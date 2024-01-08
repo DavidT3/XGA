@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 12:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:12. Copyright (c) The Contributors
 
 import os
 import re
@@ -99,7 +99,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                         ' srcreg="{breg}" backreg=NONE insts={i}' \
                         ' tstep={ts} psftype=NONE'
 
-    #TODO check the point source command in esass with some EDR obs
+    # TODO check the point source command in esass with some EDR obs
     pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF"' \
                       ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts}' \
                       ' insts={i} psftype="2D_PSF"'
@@ -142,11 +142,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
+            # TODO ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
             interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], "erosita",
                                                              source.default_coord)
             # This finds any regions which
-            #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
+            # TODO ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
                                                          "erosita", source.default_coord)
@@ -171,14 +171,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 inst_no = [s for s in inst if s.isdigit()][0]
 
                 # Got to check if this spectrum already exists
-                exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name,
-                                             telescope="erosita")
+                exists = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
+                                            min_counts, min_sn, telescope='erosita')
                 if len(exists) == 1 and exists[0].usable and not force_gen:
                     continue
 
                 # If there is no match to a region, the source region returned by this method will be None,
                 #  and if the user wants to generate spectra from region files, we have to ignore that observations
-                # ASSUMPTION6 source.source_back_regions will have a telescope parameter
+                # TODO ASSUMPTION6 source.source_back_regions will have a telescope parameter
                 if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
                     raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' "
                                                    "argument.")
@@ -191,12 +191,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 else:
                     # This constructs the sas strings for any radius that isn't 'region'
                     reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
-                                                        interloper_regions=interloper_regions,
-                                                        central_coord=source.default_coord)
+                                                   interloper_regions=interloper_regions,
+                                                   central_coord=source.default_coord)
                     b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
-                                                        outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                        interloper_regions=back_inter_reg,
-                                                        central_coord=source.default_coord, bkg_reg=True)
+                                                     outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
+                                                     interloper_regions=back_inter_reg,
+                                                     central_coord=source.default_coord, bkg_reg=True)
                     inn_rad_degrees = inner_radii[s_ind]
                     out_rad_degrees = outer_radii[s_ind]
 
@@ -223,7 +223,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                 # Cannot control the naming of spectra from srctool, so need to store
                 # the XGA formatting of the spectra, so that they can be renamed 
-                #TODO put issue, renaming spectra 
+                # TODO put issue, renaming spectra
                 spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec.fits"
                 rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
                 arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
@@ -264,15 +264,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
 
                 coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
-                src_reg_str = reg # dealt with in get_annular_esass_region
-                #TODO allow user to chose tstep and xgrid
-                tstep = 0.5 # put it as 0.5 for now
+                src_reg_str = reg  # dealt with in get_annular_esass_region
+
+                # TODO allow user to chose tstep and xgrid
+                tstep = 0.5  # put it as 0.5 for now
                 bsrc_reg_str = b_reg
-                # Defining the grouping key words
-                if group_spec and not min_counts is None:
+                # Defining the grouping keywords
+                if group_spec and min_counts is not None:
                     group_type = 'min'
                     group_scale = min_counts
-                elif group_spec and not min_sn is None:
+                elif group_spec and min_sn is not None:
                     group_type = 'snmin'
                     group_scale = min_sn
                 else:
@@ -311,13 +312,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # If the user wants to group the spectra then this command should be added
                 if group_spec:
                     # DAVID_QUESTION should I group the background spectra in the same way
-                    cmd_str+= "; " + grp_cmd_str
+                    cmd_str += "; " + grp_cmd_str
 
                 # Adds clean up commands to move all generated files and remove temporary directory
                 #cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
                 cmd_str += "; mv * ../; cd .."
                 # If temporary region files were made, they will be here
-                if os.path.exists(OUTPUT +  'erosita/' + obs_id + '/temp_regs'):
+                if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs'):
                     # Removing this directory
                     cmd_str += ";rm -r temp_regs"
 
@@ -328,20 +329,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # ASSUMPTION4 new output directory structure
                 final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
                 extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                                "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
-                                "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
-                                "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
-                                "b_rmf_path": os.path.join(OUTPUT, "erosita", obs_id, b_rmf), 
-                                "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
-                                "obs_id": obs_id, "instrument": inst, 
-                                "central_coord": source.default_coord,
-                                "from_region": from_region,
-                                "grouped": group_spec, 
-                                "min_counts": min_counts,
-                                "min_sn": min_sn,
-                                "over_sample": None,
-                                "from_region": from_region,
-                                "telescope": "erosita"})
+                                   "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
+                                   "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
+                                   "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
+                                   "b_rmf_path": os.path.join(OUTPUT, "erosita", obs_id, b_rmf),
+                                   "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
+                                   "obs_id": obs_id, "instrument": inst,
+                                   "central_coord": source.default_coord,
+                                   "grouped": group_spec,
+                                   "min_counts": min_counts,
+                                   "min_sn": min_sn,
+                                   "over_sample": None,
+                                   "from_region": from_region,
+                                   "telescope": "erosita"})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
