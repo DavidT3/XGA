@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:58. Copyright (c) The Contributors
 
 import os
 import re
@@ -229,7 +229,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Cannot control the naming of spectra from srctool, so need to store
                 # the XGA formatting of the spectra, so that they can be renamed 
                 # TODO put issue, renaming spectra
-                spec_str = spec_storage_name + "_spec.fits"
+                # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
+                spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
                 rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
                 arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
                 b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_backspec.fits"
@@ -242,11 +243,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                      dec=source.default_coord[1].value, ri=src_inn_rad_str,
                                                      ro=src_out_rad_str, ex=extra_file_name)
 
-
                 # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
                 spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                        dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                       ex=extra_file_name)
+                                       ex=extra_file_name, gr=group_spec)
 
                 rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
@@ -261,7 +261,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
                 
-                # DAVID_QUESTION should I be making these
                 # These file names are for the debug images of the source and background images, they will not be loaded
                 #  in as a XGA products, but exist purely to check by eye if necessary
                 dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug.fits".format(o=obs_id, i=inst, n=source_name,
@@ -274,7 +273,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                    dec=source.default_coord[1].value, ri=src_inn_rad_str,
                                                    ro=src_out_rad_str)
 
-                # TODO SO MANY MORE COMMENTS
+                # TODO ADD MANY MORE COMMENTS
                 coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value,
                                                       dec=source.default_coord[1].value)
                 src_reg_str = reg  # dealt with in get_annular_esass_region
@@ -303,6 +302,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
                 # Occupying the rename command for all the outputs of srctool
+                # TODO MORE COMMENTS
                 if group_spec:
                     rename_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=no_grp_spec)
                 else:

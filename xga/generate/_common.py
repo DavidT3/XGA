@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:58. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -31,7 +31,6 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
-    print(err)
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
