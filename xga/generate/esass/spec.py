@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 15:17. Copyright (c) The Contributors
 
 import os
 import re
@@ -113,7 +113,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # TODO include the background file - YES
     # TODO regroup the background file too 
     # Grouping the spectra will be done using the heasoft
-    grp_cmd = 'ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
+    grp_cmd = 'export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; ftgrouppha infile="{infi}" outfile="{of}" grouptype="{gt}" groupscale="{gs}"'
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
