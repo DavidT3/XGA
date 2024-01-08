@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 15:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 17:14. Copyright (c) The Contributors
 
 import os
 import re
@@ -30,8 +30,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
     srctool functions that generate custom sets of spectra (like a set of annular spectra for instance), as well
-    as for things like the standard srctool_spectrum function which produce relatively boring spectra. At the moment 
-    each spectra will also generate a background spectra by default. 
+    as for things like the standard srctool_spectrum function which produce 'global' spectra. Each spectrum
+    generated is accompanied by a background spectrum, as well as the necessary ancillary files.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
@@ -39,7 +39,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-        default this is zero arcseconds, resulting in a circular spectrum.
+        default, this is zero arcseconds, resulting in a circular spectrum.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
@@ -66,7 +66,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
-    
+
     # Making sure this value is the expected type
     if min_counts is not None:
         min_counts = int(min_counts)
@@ -90,11 +90,29 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         extra_name = ''
 
+    # SASS' srctool operates quite differently for extended sources and point sources. We are going to want a
+    #  detector map for extended sources to weight the ARF calculation, so here we check the source type
+    if isinstance(sources[0], (ExtendedSource, GalaxyCluster)):
+        ex_src = True
+        # TODO Decide if this will stay or not - it might be terribly inefficient using the whole thing for this
+        evtool_image(sources, Quantity(0.2, 'keV'), Quantity(10, 'keV'), NUM_CORES)
+        # Sets the psf type to MAP, which means we'll be using an image to encode the emission extent
+        et = 'MAP'
+    else:
+        ex_src = False
+        et = 'POINT'
+        raise eROSITAImplentationError("Spectral generation has not yet been implemented for point sources.")
+
     # TODO implement the det map EXTTPYE, at the moment this spectrum will treat the target as a point source
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
+    # ext_srctool_cmd = ('cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF" srcreg="{reg}" '
+    #                    'backreg=NONE tstep={ts} insts={i} psftype=NONE')
+
+    # TODO PATTERN AND FLAG SELECTION - REALLY NEED TO INCLUDE THAT
+
     ext_srctool_cmd = ('cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF" srcreg="{reg}" '
-                       'backreg=NONE tstep={ts} insts={i} psftype=NONE')
+                       'backreg=NONE tstep={ts} insts={i} psftype=NONE extmap="{em}" exttype="MAP"')
 
     # For extended sources, it is best to make a background spectra with a separate command
     bckgr_srctool_cmd = 'srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
@@ -130,18 +148,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_extras = []
     sources_types = []
     for s_ind, source in enumerate(sources):
-        # srctool operates quite differently for extended sources and point sources
-        # we also need a detection map for an extended source, so here we check the source type
-        if isinstance(source, (ExtendedSource, GalaxyCluster)):
-            ex_src = "yes"
-            # Sets the detmap type, using an image of the source is appropriate for extended sources like clusters,
-            #  but not for point sources
-            dt = 'dataset'
-        else:
-            ex_src = "no"
-            dt = 'flat'
-            raise eROSITAImplentationError("Spectral generation has not yet been implemented for point sources.")
-
+        source: BaseSource
         cmds = []
         final_paths = []
         extra_info = []
@@ -299,9 +306,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     group_type = ''
                     group_scale = ''
 
+                im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
+                                       telescope='erosita')
                 # Fills out the srctool command to make the main and background spectra
                 s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                                   i=inst_no, ts=tstep)
+                                                   i=inst_no, ts=tstep, em=im.path, et=et)
                 # Gad a longer tstep for the background to speed it up
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                       i=inst_no, ts=tstep*4)
