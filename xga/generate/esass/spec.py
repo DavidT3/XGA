@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:23. Copyright (c) The Contributors
 
 import os
 import re
@@ -16,7 +16,7 @@ from .phot import evtool_image
 from .run import esass_call
 from .._common import get_annular_esass_region
 from ... import OUTPUT, NUM_CORES
-from ...exceptions import eROSITAImplentationError, eSASSInputInvalid
+from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProductAvailableError
 from ...samples.base import BaseSample
 from ...sas._common import region_setup
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -170,9 +170,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Extracting just the instrument number for later use in eSASS commands
                 inst_no = [s for s in inst if s.isdigit()][0]
 
-                # Got to check if this spectrum already exists
-                exists = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
-                                            min_counts, min_sn, telescope='erosita')
+                try:
+                    # Got to check if this spectrum already exists
+                    source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
+                                                min_counts, min_sn, telescope='erosita')
+                    exists = True
+                except NoProductAvailableError:
+                    exists = False
+
                 if len(exists) == 1 and exists[0].usable and not force_gen:
                     continue
 
@@ -202,7 +207,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                     # TODO implement the detector map
                     # This creates a detection map for the source and background region
-                    #map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
+                    # map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
                 
                 # Getting the source name
                 source_name = source.name
@@ -237,14 +242,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                      dec=source.default_coord[1].value, ri=src_inn_rad_str,
                                                      ro=src_out_rad_str, ex=extra_file_name)
 
+
                 # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
                 spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                        dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                        ex=extra_file_name)
+
+                print(spec)
+                stop
+
                 rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
                 arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+
                 b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                            ex=extra_file_name)
@@ -256,14 +267,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # DAVID_QUESTION should I be making these
                 # These file names are for the debug images of the source and background images, they will not be loaded
                 #  in as a XGA products, but exist purely to check by eye if necessary
-                dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug." \
-                    "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
-                b_dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_back_debug." \
-                        "fits".format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug.fits".format(o=obs_id, i=inst, n=source_name,
+                                                                                    ra=source.default_coord[0].value,
+                                                                                    dec=source.default_coord[1].value,
+                                                                                    ri=src_inn_rad_str,
+                                                                                    ro=src_out_rad_str)
+                b_dim = ("{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_"
+                         "back_debug.fits").format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                                   dec=source.default_coord[1].value, ri=src_inn_rad_str,
+                                                   ro=src_out_rad_str)
 
-                coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value, dec=source.default_coord[1].value)
+                # TODO SO MANY MORE COMMENTS
+                coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value,
+                                                      dec=source.default_coord[1].value)
                 src_reg_str = reg  # dealt with in get_annular_esass_region
 
                 # TODO allow user to chose tstep and xgrid
@@ -283,8 +299,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Fills out the srctool command to make the main and background spectra
                 s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
                                                    i=inst_no, ts=tstep)
+                # had a longer tstep for the background to speed it up
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                                      i=inst_no, ts=tstep*4) # had a longer tstep for the background to speed it up
+                                                      i=inst_no, ts=tstep*4)
                 # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
@@ -315,8 +332,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     cmd_str += "; " + grp_cmd_str
 
                 # Adds clean up commands to move all generated files and remove temporary directory
-                #cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
-                cmd_str += "; mv * ../; cd .."
+                cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
                 # If temporary region files were made, they will be here
                 if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs'):
                     # Removing this directory
