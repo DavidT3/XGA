@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 12:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 12:54. Copyright (c) The Contributors
 
 import os
 import re
@@ -153,10 +153,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
-            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}"
+            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
             spec_storage_name = spec_storage_name.format(ra=source.default_coord[0].value,
                                                          dec=source.default_coord[1].value,
-                                                         ri=src_inn_rad_str, ro=src_out_rad_str)
+                                                         ri=src_inn_rad_str, ro=src_out_rad_str, gr=group_spec)
         else:
             spec_storage_name = "region"
         
@@ -180,11 +180,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  and if the user wants to generate spectra from region files, we have to ignore that observations
                 # ASSUMPTION6 source.source_back_regions will have a telescope parameter
                 if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
-                    raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
+                    raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' "
+                                                   "argument.")
 
                 # Because the region will be different for each ObsID, I have to call the setup function here
                 if outer_radius == 'region':
-                    raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' argument.")
+                    raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' "
+                                                   "argument.")
 
                 else:
                     # This constructs the sas strings for any radius that isn't 'region'
@@ -210,7 +212,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Sets up the file names of the output files, adding a random number so that the
                 #  function for generating annular spectra doesn't clash and try to use the same folder
                 # ASSUMPTION4 new output directory structure
-                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
+                                                                                r=randint(0, 1e+8))
 
                 # Setting up file names that include the extra variables
                 if group_spec and min_counts is not None:
@@ -228,23 +231,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.rmf"
                 b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.arf"
 
-                # Naming the non grouped spectra
+                # Naming the non-grouped spectra
                 no_grp_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec_not_grouped.fits"
                 no_grp_spec = no_grp_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                              dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                              ex=extra_file_name)
+                                                     dec=source.default_coord[1].value, ri=src_inn_rad_str,
+                                                     ro=src_out_rad_str, ex=extra_file_name)
 
                 # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
                 spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                ex=extra_file_name)
+                                       dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                       ex=extra_file_name)
                 rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
                 arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
                 b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                ex=extra_file_name)
+                                           dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                           ex=extra_file_name)
                 b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
                 b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
@@ -281,7 +284,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                    i=inst_no, ts=tstep)
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                       i=inst_no, ts=tstep*4) # had a longer tstep for the background to speed it up
-                # Filling out the grouping command
+                # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
                 # Occupying the rename command for all the outputs of srctool
@@ -305,7 +308,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
                 cmd_str += "; " + remove_merged_cmd                
 
-                # If the user wants to group the spectra then this command should be added
+                # If the user wants to group the spectra then this command should be added
                 if group_spec:
                     # DAVID_QUESTION should I group the background spectra in the same way
                     cmd_str+= "; " + grp_cmd_str
@@ -349,6 +352,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
 
 # TODO fix this function to use XGA in built function and I still need to debug
 def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
