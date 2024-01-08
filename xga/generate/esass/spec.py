@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:26. Copyright (c) The Contributors
 
 import os
 import re
@@ -172,13 +172,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                 try:
                     # Got to check if this spectrum already exists
-                    source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
-                                                min_counts, min_sn, telescope='erosita')
+                    check_sp = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
+                                                  min_counts, min_sn, telescope='erosita')
                     exists = True
                 except NoProductAvailableError:
                     exists = False
 
-                if exists and exists[0].usable and not force_gen:
+                if exists and check_sp.usable and not force_gen:
                     continue
 
                 # If there is no match to a region, the source region returned by this method will be None,
