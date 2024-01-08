@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:29. Copyright (c) The Contributors
 
 import os
 import re
@@ -247,9 +247,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                        dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                        ex=extra_file_name)
-
-                print(spec)
-                stop
 
                 rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                      dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
