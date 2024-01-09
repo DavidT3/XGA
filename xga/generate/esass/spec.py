@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 17:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/01/2024, 21:26. Copyright (c) The Contributors
 
 import os
 import re
@@ -245,11 +245,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # TODO put issue, renaming spectra
                 # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
                 spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
-                rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.rmf"
-                arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}.arf"
+                rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.rmf"
+                arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
                 b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_backspec.fits"
-                b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.rmf"
-                b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_backspec.arf"
+                b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.rmf"
+                b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.arf"
 
                 # Naming the non-grouped spectra
                 no_grp_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec_not_grouped.fits"
@@ -263,17 +263,21 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                        ex=extra_file_name, gr=group_spec)
 
                 rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                     ex=extra_file_name, gr=group_spec)
                 arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                     ex=extra_file_name, gr=group_spec)
 
                 b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
                                            dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
-                                           ex=extra_file_name)
+                                           ex=extra_file_name, gr=group_spec)
                 b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                         dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                         ex=extra_file_name, gr=group_spec)
                 b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
-                                dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str)
+                                         dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                         ex=extra_file_name, gr=group_spec)
                 
                 # These file names are for the debug images of the source and background images, they will not be loaded
                 #  in as a XGA products, but exist purely to check by eye if necessary
@@ -357,7 +361,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Makes sure the whole path to the temporary directory is created
                 os.makedirs(dest_dir)
 
-                # ASSUMPTION4 new output directory structure
                 final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
                 extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
                                    "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
@@ -419,15 +422,16 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
         bin_key_word = 'rebin'
         process_history = hdul[0].header['SASSHIST']
         # This creates a pattern to search for within the string of the processing history of the image
-        pattern = re.compile(fr'\b{re.escape(bin_key_word)}=(\d+)\b') # the '=(\d+)' includes an equals sign and any numbers that follow
+        # the '=(\d+)' includes an equals sign and any numbers that follow
+        pattern = re.compile(fr'\b{re.escape(bin_key_word)}=(\d+)\b')
         matches = re.finditer(pattern, process_history) # This finds this pattern within the longer string
 
         # returning the matches from the iter object
         binnings = []
         for match in matches:
-            binnings.append(match.group(1)) # using group(1) returns only the numbers, instead of the whole pattern
+            binnings.append(match.group(1))  # using group(1) returns only the numbers, instead of the whole pattern
 
-        img_binning = int(binnings[-1]) # the results of binnings are stored as strings so need to make it an int
+        img_binning = int(binnings[-1])  # the results of binnings are stored as strings so need to make it an int
 
         # Defining the WCS of the image
         # DAVID_QUESTION, the headers are crazy!
