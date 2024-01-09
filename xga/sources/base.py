@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 16:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/01/2024, 23:24. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1049,15 +1049,15 @@ class BaseSource:
 
                         # Exact same checks for the background spectrum
                         back = [f for f in named if "backspec" in f and inst in f
-                                and sp_info_str == f.split('_backspec')[0]]
+                                and sp_info_str == f.split('_backspec')[0] and "rmf" not in f and "arf" not in f]
                         back_arf = [f for f in named if "arf" in f and inst in f
-                                    and sp_info_str == f.split('_back.arf')[0] and "back" in f]
+                                    and sp_info_str == f.split('_backspec.arf')[0] and "back" in f]
                         back_rmf = [f for f in named if "rmf" in f and "back" in f and inst in f
-                                    and sp_info_str == f.split('_back.rmf')[0]]
+                                    and sp_info_str == f.split('_backspec.rmf')[0] and "back" in f]
                         if len(back_rmf) == 0:
                             back_rmf = rmf
 
-                        # If exactly one match has been found for all of the products, we define an XGA spectrum and
+                        # If exactly one match has been found for all the products, we define an XGA spectrum and
                         #  add it the source object.
                         if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 \
                                 and len(back_rmf) == 1:
