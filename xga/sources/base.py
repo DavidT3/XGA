@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 14:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:19. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1193,7 +1193,9 @@ class BaseSource:
                 for fit in prev_fits:
                     fit_name = fit.split("/")[-1]
                     fit_info = fit_name.split("_")
-                    storage_key = "_".join(fit_info[1:-1])
+                    # Indexing like this because the last two underscores are for the model name, and then the
+                    #  telescope name
+                    storage_key = "_".join(fit_info[1:-2])
                     # Load in the results table
                     fit_data = FITS(fit)
 
@@ -1234,7 +1236,8 @@ class BaseSource:
                                 # This adds ra back on, and removes any ident information if it is there
                                 sp_key = 'ra' + sp_key
                                 # Finds the appropriate matching spectrum object for the current table line
-                                spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+                                spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
+                                                         telescope=tel)[0]
                             else:
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 ann_spec = self.get_annular_spectra(set_id=set_id)
@@ -1250,19 +1253,20 @@ class BaseSource:
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
 
-                        # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
-                        #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
-                        #  consistent
-                        # TODO This will cause issues with non-XMM stuff
-                        if "pn" in inst_lums:
-                            chosen_lums = inst_lums["pn"]
+                        if tel == 'xmm':
+                            # Ideally the luminosity reported in the source object will be a PN lum, but it's
+                            #  not impossible that a PN value won't be available. - it shouldn't matter much, lums
+                            #  across the cameras are consistent
+                            if "pn" in inst_lums:
+                                chosen_lums = inst_lums["pn"]
                             # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                        elif "mos2" in inst_lums:
-                            chosen_lums = inst_lums["mos2"]
-                        elif "mos1" in inst_lums:
-                            chosen_lums = inst_lums["mos1"]
+                            elif "mos2" in inst_lums:
+                                chosen_lums = inst_lums["mos2"]
+                            else:
+                                chosen_lums = inst_lums["mos1"]
                         else:
-                            chosen_lums = None
+                            # TODO THIS ISN'T NECESSARILY THE WAY I WANT TO DO THIS
+                            chosen_lums = processed_lums
 
                         if set_id is not None:
                             ann_results[set_id][model][spec.annulus_ident] = global_results
