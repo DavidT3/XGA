@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 15:42. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -183,11 +183,12 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         script = x_script.read()
 
     # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
-    #  to be stored
-    dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
+    #  to be stored - single telescope fits are stored in a specific XSPEC directory for that telescope
+    dest_dir = OUTPUT + telescope + "/XSPEC/" + source.name + "/"
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
-    # Defining where the output summary file of the fit is written
+    # Defining where the output summary file of the fit is written - we also include the telescope in the filename,
+    #  just so they can't be confused for the same fit on a different telescope data if downloaded
     out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + telescope
     script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + telescope + ".xcm"
 
