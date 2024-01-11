@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:22. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4165,9 +4165,10 @@ class BaseSource:
                 try:
                     if not COMBINED_INSTS[tel]:
                         im = self.get_images(self.obs_ids[tel][0], self.instruments[tel][self.obs_ids[tel][0]][0],
-                                             telescope=tel)
+                                             telescope=tel, lo_en=self.peak_lo_en, hi_en=self.peak_hi_en)
                     else:
-                        im = self.get_images(self.obs_ids[tel][0], telescope=tel)
+                        im = self.get_images(self.obs_ids[tel][0], telescope=tel, lo_en=self.peak_lo_en,
+                                             hi_en=self.peak_hi_en)
                     if 'point' in self._radii:
                         print("Point {l}-{u}keV SNR - {s}".format(s=self.get_snr("point", tel, self._default_coord,
                                                                                  obs_id=im.obs_id,
