@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/01/2024, 23:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 14:39. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -966,7 +966,9 @@ class BaseSource:
                     # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
                     #  the lower level. As such we can be sure here we're only reading in instruments we decided
                     #  are valid
-                    for i in self.instruments[tel][obs]:
+                    # We add the 'combined' entry to account for the possibility of single ObsID combined instrument
+                    #  images being created - # TODO decide whether this would be better off in the 'combined' section
+                    for i in self.instruments[tel][obs] + ['combined']:
                         # Fetches lines of the inventory which match the current ObsID and instrument
                         rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                         for r_ind, r in rel_ims.iterrows():
@@ -996,7 +998,7 @@ class BaseSource:
                         r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
                         r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
                         # Check if there is only one r_inner and r_outer value each, if so its a circle
-                        #  (otherwise its an ellipse)
+                        #  (otherwise it's an ellipse)
                         if len(r_inner) == 1:
                             r_inner = r_inner[0]
                             r_outer = r_outer[0]
@@ -1172,8 +1174,8 @@ class BaseSource:
                 test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
                 # First we make sure the sets are the same length, if they're not then we know before starting that this
                 #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
-                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
-                #  exactly and the product can be loaded
+                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
+                #  match exactly and the product can be loaded
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
                                          update_inv=False)
@@ -3981,9 +3983,9 @@ class BaseSource:
         :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the SNR. Default is None,
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+            zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
         :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending signal to noise, then an array containing the order SNR ratios.
+            of ascending signal-to-noise, then an array containing the order SNR ratios.
         :rtype: Tuple[np.ndarray, np.ndarray]
         """
         # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
