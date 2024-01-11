@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/01/2024, 23:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:11. Copyright (c) The Contributors
 
 import os
 import re
@@ -449,11 +449,11 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
 
             # Converting to image coords
             # First converting the radius into pixels
-            arcsec_4 = Quantity(4, 'arcsec') # For a binning of 80, the pixel scale is 4 arcsec 
+            arcsec_4 = Quantity(4, 'arcsec')  # For a binning of 80, the pixel scale is 4 arcsec
             in_degrees = arcsec_4.to('deg') 
-            conv_factor = in_degrees.value/80 # Defining relationship between binning and pixel scale
-            pix_scale = img_binning*conv_factor # Finding pix_scale for this image
-            radius = radius.value/pix_scale # Radius now in pixels
+            conv_factor = in_degrees.value/80  # Defining relationship between binning and pixel scale
+            pix_scale = img_binning*conv_factor  # Finding pix_scale for this image
+            radius = radius.value/pix_scale  # Radius now in pixels
 
             # Now converting the centre into image coords
             x, y = wcs.world_to_pixel(centre)

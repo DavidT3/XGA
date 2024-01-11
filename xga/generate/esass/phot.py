@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:11. Copyright (c) The Contributors
 
 import os
 from shutil import rmtree
@@ -120,7 +120,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
 @esass_call
 def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
-            hi_en: Quantity = Quantity(10, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
+           hi_en: Quantity = Quantity(10, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the eSASS expmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -135,8 +135,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     """
     # TODO make sure that the same exposure map is added as a product to every source it covers
-    stack = False # This tells the esass_call routine that this command won't be part of a stack
-    execute = True # This should be executed immediately
+    stack = False  # This tells the esass_call routine that this command won't be part of a stack
+    execute = True  # This should be executed immediately
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
@@ -210,7 +210,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             evt_list = pack[-1]
             # ASSUMPTION4 new output directory structure
             dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, 
-                                                                               u=hi_en.value, n=source.name)
+                                                                                u=hi_en.value, n=source.name)
             exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -218,14 +218,16 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 rmtree(dest_dir)
 
             os.makedirs(dest_dir)
-            cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l}"
-                        " emax={u} mergedmaps={em}; fthedit {em} REFYCRVL delete; mv * ../"
-                        "; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path,
-                         l=lo_en.value, u=hi_en.value, em=exp_map, d=dest_dir))
+            # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
+            #  terminal, which causes 'device not available' errors
+            cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
+                        "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
+                        "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
+                                                            u=hi_en.value, em=exp_map, d=dest_dir))
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
-            final_paths.append(os.path.join(OUTPUT,"erosita", obs_id, exp_map))
+            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, exp_map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
                                "telescope": "erosita"})
         sources_cmds.append(np.array(cmds))
