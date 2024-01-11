@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 13:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 19:08. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -92,11 +92,11 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
     cen = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
 
     if w == h:
-        shape_str = "-circle {cx} {cy} {r}"
-        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, r=h)
+        shape_str = "-circle {cx} {cy} {r}d"
+        shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, r=(h / 2))
     else:
         # The rotation angle from the region object is in degrees already
-        shape_str = "-ellipse {cx} {cy} {w} {h} {rot}"
+        shape_str = "-ellipse {cx} {cy} {w}d {h}d {rot}"
         shape_str = shape_str.format(cx=cen[0].value, cy=cen[1].value, w=w,
                                      h=h, rot=reg.angle.value)
 
@@ -113,7 +113,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     """
 
     if central_coord is None:
-        central_coord = source._default_coord
+        central_coord = source.default_coord
 
     inner_radius = source.convert_radius(inner_radius, 'deg')
     outer_radius = source.convert_radius(outer_radius, 'deg')
@@ -121,10 +121,10 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     # Then we can check to make sure that the outer radius is larger than the inner radius
     if inner_radius.isscalar and inner_radius >= outer_radius:
         raise ValueError("An eSASS circular region for {s} cannot have an inner_radius larger than or equal to its "
-                            "outer_radius".format(s=source.name))
+                         "outer_radius".format(s=source.name))
     elif not inner_radius.isscalar and (inner_radius[0] >= outer_radius[0] or inner_radius[1] >= outer_radius[1]):
         raise ValueError("An eSASS elliptical region for {s} cannot have inner radii larger than or equal to its "
-                            "outer radii".format(s=source.name))
+                         "outer radii".format(s=source.name))
     
     if output_unit != deg:
         raise NotImplementedError("Only degree coordinates are currently supported "
@@ -149,7 +149,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     esass_interloper = [_interloper_esass_string(i) for i in interloper_regions]
     # TODO I have assumed that the eSASS versions of the regions are in the correct format
 
-    if inner_radius.isscalar and inner_radius.value !=0:
+    if inner_radius.isscalar and inner_radius.value != 0:
         esass_source_area = "annulus {cx} {cy} {ri}d {ro}d"
         esass_source_area = esass_source_area.format(cx=central_coord[0].value,
                                                      cy=central_coord[1].value,
@@ -182,10 +182,10 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     if len(esass_interloper) == 0:
         final_src = esass_source_area
     else:
-        # Multiple regions must be parsed to eSASS via an ASCII file, so I will write this here
+        # Multiple regions must be passed to eSASS via an ASCII file, so I will write this here
         reg_file_path = OUTPUT + 'erosita/' + obs_id + '/temp_regs'
-        reg_str = esass_source_area.replace(" ", "_") # replacing spaces with underscores for file naming purposes
-        reg_str = reg_str.replace(".", "-") # replacing any dots with dashes 
+        reg_str = esass_source_area.replace(" ", "_")  # replacing spaces with underscores for file naming purposes
+        reg_str = reg_str.replace(".", "-")  # replacing any dots with dashes
 
         if bkg_reg: 
             # adding backround prefix for background region files
@@ -201,6 +201,6 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         with open(reg_file_path + '/' + reg_file_name, 'w') as file:
             file.write(esass_source_area + "\n" + "\n".join(esass_interloper))
         
-        final_src= reg_file_path + '/' + reg_file_name
+        final_src = reg_file_path + '/' + reg_file_name
 
     return final_src
