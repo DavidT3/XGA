@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 19:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 20:24. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -200,7 +200,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         # Making the file
         # TODO Decide whether FK5 or ICRS is more appropriate here
         with open(reg_file_path + '/' + reg_file_name, 'w') as file:
-            file.write('fk5;\n' + esass_source_area + "\n" + "\n".join(esass_interloper))
+            file.write('fk5; ' + esass_source_area + "\n" + "\n".join(esass_interloper))
         
         final_src = reg_file_path + '/' + reg_file_name
 
