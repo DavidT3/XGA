@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 17:22. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1190,6 +1190,8 @@ class BaseSource:
                 prev_fits = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
                              for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
                              if ".xcm" not in f and ".fits" in f]
+                print(prev_fits)
+                print('')
                 for fit in prev_fits:
                     fit_name = fit.split("/")[-1]
                     fit_info = fit_name.split("_")
@@ -1274,7 +1276,7 @@ class BaseSource:
                             ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
                         else:
                             # Push global fit results, luminosities etc. into the corresponding source object.
-                            self.add_fit_data(model, global_results, chosen_lums, sp_key, 'xmm')
+                            self.add_fit_data(model, global_results, chosen_lums, sp_key, tel)
                     except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
                         chosen_lums = {}
                         warn_text = "{src} fit {f} could not be loaded in as there are no matching spectra " \
