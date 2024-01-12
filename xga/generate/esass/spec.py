@@ -1,8 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 09:47. Copyright (c) The Contributors
 
 import os
 import re
+from copy import deepcopy
 from random import randint
 from typing import Union
 
@@ -23,9 +24,9 @@ from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-               min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False, 
-               force_gen: bool = False):
+               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
+               min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False,
+               combine_tm: bool = True, force_gen: bool = False):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -33,6 +34,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     as for things like the standard srctool_spectrum function which produce 'global' spectra. Each spectrum
     generated is accompanied by a background spectrum, as well as the necessary ancillary files.
 
+    :param combine_tm:
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
@@ -51,6 +53,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         To disable minimum signal-to-noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
+    :param bool combine_tm: Create spectra for individual ObsIDs that are a combination of the data from all the
+        telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
+        survey data eROSITA takes. Default is True.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # TODO MORE COMMENTS
@@ -179,7 +184,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
         # Check which event lists are associated with each individual source
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
+            # This one is simple, just extracting the current ObsID
             obs_id = pack[1]
+
+            # Then we have to account for the two different modes this function can be used in - generating spectra
+            #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
+            if combine_tm:
+                inst_names = ['combined']
+                inst_nums = [" ".join([tm[-1] for tm in source.instruments["erosita"][obs_id]])]
+            else:
+                inst_names = deepcopy(source.instruments["erosita"][obs_id])
+                inst_nums = [tm[-1] for tm in source.instruments["erosita"][obs_id]]
+
+            print(inst_names)
+            print(inst_nums)
+            import sys
+            sys.exit()
+
             for inst in source.instruments["erosita"][obs_id]:
                 # Extracting just the instrument number for later use in eSASS commands
                 inst_no = [s for s in inst if s.isdigit()][0]
@@ -315,9 +336,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Fills out the srctool command to make the main and background spectra
                 s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
                                                    i=inst_no, ts=tstep, em=im.path, et=et)
-                # Gad a longer tstep for the background to speed it up
+                # TODO I've changed this so the timestep for background is the same as source
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                                      i=inst_no, ts=tstep*4)
+                                                      i=inst_no, ts=tstep)
                 # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
@@ -334,13 +355,22 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf])
 
-                # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
-                cmd_str += "; " + remove_merged_cmd + "; "
+                # Removing the 'merged spectra' output of srctool - which is identical to the instrument one if
+                #  we generate for one spectrum at a time. Though only if the user hasn't actually ASKED for the
+                #  merged spectrum
+                if not combine_tm:
+                    cmd_str += "; " + remove_merged_cmd + "; "
                 
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
 
-                # Removing the 'merged spectra' output of srctool - which is identical to the instrument one
-                cmd_str += "; " + remove_merged_cmd                
+                # TODO I WAS IN THE PROCESS OF LETTING THIS FUNCTION CREATE MERGED TM SPECTRA FOR A PARTICULAR OBSID
+                #  THIS WILL REQUIRE A LITTLE BIT OF MODIFICATION SO THAT A LIST OF ALL INSTRUMENTS SELECTED FOR THE
+                #  CURRENT OBSID FOR THE CURRENT SOURCE IS PASSED TO SOURCETOOL, AND XGA KNOWS THAT ITS A COMBINED
+                #  SPECTRUM
+
+                # Removing the 'merged spectra' output of srctool, the background in this case
+                if not combine_tm:
+                    cmd_str += "; " + remove_merged_cmd
 
                 # If the user wants to group the spectra then this command should be added
                 if group_spec:
@@ -351,7 +381,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     cmd_str += "; " + grp_cmd_str
 
                 # Adds clean up commands to move all generated files and remove temporary directory
-                cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+                # cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
                 # If temporary region files were made, they will be here
                 if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs'):
                     # Removing this directory
@@ -485,7 +515,7 @@ def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, i
 def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
-                     disable_progress: bool = False, force_gen: bool = False):
+                     disable_progress: bool = False, combine_tm: bool = True, force_gen: bool = False):
     
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
@@ -507,15 +537,18 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
         To disable minimum counts set this parameter to None.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
+    :param bool combine_tm: Create spectra for individual ObsIDs that are a combination of the data from all the
+        telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
+        survey data eROSITA takes. Default is True.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
-    return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                      num_cores, disable_progress, force_gen)
+    return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores, disable_progress,
+                      combine_tm, force_gen=force_gen)
