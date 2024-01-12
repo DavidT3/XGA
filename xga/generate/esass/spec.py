@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 09:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 12:58. Copyright (c) The Contributors
 
 import os
 import re
@@ -34,7 +34,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     as for things like the standard srctool_spectrum function which produce 'global' spectra. Each spectrum
     generated is accompanied by a background spectrum, as well as the necessary ancillary files.
 
-    :param combine_tm:
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
@@ -133,6 +132,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
     remove_merged_cmd = 'rm *srctoolout_0*'
+    # We also set up a command that will remove all spectra BUT the combined one, for when that is all the user wants
+    #  (though honestly it seems wasteful to generate them all and not use them, this might change later
+    remove_all_but_merged_cmd = "rm *srctoolout_*"
 
     # TODO this command is fishy 
     # TODO include the background file - YES
@@ -191,19 +193,17 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
             if combine_tm:
                 inst_names = ['combined']
-                inst_nums = [" ".join([tm[-1] for tm in source.instruments["erosita"][obs_id]])]
+                inst_nums = ['"' + ' '.join([tm[-1] for tm in source.instruments["erosita"][obs_id]]) + '"']
+                inst_srctool_id = ['0']
             else:
                 inst_names = deepcopy(source.instruments["erosita"][obs_id])
                 inst_nums = [tm[-1] for tm in source.instruments["erosita"][obs_id]]
+                inst_srctool_id = inst_nums
 
-            print(inst_names)
-            print(inst_nums)
-            import sys
-            sys.exit()
-
-            for inst in source.instruments["erosita"][obs_id]:
-                # Extracting just the instrument number for later use in eSASS commands
-                inst_no = [s for s in inst if s.isdigit()][0]
+            for inst_ind, inst in enumerate(inst_names):
+                # Extracting just the instrument number for later use in eSASS commands (or indeed a list of instrument
+                #  numbers if the user has requested a combined spectrum).
+                inst_no = inst_nums[inst_ind]
 
                 try:
                     # Got to check if this spectrum already exists
@@ -342,35 +342,39 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
+                rename_srctool_id = inst_srctool_id[inst_ind]
                 # Occupying the rename command for all the outputs of srctool
                 if group_spec:
-                    rename_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=no_grp_spec)
+                    rename_spec = rename_cmd.format(i_no=rename_srctool_id, type='SourceSpec', nn=no_grp_spec)
                 else:
-                    rename_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=spec)
-                rename_rmf = rename_cmd.format(i_no=inst_no, type='RMF', nn=rmf)
-                rename_arf = rename_cmd.format(i_no=inst_no, type='ARF', nn=arf)
-                rename_b_spec = rename_cmd.format(i_no=inst_no, type='SourceSpec', nn=b_spec)
-                rename_b_rmf = rename_cmd.format(i_no=inst_no, type='RMF', nn=b_rmf)
-                rename_b_arf = rename_cmd.format(i_no=inst_no, type='ARF', nn=b_arf)
+                    rename_spec = rename_cmd.format(i_no=rename_srctool_id, type='SourceSpec', nn=spec)
+                rename_rmf = rename_cmd.format(i_no=rename_srctool_id, type='RMF', nn=rmf)
+                rename_arf = rename_cmd.format(i_no=rename_srctool_id, type='ARF', nn=arf)
+                rename_b_spec = rename_cmd.format(i_no=rename_srctool_id, type='SourceSpec', nn=b_spec)
+                rename_b_rmf = rename_cmd.format(i_no=rename_srctool_id, type='RMF', nn=b_rmf)
+                rename_b_arf = rename_cmd.format(i_no=rename_srctool_id, type='ARF', nn=b_arf)
 
-                cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf])
+                # TODO I think all of this needs to made clearer, and each command should have a ; on the end by
+                #  default perhaps - or at least it should be consistent
 
-                # Removing the 'merged spectra' output of srctool - which is identical to the instrument one if
-                #  we generate for one spectrum at a time. Though only if the user hasn't actually ASKED for the
-                #  merged spectrum
-                if not combine_tm:
-                    cmd_str += "; " + remove_merged_cmd + "; "
-                
-                cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
+                # We make sure to remove the 'merged spectra' output of srctool - which is identical to the
+                #  instrument one if we generate for one spectrum at a time. Though only if the user hasn't actually
+                #  ASKED for the merged spectrum
+                if combine_tm:
+                    cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_all_but_merged_cmd])
+                else:
+                    cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
 
-                # TODO I WAS IN THE PROCESS OF LETTING THIS FUNCTION CREATE MERGED TM SPECTRA FOR A PARTICULAR OBSID
-                #  THIS WILL REQUIRE A LITTLE BIT OF MODIFICATION SO THAT A LIST OF ALL INSTRUMENTS SELECTED FOR THE
-                #  CURRENT OBSID FOR THE CURRENT SOURCE IS PASSED TO SOURCETOOL, AND XGA KNOWS THAT ITS A COMBINED
-                #  SPECTRUM
+                # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
+                #  we'll neaten it up at some point
+                cmd_str += ';'
 
                 # Removing the 'merged spectra' output of srctool, the background in this case
-                if not combine_tm:
-                    cmd_str += "; " + remove_merged_cmd
+                if combine_tm:
+                    cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf,
+                                         remove_all_but_merged_cmd])
+                else:
+                    cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
 
                 # If the user wants to group the spectra then this command should be added
                 if group_spec:
@@ -381,7 +385,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     cmd_str += "; " + grp_cmd_str
 
                 # Adds clean up commands to move all generated files and remove temporary directory
-                # cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+                cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
                 # If temporary region files were made, they will be here
                 if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs'):
                     # Removing this directory
