@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 15:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 17:34. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -166,12 +166,12 @@ class ExtendedSource(BaseSource):
                     else:
                         self._supp_warn.append(warn_text)
 
-        self._interloper_masks = {tel: {} for tel in self.telescopes}
-        for tel in self.telescopes:
-            for obs_id in self.obs_ids[tel]:
-                # Generating and storing these because they should only
-                cur_im = self.get_products("image", obs_id, telescope=tel)[0]
-                self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
+        # TODO remove this properly when the changes are finalised.
+        # for tel in self.telescopes:
+        #     for obs_id in self.obs_ids[tel]:
+        #         # Generating and storing these because they should only
+        #         cur_im = self.get_products("image", obs_id, telescope=tel)[0]
+        #         self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
 
         # Constructs the detected dictionary, detailing whether the source has been detected IN REGION FILES
         #  in each observation.
@@ -188,7 +188,7 @@ class ExtendedSource(BaseSource):
             else:
                 self._supp_warn.append(warn_text)
 
-        # If the source wasn't detected in ALL of the observations, then we have to rely on a custom region,
+        # If the source wasn't detected in ALL the observations, then we have to rely on a custom region,
         #  and if no custom region options are passed by the user then an error is raised.
         elif all(flat_det) and self._custom_region_radius is not None:
             warn_text = "{n} has not been detected in ANY region files, so generating and fitting products" \
@@ -629,13 +629,12 @@ class PointSource(BaseSource):
             raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
 
-        # This generates masks to remove interloper regions
-        self._interloper_masks = {tel: {} for tel in self.telescopes}
-        for tel in self.telescopes:
-            for obs_id in self.obs_ids[tel]:
-                # Generating and storing these because they should only
-                cur_im = self.get_products("image", obs_id, telescope=tel)[0]
-                self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
+        # TODO remove this properly when the changes are finalised.
+        # for tel in self.telescopes:
+        #     for obs_id in self.obs_ids[tel]:
+        #         # Generating and storing these because they should only
+        #         cur_im = self.get_products("image", obs_id, telescope=tel)[0]
+        #         self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
 
         # Here we automatically clean the observations, to make sure the point source does actually lie
         #  on the detector and not just near it
