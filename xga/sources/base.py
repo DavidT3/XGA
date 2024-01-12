@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 16:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 17:33. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -360,12 +360,17 @@ class BaseSource:
         self._other_regions = None
         self._alt_match_regions = None
         self._interloper_regions = {}
-        self._interloper_masks = {}
+        # This dictionary is used to store the masks generated to remove contaminating sources from XGA images and
+        #  ratemaps, in order to perform photometric analyses. We used to generate masks for all ObsIDs during
+        #  definition of an Extended or Point source, regardless of whether they would be used or not, but this
+        #  behaviour was altered when eROSITA support was added, due to the time-cost of generating masks for
+        #  all the detected sources in an eROSITA ObsID.
+        self._interloper_masks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
 
         # Set up an attribute where a default central coordinate will live
         self._default_coord = self.ra_dec
 
-        # Init the the radius multipliers that define the outer and inner edges of a background annulus
+        # Init the radius multipliers that define the outer and inner edges of a background annulus
         self._back_inn_factor = 1.05
         self._back_out_factor = 1.5
 
@@ -1635,11 +1640,6 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
-        if region_distance is not None and not region_distance.unit.is_equivalent('deg'):
-            raise UnitConversionError("The 'region_distance' argument must be supplied in units that are "
-                                      "convertible to degrees.")
-        elif region_distance is not None:
-            region_distance = region_distance.to('deg').value
 
         # This is the array that the mask gets built in - initially all ones and as we move through the regions we
         #  start to set the bits that need to be excluded to zero
@@ -1655,8 +1655,11 @@ class BaseSource:
             for_mask = (Quantity(np.array([_dist_from_source(*self._ra_dec, r)
                                            for r in self._interloper_regions[mask_image.telescope]])) < region_distance)
 
+        print(for_mask.sum())
+        print(len(for_mask))
+
         # TODO Maybe this is a candidate for some intelligent multi-threading?
-        for r in self._interloper_regions[mask_image.telescope][for_mask]:
+        for r in np.array(self._interloper_regions[mask_image.telescope])[for_mask]:
             if r is not None:
                 # The central coordinate of the current region
                 c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
@@ -2942,17 +2945,39 @@ class BaseSource:
 
         return mask, back_mask
 
-    def get_interloper_mask(self, telescope: str, obs_id: str = None) -> ndarray:
+    def get_interloper_mask(self, telescope: str, obs_id: str = None, region_distance: Quantity = None) -> ndarray:
         """
         Returns a mask for a given ObsID (or combined data if no ObsID given) that will remove any sources
         that have not been identified as the source of interest.
 
         :param str telescope: The telescope for which to retrieve the mask.
         :param str obs_id: The ObsID that the mask is associated with (if appropriate).
+        :param Quantity region_distance: The distance from the central coordinate within which contaminating regions
+            will be included in this mask. Introduced as a counter to the very large numbers of regions associated
+            with eROSITA observations. Default is None, in which case all contaminating regions will be included in
+            the mask.
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
-        if type(self) == BaseSource:
+        # TODO REMOVE
+        region_distance = Quantity(1, 'deg')
+
+        # Check whether an acceptable 'region_distance' argument has been passed.
+        if region_distance is not None and (not region_distance.unit.is_equivalent('deg') and
+                                            not region_distance.unit.is_equivalent('kpc')):
+            raise UnitConversionError("The 'region_distance' argument must be supplied in units that are "
+                                      "convertible to degrees or kpc.")
+        elif region_distance is not None:
+            region_distance = self.convert_radius(region_distance, 'deg').value
+            # The reg_dist_key will be used to store the mask generated for this distance, so that if it is asked for
+            #  again we won't have to regenerate it
+            reg_dist_key = region_distance
+        elif region_distance is None:
+            # The reg_dist_key value of 'all' will supersede all others, if it exists then that is what will be used
+            reg_dist_key = 'all'
+
+        # Check that we aren't a BaseSource, as that won't have any contaminating regions defined
+        if self is BaseSource:
             raise TypeError("BaseSource objects don't have enough information to know which sources "
                             "are interlopers.")
 
@@ -2963,7 +2988,7 @@ class BaseSource:
             raise NotAssociatedError("ObsID {o} is not associated with {s}; only {a} are "
                                      "available".format(o=obs_id, s=self.name,
                                                         a=", ".join(self.obs_ids[telescope])))
-        elif obs_id is not None and obs_id != "combined":
+        elif obs_id is not None and obs_id not in self._interloper_masks[telescope]:
             mask = self._interloper_masks[telescope][obs_id]
         elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks[telescope]:
             comb_ims = self.get_products("combined_image", telescope=telescope)
@@ -3650,7 +3675,8 @@ class BaseSource:
             out_unit = Unit(out_unit)
 
         if out_unit.is_equivalent('kpc') and self._redshift is None:
-            raise UnitConversionError("You cannot convert to this unit without redshift information.")
+            raise UnitConversionError("You cannot convert to {} without redshift "
+                                      "information.".format(out_unit.to_string()))
 
         if radius.unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
             out_rad = radius.to(out_unit)
