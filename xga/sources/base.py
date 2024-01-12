@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 17:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 17:53. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -365,7 +365,7 @@ class BaseSource:
         #  definition of an Extended or Point source, regardless of whether they would be used or not, but this
         #  behaviour was altered when eROSITA support was added, due to the time-cost of generating masks for
         #  all the detected sources in an eROSITA ObsID.
-        self._interloper_masks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        self._interloper_masks = {tel: {o: {} for o in self.obs_ids[tel] + ['combined']} for tel in self.telescopes}
 
         # Set up an attribute where a default central coordinate will live
         self._default_coord = self.ra_dec
@@ -2959,8 +2959,21 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
-        # TODO REMOVE
-        region_distance = Quantity(1, 'deg')
+
+        # If ObsID is None then we take it that the user wants the combined mask for the specified telescope (combined
+        #  as in all contaminating regions from all ObsIDs for that telescope removed). As such we change the value
+        #  of the variable here, making the rest of the function a little neater
+        if obs_id is None:
+            obs_id = 'combined'
+
+        # We check that the user hasn't requested a telescope or ObsID that just isn't associated with this source
+        if telescope not in self.telescopes:
+            raise NotAssociatedError("Telescope {t} is not associated with {s}; only {a} are "
+                                     "available.".format(t=telescope, s=self.name, a=", ".join(self.telescopes)))
+        elif obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids[telescope]:
+            raise NotAssociatedError("ObsID {o} is not associated with {s}; only {a} are "
+                                     "available".format(o=obs_id, s=self.name,
+                                                        a=", ".join(self.obs_ids[telescope])))
 
         # Check whether an acceptable 'region_distance' argument has been passed.
         if region_distance is not None and (not region_distance.unit.is_equivalent('deg') and
@@ -2981,25 +2994,33 @@ class BaseSource:
             raise TypeError("BaseSource objects don't have enough information to know which sources "
                             "are interlopers.")
 
-        if telescope not in self.telescopes:
-            raise NotAssociatedError("Telescope {t} is not associated with {s}; only {a} are "
-                                     "available.".format(t=telescope, s=self.name, a=", ".join(self.telescopes)))
-        elif obs_id is not None and obs_id != "combined" and obs_id not in self.obs_ids[telescope]:
-            raise NotAssociatedError("ObsID {o} is not associated with {s}; only {a} are "
-                                     "available".format(o=obs_id, s=self.name,
-                                                        a=", ".join(self.obs_ids[telescope])))
-        elif obs_id is not None and obs_id not in self._interloper_masks[telescope]:
-            mask = self._interloper_masks[telescope][obs_id]
-        elif obs_id is None or obs_id == "combined" and "combined" not in self._interloper_masks[telescope]:
-            comb_ims = self.get_products("combined_image", telescope=telescope)
-            if len(comb_ims) == 0:
-                raise NoProductAvailableError("There are no combined images available for which to fetch"
-                                              " interloper masks.")
-            im = comb_ims[0]
-            mask = self._generate_interloper_mask(im)
-            self._interloper_masks[telescope]["combined"] = mask
-        elif obs_id is None or obs_id == "combined" and "combined" in self._interloper_masks[telescope]:
-            mask = self._interloper_masks[telescope]["combined"]
+        # Here we get to the business of retrieving or generating/storing masks
+        # The first case we deal with is where the requested mask doesn't exist, and nor does an 'all' mask, which
+        #  is essentially a master interloper mask where no maximum inclusion distance (set by region_distance) was
+        #  specified. We will always use the master mask if it exists, but we'll generate the one specified by the
+        #  region distance in this case
+        if (reg_dist_key not in self._interloper_masks[telescope][obs_id] and
+                'all' not in self._interloper_masks[telescope][obs_id]):
+            # We specify a search key for the exact product type we need (combined image or just image) based on
+            #  whether the ObsID is combined or specific
+            type_search = 'combined_image' if obs_id == 'combined' else 'image'
+            # Grab it using the general product get method (another advantage of this is that the result is guaranteed
+            #  to be in a list, so we don't have to check
+            im = self.get_products(type_search, telescope=telescope)[0]
+
+            # Generate the mask as instructed, with the specified region_distance (which could well be None, which
+            #  would result in a 'master mask'
+            mask = self._generate_interloper_mask(im, region_distance)
+            # Then we store the generated mask for later, in case the same one is requested
+            self._interloper_masks[telescope][obs_id][reg_dist_key] = mask
+
+        # If a master mask is present, we'll just use that one
+        elif 'all' in self._interloper_masks[telescope][obs_id]:
+            mask = self._interloper_masks[telescope][obs_id]['all']
+        # And failing that, the specific mask that has been requested (specified by the region_distance argument)
+        #  must already exist, so we grab that and serve it to the user.
+        else:
+            mask = self._interloper_masks[telescope][obs_id][reg_dist_key]
 
         return mask
 
