@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:54. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple
@@ -57,7 +57,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         # Each telescope has its own methods of generating spectra
         if tel == 'xmm':
             warn("Spectrum stacking is not currently supported for XMM, and so combined spectra will not be used for"
-                 " these XSPEC fits.")
+                 " these XSPEC fits.", stacklevel=2)
             # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
             #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
             #  in it which will kick up a fuss if variables aren't formatted right
