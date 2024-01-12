@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:11. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -83,7 +83,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         instead use individual spectra for an ObsID. The default is False.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores)
+                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
@@ -102,10 +102,15 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
         #  least in this current setup
         for tel in source.telescopes:
+            if stacked_spectra:
+                search_inst = 'combined'
+            else:
+                search_inst = None
+
             # Find matching spectrum objects associated with the current source
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel)
+                                           over_sample=over_sample, telescope=tel, inst=search_inst)
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a cluster with only a single valid instrument for a single valid observation this may not be the case
             if isinstance(spec_objs, Spectrum):
