@@ -1,9 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 09:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:05. Copyright (c) The Contributors
 
 import os
-import warnings
 from typing import List, Union, Tuple
+from warnings import warn
 
 from astropy.units import Quantity, UnitConversionError
 
@@ -17,7 +17,8 @@ from ...sources import BaseSource, ExtendedSource, PointSource
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                     inner_radius: Union[str, Quantity], group_spec: bool = True, min_counts: int = 5,
                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                    num_cores: int = NUM_CORES) -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity]:
+                    num_cores: int = NUM_CORES, stacked_spectra: bool = False) \
+        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity]:
     """
     This pre-generates the spectra necessary for the requested fit (if they do not exist), and formats the input
     radii in a more predictable way.
@@ -44,6 +45,9 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be generated. If a
+        stacking procedure for a particular telescope is not supported, this function will instead use individual
+        spectra for an ObsID. The default is False.
     :return: Most likely just the passed in sources, but if a single source was passed then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
@@ -52,6 +56,8 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         #  telescopes that are associated with a source or sample
         # Each telescope has its own methods of generating spectra
         if tel == 'xmm':
+            warn("Spectrum stacking is not currently supported for XMM, and so combined spectra will not be used for"
+                 " these XSPEC fits.")
             # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
             #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
             #  in it which will kick up a fuss if variables aren't formatted right
@@ -61,7 +67,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             # This is the spectrum generation tool that is specific to eROSITA
             # TODO This will have to be adjusted to allow for combined spectra if that is what the user wants
             sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores,
-                                       False, False)
+                                       False, stacked_spectra)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))
@@ -104,7 +110,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     if not all([isinstance(src, (ExtendedSource, PointSource)) for src in sources]):
         raise TypeError("This convenience function cannot be used with BaseSource objects.")
     elif not all([src.detected for src in sources]):
-        warnings.warn("Not all of these sources have been detected, you may get a poor fit.")
+        warn("Not all of these sources have been detected, you may get a poor fit.")
 
     # Checks that the luminosity energy bands are pairs of values
     if lum_en.shape[1] != 2:

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:05. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -25,7 +25,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                     num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
+                     num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
+                     stacked_spectra: bool = False):
     """
     This is a convenience function for fitting an absorbed single temperature apec model(constant*tbabs*apec) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -77,6 +78,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
