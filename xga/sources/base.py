@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 17:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 18:00. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3904,6 +3904,11 @@ class BaseSource:
                 self._total_exp[tel] = {}
                 self._luminosities[tel] = {}
 
+            # This will be set to True if a whole ObsID of this telescope is removed, not just some instruments
+            #  associated with an ObsID - later on in this method that will trigger the reset of interloper regions
+            #  (which are based on all ObsID's regions for a particular telescope), and the reset of the interloper
+            #  masks based on those regions
+            whole_obsid_dis = False
             for o in to_remove[tel]:
                 for i in to_remove[tel][o]:
                     # Because of irritating missions like eROSITA where the event lists are distributed pre-combined
@@ -3919,6 +3924,9 @@ class BaseSource:
                         self._obs[tel][o] = []
 
                 if len(self._obs[tel][o]) == 0:
+                    # We now set the variable that describes whether a whole ObsID has been removed to True
+                    whole_obsid_dis = True
+
                     del self._products[tel][o]
                     del self._detected[tel][o]
                     del self._initial_regions[tel][o]
@@ -3959,10 +3967,15 @@ class BaseSource:
                     warn("All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name),
                          stacklevel=2)
 
-            # We replace the interloper regions entry for this telescope (i.e. the combined list of contaminant
-            #  regions) here, as it is possible we may have disassociated an ObsID and left its regions behind here.
-            # If an ObsID has been entirely removed, it will no longer be in '_other_regions' so this should work
-            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
+            if whole_obsid_dis:
+                # We replace the interloper regions entry for this telescope (i.e. the combined list of contaminant
+                #  regions) here, as it is possible we may have disassociated an ObsID and left its regions behind here.
+                # If an ObsID has been entirely removed, it will no longer be in '_other_regions' so this should work
+                self._interloper_regions[tel] = [r for o in self._other_regions[tel]
+                                                 for r in self._other_regions[tel][o]]
+                # We also have to wipe the interloper masks that already exist, as they would have been created with
+                #  other ObsID's regions
+                self._interloper_masks[tel] = {o: {} for o in self.obs_ids[tel] + ['combined']}
 
         if len(self._obs) == 0:
             raise NoValidObservationsError("No observations remain associated with {} after cleaning".format(self.name))
