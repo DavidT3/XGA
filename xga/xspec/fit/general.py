@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 13:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 14:10. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -199,7 +199,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                       num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                      timeout: Quantity = Quantity(1, 'hr')):
+                      timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
     """
     This is a convenience function for fitting an absorbed single temperature mekal model(constant*tbabs*mekal) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -232,7 +232,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
-        equivelant to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
+        equivalent to 1σ errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec/manual/XSerror.html)
         correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
@@ -253,9 +253,12 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores)
+                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed mekal, so I can hard code all of this stuff.
@@ -272,11 +275,16 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
+            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
+            if stacked_spectra and tel == 'erosita':
+                search_inst = 'combined'
+            else:
+                search_inst = None
 
             # Find matching spectrum objects associated with the current source
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel)
+                                           over_sample=over_sample, telescope=tel, inst=search_inst)
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a cluster with only a single valid instrument for a single valid observation this may not be the case
             if isinstance(spec_objs, Spectrum):
@@ -358,7 +366,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                         abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                         min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                         num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                        timeout: Quantity = Quantity(1, 'hr')):
+                        timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
     """
     This is a convenience function for fitting an absorbed multi temperature apec model (constant*tbabs*wdem) to
     spectra generated for XGA sources. The wdem model uses a power law distribution of the differential emission
@@ -408,9 +416,12 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores)
+                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
@@ -427,11 +438,16 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
+            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
+            if stacked_spectra and tel == 'erosita':
+                search_inst = 'combined'
+            else:
+                search_inst = None
 
             # Find matching spectrum objects associated with the current source
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel)
+                                           over_sample=over_sample, telescope=tel, inst=search_inst)
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a cluster with only a single valid instrument for a single valid observation this may not be the case
             if isinstance(spec_objs, Spectrum):
@@ -478,10 +494,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                 check_hi_lims = "{}"
                 check_err_lims = "{}"
 
-            # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
-            #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
-            #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
-            #  them all.
+            # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
+            #  luminosities. I am only specifying parameter 2 here (though there will likely be multiple models
+            #  because there are likely multiple spectra) because I know that nH of tbabs is linked in this setup, so
+            #  zeroing one will zero them all.
             nh_to_zero = "{2}"
 
             # This internal function writes out the XSPEC script with all the information we've assembled in this
@@ -514,7 +530,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-              timeout: Quantity = Quantity(1, 'hr')):
+              timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -537,7 +553,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
         :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
-        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
+        should be equivalent to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
         /manual/XSerror.html) correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
@@ -545,8 +561,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -556,9 +572,12 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores)
+                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
@@ -578,10 +597,15 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     src_inds = []
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
+            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
+            if stacked_spectra and tel == 'erosita':
+                search_inst = 'combined'
+            else:
+                search_inst = None
 
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel)
+                                           over_sample=over_sample, telescope=tel, inst=search_inst)
 
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a source with only a single valid instrument for a single valid observation this may not be the case
@@ -662,7 +686,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True, par_fit_stat: float = 1.,
               lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
               min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr')):
+              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
     """
     This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -685,7 +709,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which
-        should be equivelant to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
+        should be equivalent to 1sigma errors if I've understood (https://heasarc.gsfc.nasa.gov/xanadu/xspec
         /manual/XSerror.html) correctly.
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
@@ -693,8 +717,8 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -704,9 +728,12 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     """
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores)
+                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed blackbody or absorbed zbbody
@@ -726,9 +753,15 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     src_inds = []
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
+            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
+            if stacked_spectra and tel == 'erosita':
+                search_inst = 'combined'
+            else:
+                search_inst = None
+
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel)
+                                           over_sample=over_sample, telescope=tel, inst=search_inst)
 
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a source with only a single valid instrument for a single valid observation this may not be the case
