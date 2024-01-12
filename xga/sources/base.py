@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 17:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 16:37. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1621,22 +1621,42 @@ class BaseSource:
 
         return results_dict, alt_match_dict, anti_results_dict
 
-    def _generate_interloper_mask(self, mask_image: Image) -> ndarray:
+    def _generate_interloper_mask(self, mask_image: Image, region_distance: Quantity = None) -> ndarray:
         """
         An internal method to create masks for the removal of contaminating sources - the passed image is used both
         to provide dimension/WCS information, but also to identify the telescope used for the image. Regions are
-        kept separate across telescopes
+        kept separate across telescopes.
 
         :param Image mask_image: The image for which to create the interloper mask.
+        :param Quantity region_distance: The distance from the central coordinate within which contaminating
+            regions will be included in this mask. Introduced as a counter to the very large numbers of regions
+            associated with eROSITA observations. Default is None, in which case all contaminating regions will be
+            included in the mask.
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
+        if not region_distance.unit.is_equivalent('deg'):
+            raise UnitConversionError("The 'region_distance' argument must be supplied in units that are "
+                                      "convertible to degrees.")
+        else:
+            region_distance = region_distance.to('deg').value
+
         # This is the array that the mask gets built in - initially all ones and as we move through the regions we
         #  start to set the bits that need to be excluded to zero
         mask = np.ones(mask_image.shape)
 
+        # If a region inclusion distance has not been set, then we create a mask of all True so that all regions
+        #  are included in the final mask
+        if region_distance is None:
+            for_mask = np.full(len(self._interloper_regions[mask_image.telescope]), True)
+        # However, if an inclusion distance has been passed, we use it to create a True-False array to define which
+        #  regions we want to include.
+        else:
+            for_mask = (Quantity(np.array([_dist_from_source(*self._ra_dec, r)
+                                           for r in self._interloper_regions[mask_image.telescope]])) < region_distance)
+
         # TODO Maybe this is a candidate for some intelligent multi-threading?
-        for r in self._interloper_regions[mask_image.telescope]:
+        for r in self._interloper_regions[mask_image.telescope][for_mask]:
             if r is not None:
                 # The central coordinate of the current region
                 c = Quantity([r.center.ra.value, r.center.dec.value], 'deg')
