@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 12:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/01/2024, 09:04. Copyright (c) The Contributors
 
 import os
 import re
@@ -216,6 +216,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 if exists and check_sp.usable and not force_gen:
                     continue
 
+                # Getting the source name
+                source_name = source.name
+
+                # Just grabs the event list object
+                evt_list = pack[-1]
+                # Sets up the file names of the output files, adding a random number so that the
+                #  function for generating annular spectra doesn't clash and try to use the same folder
+                # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
+                #  being removed) will be written to a different temporary folder using the same random identifier.
+                rand_ident = randint(0, 1e+8)
+                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
+                                                                                r=rand_ident)
+
                 # If there is no match to a region, the source region returned by this method will be None,
                 #  and if the user wants to generate spectra from region files, we have to ignore that observations
                 # TODO ASSUMPTION6 source.source_back_regions will have a telescope parameter
@@ -232,11 +245,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     # This constructs the sas strings for any radius that isn't 'region'
                     reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
                                                    interloper_regions=interloper_regions,
-                                                   central_coord=source.default_coord)
+                                                   central_coord=source.default_coord, rand_ident=rand_ident)
                     b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
                                                      outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
                                                      interloper_regions=back_inter_reg,
-                                                     central_coord=source.default_coord, bkg_reg=True)
+                                                     central_coord=source.default_coord, bkg_reg=True,
+                                                     rand_ident=rand_ident)
                     inn_rad_degrees = inner_radii[s_ind]
                     out_rad_degrees = outer_radii[s_ind]
 
@@ -244,17 +258,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     # This creates a detection map for the source and background region
                     # map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
                 
-                # Getting the source name
-                source_name = source.name
-                
-                # Just grabs the event list object
-                evt_list = pack[-1]
-                # Sets up the file names of the output files, adding a random number so that the
-                #  function for generating annular spectra doesn't clash and try to use the same folder
-                # ASSUMPTION4 new output directory structure
-                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
-                                                                                r=randint(0, 1e+8))
-
                 # Setting up file names that include the extra variables
                 if group_spec and min_counts is not None:
                     extra_file_name = "_mincnt{c}".format(c=min_counts)
@@ -387,9 +390,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Adds clean up commands to move all generated files and remove temporary directory
                 cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
                 # If temporary region files were made, they will be here
-                if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs'):
+                if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs_{i}'.format(i=rand_ident)):
                     # Removing this directory
-                    cmd_str += ";rm -r temp_regs"
+                    cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
 
                 cmds.append(cmd_str)  # Adds the full command to the set
                 # Makes sure the whole path to the temporary directory is created
