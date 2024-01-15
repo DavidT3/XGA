@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 20:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/01/2024, 09:02. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -31,6 +31,10 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
+
+    # TODO REMOVE OBVIOUSLY
+    if 'STOP' in out:
+        print(out, '\n\n')
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
@@ -106,12 +110,36 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
 def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str,
                              output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
                              interloper_regions: np.ndarray = None, central_coord: Quantity = None,
-                             bkg_reg: bool = False) -> str:
+                             bkg_reg: bool = False, rand_ident: int = None) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
-    """
 
+    :param BaseSource source: The source object for which we wish to generate an eSASS-compatible annular region
+        string/region file.
+    :param Quantity inner_radius: The inner radius/radii of the region you wish to generate in SAS, if the
+        quantity has multiple elements then an elliptical region will be generated, with the first element
+        being the inner radius on the semi-major axis, and the second on the semi-minor axis.
+    :param Quantity outer_radius: The inner outer_radius/radii of the region you wish to generate in SAS, if the
+        quantity has multiple elements then an elliptical region will be generated, with the first element
+        being the outer radius on the semi-major axis, and the second on the semi-minor axis.
+    :param str obs_id: The ObsID of the observation you wish to generate the SAS region for.
+    :param UnitBase/str output_unit: The desired units for the region string/file to be written in.
+    :param Quantity rot_angle: The rotation angle of the source region, default is zero degrees.
+    :param np.ndarray interloper_regions: The interloper regions to remove from the source region,
+        default is None, in which case the function will run self.regions_within_radii.
+    :param Quantity central_coord: The coordinate on which to centre the source region, default is
+        None in which case the function will use the default_coord of the source object.
+    :param bool bkg_reg: Specifies whether the region string/file to be generated is for a background annulus. If
+        True, and contaminating regions are being removed (i.e. a file needs to be written out), then a back_ prefix
+        will be added to the file names. Default is False.
+    :param int rand_ident: A random identifier to be inserted in the 'temp_regs' directory name, if temporary
+        region files need to be written out.
+    :return: Either a string representation of the requested region (if no contaminating sources are being
+        removed), or a path to a region file that can be used with eSASS that specifies the source and
+        contaminating regions.
+    :rtype: str
+    """
     if central_coord is None:
         central_coord = source.default_coord
 
@@ -138,10 +166,8 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     # If the user doesn't pass any regions, then we have to find them ourselves. I decided to allow this
     #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
     #  like in evselect_spectrum for instance.
-    #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
     if interloper_regions is None and inner_radius.isscalar:
         interloper_regions = source.regions_within_radii(inner_radius, outer_radius, "erosita", central_coord)
-    #ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
     elif interloper_regions is None and not inner_radius.isscalar:
         interloper_regions = source.regions_within_radii(min(inner_radius), max(outer_radius), "erosita", central_coord)
 
@@ -183,7 +209,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         final_src = esass_source_area
     else:
         # Multiple regions must be passed to eSASS via an ASCII file, so I will write this here
-        reg_file_path = OUTPUT + 'erosita/' + obs_id + '/temp_regs'
+        reg_file_path = OUTPUT + 'erosita/' + obs_id + '/temp_regs_{i}'.format(i=rand_ident)
         reg_str = esass_source_area.replace(" ", "_")  # replacing spaces with underscores for file naming purposes
         reg_str = reg_str.replace(".", "-")  # replacing any dots with dashes
 
