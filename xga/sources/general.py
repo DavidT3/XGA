@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 17:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/01/2024, 22:30. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -131,9 +131,18 @@ class ExtendedSource(BaseSource):
             search_aperture = Quantity(5, 'arcmin').to('deg')
         self._radii["search"] = search_aperture
 
+        # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak
+
+        # Here we deal with the user defined background region, if an annulus surrounding the source is
+        #  to be used. First though, we check whether that the outer radius factor is larger than the inner radius
+        #  factor.
+        if back_out_rad_factor <= back_inn_rad_factor:
+            raise ValueError("The 'back_out_rad_factor' argument must be larger than the 'back_inn_rad_factor' "
+                             "argument.")
         self._back_inn_factor = back_inn_rad_factor
         self._back_out_factor = back_out_rad_factor
+
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
@@ -653,9 +662,18 @@ class PointSource(BaseSource):
                 emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                 emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
+        # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak
+
+        # Here we deal with the user defined background region, if an annulus surrounding the source is
+        #  to be used. First though, we check whether that the outer radius factor is larger than the inner radius
+        #  factor.
+        if back_out_rad_factor <= back_inn_rad_factor:
+            raise ValueError("The 'back_out_rad_factor' argument must be larger than the 'back_inn_rad_factor' "
+                             "argument.")
         self._back_inn_factor = back_inn_rad_factor
         self._back_out_factor = back_out_rad_factor
+
         self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
         self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
         for tel in self.telescopes:
