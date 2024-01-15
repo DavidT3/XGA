@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/01/2024, 22:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/01/2024, 09:38. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -668,6 +668,8 @@ class PointSource(BaseSource):
         # Here we deal with the user defined background region, if an annulus surrounding the source is
         #  to be used. First though, we check whether that the outer radius factor is larger than the inner radius
         #  factor.
+        # TODO Honestly why isn't this in BaseSource?? - it gets repeated in PointSource and ExtendedSource, which
+        #  seems silly
         if back_out_rad_factor <= back_inn_rad_factor:
             raise ValueError("The 'back_out_rad_factor' argument must be larger than the 'back_inn_rad_factor' "
                              "argument.")

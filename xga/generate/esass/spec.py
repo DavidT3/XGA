@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/01/2024, 09:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/01/2024, 09:38. Copyright (c) The Contributors
 
 import os
 import re
@@ -339,9 +339,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Fills out the srctool command to make the main and background spectra
                 s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
                                                    i=inst_no, ts=tstep, em=im.path, et=et)
-                # TODO I've changed this so the timestep for background is the same as source
+                # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                                      i=inst_no, ts=tstep)
+                                                      i=inst_no, ts=tstep*4)
                 # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
