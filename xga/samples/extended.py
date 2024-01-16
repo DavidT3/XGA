@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 09:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:52. Copyright (c) The Contributors
 
 from typing import List
 
@@ -125,7 +125,7 @@ class ClusterSample(BaseSample):
         """
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.sas import evselect_image, eexpmap, emosaic
+        from xga.generate.sas import evselect_image, eexpmap, emosaic
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
@@ -620,7 +620,7 @@ class ClusterSample(BaseSample):
         :rtype: Quantity
         """
         # Has to be here to prevent circular import unfortunately
-        from ..sas._common import region_setup
+        from ..generate.sas._common import region_setup
 
         # Have to check that the chosen telescope is actually valid for this sample
         if telescope not in self.telescopes:
@@ -731,7 +731,7 @@ class ClusterSample(BaseSample):
         :rtype: Quantity
         """
         # Has to be here to prevent circular import unfortunately
-        from ..sas._common import region_setup
+        from ..generate.sas._common import region_setup
 
         # Have to check that the chosen telescope is actually valid for this sample
         if telescope not in self.telescopes:
