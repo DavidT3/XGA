@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/05/2023, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:59. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -11,10 +11,10 @@ from astropy.units import Quantity
 from .run import xspec_call
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
+from ..generate.sas import evselect_spectrum
+from ..generate.sas._common import region_setup
 from ..products import Spectrum
 from ..samples.extended import ClusterSample
-from ..sas import evselect_spectrum
-from ..sas._common import region_setup
 from ..sources import BaseSource, GalaxyCluster
 from ..utils import ABUND_TABLES
 

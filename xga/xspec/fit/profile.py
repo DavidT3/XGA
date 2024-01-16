@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/04/2023, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:59. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -10,9 +10,9 @@ from ._common import _write_xspec_script, _check_inputs
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
+from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
-from ...sas import spectrum_set
 from ...sources import BaseSource
 
 
