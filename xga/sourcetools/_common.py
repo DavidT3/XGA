@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/08/2023, 15:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -9,10 +9,10 @@ from astropy.units import Quantity
 from .misc import model_check
 from .. import NUM_CORES
 from ..exceptions import ModelNotAssociatedError
+from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..samples import ClusterSample
-from ..sas._common import region_setup
 from ..sources import BaseSource, GalaxyCluster
 from ..sourcetools.density import inv_abel_fitted_model
 from ..sourcetools.temperature import onion_deproj_temp_prof

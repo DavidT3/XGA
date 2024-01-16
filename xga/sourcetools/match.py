@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 11:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
+
 import gc
 import os
 from copy import deepcopy
@@ -565,7 +566,7 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
     #  that allows for a list of ObsIDs to be passed rather than coordinates
     from ..sources import NullSource
-    from ..sas import eexpmap
+    from ..generate.sas import eexpmap
 
     # Checks whether there are multiple input coordinates or just one. If one then the floats are turned into
     #  an array of length one to make later code easier to write (i.e. everything is iterable regardless)
