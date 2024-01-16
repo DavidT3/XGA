@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/10/2023, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 09:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -496,7 +496,7 @@ class Image(BaseProduct):
     @property
     def instruments(self) -> dict:
         """
-        Equivelant to the BaseSource instruments property, this will return a dictionary of ObsIDs with lists of
+        Equivalent to the BaseSource instruments property, this will return a dictionary of ObsIDs with lists of
         instruments that are associated with them in a combined image. If the image is not combined then an equivelant
         dictionary with one key (the ObsID), with the associated value being a list with one entry (the instrument).
 
@@ -772,7 +772,7 @@ class Image(BaseProduct):
             else:
                 self._wcs_xmmdetXdetY = input_wcs
 
-    # This absolutely doesn't get a setter considering its the header object with all the information
+    # This absolutely doesn't get a setter considering it's the header object with all the information
     #  about the image in.
     @property
     def header(self) -> FITSHDR:
@@ -785,6 +785,16 @@ class Image(BaseProduct):
         if self._header is None:
             self._read_wcs_on_demand()
         return self._header
+
+    @header.deleter
+    def header(self):
+        """
+        Property deleter for the header of this Image instance, or whatever subclass of the Image class you
+        may be using. The self._header attribute is removed from memory, and then self._header is explicitly set
+        to None so that self._read_wcs_on_demand() will be triggered if you ever want the header from this object again.
+        """
+        del self._header
+        self._header = None
 
     def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str]) -> Quantity:
         """
@@ -1016,6 +1026,32 @@ class Image(BaseProduct):
         else:
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
+
+    def unload(self, unload_data: bool = True, unload_header: bool = False):
+        """
+        This method allows you to safely remove the data and/or header information contained in this
+        Image/ExpMap/RateMap from memory, while guaranteeing that it will be read back in if required. We use
+        the delete methods implemented for the data and header properties, which can also be used directly by
+        the user.
+
+        :param bool unload_data: Specifies whether the data should be unloaded from memory. Default is True, as the
+            image data is liable to take up far more memory than the header, meaning it is more likely to need to
+            be removed.
+        :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
+        """
+
+        # Doesn't make sense in this case, as the method wouldn't do anything - as it was probably a mistake to call
+        #  the method like this I throw an error so the user knows
+        if not unload_data and not unload_header:
+            raise ValueError("At least one of the 'unload_data' and 'unload_header' arguments must be True.")
+
+        # Pretty simple, if the user wants the data gone then we use the existing property delete method for data
+        if unload_data:
+            del self.data
+
+        # And if they want the header gone then we use the property delete method for header
+        if unload_header:
+            del self.header
 
     def get_count(self, at_coord: Quantity) -> float:
         """
