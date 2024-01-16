@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:48. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -14,9 +14,9 @@ from scipy.signal import convolve
 from tqdm import tqdm
 
 from ..exceptions import NotAssociatedError
+from ..generate.sas import evselect_image, psfgen, emosaic
 from ..products import PSFGrid, Image
 from ..samples.base import BaseSample
-from ..sas import evselect_image, psfgen, emosaic
 from ..sources import BaseSource
 from ..utils import NUM_CORES, OUTPUT
 
