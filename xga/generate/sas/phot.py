@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:28. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -44,7 +44,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
     if 'xmm' not in sources.telescopes:
         raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
-                                          "spectra cannot be generated.")
+                                          "image cannot be generated.")
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -140,6 +140,14 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if 'xmm' not in sources.telescopes:
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "exposure maps cannot be generated.")
+
     # I know that a lot of this code is the same as the evselect_image code, but its 1am so please don't
     #  judge me too much.
 
@@ -172,6 +180,11 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
     sources_extras = []
     sources_types = []
     for source in sources:
+        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
+        #  beginning of this function), so we're just skipping all the individual sources that don't have XMM data
+        if 'xmm' not in source.telescopes:
+            continue
+
         cmds = []
         final_paths = []
         extra_info = []
@@ -250,6 +263,14 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if 'xmm' not in sources.telescopes:
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "images cannot be generated.")
+
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -286,6 +307,11 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     sources_extras = []
     sources_types = []
     for source in sources:
+        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
+        #  beginning of this function), so we're just skipping all the individual sources that don't have XMM data
+        if 'xmm' not in source.telescopes:
+            continue
+
         en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
         # If we're mosaicing PSF corrected images, we need to
         if psf_corr and to_mosaic == "expmap":
@@ -376,6 +402,14 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if 'xmm' not in sources.telescopes:
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "PSF realisations cannot be generated.")
+
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
 
@@ -412,6 +446,12 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
             extra_info = []
             # Check which event lists are associated with each individual source
             for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+                # By this point we know that at least one of the sources has XMM data associated (we checked that
+                #  at the beginning of this function), so we're just skipping all the individual sources that don't
+                #  have XMM data
+                if 'xmm' not in source.telescopes:
+                    continue
+
                 obs_id = pack[0]
                 inst = pack[1]
 
