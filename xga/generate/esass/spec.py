@@ -1,17 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 16:15. Copyright (c) The Contributors
 
 import os
-import re
-from copy import deepcopy
+from copy import deepcopy, copy
 from random import randint
-from typing import Union
+from typing import Union, List
 
 import numpy as np
-from astropy.coordinates import SkyCoord
-from astropy.io import fits
 from astropy.units import Quantity
-from astropy.wcs import WCS
 
 from .phot import evtool_image
 from .run import esass_call
@@ -257,7 +253,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                    "argument.")
 
                 else:
-                    # This constructs the sas strings for any radius that isn't 'region'
+                    # This constructs the eSASS strings/region files for any radius that isn't 'region'
                     reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
                                                    interloper_regions=interloper_regions,
                                                    central_coord=source.default_coord, rand_ident=rand_ident)
@@ -439,98 +435,99 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-# TODO fix this function to use XGA in built function and I still need to debug
-def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
-                      rot_angle: Quantity = Quantity(0, 'deg')):
-    """
-    Internal function to make detection maps for extended sources, so that they can be corrected for vignetting
-    correctly when spectra are generated in esass.
-    """
-    outer_radius = outer_radius.to('deg')
-    
-    # Defining the name of the detection map
-    detmap_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ro{ro}_detmap.fits"
-    detmap_name = detmap_str.format(o=obs_id, i=inst, n=source.name, ra=source.default_coord[0].value,
-                                    dec=source.default_coord[1].value, ro=outer_radius.to_value)
-    detmap_path = OUTPUT + 'erosita/' + obs_id + '/' + detmap_name
-
-    # Checking if an image has already been made
-    en_id = "bound_{l}-{u}".format(l=0.2, u=10)
-    exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
-                  if en_id in match]
-
-    if len(exists) == 1 and exists[0][-1].useable:
-        img = exists[0][-1] 
-    # Generating an image around this region
-    else:
-        evtool_image(source)
-        exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
-                  if en_id in match]
-        img = exists[0][-1]
-        
-    # Converting that image to the detection map needed
-    with fits.open(img.path) as hdul:
-        # Getting rebinning information from the image
-        bin_key_word = 'rebin'
-        process_history = hdul[0].header['SASSHIST']
-        # This creates a pattern to search for within the string of the processing history of the image
-        # the '=(\d+)' includes an equals sign and any numbers that follow
-        pattern = re.compile(fr'\b{re.escape(bin_key_word)}=(\d+)\b')
-        matches = re.finditer(pattern, process_history) # This finds this pattern within the longer string
-
-        # returning the matches from the iter object
-        binnings = []
-        for match in matches:
-            binnings.append(match.group(1))  # using group(1) returns only the numbers, instead of the whole pattern
-
-        img_binning = int(binnings[-1])  # the results of binnings are stored as strings so need to make it an int
-
-        # Defining the WCS of the image
-        # DAVID_QUESTION, the headers are crazy!
-        hdr = hdul[0].header
-        wcs = WCS(naxis=2)
-        wcs.wcs.cdelt = [hdr["CDELT1P"], hdr["CDELT2P"]]
-        wcs.wcs.crpix = [hdr["CRPIX1P"],hdr["CRPIX2P"]]
-        wcs.wcs.crval = [hdr["CRVAL1"], hdr["CRVAL2"]]
-        wcs.wcs.ctype = [hdr["CTYPE1"], hdr["CTYPE2"]]
-
-        if outer_radius.isscalar:
-            # Defining the region first in sky coords
-            radius = outer_radius*source.background_radius_factors[1]
-            centre = SkyCoord(source.default_coord[0], source.default_coord[1], unit='deg', frame='fk5')
-
-            # Converting to image coords
-            # First converting the radius into pixels
-            arcsec_4 = Quantity(4, 'arcsec')  # For a binning of 80, the pixel scale is 4 arcsec
-            in_degrees = arcsec_4.to('deg') 
-            conv_factor = in_degrees.value/80  # Defining relationship between binning and pixel scale
-            pix_scale = img_binning*conv_factor  # Finding pix_scale for this image
-            radius = radius.value/pix_scale  # Radius now in pixels
-
-            # Now converting the centre into image coords
-            x, y = wcs.world_to_pixel(centre)
-            x = int(x)
-            y = int(y)
-            centre = [x, y]
-
-            # Then creating a mask in the image over the region
-            img = hdul[0].data
-            y, x = np.ogrid[:img.shape[0], :img.shape[1]]
-            distance = np.sqrt((x - centre[0])**2 + (y - centre[1])**2)
-            region_mask = distance <= radius
-            img[region_mask & (img != 0)] = 1
-            img[~region_mask] = 0
-
-            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                os.mkdir(OUTPUT + 'erosita/' + obs_id)
-
-            hdul.writeto(detmap_path)
-        
-        # TODO ellipses!
-        elif not outer_radius.isscalar:
-            raise NotImplementedError("Haven't figured out how to do this with ellipses yet")
-    
-    return detmap_path
+# # TODO fix this function to use XGA in built function and I still need to debug
+# TODO DAVID - Actually don't think that this is necessary anymore
+# def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
+#                       rot_angle: Quantity = Quantity(0, 'deg')):
+#     """
+#     Internal function to make detection maps for extended sources, so that they can be corrected for vignetting
+#     correctly when spectra are generated in esass.
+#     """
+#     outer_radius = outer_radius.to('deg')
+#
+#     # Defining the name of the detection map
+#     detmap_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ro{ro}_detmap.fits"
+#     detmap_name = detmap_str.format(o=obs_id, i=inst, n=source.name, ra=source.default_coord[0].value,
+#                                     dec=source.default_coord[1].value, ro=outer_radius.to_value)
+#     detmap_path = OUTPUT + 'erosita/' + obs_id + '/' + detmap_name
+#
+#     # Checking if an image has already been made
+#     en_id = "bound_{l}-{u}".format(l=0.2, u=10)
+#     exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
+#                   if en_id in match]
+#
+#     if len(exists) == 1 and exists[0][-1].useable:
+#         img = exists[0][-1]
+#     # Generating an image around this region
+#     else:
+#         evtool_image(source)
+#         exists = [match for match in source.get_products("image", obs_id, inst, telescope="erosita", just_obj=False)
+#                   if en_id in match]
+#         img = exists[0][-1]
+#
+#     # Converting that image to the detection map needed
+#     with fits.open(img.path) as hdul:
+#         # Getting rebinning information from the image
+#         bin_key_word = 'rebin'
+#         process_history = hdul[0].header['SASSHIST']
+#         # This creates a pattern to search for within the string of the processing history of the image
+#         # the '=(\d+)' includes an equals sign and any numbers that follow
+#         pattern = re.compile(fr'\b{re.escape(bin_key_word)}=(\d+)\b')
+#         matches = re.finditer(pattern, process_history) # This finds this pattern within the longer string
+#
+#         # returning the matches from the iter object
+#         binnings = []
+#         for match in matches:
+#             binnings.append(match.group(1))  # using group(1) returns only the numbers, instead of the whole pattern
+#
+#         img_binning = int(binnings[-1])  # the results of binnings are stored as strings so need to make it an int
+#
+#         # Defining the WCS of the image
+#         # DAVID_QUESTION, the headers are crazy!
+#         hdr = hdul[0].header
+#         wcs = WCS(naxis=2)
+#         wcs.wcs.cdelt = [hdr["CDELT1P"], hdr["CDELT2P"]]
+#         wcs.wcs.crpix = [hdr["CRPIX1P"],hdr["CRPIX2P"]]
+#         wcs.wcs.crval = [hdr["CRVAL1"], hdr["CRVAL2"]]
+#         wcs.wcs.ctype = [hdr["CTYPE1"], hdr["CTYPE2"]]
+#
+#         if outer_radius.isscalar:
+#             # Defining the region first in sky coords
+#             radius = outer_radius*source.background_radius_factors[1]
+#             centre = SkyCoord(source.default_coord[0], source.default_coord[1], unit='deg', frame='fk5')
+#
+#             # Converting to image coords
+#             # First converting the radius into pixels
+#             arcsec_4 = Quantity(4, 'arcsec')  # For a binning of 80, the pixel scale is 4 arcsec
+#             in_degrees = arcsec_4.to('deg')
+#             conv_factor = in_degrees.value/80  # Defining relationship between binning and pixel scale
+#             pix_scale = img_binning*conv_factor  # Finding pix_scale for this image
+#             radius = radius.value/pix_scale  # Radius now in pixels
+#
+#             # Now converting the centre into image coords
+#             x, y = wcs.world_to_pixel(centre)
+#             x = int(x)
+#             y = int(y)
+#             centre = [x, y]
+#
+#             # Then creating a mask in the image over the region
+#             img = hdul[0].data
+#             y, x = np.ogrid[:img.shape[0], :img.shape[1]]
+#             distance = np.sqrt((x - centre[0])**2 + (y - centre[1])**2)
+#             region_mask = distance <= radius
+#             img[region_mask & (img != 0)] = 1
+#             img[~region_mask] = 0
+#
+#             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+#                 os.mkdir(OUTPUT + 'erosita/' + obs_id)
+#
+#             hdul.writeto(detmap_path)
+#
+#         # TODO ellipses!
+#         elif not outer_radius.isscalar:
+#             raise NotImplementedError("Haven't figured out how to do this with ellipses yet")
+#
+#     return detmap_path
 
 
 @esass_call
@@ -574,3 +571,246 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores, disable_progress,
                       combine_tm, force_gen=force_gen)
+
+
+# TODO I feel that I could combine this with the original SAS one, seeing as they essentially call existing
+#  spectrum generation functions with particular arguments
+@esass_call
+def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
+                       group_spec: bool = True, min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
+                       force_regen: bool = False, disable_progress: bool = False, combine_tm: bool = False):
+    """
+    This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular
+    annuli, specifically using data from the eROSITA telescope.
+    Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
+    to measure spectroscopic quantities in a three dimensional space.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
+        annuli for the sources. A single quantity containing at least three radii may be passed if one source
+        is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
+        source.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
+    :param bool force_regen: This will force all the constituent spectra of the set to be regenerated, use this
+        if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
+    :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
+    :param bool combine_tm: Create annular spectra for individual ObsIDs that are a combination of the data from
+        all the telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature
+        of the survey data eROSITA takes. Default is True.
+    """
+    # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
+    #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
+    #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
+    if 'erosita' not in sources.telescopes:
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
+                                          "eROSITA annular spectra cannot be generated.")
+
+    if combine_tm:
+        raise NotImplementedError("We do not yet support stacking of telescope module data for annular spectra.")
+
+    # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+    elif isinstance(sources, list) and not all([isinstance(s, BaseSource) for s in sources]):
+        raise TypeError("If a list is passed, each element must be a source.")
+    # And the only other option is a BaseSample instance, so if it isn't that then we get angry
+    elif not isinstance(sources, (BaseSample, list)):
+        raise TypeError("Please only pass source or sample objects for the 'sources' parameter of this function")
+
+    # I just want to make sure that nobody passes anything daft for the radii
+    if isinstance(radii, Quantity) and len(sources) != 1:
+        raise TypeError("You may only pass a Quantity for the radii parameter if you are only analysing "
+                        "one source. You are attempting to generate spectrum sets for {0} sources, so please pass "
+                        "a list of {0} non-scalar quantities.".format(len(sources)))
+    elif isinstance(radii, Quantity):
+        pass
+    elif isinstance(radii, (list, np.ndarray)) and len(sources) != len(radii):
+        raise ValueError("The list of quantities passed for the radii parameter must be the same length as the "
+                         "number of sources which you are analysing.")
+
+    # If we've made it to this point then the radii type is fine, but I want to make sure that radii is a list
+    #  of quantities - as expected by the rest of the function
+    if isinstance(radii, Quantity):
+        radii = [radii]
+
+    # Check that all radii are passed in the units, I could convert them and make sure but I can't
+    #  be bothered
+    if len(set([r.unit for r in radii])) != 1:
+        raise ValueError("Please pass all radii sets in the same units.")
+
+    # I'm also going to check to make sure that every annulus N+1 is further out then annulus N. There is a check
+    #  for this in the spec setup function but if I catch it here I can give a more informative error message
+    for s_ind, source in enumerate(sources):
+        # I'll also check that the quantity passed for the radii isn't scalar, and isn't only two long - that's not
+        #  a set of annuli, they should just use evselect_spectrum for that
+        cur_rad = radii[s_ind]
+        src_name = source.name
+        if cur_rad.isscalar:
+            raise ValueError("The radii quantity you have passed for {s} only has one value in it, this function is "
+                             "for generating a set of multiple annular spectra, I need at least three "
+                             "entries.".format(s=src_name))
+        elif len(cur_rad) < 3:
+            raise ValueError("The radii quantity have you passed for {s} must have at least 3 entries, this "
+                             "would generate a set of 2 annular spectra and is the minimum for this "
+                             "function.".format(s=src_name))
+
+        # This runs through the radii for this source and makes sure that annulus N+1 is larger than annulus N
+        greater_check = [cur_rad[r_ind] < cur_rad[r_ind+1] for r_ind in range(0, len(cur_rad)-1)]
+        if not all(greater_check):
+            raise ValueError("Not all of the radii passed for {s} are larger than the annulus that "
+                             "precedes them.".format(s=src_name))
+
+    # This generates a spectra between the innermost and outmost radii for each source
+    innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
+    outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
+    srctool_spectrum(sources, outermost_rads, innermost_rads, group_spec, min_counts, min_sn, num_cores,
+                     disable_progress)
+
+    # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
+    #  the correct annuli, which is why I have to iterate through the sources and radii
+
+    # These store the final output information needed to run the commands
+    all_cmds = []
+    all_paths = []
+    all_out_types = []
+    all_extras = []
+    # Iterating through the sources
+    for s_ind, source in enumerate(sources):
+        # This generates a random integer ID for this set of spectra
+        set_id = randint(0, 1e+8)
+
+        # I want to be sure that this configuration doesn't already exist
+        if group_spec and min_counts is not None:
+            extra_name = "_mincnt{}".format(min_counts)
+        elif group_spec and min_sn is not None:
+            extra_name = "_minsn{}".format(min_sn)
+        else:
+            extra_name = ''
+
+        # Combines the annular radii into a string
+        ann_rad_str = "_".join(source.convert_radius(radii[s_ind], 'deg').value.astype(str))
+        spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
+        spec_storage_name = spec_storage_name.format(ra=source.default_coord[0].value,
+                                                     dec=source.default_coord[1].value, ar=ann_rad_str, gr=group_spec)
+
+        spec_storage_name += extra_name
+
+        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='erosita')
+        if len(exists) == 0:
+            # If it doesn't exist then we do need to call evselect_spectrum
+            generate_spec = True
+        else:
+            # If it already exists though we don't need to bother
+            generate_spec = False
+
+        # This is where the commands/extra information get concatenated from the different annuli
+        src_cmds = np.array([])
+        src_paths = np.array([])
+        src_out_types = []
+        src_extras = np.array([])
+        if generate_spec or force_regen:
+            # Here we run through all the requested annuli for the current source
+            for r_ind in range(len(radii[s_ind])-1):
+                # Generate the eSASS commands for the current annulus of the current source, for all observations
+                spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
+                                          min_sn, num_cores, disable_progress, combine_tm, True)
+
+                # Read out some of the output into variables to be modified
+                interim_paths = spec_cmd_out[5][0]
+                interim_extras = spec_cmd_out[6][0]
+                interim_cmds = spec_cmd_out[0][0]
+
+                # Modified paths and commands will be stored in here
+                new_paths = []
+                new_cmds = []
+                for p_ind, p in enumerate(interim_paths):
+                    cur_cmd = interim_cmds[p_ind]
+
+                    # Split up the current path, so we only modify the actual file name and not any
+                    #  other part of the string
+                    split_p = p.split('/')
+                    # We add the set and annulus identifiers
+                    new_spec = (split_p[-1].replace("_spec.fits", "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
+                                + "_spec.fits")
+                    # Not enough just to change the name passed through XGA, it has to be changed in
+                    #  the eSASS commands as well
+                    cur_cmd = cur_cmd.replace(split_p[-1], new_spec)
+
+                    # Add the new filename back into the split spec file path
+                    split_p[-1] = new_spec
+
+                    # Add an annulus identifier to the extra_info dictionary
+                    interim_extras[p_ind].update({"set_ident": set_id, "ann_ident": r_ind})
+
+                    # Only need to modify the RMF paths if the universal RMF HASN'T been used
+                    if "universal" not in interim_extras[p_ind]['rmf_path']:
+                        # Much the same process as with the spectrum name
+                        split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
+                        # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
+                        new_rmf = split_r[-1].replace('.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
+                        # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                        #             + "_back.rmf"
+
+                        # Replacing the names in the eSASS commands
+                        cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)
+                        # cur_cmd = cur_cmd.replace(split_br[-1], new_b_rmf)
+
+                        split_r[-1] = new_rmf
+                        # split_br[-1] = new_b_rmf
+
+                        # Adding the new RMF paths into the extra info dictionary
+                        # interim_extras[p_ind].update({"rmf_path": "/".join(split_r),
+                        # "b_rmf_path": "/".join(split_br)})
+                        interim_extras[p_ind].update({"rmf_path": "/".join(split_r)})
+
+                    # Same process as RMFs but for the ARF, background ARF, and background spec
+                    split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
+                    # split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+                    split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
+                    new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
+                    # new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                    #             + "_back.arf"
+                    new_b_spec = (split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
+                                  + "_backspec.fits")
+
+                    # New names into the commands
+                    cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
+                    # cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
+                    cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
+
+                    split_a[-1] = new_arf
+                    # split_ba[-1] = new_b_arf
+                    split_bs[-1] = new_b_spec
+
+                    # Update the extra info dictionary some more
+                    # interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
+                    #                               "b_spec_path": "/".join(split_bs)})
+                    interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs)})
+
+                    # Add the new paths and commands to their respective lists
+                    new_paths.append("/".join(split_p))
+                    new_cmds.append(cur_cmd)
+
+                src_paths = np.concatenate([src_paths, new_paths])
+                # Go through and concatenate things to the source lists defined above
+                src_cmds = np.concatenate([src_cmds, new_cmds])
+                src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
+                src_extras = np.concatenate([src_extras, interim_extras])
+        src_out_types = np.array(src_out_types)
+
+        # This adds the current sources final commands to the 'all sources' lists
+        all_cmds.append(src_cmds)
+        all_paths.append(src_paths)
+        all_out_types.append(src_out_types)
+        all_extras.append(src_extras)
+
+    # This gets passed back to the esass call function and is used to run the commands
+    return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
