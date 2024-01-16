@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 11:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:46. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4021,17 +4021,19 @@ class BaseSource:
         for tel in self.telescopes:
             if tel not in ['xmm', 'erosita']:
                 warn("The features required for observation checking are not implemented for telescopes "
-                     "other than XMM and eROSITA - though they are a priority.", stacklevel=2)
+                     "other than XMM and eROSITA - though it is a priority.", stacklevel=2)
                 continue
             else:
-                # TODO BAD BODGE
                 if tel == 'xmm':
                     # Again don't particularly want to do this local import, but its just easier
-                    from xga.sas import eexpmap
+                    from xga.generate.sas import eexpmap
 
                     # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
                     #  first, then checking where the source lies on the exposure map
                     eexpmap(self, self._peak_lo_en, self._peak_hi_en)
+                elif tel == 'erosita':
+                    from xga.generate.esass import expmap
+                    expmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID
@@ -4399,6 +4401,9 @@ class NullSource:
         """
         The method used to initiate the NullSource class.
         """
+
+        raise NotImplementedError("This class is not currently functional with the new multi-mission setup for XGA.")
+
         # To find all census entries with non-na coordinates
         cleaned_census = CENSUS.dropna()
         self._ra_dec = np.array([None, None])
