@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 15:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 16:17. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -10,6 +10,7 @@ from ._common import _write_xspec_script, _check_inputs
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
+from ...generate.esass.spec import esass_spectrum_set
 from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
@@ -86,7 +87,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         spectrum_set(sources, radii, group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
 
     if 'erosita' in sources.telescopes:
-        raise NotImplementedError("We haven't yet added annular spectra generation for eROSITA.")
+        esass_spectrum_set(sources, radii, group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
