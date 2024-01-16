@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 09:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 13:10. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -13,7 +13,7 @@ from astropy.units import Quantity
 from ._common import region_setup, _gen_detmap_cmd
 from .misc import cifbuild
 from .. import OUTPUT, NUM_CORES
-from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError
+from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, NoTelescopeDataError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -35,7 +35,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-        default this is zero arcseconds, resulting in a circular spectrum.
+        default, this is zero arcseconds, resulting in a circular spectrum.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
@@ -50,6 +50,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if 'xmm' not in sources.telescopes:
+        raise NoTelescopeDataError("There are no XMM data associated with the source/sample, as such XMM spectra "
+                                   "cannot be generated.")
+
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
