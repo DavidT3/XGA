@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 13:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:25. Copyright (c) The Contributors
 
 import os
 import re
@@ -16,10 +16,11 @@ from astropy.wcs import WCS
 from .phot import evtool_image
 from .run import esass_call
 from .._common import get_annular_esass_region
+from ..sas._common import region_setup
 from ... import OUTPUT, NUM_CORES
-from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProductAvailableError, NoTelescopeDataError
+from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProductAvailableError, \
+    TelescopeNotAssociatedError
 from ...samples.base import BaseSample
-from ...sas._common import region_setup
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 
 
@@ -64,8 +65,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
     if 'erosita' not in sources.telescopes:
-        raise NoTelescopeDataError("There are no eROSITA data associated with the source/sample, as such eROSITA "
-                                   "spectra cannot be generated.")
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
+                                          "eROSITA spectra cannot be generated.")
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):

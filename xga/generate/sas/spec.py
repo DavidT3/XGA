@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:25. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -11,7 +11,7 @@ import numpy as np
 from astropy.units import Quantity
 
 from xga import OUTPUT, NUM_CORES
-from xga.exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, NoTelescopeDataError
+from xga.exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 from ._common import region_setup, _gen_detmap_cmd
@@ -55,8 +55,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
     if 'xmm' not in sources.telescopes:
-        raise NoTelescopeDataError("There are no XMM data associated with the source/sample, as such XMM spectra "
-                                   "cannot be generated.")
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "spectra cannot be generated.")
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):

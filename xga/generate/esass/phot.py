@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:25. Copyright (c) The Contributors
 
 import os
 from shutil import rmtree
@@ -10,7 +10,7 @@ from astropy.units import Quantity, UnitConversionError
 
 from .run import esass_call
 from ... import OUTPUT, NUM_CORES
-from ...exceptions import NoTelescopeDataError
+from ...exceptions import TelescopeNotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
@@ -36,8 +36,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
     if 'erosita' not in sources.telescopes:
-        raise NoTelescopeDataError("There are no eROSITA data associated with the source/sample, as such eROSITA "
-                                   "images cannot be generated.")
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
+                                          "eROSITA images cannot be generated.")
 
     stack = False # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -152,8 +152,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
     if 'erosita' not in sources.telescopes:
-        raise NoTelescopeDataError("There are no eROSITA data associated with the source/sample, as such eROSITA "
-                                   "exposure maps cannot be generated.")
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
+                                          "eROSITA exposure maps cannot be generated.")
 
     # TODO make sure that the same exposure map is added as a product to every source it covers
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
