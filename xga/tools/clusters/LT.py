@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2023, 09:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:57. Copyright (c) The Contributors
+
 from typing import Tuple
 from warnings import warn
 
@@ -10,10 +11,10 @@ from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
 from xga.exceptions import ModelNotAssociatedError, SASGenerationError
+from xga.generate.sas import evselect_spectrum
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
 from xga.samples import ClusterSample
-from xga.sas import evselect_spectrum
 from xga.xspec import single_temp_apec
 
 # This just sets the data columns that MUST be present in the sample data passed by the user
