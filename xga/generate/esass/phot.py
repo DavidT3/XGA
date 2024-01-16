@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/01/2024, 16:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:01. Copyright (c) The Contributors
 
 import os
 from shutil import rmtree
@@ -10,6 +10,7 @@ from astropy.units import Quantity, UnitConversionError
 
 from .run import esass_call
 from ... import OUTPUT, NUM_CORES
+from ...exceptions import NoTelescopeDataError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
@@ -30,8 +31,16 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
+    #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
+    #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
+    if 'erosita' not in sources.telescopes:
+        raise NoTelescopeDataError("There are no eROSITA data associated with the source/sample, as such eROSITA "
+                                   "images cannot be generated.")
+
     stack = False # This tells the esass_call routine that this command won't be part of a stack
-    execute = True # This should be executed immediately
+    execute = True  # This should be executed immediately
 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
@@ -58,8 +67,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         hi_en = hi_en.to('keV')
 
     # Checking user's lo_en and hi_en inputs are in the valid energy range for eROSITA
-    if (lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or \
-        (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV')):
+    if ((lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or
+            (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV'))):
         raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
@@ -69,6 +78,11 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     sources_extras = []
     sources_types = []
     for source in sources:
+        # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
+        #  beginning of this function), so we're just skipping all the individual sources that don't have eROSITA data
+        if 'erosita' not in source.telescopes:
+            continue
+
         cmds = []
         final_paths = []
         extra_info = []
@@ -76,7 +90,6 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         for pack in source.get_products("events", telescope='erosita', just_obj=False):
             obs_id = pack[1]
             inst = pack[2]
-            # ASSUMPTION4 new output directory structure
             if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
                 os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
@@ -113,7 +126,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
 
-    # I only return num_cores here so it has a reason to be passed to this function, really
+    # I only return num_cores here, so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
@@ -134,6 +147,14 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     """
+    # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
+    #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
+    #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
+    if 'erosita' not in sources.telescopes:
+        raise NoTelescopeDataError("There are no eROSITA data associated with the source/sample, as such eROSITA "
+                                   "exposure maps cannot be generated.")
+
     # TODO make sure that the same exposure map is added as a product to every source it covers
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -183,6 +204,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     sources_extras = []
     sources_types = []
     for source in sources:
+        # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
+        #  beginning of this function), so we're just skipping all the individual sources that don't have eROSITA data
+        if 'erosita' not in source.telescopes:
+            continue
+
         cmds = []
         final_paths = []
         extra_info = []
@@ -239,6 +265,6 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
-    # I only return num_cores here so it has a reason to be passed to this function, really
+    # I only return num_cores here, so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
