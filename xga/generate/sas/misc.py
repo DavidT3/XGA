@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:30. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -9,7 +9,7 @@ import numpy as np
 from fitsio import read_header
 
 from xga import OUTPUT, NUM_CORES
-from xga.exceptions import InvalidProductError
+from xga.exceptions import InvalidProductError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
@@ -29,6 +29,14 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if 'xmm' not in sources.telescopes:
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "calibration files cannot be generated.")
+
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
@@ -42,6 +50,11 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
     sources_extras = []
     sources_types = []
     for source in sources:
+        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
+        #  beginning of this function), so we're just skipping all the individual sources that don't have XMM data
+        if 'xmm' not in source.telescopes:
+            continue
+
         cmds = []
         final_paths = []
         extra_info = []
