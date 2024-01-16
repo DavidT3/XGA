@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 16:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:14. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -9,12 +9,12 @@ from warnings import warn
 
 from tqdm import tqdm
 
-from .. import SAS_AVAIL, SAS_VERSION
-from ..exceptions import SASGenerationError, SASNotFoundError, SourceNotFoundError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
-from ..samples.base import BaseSample
-from ..sources import BaseSource
-from ..sources.base import NullSource
+from xga import SAS_AVAIL, SAS_VERSION
+from xga.exceptions import SASGenerationError, SASNotFoundError
+from xga.products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, AnnularSpectra
+from xga.samples.base import BaseSample
+from xga.sources import BaseSource
+from xga.sources.base import NullSource
 
 
 def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:

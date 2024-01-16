@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/10/2023, 18:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:14. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -8,12 +8,12 @@ from typing import Union
 import numpy as np
 from fitsio import read_header
 
+from xga import OUTPUT, NUM_CORES
+from xga.exceptions import InvalidProductError
+from xga.samples.base import BaseSample
+from xga.sources import BaseSource
+from xga.sources.base import NullSource
 from .run import sas_call
-from .. import OUTPUT, NUM_CORES
-from ..exceptions import InvalidProductError
-from ..samples.base import BaseSample
-from ..sources import BaseSource
-from ..sources.base import NullSource
 
 
 @sas_call
