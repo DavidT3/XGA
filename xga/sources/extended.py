@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:55. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -204,7 +204,7 @@ class GalaxyCluster(ExtendedSource):
                 #  to run those commands themselves later
                 # Now I will run them only if the regen_merged flag is True
                 if regen_merged:
-                    from ..sas import emosaic
+                    from ..generate.sas import emosaic
                     emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     self._all_peaks(peak_find_method)
