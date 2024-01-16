@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 11:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 13:51. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -128,7 +128,8 @@ def esass_call(esass_func):
 
         elif to_execute and len(all_run) == 0:
             # It is possible to call a wrapped eSASS function and find that the products already exist.
-            print("All requested products already exist")
+            # print("All requested products already exist")
+            pass
 
         # Now we assign products to source objects
         all_to_raise = []
