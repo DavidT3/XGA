@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:21. Copyright (c) The Contributors
 
 class eROSITAImplentationError(Exception):
     def __init__(self, *args):
@@ -164,11 +164,11 @@ class UnknownCommandlineError(Exception):
             return 'A generic UnknownCommandlineError has been raised'
 
 
-class SourceNotFoundError(Exception):
+class TelescopeNotAssociatedError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if the user tries to run a SAS (or eSASS) function that has no XMM (or eROSITA) data
-        associated with it.
+        Exception raised if the user tries to run a telescope specific function (e.g. a SAS function for XMM, or an
+        eSASS function for eROSITA) and the source or sample has no data for that telescope associated with it.
 
         :param expression:
         :param message:
