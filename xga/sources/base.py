@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 18:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 11:43. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -20,8 +20,8 @@ from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRe
 from regions import read_ds9, PixelRegion
 
 from .. import xga_conf, BLACKLIST
-from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
-    NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+from ..exceptions import NotAssociatedError, NoValidObservationsError, NoProductAvailableError, ModelNotAssociatedError, \
+    ParameterNotAssociatedError, \
     NotSampleMemberError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
@@ -1606,9 +1606,19 @@ class BaseSource:
                                 self._supp_warn.append(warn_text)
 
                         elif len(interim_reg) > 1 and source_type == "ext":
-                            raise MultipleMatchError("More than one match for {n} is found in the region file "
-                                                     "for observation {t}-{o}, this cannot yet be dealt with "
-                                                     "for extended sources.".format(o=obs, n=self.name, t=tel))
+                            # raise MultipleMatchError("More than one match for {n} is found in the region file "
+                            #                          "for observation {t}-{o}, this cannot yet be dealt with "
+                            #                          "for extended sources.".format(o=obs, n=self.name, t=tel))
+
+                            results_dict[tel][obs] = interim_reg[0]
+                            warn_text = "{ns} matches for the extended source {n} are found in the {t}-{o} region " \
+                                        "file. The source nearest to the passed coordinates is accepted, all others " \
+                                        "will be placed in the alternate match category and will not be removed " \
+                                        "by masks.".format(o=obs, n=self.name, ns=len(interim_reg), t=tel)
+                            if not self._samp_member:
+                                warn(warn_text, stacklevel=2)
+                            else:
+                                self._supp_warn.append(warn_text)
 
                     # Alt match is used for when there is a secondary match to a point source
                     alt_match_reg = [entry for entry in init_region_matches if entry != results_dict[tel][obs]]
@@ -2959,6 +2969,11 @@ class BaseSource:
         :return: A numpy array of 0s and 1s which acts as a mask to remove interloper sources.
         :rtype: ndarray
         """
+        # TODO I HAVE MADE IT SO THAT INTERLOPER MASKS ARE GENERATED ON DEMAND, RATHER THAN JUST AS A SOURCE
+        #  IS DECLARED. I HOPE THAT THIS WILL MAKE THE DECLARATION OF SOURCES WITH EROSITA DATA CONSIDERABLY FASTER.
+        #  HOWEVER I STILL HAVE NOT MADE USE OF THE NEW REGION DISTANCE FEATURE ANYWHERE YET, SO THE NEXT JOB IS TO
+        #  SET A MAXIMUM DISTANCE FOR MASK GENERATION (FOR EROSITA ONLY AT THE MOMENT MAYBE?) THAT WILL SPEED UP THE
+        #  PROCESS OF GENERATING THE MASK WHEN IT IS ACTUALLY NEEDED
 
         # If ObsID is None then we take it that the user wants the combined mask for the specified telescope (combined
         #  as in all contaminating regions from all ObsIDs for that telescope removed). As such we change the value
@@ -3475,7 +3490,7 @@ class BaseSource:
         self._dof[telescope][spec_storage_key][model] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
-        #  then for each result find the +- errors
+        #  for each result find the +- errors
         par_headers = [n for n in tab_line.dtype.names if n not in not_par]
         mod_res = {}
         for par in par_headers:
@@ -3531,7 +3546,7 @@ class BaseSource:
             from (e.g. constant*tbabs*apec).
         :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
-            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default, this is zero arcseconds, resulting in a
             circular spectrum.
         :param str par: The name of the parameter you want a result for.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
@@ -4008,8 +4023,8 @@ class BaseSource:
         # TODO Also just double check I've implemented this right
         for tel in self.telescopes:
             if tel not in ['xmm', 'erosita']:
-                warn("The features required for observation checking are not implemented for non-XMM telescopes "
-                     "right now - though they are a priority.", stacklevel=2)
+                warn("The features required for observation checking are not implemented for telescopes "
+                     "other than XMM and eROSITA - though they are a priority.", stacklevel=2)
                 continue
             else:
                 # TODO BAD BODGE
@@ -4039,6 +4054,11 @@ class BaseSource:
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
                         #  with the XMM chips. Just mask the modified expmap, then sum.
                         area[tel][o][ex.instrument] = (ex_data * m).sum()
+
+                        # Desperately trying to make sure I don't get memory allocation errors, particularly with
+                        #  eROSITA with their memory-hogging images/exposure maps
+                        del ex_data
+                        ex.unload(unload_data=True, unload_header=False)
 
                 if max(list(full_area[tel].values())) == 0:
                     # Everything has to be rejected in this case
