@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:15. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -332,6 +332,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 src_reg_str = reg  # dealt with in get_annular_esass_region
 
                 # TODO allow user to chose tstep and xgrid
+                # TODO CHANGE BACK
                 tstep = 0.5  # put it as 0.5 for now
                 bsrc_reg_str = b_reg
                 # Defining the grouping keywords
@@ -350,11 +351,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # Fills out the srctool command to make the main and background spectra
                 if isinstance(source, ExtendedSource):
                     # We have a slightly different command for extended and point sources
-                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                                   i=inst_no, ts=tstep, em=im.path, et=et)
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
+                                                       i=inst_no, ts=tstep, em=im.path, et=et)
                 else:
-                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
-                                                   i=inst_no, ts=tstep)
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
+                                                       i=inst_no, ts=tstep)
 
                 # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
@@ -601,8 +602,6 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
-    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
-        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool force_regen: This will force all the constituent spectra of the set to be regenerated, use this
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
@@ -679,7 +678,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
     innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
     outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
     srctool_spectrum(sources, outermost_rads, innermost_rads, group_spec, min_counts, min_sn, num_cores,
-                     disable_progress)
+                     disable_progress, combine_tm)
 
     # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
     #  the correct annuli, which is why I have to iterate through the sources and radii
@@ -710,7 +709,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
 
         spec_storage_name += extra_name
 
-        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='erosita')
+        exists = source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope='erosita')
         if len(exists) == 0:
             # If it doesn't exist then we do need to call evselect_spectrum
             generate_spec = True
