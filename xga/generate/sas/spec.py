@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:35. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -54,7 +54,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
-    if 'xmm' not in sources.telescopes:
+    if ((not isinstance(sources, list) and 'xmm' not in sources.telescopes) or
+            (isinstance(sources, list) and 'xmm' not in sources[0].telescopes)):
         raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
                                           "spectra cannot be generated.")
 
@@ -516,6 +517,15 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if ((not isinstance(sources, list) and 'xmm' not in sources.telescopes) or
+            (isinstance(sources, list) and 'xmm' not in sources[0].telescopes)):
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "spectra cannot be generated.")
+
     # If it's a single source I put it into an iterable object (i.e. a list), just for convenience
     if isinstance(sources, BaseSource):
         sources = [sources]

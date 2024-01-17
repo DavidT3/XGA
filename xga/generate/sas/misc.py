@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:35. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -33,7 +33,8 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
-    if 'xmm' not in sources.telescopes:
+    if ((not isinstance(sources, list) and 'xmm' not in sources.telescopes) or
+            (isinstance(sources, list) and 'xmm' not in sources[0].telescopes)):
         raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
                                           "calibration files cannot be generated.")
 
