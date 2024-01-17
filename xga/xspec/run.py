@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/01/2024, 13:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 14:26. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -90,7 +90,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         fitsio.write(out_file + ".fits", spec_info.to_records(index=False), extname="spec_info")
         del spec_info
 
-        # This finds all of the matching spectrum plot csvs were generated
+        # This finds all the matching spectrum plot csvs were generated
         rel_path = "/".join(out_file.split('/')[0:-1])
         # This is mostly just used to find how many files there are
         spec_tabs = [rel_path + "/" + sp for sp in os.listdir(rel_path)
@@ -235,10 +235,10 @@ def xspec_call(xspec_func):
                                 spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
                                                       telescope=tel)[0]
                             else:
-                                # TODO Sort this out at some point
-                                if tel != 'xmm':
-                                    raise NotImplementedError("We do not yet support fitting sets of annular spectra"
-                                                              " for telescopes other than XMM.")
+                                # # TODO Sort this out at some point
+                                # if tel != 'xmm':
+                                #     raise NotImplementedError("We do not yet support fitting sets of annular spectra"
+                                #                               " for telescopes other than XMM.")
                                 obs_order.append([sp_info[0], sp_info[1]])
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
@@ -246,7 +246,7 @@ def xspec_call(xspec_func):
                                 second_part = "_" + "_".join(sp_key.split('ro')[-1].split("_")[1:])
 
                                 ann_sp_key = first_part + "ar" + "_".join(radii[ind].value.astype(str)) + second_part
-                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key)
+                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key, telescope=tel)
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
                                                              "this is the developers fault, not yours.")
