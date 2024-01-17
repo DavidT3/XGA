@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:37. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -736,7 +736,11 @@ class PointSource(BaseSource):
             else:
                 # If we don't care about peak finding then this is the boi to go for
                 coord = self.ra_dec
-                near_edge = comb_rt.near_edge(coord)
+                if comb_rt is not None:
+                    near_edge = comb_rt.near_edge(coord)
+                else:
+                    # TODO remove this once full other telescope support is implemented
+                    near_edge = False
 
             self._peaks[tel]["combined"] = coord
             self._peaks_near_edge[tel]["combined"] = near_edge
