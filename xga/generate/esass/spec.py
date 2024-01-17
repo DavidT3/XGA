@@ -129,8 +129,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                         ' tstep={ts} psftype=NONE'
 
     # TODO check the point source command in esass with some EDR obs
-    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srcoord="{sc}" todo="SPEC ARF RMF"' \
-                      ' srcreg="{reg}" backreg="{breg}" exttype="POINT" tstep={ts}' \
+    pnt_srctool_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="SPEC ARF RMF"' \
+                      ' srcreg="{reg}" exttype="POINT" tstep={ts}' \
                       ' insts={i} psftype="2D_PSF"'
     
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format
@@ -141,7 +141,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  (though honestly it seems wasteful to generate them all and not use them, this might change later
     remove_all_but_merged_cmd = "rm *srctoolout_*"
 
-    # TODO this command is fishy 
     # TODO include the background file - YES
     # TODO regroup the background file too 
     # Grouping the spectra will be done using the HEASoft tool 'ftgrouppha' - we make sure to remove the original
@@ -348,8 +347,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
                                        telescope='erosita')
                 # Fills out the srctool command to make the main and background spectra
-                s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
+                if isinstance(source, ExtendedSource):
+                    # We have a slightly different command for extended and point sources
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
                                                    i=inst_no, ts=tstep, em=im.path, et=et)
+                else:
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, 
+                                                   i=inst_no, ts=tstep)
+
                 # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
                                                       i=inst_no, ts=tstep*4)
