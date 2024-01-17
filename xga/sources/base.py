@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 11:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 12:02. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -680,7 +680,7 @@ class BaseSource:
         models = []
         for tel in self.telescopes:
             for s_key in self._fit_results[tel]:
-                models += list(self._fit_results[s_key].keys())
+                models += list(self._fit_results[tel][s_key].keys())
 
         models = list(set(models))
 
