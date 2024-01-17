@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 16:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:33. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -60,7 +60,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if 'erosita' not in sources.telescopes:
+    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
+            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
         raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
                                           "eROSITA spectra cannot be generated.")
 
@@ -614,9 +615,10 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if 'erosita' not in sources.telescopes:
+    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
+            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
         raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA annular spectra cannot be generated.")
+                                          "eROSITA spectra cannot be generated.")
 
     if combine_tm:
         raise NotImplementedError("We do not yet support stacking of telescope module data for annular spectra.")
