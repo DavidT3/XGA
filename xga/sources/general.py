@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 08:56. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -658,7 +658,7 @@ class PointSource(BaseSource):
 
             # TODO Generalise this to more telescopes once generation is better supported
             if regen_merged and 'xmm' in self.telescopes:
-                from ..sas import emosaic
+                from ..generate.sas import emosaic
                 emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                 emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
@@ -716,7 +716,7 @@ class PointSource(BaseSource):
         if len(comb_rt) != 0:
             comb_rt = comb_rt[0]
         else:
-            from xga.sas import emosaic
+            from xga.generate.sas import emosaic
             emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
             emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
             comb_rt = self.get_products("combined_ratemap", extra_key=en_key)[0]
