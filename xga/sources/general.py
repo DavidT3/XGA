@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 08:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:22. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -710,28 +710,36 @@ class PointSource(BaseSource):
         return self._peaks['xmm']["combined"]
 
     def _all_peaks(self):
-        en_key = "bound_{l}-{u}".format(l=self._peak_lo_en.value, u=self._peak_hi_en.value)
-        comb_rt = self.get_products("combined_ratemap", extra_key=en_key)
 
-        if len(comb_rt) != 0:
-            comb_rt = comb_rt[0]
-        else:
-            from xga.generate.sas import emosaic
-            emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-            emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-            comb_rt = self.get_products("combined_ratemap", extra_key=en_key)[0]
+        # TODO WHY THE FUCK ISN'T THIS JUST ONE METHOD IN BASESOURCE???
+        for tel in self.telescopes:
+            try:
+                comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+            except NoProductAvailableError:
+                # TODO Make this more elegant
+                if tel == 'xmm':
+                    # I didn't want to import this here, but otherwise circular imports become a problem
+                    from xga.generate.sas import emosaic
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+                else:
+                    warn("Generating the combined images required for this is not supported for {t} currently.",
+                         stacklevel=2)
+                    comb_rt = None
 
-        if self._use_peak:
-            coord, near_edge = self.find_peak(comb_rt)
-            # Updating nH for new coord, probably won't make a difference most of the time
-            self._nH = nh_lookup(coord)[0]
-        else:
-            # If we don't care about peak finding then this is the boi to go for
-            coord = self.ra_dec
-            near_edge = comb_rt.near_edge(coord)
+            # TODO return this to not checking if comb_rt is None once other telescopes fully supported
+            if self._use_peak and comb_rt is not None:
+                coord, near_edge = self.find_peak(comb_rt)
+                # Updating nH for new coord, probably won't make a difference most of the time
+                self._nH = nh_lookup(coord)[0]
+            else:
+                # If we don't care about peak finding then this is the boi to go for
+                coord = self.ra_dec
+                near_edge = comb_rt.near_edge(coord)
 
-        self._peaks["combined"] = coord
-        self._peaks_near_edge["combined"] = near_edge
+            self._peaks[tel]["combined"] = coord
+            self._peaks_near_edge[tel]["combined"] = near_edge
 
     def find_peak(self, rt: RateMap, peak_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
         """
