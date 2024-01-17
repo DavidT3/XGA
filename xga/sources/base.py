@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 12:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 13:46. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3021,7 +3021,7 @@ class BaseSource:
             type_search = 'combined_image' if obs_id == 'combined' else 'image'
             # Grab it using the general product get method (another advantage of this is that the result is guaranteed
             #  to be in a list, so we don't have to check
-            im = self.get_products(type_search, telescope=telescope)[0]
+            im = self.get_products(type_search, telescope=telescope, obs_id=obs_id)[0]
 
             # Generate the mask as instructed, with the specified region_distance (which could well be None, which
             #  would result in a 'master mask'
