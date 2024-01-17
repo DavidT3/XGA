@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/01/2024, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 14:25. Copyright (c) The Contributors
 
 
 import os
@@ -2785,24 +2785,26 @@ class AnnularSpectra(BaseAggregateProduct):
                 if par == 'kT' and upper_limit is None:
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, associated_set_id=self.set_ident,
-                                                         set_storage_key=self.storage_key, deg_radii=mid_radii_deg)
+                                                         set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
+                                                         telescope=self.telescope)
                 elif par == 'kT' and upper_limit is not None:
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                         self.storage_key, deg_radii=mid_radii_deg)
+                                                         self.storage_key, deg_radii=mid_radii_deg,
+                                                         telescope=self.telescope)
                 elif par == 'Abundanc':
                     new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                         mid_radii_deg)
+                                                         mid_radii_deg, telescope=self.telescope)
                 elif par == 'norm':
                     new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
                                                    rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                   mid_radii_deg)
+                                                   mid_radii_deg, telescope=self.telescope)
                 else:
                     prof_type = "1d_proj_{}"
                     new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
                                          prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                         mid_radii_deg)
+                                         mid_radii_deg, telescope=self.telescope)
 
                 profs.append(new_prof)
 
