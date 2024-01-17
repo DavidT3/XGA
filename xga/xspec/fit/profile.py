@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 16:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:50. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -90,6 +90,16 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         esass_spectrum_set(sources, radii, group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
+
+    # Want to make sure that the radii are a list of sets of annular bounds (even if that list only has one set
+    #  because there is only one source, or multiple sources with one set of annular bounds).
+    if isinstance(radii, Quantity):
+        radii = [radii]
+
+    # If there are multiple sources, but only one set of radii, we add more entries to the radii list to make
+    #  that easier to deal with for the rest of the function
+    if len(sources) != 1 and len(radii) == 1:
+        radii *= len(sources)
 
     # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
     model = "constant*tbabs*apec"
