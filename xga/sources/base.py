@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 13:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 16:14. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -22,7 +22,7 @@ from regions import read_ds9, PixelRegion
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, NoProductAvailableError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, \
-    NotSampleMemberError
+    NotSampleMemberError, TelescopeNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -1993,6 +1993,11 @@ class BaseSource:
                 #  together - merged products do get a 'combined' prefix on their product type key though
                 if obs_id == "combined":
                     p_type = "combined_" + p_type
+
+                if tel not in self.telescopes:
+                    raise TelescopeNotAssociatedError("The {t} telescope is not associated with this X-ray "
+                                                      "source; the {o}-{i} {pt} cannot be added to "
+                                                      "{n}.".format(t=tel, o=obs_id, i=inst, pt=p_type, n=self.name))
 
                 # 'Combined' will effectively be stored as another ObsID
                 if "combined" not in self._products[tel]:
