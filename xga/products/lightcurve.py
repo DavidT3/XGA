@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:06. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -75,16 +75,10 @@ class LightCurve(BaseProduct):
 
         # Store the size of the time binning used to generate the lightcurve as an attribute
         self._time_bin = time_bin_size
-        # We now take a telescope argument, to work with multi-mission XGA, so we need to only check the pattern
-        #  with this function if this is an XMM lightcurve
-        if telescope == 'xmm':
-            # Unfortunate local import to avoid circular import errors
-            from xga.generate.common import check_pattern
-            self._pattern_expr, self._pattern_name = check_pattern(pattern_expr)
-        else:
-            warn("Pattern checking is not implemented for non-XMM telescopes", stacklevel=2)
-            self._pattern_expr = None
-            self._pattern_name = None
+
+        # Unfortunate local import to avoid circular import errors
+        from xga.generate.common import check_pattern
+        self._pattern_expr, self._pattern_name = check_pattern(pattern_expr, telescope)
 
         self._energy_bounds = (lo_en, hi_en)
 

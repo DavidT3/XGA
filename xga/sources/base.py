@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 15:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2955,27 +2955,21 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[LightCurve, List[LightCurve]]
         """
-        if telescope == 'xmm':
-            from xga.generate.sas import check_pattern
-        else:
-            raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
+        from ..generate.common import check_pattern
 
-        from xga.generate.sas import check_pattern
-
-        # TODO This is XMM specific because of the patterns currently
         # This is where we set up the search string for the patterns specified by the user.
         if pattern is None:
             patt_search = "_pattern"
         elif isinstance(pattern, str):
             pattern = {'pn': '<=4', 'mos': '<=12', 'tm': '15'}
-            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+            patt_search = {inst: "_pattern" + check_pattern(patt, telescope)[1] for inst, patt in pattern.items()}
         elif isinstance(pattern, dict):
             if ('mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys())
                     or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(0, 7)])):
                 raise ValueError("Specific MOS/TM instruments do not need to be specified for 'pattern'; i.e. there "
                                  "should be one entry for 'mos' or 'tm'.")
             pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
-            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+            patt_search = {inst: "_pattern" + check_pattern(patt, telescope)[1] for inst, patt in pattern.items()}
         else:
             raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
                             "instrument names and values are string patterns.")
@@ -3037,7 +3031,7 @@ class BaseSource:
         :rtype: Union[AggregateLightCurve, List[AggregateLightCurve]]
         """
         if telescope == 'xmm':
-            from xga.generate.sas import check_pattern
+            from ..generate.common import check_pattern
         else:
             raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
 
