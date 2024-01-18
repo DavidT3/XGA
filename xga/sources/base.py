@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 15:54. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1929,6 +1929,99 @@ class BaseSource:
 
         return matched_prods
 
+    def _get_lc_prod(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                     inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     time_bin_size: Quantity = None, telescope: str = None) \
+            -> Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A protected method to retrieve XGA LightCurve objects, the user should never interact with this directly.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products), or a single/list of AggregateLightCurve objects.
+        :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        # Set up search strings (for the product storage keys) for the inner and outer radii here. The default None
+        #  value just creates a key that looks for the 'ri' or 'ro' precursor to the value in the key, i.e. it doesn't
+        #  do anything - we also make sure that any radii passed by the user are converted properly
+        if inner_radius is not None and isinstance(inner_radius, Quantity):
+            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg').value)
+        elif inner_radius is not None and isinstance(inner_radius, str):
+            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg').value)
+        elif inner_radius is None:
+            inn_rad_search = "_ri"
+        else:
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
+
+        if outer_radius is not None and isinstance(outer_radius, Quantity):
+            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg').value)
+        elif outer_radius is not None and isinstance(outer_radius, str):
+            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg').value)
+        elif outer_radius is None:
+            out_rad_search = "_ro"
+        else:
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
+
+        # Check to make sure that the time bin size is a legal value, and set up a search string for the time bin
+        #  size in order to narrow down the lightcurves to just the ones that the user wants
+        if time_bin_size is not None and not time_bin_size.unit.is_equivalent('s'):
+            raise UnitConversionError("The 'time_bin_size' argument must be convertible to seconds.")
+        elif time_bin_size is None:
+            time_bin_search = '_timebin'
+        else:
+            time_bin_search = '_timebin{}'.format(time_bin_size.to('s').value)
+
+        # Setting up the energy band search string - if one bound is specified then the other has to be as well, I
+        #  didn't think it made sense otherwise
+        if any([lo_en is not None, hi_en is not None]) and not all([lo_en is not None, hi_en is not None]):
+            raise ValueError("The 'lo_en' and 'hi_en' values must either both be None, or both be an energy value.")
+        if (lo_en is not None and not lo_en.unit.is_equivalent('keV')) or \
+                (hi_en is not None and not hi_en.unit.is_equivalent('keV')):
+            raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
+        # If either is None then we know both are because we checked earlier
+        elif lo_en is None:
+            en_search = 'bound_'
+        elif lo_en is not None:
+            en_search = 'bound_{l}-{u}'.format(l=lo_en.to('keV').value, u=hi_en.to('keV').value)
+
+        if obs_id == 'combined':
+            search_key = 'combined_lightcurve'
+        else:
+            search_key = 'lightcurve'
+        # Grabbing every single lightcurve that matches ObsID and inst passed by the user (remember they could be
+        #  None values, indeed they are by default) - we'll then sweep through whatever list is returned and
+        #  narrow them down
+        all_lcs = self.get_products(search_key, obs_id, inst, telescope=telescope)
+        # It was getting to the point where a list comprehension was less readable than a for loop, particularly
+        #  with the pattern logic, so I changed it to this
+        matched_prods = []
+        for lc in all_lcs:
+            if out_rad_search in lc.storage_key and inn_rad_search in lc.storage_key and \
+                    time_bin_search in lc.storage_key and en_search in lc.storage_key:
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
     # This is used to name files and directories so this is not allowed to change.
     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
                      extra_info: np.ndarray, stack: bool = False):
@@ -2867,18 +2960,20 @@ class BaseSource:
         else:
             raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
 
+        from xga.generate.sas import check_pattern
 
         # TODO This is XMM specific because of the patterns currently
         # This is where we set up the search string for the patterns specified by the user.
         if pattern is None:
             patt_search = "_pattern"
         elif isinstance(pattern, str):
-            pattern = {'pn': '<=4', 'mos': '<=12'}
+            pattern = {'pn': '<=4', 'mos': '<=12', 'tm': '15'}
             patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
         elif isinstance(pattern, dict):
-            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
-                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
-                                 "should be one entry for 'mos'.")
+            if ('mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys())
+                    or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(0, 7)])):
+                raise ValueError("Specific MOS/TM instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos' or 'tm'.")
             pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
             patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
         else:
@@ -2889,7 +2984,10 @@ class BaseSource:
         if 'mos' in patt_search:
             patt_search.update({'mos1': patt_search['mos'], 'mos2': patt_search['mos']})
 
-        some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size)
+        if 'tm' in patt_search:
+            patt_search.update({'tm{}'.format(tm_i): patt_search['tm'] for tm_i in range(0, 7)})
+
+        some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size, telescope)
         matched_prods = []
         for lc in some_lcs:
             if isinstance(patt_search, str):
