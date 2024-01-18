@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:16. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -180,12 +180,10 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                 #  numbers if the user has requested a combined spectrum).
                 inst_no = inst_nums[inst_ind]
 
-                # TODO implement checking
-
                 try:
                     # Got to check if this lightcurve already exists
                     check_lc = source.get_lightcurves(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], lo_en,
-                                                      hi_en, time_bin_size, patt, 'erosita')
+                                                      hi_en, Quantity(time_bin_size, 's'), patt, 'erosita')
                     exists = True
                 except NoProductAvailableError:
                     exists = False
