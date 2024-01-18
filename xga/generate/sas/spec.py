@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 10:31. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -453,7 +453,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                       num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
-    A wrapper for all of the SAS processes necessary to generate an XMM spectrum that can be analysed
+    A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
     observation, will have a spectrum generated using the specified outer and inner radii as a boundary. The
     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
