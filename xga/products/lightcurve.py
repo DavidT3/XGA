@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 20:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 10:30. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -40,10 +40,12 @@ class LightCurve(BaseProduct):
     :param str pattern_expr: The event selection pattern used to generate the lightcurve.
     :param bool region: Whether this was generated from a region in a region file
     :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
-                 time_bin_size: Quantity, pattern_expr: str, region: bool = False, is_back_sub: bool = True):
+                 time_bin_size: Quantity, pattern_expr: str, region: bool = False, is_back_sub: bool = True,
+                 telescope: str = None):
         """
         This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
         for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
@@ -64,16 +66,26 @@ class LightCurve(BaseProduct):
         :param str pattern_expr: The event selection pattern used to generate the lightcurve.
         :param bool region: Whether this was generated from a region in a region file
         :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
-        # Unfortunate local import to avoid circular import errors
-        from xga.sas import check_pattern
 
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
 
+        # Set the product type
         self._prod_type = "lightcurve"
 
+        # Store the size of the time binning used to generate the lightcurve as an attribute
         self._time_bin = time_bin_size
-        self._pattern_expr, self._pattern_name = check_pattern(pattern_expr)
+        # We now take a telescope argument, to work with multi-mission XGA, so we need to only check the pattern
+        #  with this function if this is an XMM lightcurve
+        if telescope == 'xmm':
+            # Unfortunate local import to avoid circular import errors
+            from xga.generate.sas import check_pattern
+            self._pattern_expr, self._pattern_name = check_pattern(pattern_expr)
+        else:
+            warn("Pattern checking is not implemented for non-XMM telescopes", stacklevel=2)
+            self._pattern_expr = None
+            self._pattern_name = None
 
         self._energy_bounds = (lo_en, hi_en)
 
