@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:53. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -292,7 +292,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
 
-            final_paths.append(os.path.join(OUTPUT, obs_id, corr_lc))
+            final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, corr_lc))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
                                "s_lc_path": os.path.join(OUTPUT, obs_id, lc),
                                "b_lc_path": os.path.join(OUTPUT, obs_id, b_lc),
