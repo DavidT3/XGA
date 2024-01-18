@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 08:35. Copyright (c) The Contributors
 import os.path
 import warnings
 from typing import Union, Tuple, List
@@ -7,11 +7,11 @@ from typing import Union, Tuple, List
 from astropy.units import Quantity
 
 from .misc import cifbuild
+from ...exceptions import NotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource, GalaxyCluster
 from ...sources.base import NullSource
 from ...utils import RAD_LABELS, NUM_CORES
-from ...exceptions import NotAssociatedError
 
 
 def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -114,8 +114,10 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
             final_inner.append(cur_inn_rad)
             final_outer.append(cur_out_rad)
 
-    # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
+    if ((not isinstance(sources, list) and 'xmm' in sources.telescopes)
+            or (isinstance(sources, list) and 'xmm' in sources[0].telescopes)):
+        # Have to make sure that all XMM observations have an up to date cif file.
+        cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
     return sources, final_inner, final_outer
 
