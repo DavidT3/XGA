@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:25. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2957,12 +2957,21 @@ class BaseSource:
         """
         from ..generate.common import check_pattern
 
+        if telescope is None and pattern == 'default' and len(self.telescopes) != 1:
+            warn("Can't use the 'default' pattern argument value when 'telescope' is None and there is more than"
+                 " one telescope associated with the source - this is because different telescopes use different"
+                 " pattern styles. The 'pattern' argument value has been set to None.", stacklevel=2)
+            pattern = None
+        elif telescope is None and pattern == 'default' and len(self.telescopes) == 1:
+            telescope = self.telescopes[0]
+
         # This is where we set up the search string for the patterns specified by the user.
         if pattern is None:
             patt_search = "_pattern"
         elif isinstance(pattern, str):
-            pattern = {'pn': '<=4', 'mos': '<=12', 'tm': '15'}
-            patt_search = {inst: "_pattern" + check_pattern(patt, telescope)[1] for inst, patt in pattern.items()}
+            pattern = {'xmm': {'pn': '<=4', 'mos': '<=12'}, 'erosita': {'tm': '15', 'combined': '15'}}
+            patt_search = {inst: "_pattern" + check_pattern(patt, telescope)[1]
+                           for inst, patt in pattern[telescope].items()}
         elif isinstance(pattern, dict):
             if ('mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys())
                     or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(0, 7)])):
