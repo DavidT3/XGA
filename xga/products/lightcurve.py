@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 15:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -79,7 +79,7 @@ class LightCurve(BaseProduct):
         #  with this function if this is an XMM lightcurve
         if telescope == 'xmm':
             # Unfortunate local import to avoid circular import errors
-            from xga.generate.sas import check_pattern
+            from xga.generate.common import check_pattern
             self._pattern_expr, self._pattern_name = check_pattern(pattern_expr)
         else:
             warn("Pattern checking is not implemented for non-XMM telescopes", stacklevel=2)

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 13:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -8,7 +8,7 @@ from warnings import warn
 
 from tqdm import tqdm
 
-from .._common import execute_cmd
+from ..common import execute_cmd
 from ... import eSASS_AVAIL
 from ...exceptions import eSASSNotFoundError
 from ...products import BaseProduct, AnnularSpectra

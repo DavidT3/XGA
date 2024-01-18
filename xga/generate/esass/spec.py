@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -11,7 +11,7 @@ from astropy.units import Quantity
 
 from .phot import evtool_image
 from .run import esass_call
-from .._common import get_annular_esass_region
+from ..common import get_annular_esass_region
 from ..sas._common import region_setup
 from ... import OUTPUT, NUM_CORES
 from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProductAvailableError, \

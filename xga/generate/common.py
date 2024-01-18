@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -233,3 +233,62 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         final_src = reg_file_path + '/' + reg_file_name
 
     return final_src
+
+
+def check_pattern(pattern: Union[str, int], telescope: str = 'xmm') -> Tuple[str, str]:
+    """
+    A very simple (and not exhaustive) checker for pattern expressions.
+
+    :param str/int pattern: The pattern selection expression to be checked.
+    :param str telescope: The telescope for which we wish to check the validity of a pattern expression.
+    :return: A string pattern selection expression, and a pattern representation that should be safe for naming
+        files with.
+    :rtype: Tuple[str, str]
+    """
+
+    if telescope == 'xmm':
+        if isinstance(pattern, int):
+            pattern = '==' + str(pattern)
+        elif not isinstance(pattern, str):
+            raise TypeError("Pattern arguments must be either an integer (we then assume only events with that pattern "
+                            "should be selected) or a SAS selection command (e.g. 'in [1:4]' or '<= 4').")
+
+        # First off I remove whitespace from the beginning and end of the term
+        pattern = pattern.strip()
+        # pattern = pattern.replace(' ', '')
+        # Sometimes we will pass in patterns that have been converted to the 'XGA format', if you want to call it
+        #  that. This namely happens when we're reading light curves that have been saved to disk back in. As such we
+        #  replace the XGA-isms with their original string meanings
+        pattern = pattern.replace('lteq', '<=').replace('gteq', '>=').replace('eq', '==') \
+            .replace('lteq', '<=').replace('lt', '<').replace('gt', '>')
+
+        # Then we check for understandable selection commands; inequalities, equals, and 'in'
+        if pattern[:2] not in ['in', '<=', '>=', '=='] and pattern[:1] not in ['<', '>']:
+            raise ValueError("First part of a pattern statement must be either 'in', '<=', '>=', '==', '<', or '>'.")
+
+        if pattern[:2] == 'in' and '[' not in pattern and '(' not in pattern:
+            raise ValueError("If a pattern statement uses 'in', either a '[' (for inclusive lower limit) or '(' (for "
+                             "exclusive lower limit) must be in the statement.")
+
+        if pattern[:2] == 'in' and ']' not in pattern and ')' not in pattern:
+            raise ValueError("If a pattern statement uses 'in', either a ']' (for inclusive upper limit) or ')' (for "
+                             "exclusive upper limit) must be in the statement.")
+
+        if pattern[:2] == 'in' and ':' not in pattern:
+            raise ValueError("If a pattern statement uses 'in', either a ':' must be present in the statement to separate "
+                             "lower and upper limits.")
+
+        # SAS doesn't like having file names with special characters, so I am trying to come up with safe replacements
+        #  that still convey what the pattern selection was
+        # .replace('in', '')
+        patt_file_name = pattern.replace(' ', '').replace('<=', 'lteq').replace('>=', 'gteq').replace('==', 'eq')\
+            .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt')
+
+    elif telescope == 'erosita':
+        # TODO Add a pattern checker when I actually understand what patterns can be for eROSITA
+        patt_file_name = str(pattern)
+    else:
+        raise NotImplementedError("Support for the {t} telescope has not yet been added to this "
+                                  "function.".format(t=telescope))
+
+    return pattern, patt_file_name

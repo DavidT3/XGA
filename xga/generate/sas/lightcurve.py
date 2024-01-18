@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -8,8 +8,9 @@ from typing import Union
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
-from ._common import region_setup, check_pattern
+from ._common import region_setup
 from .run import sas_call
+from ..common import check_pattern
 from ... import OUTPUT, NUM_CORES
 from ...exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from ...samples.base import BaseSample
