@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 15:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 15:43. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -18,7 +18,6 @@ from xga.products import BaseProduct, BaseAggregateProduct
 from xga.utils import dict_search
 
 
-# TODO I REALLY REALLY NEED TO CONVERT THE LIGHTCURVE STUFF TO SUPPORT MULTI-MISSION XGA
 class LightCurve(BaseProduct):
     """
     This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
@@ -597,7 +596,7 @@ class LightCurve(BaseProduct):
 
         elif not self.usable:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
+            raise FailedProductError("Failed to generate this product successfully, so you cannot access "
                                      "data from it; reason given is {}.".format(reasons))
 
     def overlap_check(self, lightcurves: Union['LightCurve', List['LightCurve']]) -> Union[np.ndarray, bool]:
