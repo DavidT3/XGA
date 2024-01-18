@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 20:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 21:11. Copyright (c) The Contributors
 
 from typing import Tuple
 from warnings import warn
@@ -158,7 +158,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  Turner et al. eFEDS-XCS paper).
     if telescope == 'erosita':
         warn("Scaling relations used in this work are currently based off of XMM data - eROSITA temperatures have"
-             "been shown to be somewhat discrepant, so be cautious or provide your own scaling relations.")
+             "been shown to be somewhat discrepant, so be cautious or provide your own scaling relations.",
+             stacklevel=2)
 
     # I want the sample to be passed in as a DataFrame, so I can easily extract the information I need
     if not isinstance(sample_data, pd.DataFrame):
