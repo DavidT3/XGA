@@ -294,8 +294,8 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, corr_lc))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                               "s_lc_path": os.path.join(OUTPUT, obs_id, lc),
-                               "b_lc_path": os.path.join(OUTPUT, obs_id, b_lc),
+                               "s_lc_path": os.path.join(OUTPUT, 'xmm', obs_id, lc),
+                               "b_lc_path": os.path.join(OUTPUT, 'xmm', obs_id, b_lc),
                                "time_bin": time_bin_size,
                                "pattern": pn_patt if 'pn' in inst else mos_patt,
                                "obs_id": obs_id, "instrument": inst, "central_coord": source.default_coord,
