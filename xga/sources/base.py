@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 20:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:11. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2826,6 +2826,158 @@ class BaseSource:
         elif len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any combined {p} profiles matching your "
                                           "input.".format(p=profile_type))
+
+        return matched_prods
+
+    def get_lightcurves(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                        inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                        hi_en: Quantity = None, time_bin_size: Quantity = None, pattern: Union[dict, str] = 'default',
+                        telescope: str = None) -> Union[LightCurve, List[LightCurve]]:
+        """
+        A method to retrieve XGA LightCurve objects.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :param dict pattern: Event selection patterns used to create lightcurves of interest. The default value is
+            'default' which uses the default values for generating lightcurves for different instruments, or you
+            can pass a dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}. You can also pass None, which
+            means all light curves matching other search terms will be returned.
+        :param str telescope: Optionally, a specific telescope to search for lightcurves can be supplied. The
+            default is None, which means all lightcurves matching the other criteria will be returned.
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products).
+        :rtype: Union[LightCurve, List[LightCurve]]
+        """
+        if telescope == 'xmm':
+            from xga.generate.sas import check_pattern
+        else:
+            raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
+
+
+        # TODO This is XMM specific because of the patterns currently
+        # This is where we set up the search string for the patterns specified by the user.
+        if pattern is None:
+            patt_search = "_pattern"
+        elif isinstance(pattern, str):
+            pattern = {'pn': '<=4', 'mos': '<=12'}
+            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+        elif isinstance(pattern, dict):
+            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos'.")
+            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+        else:
+            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                            "instrument names and values are string patterns.")
+
+        # Just makes the search easier down the line
+        if 'mos' in patt_search:
+            patt_search.update({'mos1': patt_search['mos'], 'mos2': patt_search['mos']})
+
+        some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size)
+        matched_prods = []
+        for lc in some_lcs:
+            if isinstance(patt_search, str):
+                rel_patt_search = patt_search
+            else:
+                rel_patt_search = patt_search[lc.instrument]
+
+            if rel_patt_search in lc.storage_key:
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
+    def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
+                                 inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                                 hi_en: Quantity = None, time_bin_size: Quantity = None,
+                                 pattern: Union[dict, str] = "default", telescope: str = None) \
+            -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at
+        the same time and have been packaged together).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the aggregate lightcurve (for instance 'point' would be acceptable for a PointSource, or
+            Quantity(100, 'kpc')). Default is None, meaning all aggregate lightcurves will be retrieved.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the aggregate lightcurve (for instance 'point' would be acceptable for a PointSource, or
+            Quantity(0, 'kpc')). Default is None, meaning all aggregate lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the aggregate lightcurves you wish to retrieve, the default
+            is None (which will retrieve all aggregate lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the aggregate lightcurves you wish to retrieve, the default
+            is None (which will retrieve all aggregate lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired aggregate lightcurve. The
+            default value is None, in which case all aggregate lightcurves matching other criteria will be retrieved.
+        :param dict pattern: Event selection patterns used to create aggregate lightcurves of interest. The default
+            is 'default' which uses the default values for generating lightcurves for different instruments, or you
+            can pass a dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}. You can also pass None, which
+            means all aggregate  light curves matching other search terms will be returned.
+        :param str telescope: Optionally, a specific telescope to search for lightcurves can be supplied. The
+            default is None, which means all lightcurves matching the other criteria will be returned.
+        :return: An XGA AggregateLightCurve object (if there is an exact match), or a list of XGA AggregateLightCurve
+            objects (if there were multiple matching products).
+        :rtype: Union[AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        if telescope == 'xmm':
+            from xga.generate.sas import check_pattern
+        else:
+            raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
+
+        # TODO This is XMM specific because of the patterns currently
+        # This is where we set up the search string for the patterns specified by the user.
+        if pattern is None:
+            patt_search = "pattern"
+        elif isinstance(pattern, str):
+            pattern = {'pn': '<=4', 'mos': '<=12'}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
+        elif isinstance(pattern, dict):
+            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos'.")
+            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
+        else:
+            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                            "instrument names and values are string patterns.")
+
+        # Use the internal function to find the combined light curves, then apply pattern checks after
+        some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
+        matched_prods = []
+        for lc in some_lcs:
+            if isinstance(patt_search, str):
+                rel_patt_search = [patt_search]
+            else:
+                rel_patt_search = [patt for inst, patt in patt_search.items()]
+
+            if all([rps in lc.storage_key for rps in rel_patt_search]):
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
 
         return matched_prods
 
