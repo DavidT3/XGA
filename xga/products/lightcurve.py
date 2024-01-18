@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 10:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 10:44. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -605,8 +605,30 @@ class LightCurve(BaseProduct):
     def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'), lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True):
+                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True) -> Axes:
+        """
+        A method that allows the user to retrieve a populated lightcurve visualisation axes, in a form that allows
+        them to then add their own plots in additon to what has been automatically constructed. This is an alternative
+        to the view method, which calls this method and then displays the visualisation as constructed here.
 
+        :param Axes ax: The matplotlib axes that should be populated with a lightcurve visualization.
+        :param str/Unit time_unit: The unit to be used for the time axis.
+        :param Quantity lo_time_lim: The lower x-limit (i.e. lower time limit) of the data to be displayed.
+        :param Quantity hi_time_lim: The upper x-limit (i.e. upper time limit) of the data to be displayed.
+        :param str colour: The colour to be used to plot data points (if background and source lightcurves are not
+            plotted separately).
+        :param bool plot_sep: Should the source and background lightcurves be plotted separately. Default is False.
+        :param str src_colour: The colour to be used to plot source lightcurve data points, if plot_sep is True.
+        :param str bck_colour: The colour to be used to plot background lightcurve data points, if plot_sep is True.
+        :param str custom_title: A title to be added to the axes, which would override the automatically constructed
+            figure title.
+        :param int label_font_size: The fontsize to be used for labels.
+        :param int title_font_size: The fontsize to be used for the title.
+        :param bool highlight_bad_times: Should periods of time that are NOT within a GTI be highlighted?
+            Default is True.
+        :return: The input Axes, but populated with a lightcurve visualisation.
+        :rtype: Axes
+        """
         if isinstance(time_unit, str):
             time_unit = Unit(time_unit)
 
@@ -709,7 +731,25 @@ class LightCurve(BaseProduct):
              plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
              custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
              highlight_bad_times: bool = True):
+        """
+        A method that creates and displays a visualisation of this lightcurve.
 
+        :param tuple figsize: The figure size to use for this lightcurve visualisation.
+        :param str/Unit time_unit: The unit to be used for the time axis.
+        :param Quantity lo_time_lim: The lower x-limit (i.e. lower time limit) of the data to be displayed.
+        :param Quantity hi_time_lim: The upper x-limit (i.e. upper time limit) of the data to be displayed.
+        :param str colour: The colour to be used to plot data points (if background and source lightcurves are not
+            plotted separately).
+        :param bool plot_sep: Should the source and background lightcurves be plotted separately. Default is False.
+        :param str src_colour: The colour to be used to plot source lightcurve data points, if plot_sep is True.
+        :param str bck_colour: The colour to be used to plot background lightcurve data points, if plot_sep is True.
+        :param str custom_title: A title to be added to the axes, which would override the automatically constructed
+            figure title.
+        :param int label_font_size: The fontsize to be used for labels.
+        :param int title_font_size: The fontsize to be used for the title.
+        :param bool highlight_bad_times: Should periods of time that are NOT within a GTI be highlighted?
+            Default is True.
+        """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
