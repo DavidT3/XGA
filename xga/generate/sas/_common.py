@@ -6,14 +6,16 @@ from typing import Union, Tuple, List
 
 from astropy.units import Quantity
 
-from xga.exceptions import NotAssociatedError
-from xga.samples import BaseSample
-from xga.sources import BaseSource, NullSource, GalaxyCluster
-from xga.utils import RAD_LABELS, OUTPUT
+from .misc import cifbuild
+from ...samples.base import BaseSample
+from ...sources import BaseSource, GalaxyCluster
+from ...sources.base import NullSource
+from ...utils import RAD_LABELS, NUM_CORES
+from ...exceptions import NotAssociatedError
 
 
 def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                 inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str) \
+                 inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str, num_cores: int = NUM_CORES) \
         -> Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]:
     """
     The preparation and value checking stage for SAS spectrum generation.
@@ -26,6 +28,7 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
         default this is zero arcseconds, resulting in a circular spectrum.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param str obs_id: Only used if the 'region' radius name is passed, the ObsID to retrieve the region for.
+    :param int num_cores: The number of cores to be used, will be passed to cifbuild.
     :return: The source objects, a list of inner radius quantities, and a list of outer radius quantities.
     :rtype: Tuple[Union[BaseSource, BaseSample], List[Quantity], List[Quantity]]
     """
@@ -111,11 +114,65 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
             final_inner.append(cur_inn_rad)
             final_outer.append(cur_out_rad)
 
+    # Have to make sure that all observations have an up to date cif file.
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
+
     return sources, final_inner, final_outer
+
+
+def check_pattern(pattern: Union[str, int]) -> Tuple[str, str]:
+    """
+    A very simple (and not exhaustive) checker for XMM SAS pattern expressions.
+
+    :param str/int pattern: The pattern selection expression to be checked.
+    :return: A string pattern selection expression, and a pattern representation that should be safe for naming
+        SAS files with.
+    :rtype: Tuple[str, str]
+    """
+
+    if isinstance(pattern, int):
+        pattern = '==' + str(pattern)
+    elif not isinstance(pattern, str):
+        raise TypeError("Pattern arguments must be either an integer (we then assume only events with that pattern "
+                        "should be selected) or a SAS selection command (e.g. 'in [1:4]' or '<= 4').")
+
+    # First off I remove whitespace from the beginning and end of the term
+    pattern = pattern.strip()
+    # pattern = pattern.replace(' ', '')
+    # Sometimes we will pass in patterns that have been converted to the 'XGA format', if you want to call it
+    #  that. This namely happens when we're reading light curves that have been saved to disk back in. As such we
+    #  replace the XGA-isms with their original string meanings
+    pattern = pattern.replace('lteq', '<=').replace('gteq', '>=').replace('eq', '==') \
+        .replace('lteq', '<=').replace('lt', '<').replace('gt', '>')
+
+    # Then we check for understandable selection commands; inequalities, equals, and 'in'
+    if pattern[:2] not in ['in', '<=', '>=', '=='] and pattern[:1] not in ['<', '>']:
+        raise ValueError("First part of a pattern statement must be either 'in', '<=', '>=', '==', '<', or '>'.")
+
+    if pattern[:2] == 'in' and '[' not in pattern and '(' not in pattern:
+        raise ValueError("If a pattern statement uses 'in', either a '[' (for inclusive lower limit) or '(' (for "
+                         "exclusive lower limit) must be in the statement.")
+
+    if pattern[:2] == 'in' and ']' not in pattern and ')' not in pattern:
+        raise ValueError("If a pattern statement uses 'in', either a ']' (for inclusive upper limit) or ')' (for "
+                         "exclusive upper limit) must be in the statement.")
+
+    if pattern[:2] == 'in' and ':' not in pattern:
+        raise ValueError("If a pattern statement uses 'in', either a ':' must be present in the statement to separate "
+                         "lower and upper limits.")
+
+    # SAS doesn't like having file names with special characters, so I am trying to come up with safe replacements
+    #  that still convey what the pattern selection was
+    # .replace('in', '')
+    patt_file_name = pattern.replace(' ', '').replace('<=', 'lteq').replace('>=', 'gteq').replace('==', 'eq')\
+        .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt')
+
+    return pattern, patt_file_name
 
 
 def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 200) -> Tuple[str, str, str]:
     """
+    An internal method for generating SAS commands required to create detector maps for the weighting of ARFs.
 
     :param BaseSource source: The source for which the parent method is generating ARFs for, and that needs
         a detector map.

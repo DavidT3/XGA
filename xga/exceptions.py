@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:21. Copyright (c) The Contributors
 
+
 class eROSITAImplentationError(Exception):
     def __init__(self, *args):
         """
@@ -21,6 +22,7 @@ class eROSITAImplentationError(Exception):
         else:
             return 'eROSITAImplementationError has been raised'
 
+
 class eSASSInputInvalid(Exception):
     def __init__(self, *args):
         """
@@ -39,6 +41,7 @@ class eSASSInputInvalid(Exception):
             return '{0} '.format(self.message)
         else:
             return 'eSASSInputInvalid has been raised'
+
 
 class HeasoftError(Exception):
     def __init__(self, *args):
@@ -79,10 +82,11 @@ class SASNotFoundError(Exception):
         else:
             return 'SASNotFoundError has been raised'
 
+
 class eSASSNotFoundError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if the eROSITA Science Analysis Software 
+        Exception raised if the eROSITA Science Analysis Software
         System can not be found on the system.
 
         :param expression:
@@ -515,8 +519,8 @@ class IncompatibleProductError(Exception):
     def __init__(self, *args):
         """
         Raised when products are used together that do not have matching ObsID and instrument
-        values. For instance when you try to re-sample a PSF with an Image object from a different
-        observation and instrument.
+        values, or when they were not generated at the same coordinates. For instance when you try to
+        re-sample a PSF with an Image object from a different observation and instrument.
 
         :param expression:
         :param message:

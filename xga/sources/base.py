@@ -28,6 +28,7 @@ from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
+from ..products.lightcurve import LightCurve, AggregateLightCurve
 from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source
 from ..sourcetools.misc import coord_to_name
@@ -898,7 +899,7 @@ class BaseSource:
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
-        def parse_image_like(file_path: str, exact_type: str, telescope: str, merged: bool = False) -> BaseProduct:
+        def parse_image_like(file_path: str, exact_type: str, telescope: str, merged: bool = False) -> Union[Image, ExpMap]:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
@@ -908,8 +909,8 @@ class BaseSource:
             :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
             :param str telescope: The telescope that this product is from.
             :param bool merged: Whether this is a merged file or not.
-            :return: An XGA product object.
-            :rtype: BaseProduct
+            :return: An XGA Image or ExpMap object.
+            :rtype: Union[Image, ExpMap]
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
@@ -947,6 +948,62 @@ class BaseSource:
                 raise TypeError("Only image and expmap are allowed.")
 
             return final_obj
+
+        # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
+        def parse_lightcurve(inven_entry: pd.Series) -> LightCurve:
+            """
+            Very simple little function that takes information on an XGA-generated lightcurve (including a path to
+            the file), and sets up a LightCurve product that can be added to the product storage structure
+            of the source.
+
+            :param pd.Series inven_entry: The inventory entry from which a LightCurve object should be parsed.
+            :return: An XGA LightCurve object
+            :rtype: LightCurve
+            """
+            if inven_entry['src_name'] == self.name:
+                # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
+                #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
+                #  later to read in the data
+                rel_path = cur_d + inven_entry['file_name']
+                rel_obs_id = inven_entry['obs_id']
+                rel_inst = inven_entry['inst']
+
+                # Make sure that the current ObsID and instrument are actually associated with the source
+                if rel_obs_id in self.obs_ids and rel_inst in self.instruments[rel_obs_id]:
+                    # We split up the information contained in the info key - this is going to tell us what
+                    #  settings were used to generate the lightcurve
+                    lc_info = inven_entry['info_key'].split("_")
+
+                    # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
+                    rel_lo_en, rel_hi_en = lc_info[1].split("-")
+                    rel_lo_en = Quantity(float(rel_lo_en), "keV")
+                    rel_hi_en = Quantity(float(rel_hi_en), "keV")
+
+                    # We also need to grab the central coordinates and turn them into an Astropy Quantity
+                    rel_central_coord = Quantity([float(lc_info[2].replace('ra', '')),
+                                                  float(lc_info[3].replace('dec', ''))], 'deg')
+
+                    # The inner and outer radii are always in degrees at this stage, because then we are
+                    #  independent of a cosmology or redshift
+                    rel_inn_rad = Quantity(lc_info[4].replace('ri', ''), 'deg')
+                    rel_out_rad = Quantity(lc_info[5].replace('ro', ''), 'deg')
+
+                    # The timebin size is always in seconds
+                    rel_time_bin = Quantity(lc_info[6].replace('timebin', ''), 's')
+
+                    rel_patt = lc_info[7].replace('pattern', '')
+
+                    # Setting up the lightcurve to be passed back out and stored in the source
+                    final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
+                                           rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+
+                else:
+                    final_obj = None
+
+            else:
+                final_obj = None
+
+            return final_obj
         # Just figure out where we are in the filesystem, we'll make sure to return to this location after all
         #  the changing directory we're about to do
         og_dir = os.getcwd()
@@ -982,6 +1039,14 @@ class BaseSource:
                         for r_ind, r in rel_ims.iterrows():
                             self.update_products(parse_image_like(cur_d+r['file_name'], r['type'], tel),
                                                  update_inv=False)
+
+                    # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
+                    # This finds the lines of the inventory that are lightCurve entries
+                    lc_lines = inven[inven['type'] == 'lightcurve']
+                    for row_ind, row in lc_lines.iterrows():
+                        # The parse lightcurve function does check to see if an inventory entry is relevant to this
+                        #  source (using the source name), and if the ObsID and instrument are still associated.
+                        self.update_products(parse_lightcurve(row), update_inv=False)
 
                     # For spectra, we search for products that have the name of this object in, as they are for
                     #  specific parts of the observation.
@@ -1969,11 +2034,12 @@ class BaseSource:
 
         for po in prod_obj:
             if po is not None:
-                if isinstance(po, Image):
+                if isinstance(po, Image) or isinstance(po, LightCurve):
                     extra_key = po.storage_key
                     en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
                                                     u=float(po.energy_bounds[1].value))
-                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
+                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D) or \
+                        isinstance(po, AggregateLightCurve)::
                     extra_key = po.storage_key
                 elif type(po) == PSFGrid:
                     # The first part of the key is the model used (by default its ELLBETA for example), and
@@ -2548,14 +2614,14 @@ class BaseSource:
         elif isinstance(inner_radius, str):
             inn_rad_num = self.get_radius(inner_radius, 'deg')
         else:
-            raise TypeError("You may only a quantity or a string as inner_radius")
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
 
         if isinstance(outer_radius, Quantity):
             out_rad_num = self.convert_radius(outer_radius, 'deg')
         elif isinstance(outer_radius, str):
             out_rad_num = self.get_radius(outer_radius, 'deg')
         else:
-            raise TypeError("You may only a quantity or a string as outer_radius")
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
 
         if over_sample is not None:
             over_sample = int(over_sample)

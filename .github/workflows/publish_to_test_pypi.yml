@@ -23,8 +23,8 @@ jobs:
     name: Build and publish XGA
     # I actually only want to run this one if the pushed commit has a tag - I will only do this for new versions of the module
     if: startsWith(github.ref, 'refs/tags')
-    # The build/publishing process runs on Ubuntu 18.04 - not super important what this is for this use case, so long as its not Windows
-    runs-on: ubuntu-18.04
+    # The build/publishing process runs on Ubuntu 20.04 - not super important what this is for this use case, so long as its not Windows
+    runs-on: ubuntu-20.04
     
     # This job has several steps
     steps:

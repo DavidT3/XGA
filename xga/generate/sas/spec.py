@@ -65,7 +65,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     if outer_radius != 'region':
         from_region = False
-        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress, '')
+        sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
+                                                         '', num_cores)
     else:
         # This is used in the extra information dictionary for when the XGA spectrum object is defined
         from_region = True
@@ -202,7 +203,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Because the region will be different for each ObsID, I have to call the setup function here
             if outer_radius == 'region':
                 interim_source, inner_radii, outer_radii = region_setup([source], outer_radius, inner_radius,
-                                                                        disable_progress, obs_id)
+                                                                        disable_progress, obs_id, num_cores)
                 # Need the reg for central coordinates
                 reg = source.source_back_regions('region', 'xmm', obs_id)[0]
                 reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')

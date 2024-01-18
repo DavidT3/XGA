@@ -54,8 +54,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
     :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
         desired result were grouped by minimum counts.
-    :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-        desired result were grouped by minimum signal to noise.
+    :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+        desired result were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were fitted.
     :param str/list obs_id: A specific ObsID(s) to measure the density from. This should be a string if a single
         source is being analysed, and a list of ObsIDs the same length as the number of sources otherwise. The
@@ -126,8 +126,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     else:
         # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
         #  this function will also make sure that they are generated
-        single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table, num_cores=num_cores,
-                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
+        single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table, group_spec=group_spec,
+                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, num_cores=num_cores)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion factor
         #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for

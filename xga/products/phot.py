@@ -1342,9 +1342,7 @@ class Image(BaseProduct):
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        # Turns off any ticks and tick labels, we don't want them in an image
         ax = plt.gca()
-
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
                            ch_thickness)

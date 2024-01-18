@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/04/2023, 15:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 18:46. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -161,8 +161,8 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
                                x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
                                x_name: str = 'X', dim_hubb_ind: Union[float, int] = None,
                                point_names: Union[np.ndarray, list] = None,
-                               third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None) \
-        -> ScalingRelation:
+                               third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None,
+                               x_en_bounds: Quantity = None, y_en_bounds: Quantity = None) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy non-linear least squares implementation (curve fit), generate
     an XGA ScalingRelation product, and return it.
@@ -196,6 +196,12 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
+    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -211,7 +217,8 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
     sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='Curve Fit',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
                          y_err=y_fit_errs * y_norm, x_lims=x_lims, dim_hubb_ind=dim_hubb_ind, point_names=point_names,
-                         third_dim_info=third_dim_info, third_dim_name=third_dim_name)
+                         third_dim_info=third_dim_info, third_dim_name=third_dim_name, x_en_bounds=x_en_bounds,
+                         y_en_bounds=y_en_bounds)
 
     return sr
 
@@ -221,8 +228,8 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
                          x_lims: Quantity = None, start_pars: list = None, y_name: str = 'Y',
                          x_name: str = 'X', dim_hubb_ind: Union[float, int] = None,
                          point_names: Union[np.ndarray, list] = None,
-                         third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None) \
-        -> ScalingRelation:
+                         third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None,
+                         x_en_bounds: Quantity = None, y_en_bounds: Quantity = None) -> ScalingRelation:
     """
     A function to fit a scaling relation with the scipy orthogonal distance regression implementation, generate
     an XGA ScalingRelation product, and return it.
@@ -258,6 +265,12 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
+    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -305,7 +318,8 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
     sr = ScalingRelation(fit_par, fit_par_err, model_func, x_norm, y_norm, x_name, y_name, fit_method='ODR',
                          x_data=x_fit_data * x_norm, y_data=y_fit_data * y_norm, x_err=x_fit_errs * x_norm,
                          y_err=y_fit_errs * y_norm, x_lims=x_lims, odr_output=fit_results, dim_hubb_ind=dim_hubb_ind,
-                         point_names=point_names, third_dim_info=third_dim_info, third_dim_name=third_dim_name)
+                         point_names=point_names, third_dim_info=third_dim_info, third_dim_name=third_dim_name,
+                         x_en_bounds=x_en_bounds, y_en_bounds=y_en_bounds)
 
     return sr
 
@@ -314,8 +328,8 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
                           y_norm: Quantity = None, x_norm: Quantity = None, x_lims: Quantity = None, y_name: str = 'Y',
                           x_name: str = 'X', num_steps: int = 100000, num_chains: int = 4, num_burn_in: int = 10000,
                           dim_hubb_ind: Union[float, int] = None, point_names: Union[np.ndarray, list] = None,
-                          third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None) \
-        -> ScalingRelation:
+                          third_dim_info: Union[np.ndarray, Quantity] = None, third_dim_name: str = None,
+                          x_en_bounds: Quantity = None, y_en_bounds: Quantity = None) -> ScalingRelation:
     """
     A function to fit a power law scaling relation with the excellent R fitting package LIRA
     (https://doi.org/10.1093/mnras/stv2374), this function requires a valid R installation, along with LIRA (and its
@@ -349,6 +363,12 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
+    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -424,7 +444,7 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
                          y_err=y_fit_errs * y_norm, x_lims=x_lims, chains=xga_chains,
                          scatter_par=np.array([sigma_par_val, sigma_par_err]), scatter_chain=sigma_par_chain,
                          dim_hubb_ind=dim_hubb_ind, point_names=point_names, third_dim_info=third_dim_info,
-                         third_dim_name=third_dim_name)
+                         third_dim_name=third_dim_name, x_en_bounds=x_en_bounds, y_en_bounds=y_en_bounds)
 
     return sr
 

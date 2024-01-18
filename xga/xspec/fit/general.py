@@ -20,12 +20,12 @@ from ...sources import BaseSource
 def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
-                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                     freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
+                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
+                     freeze_met: bool = True, freeze_temp: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                     min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                     num_cores: int = NUM_CORES, spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
+                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
+                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                     spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
                      stacked_spectra: bool = False):
     """
     This is a convenience function for fitting an absorbed single temperature apec model(constant*tbabs*apec) to an
@@ -39,6 +39,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     that spectrum will be rejected and not included in the final fit. Spectrum checking also involves rejecting any
     spectra with fewer than 10 noticed channels.
 
+    Freezing the temperature value of the fit is also possible, in cases where the data may not be sufficient to
+    constrain it, and an external temperature constrain is used (by passing to the 'start_temp' argument).
+
     :param List[BaseSource] sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
@@ -49,11 +52,14 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
         or Quantity(1000, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
-    :param Quantity start_temp: The initial temperature for the fit.
+    :param Quantity start_temp: The initial temperature for the fit, the default is 3 keV. This value can also be
+        a non-scalar Quantity, with an entry for every source in a sample (this is most useful when used with the
+        'freeze_temp' argument, to provide some external constraint on temperature for objects with poor data).
     :param start_met: The initial metallicity for the fit (in ZSun).
     :param Quantity lum_en: Energy bands in which to measure luminosity.
-    :param bool freeze_nh: Whether the hydrogen column density should be frozen.
-    :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
+    :param bool freeze_nh: Whether the hydrogen column density should be frozen. Default is True.
+    :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen. Default is True.
+    :param bool freeze_temp: Whether the temperature parameter in the fit should be frozen. Default is False
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
@@ -82,9 +88,19 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
     """
+
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
+
+    # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
+    if not start_temp.isscalar and len(start_temp) != len(sources):
+        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+                         "source. It currently has {n} for {s} sources.".format(n=len(start_temp), s=len(sources)))
+    # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif start_temp.isscalar:
+        start_temp = Quantity([start_temp.value]*len(sources), start_temp.unit)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -129,20 +145,16 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                 raise ValueError("You cannot supply a source without a redshift to this model.")
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
-            t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+            t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
             # Another TCL list, this time of the parameter start values for this model.
             par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
                                                               source.redshift, 1.)
 
-            # Set up the TCL list that defines which parameters are frozen, dependant on user input
-            if freeze_nh and freeze_met:
-                freezing = "{F T F T T F}"
-            elif not freeze_nh and freeze_met:
-                freezing = "{F F F T T F}"
-            elif freeze_nh and not freeze_met:
-                freezing = "{F T F F T F}"
-            elif not freeze_nh and not freeze_met:
-                freezing = "{F F F F T F}"
+            # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
+            #  include the temperature, if the user wants it fixed at the start value
+            freezing = "{{F {n} {t} {a} T F}}".format(n="T" if freeze_nh else "F",
+                                                      t="T" if freeze_temp else "F",
+                                                      a="T" if freeze_met else "F")
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -178,8 +190,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'kT',
-                                         group_spec, min_counts, min_sn, over_sample)
+                # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
+                                         min_counts, min_sn, over_sample)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -194,12 +207,13 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                       start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
                       lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                      freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
-                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                      min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                      num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                      timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
+                      freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False,
+                      lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+                      par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+                      fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                      over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                      spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
+                      stacked_spectra: bool = False):
     """
     This is a convenience function for fitting an absorbed single temperature mekal model(constant*tbabs*mekal) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -224,11 +238,14 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,
         or Quantity(1000, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
-    :param Quantity start_temp: The initial temperature for the fit.
+    :param Quantity start_temp: The initial temperature for the fit, the default is 3 keV. This value can also be
+        a non-scalar Quantity, with an entry for every source in a sample (this is most useful when used with the
+        'freeze_temp' argument, to provide some external constraint on temperature for objects with poor data).
     :param start_met: The initial metallicity for the fit (in ZSun).
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
+    :param bool freeze_temp: Whether the temperature parameter in the fit should be frozen. Default is False
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 which should be
@@ -260,6 +277,15 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
+
+    # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
+    if not start_temp.isscalar and len(start_temp) != len(sources):
+        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+                         "source. It currently has {n} for {s} sources.".format(n=len(start_temp), s=len(sources)))
+    # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif start_temp.isscalar:
+        start_temp = Quantity([start_temp.value] * len(sources), start_temp.unit)
 
     # This function is for a set model, absorbed mekal, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -302,13 +328,15 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                 raise ValueError("You cannot supply a source without a redshift to this model.")
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
-            t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+            t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
             # Another TCL list, this time of the parameter start values for this model.
             par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1,
                                                                       start_met, source.redshift, 1, 1.)
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
-            freezing = "{{F {n} F T {ab} T T F}}".format(n='T' if freeze_nh else 'F', ab='T' if freeze_met else 'F')
+            freezing = "{{F {n} {t} T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
+                                                           t='T' if freeze_temp else 'F',
+                                                           ab='T' if freeze_met else 'F')
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -344,7 +372,8 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'kT', group_spec,
+                # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
                                          min_counts, min_sn, over_sample)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
@@ -511,7 +540,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'kT', group_spec,
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
                                          min_counts, min_sn, over_sample)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)

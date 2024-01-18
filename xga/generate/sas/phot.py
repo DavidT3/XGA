@@ -55,7 +55,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
 
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
     if lo_en > hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
+        raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
     else:
         # Converts the energies to channels for EPIC detectors, assuming one channel per eV
         lo_chan = int(lo_en.to('eV').value)

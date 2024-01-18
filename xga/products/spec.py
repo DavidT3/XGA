@@ -2020,8 +2020,7 @@ class AnnularSpectra(BaseAggregateProduct):
         A property of this spectrum set that details which ObsIDs have contributed spectra to this object.
 
         :return: A list of ObsIDs.
-        containing instruments associated with those ObsIDs.
-        :rtype: dict
+        :rtype: list
         """
         return list(self._instruments.keys())
 
@@ -2032,7 +2031,7 @@ class AnnularSpectra(BaseAggregateProduct):
         to this object.
 
         :return: A dictionary of lists, with the top level keys being ObsIDs, and the lists
-        containing instruments associated with those ObsIDs.
+            containing instruments associated with those ObsIDs.
         :rtype: dict
         """
         return self._instruments

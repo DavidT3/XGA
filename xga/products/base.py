@@ -415,10 +415,10 @@ class BaseAggregateProduct:
     @property
     def obs_id(self) -> str:
         """
-        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
+        Property getter for the ObsID of this AggregateProduct. Admittedly this information is implicit in the location
         this object is stored in a source object, but I think it worth storing directly as a property as well.
 
-        :return: The ObsID of this image.
+        :return: The ObsID of this AggregateProduct.
         :rtype: str
         """
         return self._obs_id
@@ -426,11 +426,11 @@ class BaseAggregateProduct:
     @property
     def instrument(self) -> str:
         """
-        Property getter for the instrument used to take this image. Admittedly this information is implicit
+        Property getter for the instrument of this AggregateProduct. Admittedly this information is implicit
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
 
-        :return: The instrument used to take this image.
+        :return: The instrument of this AggregateProduct.
         :rtype: str
         """
         return self._inst
@@ -467,7 +467,6 @@ class BaseAggregateProduct:
         """
         return self._all_usable
 
-    # This is a fundamental property of the generated product, so I won't allow it be changed.
     @property
     def energy_bounds(self) -> Tuple[Quantity, Quantity]:
         """
@@ -2726,7 +2725,7 @@ class BaseAggregateProfile1D:
                 line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label)
                 if p.values_err is not None:
                     y_errs = (p.values_err.copy() / y_norms[p_ind]).value
-                    main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                    main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
                                          linestyle='dashdot', alpha=0.7)
             else:
                 line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
