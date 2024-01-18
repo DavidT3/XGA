@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 10:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 15:13. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -522,7 +522,10 @@ class LightCurve(BaseProduct):
                 if self._is_back_sub:
                     # TODO I should email the XMM help desk about this and double check
                     self._bck_sub_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
-                    self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                    if 'ERROR' in all_lc['RATE'].get_colnames():
+                        self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                    else:
+                        self._bck_sub_cnt_rate_err = Quantity(all_lc['RATE'].read_column('RATE_ERR'), 'ct/s')
 
                     if np.isnan(self._bck_sub_cnt_rate).any():
                         good_ent = np.where(~np.isnan(self._bck_sub_cnt_rate))
@@ -534,7 +537,10 @@ class LightCurve(BaseProduct):
                     # If we weren't told that the rate data are background subtracted when the light curve was
                     #  declared, then we store the values in the source count rate attributes
                     self._src_cnt_rate = Quantity(all_lc['RATE'].read_column('RATE'), 'ct/s')
-                    self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                    if 'ERROR' in all_lc['RATE'].get_colnames():
+                        self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('ERROR'), 'ct/s')
+                    else:
+                        self._src_cnt_rate_err = Quantity(all_lc['RATE'].read_column('RATE_ERR'), 'ct/s')
 
                     if np.isnan(self._src_cnt_rate).any():
                         good_ent = np.where(~np.isnan(self._src_cnt_rate))
@@ -545,22 +551,45 @@ class LightCurve(BaseProduct):
 
                 self._time = Quantity(all_lc['RATE'].read_column('TIME'), 's')[good_ent]
                 self._frac_exp = Quantity(all_lc['RATE'].read_column('FRACEXP'))[good_ent]
-                self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')[good_ent]
-                self._bck_cnt_rate_err = Quantity(all_lc['RATE'].read_column('BACKE'), 'ct/s')[good_ent]
+                if "BACKV" in all_lc['RATE'].read_column('RATE'):
+                    self._bck_cnt_rate = Quantity(all_lc['RATE'].read_column('BACKV'), 'ct/s')[good_ent]
+                    self._bck_cnt_rate_err = Quantity(all_lc['RATE'].read_column('BACKE'), 'ct/s')[good_ent]
 
-                # Here we read out the beginning and end times of the GTIs for source and background
-                self._src_gti = Quantity([all_lc['SRC_GTIS'].read_column('START'),
-                                          all_lc['SRC_GTIS'].read_column('STOP')], 's').T
-                self._bck_gti = Quantity([all_lc['BKG_GTIS'].read_column('START'),
-                                          all_lc['BKG_GTIS'].read_column('STOP')], 's').T
+                else:
+                    self._bck_cnt_rate = Quantity(np.full(len(all_lc['RATE'].read_column('TIME')),
+                                                          np.NaN), 'ct/s')[good_ent]
+                    self._bck_cnt_rate_err = Quantity(np.full(len(all_lc['RATE'].read_column('TIME')),
+                                                              np.NaN), 'ct/s')[good_ent]
 
                 # Grab the start, stop, and time assign values from the overall header of the light curve
                 hdr = all_lc['RATE'].read_header()
                 self._time_start = Quantity(hdr['TSTART'], 's')
                 self._time_stop = Quantity(hdr['TSTOP'], 's')
-                self._time_assign = hdr['TASSIGN']
+                if 'TASSIGN' in hdr:
+                    self._time_assign = hdr['TASSIGN']
+                else:
+                    self._time_assign = None
                 self._ref_time = Time(hdr['MJDREF'], format='mjd')
                 self._time_sys = hdr['TIMESYS']
+
+                # TODO NEED TO ASK EROSITA TEAM IF THE COMBINED LIGHTCURVES ARE MEANT TO HAVE GTIs WRITTEN
+                # I now read in the GTIs after dealing with the header keywords because I might need to construct
+                #  my own GTI entry if there is no specific GTI in the lightcurve
+                if self.telescope == 'xmm':
+                    # Here we read out the beginning and end times of the GTIs for source and background
+                    self._src_gti = Quantity([all_lc['SRC_GTIS'].read_column('START'),
+                                              all_lc['SRC_GTIS'].read_column('STOP')], 's').T
+                    self._bck_gti = Quantity([all_lc['BKG_GTIS'].read_column('START'),
+                                              all_lc['BKG_GTIS'].read_column('STOP')], 's').T
+
+                elif self.telescope == 'erosita' and 'SRCGTI{}'.format(self.instrument[-1]) in all_lc:
+                    self._src_gti = Quantity([all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('START'),
+                                              all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('STOP')],
+                                             's').T
+                    self._bck_gti = self._src_gti
+                else:
+                    self._src_gti = Quantity([[self._time_start.value, self._time_stop.value]], 's')
+                    self._bck_gti = self._src_gti
 
             # TODO add calculation for error prop of src-bck or bck+bckcorr
             # And set this attribute to make sure that no further reading in is done
