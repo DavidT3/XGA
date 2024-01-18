@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:39. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -10,6 +10,7 @@ from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from ..products.lightcurve import LightCurve
 from ..sources import BaseSource
 from ..utils import OUTPUT
 
@@ -62,6 +63,11 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                        extra_info["instrument"], out, err, cmd)
+    elif p_type == 'light curve' and "NullSource" not in src:
+        prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                          extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                          extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
+                          extra_info["from_region"], telescope=extra_info['telescope'])
     elif p_type == "cross arfs":
         prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
                            telescope=extra_info["telescope"])

@@ -1,13 +1,15 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 13:39. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
 from random import randint
 from typing import Union
 
+import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
+from .run import esass_call
 from .._common import get_annular_esass_region
 from ..sas._common import region_setup
 from ... import OUTPUT, NUM_CORES
@@ -90,12 +92,12 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
     # TODO These may not be valid for the lightcurve generation
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format
-    rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
+    rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn};'
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
-    remove_merged_cmd = 'rm *srctoolout_0*'
+    remove_merged_cmd = 'rm *srctoolout_0*;'
     # We also set up a command that will remove all lightcurves BUT the combined one, for when that is all the
     #  user wants (though honestly it seems wasteful to generate them all and not use them, this might change later
-    remove_all_but_merged_cmd = "rm *srctoolout_*"
+    remove_all_but_merged_cmd = "rm *srctoolout_*;"
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -194,22 +196,21 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                                                  interloper_regions=back_inter_reg,
                                                  central_coord=source.default_coord, bkg_reg=True,
                                                  rand_ident=rand_ident)
+
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
 
-                # TODO implement the detector map
-                # This creates a detection map for the source and background region
-                # map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
-
-                # lc_cmd = ('cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="LC LCCORR" srcreg="{reg}" exttype="POINT" '
-                #               'tstep={ts} insts={i} psftype="2D_PSF" lctype="{lct}" lcpars="{lcp}" lcemin="{le}" lcemax="{lm}" '
-                #               'lcgamma="{lcg}" backreg="{breg}"')
+                lc = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_lcurve.fits"
+                lc_name = lc.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                                    dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
+                                    ex=extra_name)
 
                 # TODO ADD MANY MORE COMMENTS
                 coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value,
                                                       dec=source.default_coord[1].value)
                 src_reg_str = reg  # dealt with in get_annular_esass_region
 
+                # TODO decide what to do about this
                 tstep = 0.5  # put it as 0.5 for now
 
                 # TODO Decide on the best generation type (i.e. REGULAR OR REGULAR+/-
@@ -218,51 +219,81 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                                         le=str(lo_en.value), lm=str(hi_en.value), lcg=str(lc_gamma))
 
                 rename_srctool_id = inst_srctool_id[inst_ind]
-                rename_lc = rename_cmd.format(i_no=rename_srctool_id, type='SourceSpec', nn=no_grp_spec)
+                rename_lc = rename_cmd.format(i_no=rename_srctool_id, type='LightCurve', nn=lc_name)
 
+                cmd_str += rename_lc
+
+                # We make sure to remove the 'merged lightcurve' output of srctool - which is identical to the
+                #  instrument one if we generate for one lightcurve at a time. Though only if the user hasn't actually
+                #  ASKED for the merged lightcurve
+                if combine_tm:
+                    cmd_str += remove_all_but_merged_cmd
+                else:
+                    cmd_str += remove_merged_cmd
+
+                # Adds clean up commands to move all generated files and remove temporary directory
+                cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+                # If temporary region files were made, they will be here
+                if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs_{i}'.format(i=rand_ident)):
+                    # Removing this directory
+                    cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
+
+                cmds.append(cmd_str)  # Adds the full command to the set
+                # Makes sure the whole path to the temporary directory is created
                 os.makedirs(dest_dir)
-                print(cmd_str)
-                print('')
-                # print(rename_lc)
 
-                stop
+                final_paths.append(os.path.join(OUTPUT, obs_id, lc_name))
+                extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
+                                   "time_bin": time_bin_size,
+                                   "pattern": patt,
+                                   "obs_id": obs_id, "instrument": inst, "central_coord": source.default_coord,
+                                   "from_region": False,
+                                   "lo_en": lo_en,
+                                   "hi_en": hi_en,
+                                   "telescope": 'erosita'})
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            # This contains any other information that will be needed to instantiate the class
+            #  once the eSASS cmd has run
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="light curve"))
+
+        return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-# @esass_call
-# def evselect_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-#                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-#                         lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-#                         time_bin_size: Quantity = Quantity(100, 's'), pn_patt: str = '<= 4',
-#                         mos_patt: str = '<= 12', num_cores: int = NUM_CORES, disable_progress: bool = False):
-#     """
-#     A wrapper for all the SAS processes necessary to generate XMM light curves for a specified region.
-#      Every observation associated with this source, and every instrument associated with that
-#     observation, will have a light curve generated using the specified outer and inner radii as a boundary. The
-#     default inner radius is zero, so by default this function will produce light curves in a circular region out
-#     to the outer_radius.
-#     The light curves are corrected for background, vignetting, and PSF concerns using the SAS 'epiclccorr' tool.
-#
-#     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
-#     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
-#         the light curve (for instance 'point' would be acceptable for a Star or PointSource). If 'region' is chosen
-#         (to use the regions in region files), then any inner radius will be ignored. If you are generating for
-#         multiple sources then you can also pass a Quantity with one entry per source.
-#     :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
-#         the light curve. By default this is zero arcseconds, resulting in a light curve from a circular region. If
-#         you are generating for multiple sources then you can also pass a Quantity with one entry per source.
-#     :param Quantity lo_en: The lower energy boundary for the light curve, in units of keV. The default is 0.5 keV.
-#     :param Quantity hi_en: The upper energy boundary for the light curve, in units of keV. The default is 2.0 keV.
-#     :param Quantity time_bin_size: The bin size to be used for the creation of the light curve, in
-#         seconds. The default is 100 s.
-#     :param str pn_patt: The event selection pattern that should be applied for PN data. This should be a string
-#         containing the selection expression of a valid XMM SAS pattern definition. For instance, the default for PN
-#         is <= 4.
-#     :param str mos_patt: The event selection pattern that should be applied for MOS data. This should be a string
-#         containing the selection expression of a valid XMM SAS pattern definition. For instance, the default for MOS
-#         is <= 12.
-#     :param int num_cores: The number of cores to use (if running locally), default is set to
-#         90% of available.
-#     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
-#     """
-#     return _lc_cmds(sources, outer_radius, inner_radius, lo_en, hi_en, time_bin_size, pn_patt, mos_patt,
-#                     num_cores, disable_progress)
+@esass_call
+def srctool_lightcurve(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
+                       time_bin_size: Quantity = Quantity(100, 's'), patt: str = '<= 4',
+                       num_cores: int = NUM_CORES, disable_progress: bool = False, combine_tm: bool = True):
+    """
+    A wrapper for all the SAS processes necessary to generate XMM light curves for a specified region.
+     Every observation associated with this source, and every instrument associated with that
+    observation, will have a light curve generated using the specified outer and inner radii as a boundary. The
+    default inner radius is zero, so by default this function will produce light curves in a circular region out
+    to the outer_radius.
+    The light curves are corrected for background, vignetting, and PSF concerns using the SAS 'epiclccorr' tool.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
+        the light curve (for instance 'point' would be acceptable for a Star or PointSource). If 'region' is chosen
+        (to use the regions in region files), then any inner radius will be ignored. If you are generating for
+        multiple sources then you can also pass a Quantity with one entry per source.
+    :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
+        the light curve. By default this is zero arcseconds, resulting in a light curve from a circular region. If
+        you are generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param Quantity lo_en: The lower energy boundary for the light curve, in units of keV. The default is 0.5 keV.
+    :param Quantity hi_en: The upper energy boundary for the light curve, in units of keV. The default is 2.0 keV.
+    :param Quantity time_bin_size: The bin size to be used for the creation of the light curve, in
+        seconds. The default is 100 s.
+    :param str patt: The event selection pattern
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+        90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :param bool combine_tm: Create lightcurves for individual ObsIDs that are a combination of the data from all the
+        telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
+        survey data eROSITA takes. Default is True.
+    """
+    return _lc_cmds(sources, outer_radius, inner_radius, lo_en, hi_en, time_bin_size, patt, num_cores,
+                    disable_progress, combine_tm)
