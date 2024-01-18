@@ -111,7 +111,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         ex_src = False
         et = 'POINT'
-        raise eROSITAImplentationError("Spectral generation has not yet been implemented for point sources.")
 
     # TODO implement the det map EXTTPYE, at the moment this spectrum will treat the target as a point source
     # Defining the various eSASS commands that need to be populated
@@ -354,7 +353,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
                                                        i=inst_no, ts=tstep, em=im.path, et=et)
                 else:
-                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
+                    s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
                                                        i=inst_no, ts=tstep)
 
                 # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
