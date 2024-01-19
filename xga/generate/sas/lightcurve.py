@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 10:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 10:52. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -147,9 +147,9 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         lc_storage_name += extra_name
 
         # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", just_obj=False):
-            obs_id = pack[0]
-            inst = pack[1]
+        for pack in source.get_products("events", just_obj=False, telescope='xmm'):
+            obs_id = pack[1]
+            inst = pack[2]
             try:
                 # If we can find an exact match then we don't need to generate this light curve, it already exists, so
                 #  we would move onto the next ObsID-instrument combo
