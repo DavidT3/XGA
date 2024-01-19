@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 15:01. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -949,14 +949,14 @@ class BaseSource:
 
             return final_obj
 
-        # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
-        def parse_lightcurve(inven_entry: pd.Series) -> LightCurve:
+        def parse_lightcurve(inven_entry: pd.Series, telescope: str) -> LightCurve:
             """
             Very simple little function that takes information on an XGA-generated lightcurve (including a path to
             the file), and sets up a LightCurve product that can be added to the product storage structure
             of the source.
 
             :param pd.Series inven_entry: The inventory entry from which a LightCurve object should be parsed.
+            :param str telescope: The telescope to which this lightcurve belongs.
             :return: An XGA LightCurve object
             :rtype: LightCurve
             """
@@ -969,7 +969,8 @@ class BaseSource:
                 rel_inst = inven_entry['inst']
 
                 # Make sure that the current ObsID and instrument are actually associated with the source
-                if rel_obs_id in self.obs_ids and rel_inst in self.instruments[rel_obs_id]:
+                if (rel_obs_id in self.obs_ids[telescope] and
+                        (rel_inst in self.instruments[telescope][rel_obs_id] or rel_inst == "combined")):
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry['info_key'].split("_")
@@ -995,7 +996,8 @@ class BaseSource:
 
                     # Setting up the lightcurve to be passed back out and stored in the source
                     final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
-                                           rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+                                           rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True,
+                                           telescope=telescope)
 
                 else:
                     final_obj = None
@@ -1046,7 +1048,7 @@ class BaseSource:
                     for row_ind, row in lc_lines.iterrows():
                         # The parse lightcurve function does check to see if an inventory entry is relevant to this
                         #  source (using the source name), and if the ObsID and instrument are still associated.
-                        self.update_products(parse_lightcurve(row), update_inv=False)
+                        self.update_products(parse_lightcurve(row, tel), update_inv=False)
 
                     # For spectra, we search for products that have the name of this object in, as they are for
                     #  specific parts of the observation.
@@ -3043,6 +3045,10 @@ class BaseSource:
             from ..generate.common import check_pattern
         else:
             raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
+
+        # TODO SO THIS IS THE LAST GET METHOD THAT NEEDS CONVERTING TO SUPPORT DIFFERENT TELESCOPES - HOWEVER THAT IS
+        #  COMPLICATED BY THE FACT THAT WE DON'T CURRENTLY AUTO-CREATE AGGREGATE LIGHTCURVES, AND THEY MIGHT BE THE
+        #  ONE THING THAT IS ALREADY ALLOWED TO BE MULTI-TELESCOPE
 
         # TODO This is XMM specific because of the patterns currently
         # This is where we set up the search string for the patterns specified by the user.
