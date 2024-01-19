@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 21:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 09:49. Copyright (c) The Contributors
 
 from typing import Tuple
 from warnings import warn
@@ -27,7 +27,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = False, freeze_nh: bool = True, freeze_met: bool = True,
+                                    core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
                                     freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
                                     temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
                                     lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
@@ -99,7 +99,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         Quantity([[0.5, 2.0], [0.01, 100.0]], 'keV'), corresponding to the 0.5-2.0keV and bolometric bands.
     :param bool core_excised: Should final measurements of temperature and luminosity be made with core-excision in
         addition to measurements within the overdensity radius specified by the scaling relation. This will involve
-        multiplying the radii by 0.15 to determine the inner radius. Default is False.
+        multiplying the radii by 0.15 to determine the inner radius. Default is True.
     :param bool freeze_nh: Controls whether the hydrogen column density (nH) should be frozen during XSPEC fits to
         spectra, the default is True.
     :param bool freeze_met: Controls whether metallicity should be frozen during XSPEC fits to spectra, the default
