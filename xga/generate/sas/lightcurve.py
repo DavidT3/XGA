@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 10:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 10:47. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -127,12 +127,12 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind],
+            interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], 'xmm',
                                                              source.default_coord)
             # This finds any regions which
             back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
                                                          outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         source.default_coord)
+                                                         'xmm', source.default_coord)
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these light curves will be stored
@@ -167,7 +167,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate light curves from region files, we have to ignore that observations
-            if outer_radius == "region" and source.source_back_regions("region", obs_id)[0] is None:
+            if outer_radius == "region" and source.source_back_regions("region", 'xmm', obs_id)[0] is None:
                 continue
 
             # Because the region will be different for each ObsID, I have to call the setup function here
