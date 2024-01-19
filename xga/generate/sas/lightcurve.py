@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 10:43. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -153,18 +153,16 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             try:
                 # If we can find an exact match then we don't need to generate this light curve, it already exists, so
                 #  we would move onto the next ObsID-instrument combo
-                source.get_lightcurves(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], lo_en, hi_en,
-                                       Quantity(time_bin_size, 's'), {'pn': pn_patt, 'mos': mos_patt})
+                check_lc = source.get_lightcurves(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], lo_en, hi_en,
+                                                  Quantity(time_bin_size, 's'), {'pn': pn_patt, 'mos': mos_patt},
+                                                  telescope='xmm')
+                exists = True
                 continue
             except NoProductAvailableError:
-                pass
-
-            if not os.path.exists(OUTPUT + obs_id):
-                os.mkdir(OUTPUT + obs_id)
+                exists = False
 
             # Got to check if this light curve already exists
-            exists = source.get_products("light_curve", obs_id, inst, extra_key=lc_storage_name)
-            if len(exists) == 1 and exists[0].usable and not force_gen:
+            if exists and check_lc.usable and not force_gen:
                 continue
 
             # If there is no match to a region, the source region returned by this method will be None,
@@ -181,10 +179,11 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                 reg_cen_coords = Quantity([reg.center.ra.value, reg.center.dec.value], 'deg')
                 # Pass the largest outer radius here, so we'll look for interlopers in a circle with the radius
                 #  being the largest axis of the ellipse
-                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), reg_cen_coords)
+                interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), 'xmm',
+                                                                 reg_cen_coords)
                 back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
                                                              max(outer_radii[0]) * source.background_radius_factors[1],
-                                                             reg_cen_coords)
+                                                             'xmm', reg_cen_coords)
 
                 reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
                                                     interloper_regions=interloper_regions, central_coord=reg_cen_coords,
