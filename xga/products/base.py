@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2023, 15:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 15:01. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -360,7 +360,7 @@ class BaseProduct:
 
 class BaseAggregateProduct:
     """
-    A base class for any XGA products that are an aggregate of an XGA SAS product, for instance this is sub-classed
+    A base class for any XGA products that are an aggregate of a set of XGA products, for instance this is sub-classed
     to make the AnnularSpectra class. Users really shouldn't be instantiating these for themselves.
 
     :param list file_paths: The file paths of the main files for a given aggregate product.
