@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 18:56. Copyright (c) The Contributors
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -608,15 +608,16 @@ class LightCurve(BaseProduct):
         if isinstance(lightcurves, LightCurve):
             lightcurves = [lightcurves]
 
-        # Grabs the start and stop times for the passed lightcurves, puts them all in non-scalar quantities
-        starts = Quantity([lc.start_time for lc in lightcurves])
-        ends = Quantity([lc.stop_time for lc in lightcurves])
+        # Grabs the start and stop datetimes (which take into account the reference times of each lightcurve) for
+        #  the passed lightcurves, puts them all in non-scalar quantities
+        starts = np.array([lc.start_datetime for lc in lightcurves])
+        ends = np.array([lc.stop_datetime for lc in lightcurves])
 
         # Simply constructs a boolean array that tells us if each lightcurve starts in, finishes in, or completely
         #  encloses the light curve we're checking against
-        overlap = ((starts >= self.start_time) & (starts < self.stop_time)) | \
-                  ((ends >= self.start_time) & (ends < self.stop_time)) | \
-                  ((starts <= self.start_time) & (ends >= self.stop_time))
+        overlap = ((starts >= self.start_datetime) & (starts < self.stop_datetime)) | \
+                  ((ends >= self.start_datetime) & (ends < self.stop_datetime)) | \
+                  ((starts <= self.start_datetime) & (ends >= self.stop_datetime))
 
         if len(overlap) == 1:
             overlap = overlap[0]
@@ -787,6 +788,10 @@ class LightCurve(BaseProduct):
         plt.close("all")
 
 
+# TODO THIS DOESN'T YET PROPERLY SUPPORT TELESCOPES OTHER THAN XMM YET, THOUGH CONVERTING TO SUPPORT OTHER TELESCOPES
+#  SHOULD BE PRETTY SIMPLE. WHAT WON'T NECESSARILY BE SIMPLE IS THAT I HAVE DECIDED THIS CLASS IS GOING TO BE THE
+#  FIRST TO SUPPORT MULTIPLE TELESCOPES IN A SINGLE AGGREGATE PRODUCT. I ALREADY SORT OF DESIGNED IT WITH THAT IN MIND
+#  BUT IT IS GOING TO BE INTERESTING
 class AggregateLightCurve(BaseAggregateProduct):
     """
     The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
@@ -922,7 +927,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
         self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
 
-        # This stores the ObsIDs and their instruments, for the lightcurves associated with this objcet
+        # This stores the ObsIDs and their instruments, for the lightcurves associated with this object
         self._rel_obs = {}
         # This array determines which lightcurves have overlapping temporal coverage
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
@@ -938,12 +943,21 @@ class AggregateLightCurve(BaseAggregateProduct):
             #  the current one. Checking like this does include the current light curve which obviously will overlap,
             #  but we're setting up an overlap matrix and those values will be the diagonal, so we don't mind
             cur_overlap = lc.overlap_check(lightcurves)
+            print(lc.telescope, lc.obs_id)
+            print(cur_overlap)
+            print('')
             overlapping[lc_ind, :] = cur_overlap
+
+        plt.imshow(overlapping, origin='lower')
+        plt.show()
+
+        print(overlapping.shape)
 
         # Get the entries one up from the diagonal, we'll use them to split the light curves up into time chunks, which
         #  is where there are gaps between coverage. This works because there will be False overlap entries in the
         #  shifted diagonal of the matrix, and those are cases where there is a break in the observations
         split = np.diag(overlapping, 1)
+        print(len(split))
         split = np.insert(split, 0, False)
 
         # Here we want to index the light curves into time chunk groupings
@@ -993,6 +1007,14 @@ class AggregateLightCurve(BaseAggregateProduct):
         :rtype: dict
         """
         return self._rel_obs
+
+    @property
+    def telescopes(self) -> str:
+        """
+
+        :return:
+        :rtype: str
+        """
 
     @property
     def src_name(self) -> str:
@@ -1322,7 +1344,10 @@ class AggregateLightCurve(BaseAggregateProduct):
         # This sets the fraction of the total x-width of the figure that is set between each axes
         buffer_frac = 0.008
         # This calculates the total time length of all time chunks
-        chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
+        # chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
+        chunk_len = (self.datetime_chunks[:, 1] - self.datetime_chunks[:, 0])
+        chunk_len = np.array([float(cl.total_seconds()) for cl in chunk_len])
+
         # Then finds what fraction of the total coverage each time chunk covers, taking into account the buffer
         chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac*len(chunk_len)-1)
 
