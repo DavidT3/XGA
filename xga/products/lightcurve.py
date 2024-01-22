@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 23:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:05. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1429,8 +1429,8 @@ class AggregateLightCurve(BaseAggregateProduct):
                 #  the lightcurves that are to be plotted, as the y-axis is shared - if the user hasn't specified
                 #  their own y-axis limits
                 if y_lims is None:
-                    low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in all_rel_lcs]).value*0.95
-                    upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in all_rel_lcs]).value*1.05
+                    low_lim = min([np.nanmin(lc.count_rate-lc.count_rate_err) for lc in all_rel_lcs]).value*0.95
+                    upp_lim = max([np.nanmax(lc.count_rate+lc.count_rate_err) for lc in all_rel_lcs]).value*1.05
                 else:
                     # The user has specified axis limits, so we make sure to convert them to the y-axis unit
                     low_lim, upp_lim = y_lims.to(self.all_lightcurves[0].count_rate.unit).value
