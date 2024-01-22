@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:27. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1533,11 +1533,12 @@ class AggregateLightCurve(BaseAggregateProduct):
                                              i=rel_lc.instrument)
                 if fracexp_corr:
                     plt_cr = rel_lc.count_rate.value / rel_lc.frac_exp
-                    print('waaaaaay')
+                    plt_cr_err = rel_lc.count_rate_err.value / rel_lc.frac_exp
                 else:
                     plt_cr = rel_lc.count_rate.value
-                ax.errorbar(rel_lc.datetime, plt_cr, yerr=rel_lc.count_rate_err.value,
-                            capsize=2, label=ident, fmt='x', color=inst_colours[rel_lc.instrument])
+                    plt_cr_err = rel_lc.count_rate_err.value
+                ax.errorbar(rel_lc.datetime, plt_cr, yerr=plt_cr_err, capsize=2, label=ident, fmt='x',
+                            color=inst_colours[rel_lc.instrument])
 
             ax.legend(loc='best')
 
