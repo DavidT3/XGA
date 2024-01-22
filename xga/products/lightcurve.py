@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 21:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 21:38. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 
 from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, TelescopeNotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
-from xga.utils import dict_search
+from xga.utils import dict_search, PRETTY_TELESCOPE_NAMES
 
 
 class LightCurve(BaseProduct):
@@ -788,10 +788,6 @@ class LightCurve(BaseProduct):
         plt.close("all")
 
 
-# TODO THIS DOESN'T YET PROPERLY SUPPORT TELESCOPES OTHER THAN XMM YET, THOUGH CONVERTING TO SUPPORT OTHER TELESCOPES
-#  SHOULD BE PRETTY SIMPLE. WHAT WON'T NECESSARILY BE SIMPLE IS THAT I HAVE DECIDED THIS CLASS IS GOING TO BE THE
-#  FIRST TO SUPPORT MULTIPLE TELESCOPES IN A SINGLE AGGREGATE PRODUCT. I ALREADY SORT OF DESIGNED IT WITH THAT IN MIND
-#  BUT IT IS GOING TO BE INTERESTING
 class AggregateLightCurve(BaseAggregateProduct):
     """
     The init method for the AggregateLightCurve class, performs checks and organises the light-curves which
@@ -1467,7 +1463,8 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             # Now we cycle through the light curves for the current time chunk and add them to the plot
             for rel_lc in rel_lcs:
-                ident = "{t} {o}-{i}".format(t=rel_lc.telescope, o=rel_lc.obs_id, i=rel_lc.instrument)
+                ident = "{t} {o}-{i}".format(t=PRETTY_TELESCOPE_NAMES[rel_lc.telescope], o=rel_lc.obs_id,
+                                             i=rel_lc.instrument)
                 ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
                             capsize=2, label=ident, fmt='x')
 
