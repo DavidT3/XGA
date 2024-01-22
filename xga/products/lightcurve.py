@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 22:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 22:26. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1330,7 +1330,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
-                 title_font_size: int = 20, inst_cmap: str = 'inferno') -> Tuple[dict, Figure]:
+                 title_font_size: int = 20, inst_cmap: str = 'inferno', y_lims: Quantity = None) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1343,6 +1343,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param int title_font_size: The font size for the title, default is 20.
         :param str inst_cmap: The colormap from which we draw colours to uniquely identify different instruments
             plotted in this get_view method.
+        :param Quantity y_lims: The lower and upper limits that should be applied to the y-axis of this plot. The
+            default is None, in which case they will be determined automatically based on the data.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
@@ -1387,9 +1389,14 @@ class AggregateLightCurve(BaseAggregateProduct):
                 axes_dict[tc_id].set_ylabel(y_lab, fontsize=label_font_size)
 
                 # We set the upper and lower y-axis limits based on the maximum and minimum count rates across all
-                #  the lightcurves in this object, as the y-axis is shared
-                low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in self.all_lightcurves]).value*0.95
-                upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in self.all_lightcurves]).value*1.05
+                #  the lightcurves in this object, as the y-axis is shared - if the user hasn't specified their
+                #  own y-axis limits
+                if y_lims is None:
+                    low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in self.all_lightcurves]).value*0.95
+                    upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in self.all_lightcurves]).value*1.05
+                else:
+                    # The user has specified axis limits, so we make sure to convert them to the y-axis unit
+                    low_lim, upp_lim = y_lims.to(self.all_lightcurves[0].count_rate.unit).value
                 axes_dict[tc_id].set_ylim(low_lim, upp_lim)
 
                 # If there is more than one time chunk, we turn off the line on the right hand side of this initial
@@ -1499,7 +1506,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return axes_dict, fig
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
-             title_font_size: int = 18, inst_cmap: str = 'inferno'):
+             title_font_size: int = 18, inst_cmap: str = 'inferno', y_lims: Quantity = None):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1517,11 +1524,13 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param int title_font_size: The font size for the title, default is 20.
         :param str inst_cmap: The colormap from which we draw colours to uniquely identify different instruments
             plotted in this view method.
+        :param Quantity y_lims: The lower and upper limits that should be applied to the y-axis of this plot. The
+            default is None, in which case they will be determined automatically based on the data.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap)
+        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims)
 
         # plt.tight_layout()
         # Display the plot
