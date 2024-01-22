@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 22:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 23:39. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1330,7 +1330,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
-                 title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None) -> Tuple[dict, Figure]:
+                 title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
+                 time_chunk_ids: Union[int, List[int]] = None) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1345,18 +1346,54 @@ class AggregateLightCurve(BaseAggregateProduct):
             plotted in this get_view method.
         :param Quantity y_lims: The lower and upper limits that should be applied to the y-axis of this plot. The
             default is None, in which case they will be determined automatically based on the data.
+        :param int/List[int] time_chunk_ids: This parameter can be used to control which time chunks are plotted on
+            this AggregateLightCurve view. The default is None, in which case all time chunks are plotted; however
+            the user may also pass a list of chunk IDs (or a single chunk ID) to limit the data that are shown.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
 
+        # We check the input for the time_chunk_ids argument first, because not only does it determine the data that
+        #  we plot, but it determines how we set up the figure
+        if time_chunk_ids is not None and isinstance(time_chunk_ids, int):
+            # The 'all_rel_lcs' variable is actually only used for auto-setting the y-axis limits, the light curve
+            #  retrieval for plotting will happen separately (I just found it more convenient that way, even if this
+            #  isn't particularly elegant).
+            all_rel_lcs = self.get_lightcurves(time_chunk_ids, inst=inst)
+            if isinstance(all_rel_lcs, LightCurve):
+                all_rel_lcs = [all_rel_lcs]
+            time_chunk_ids = np.array([time_chunk_ids])
+        elif time_chunk_ids is not None and isinstance(time_chunk_ids, (list, np.ndarray)):
+            # This has to be done in a for-loop rather than a list comprehension, because I have to be able to catch
+            #  not associated errors
+            # all_rel_lcs = [lc for tc_id in time_chunk_ids for lc in self.get_lightcurves(time_chunk_id=tc_id)]
+            all_rel_lcs = []
+            for tc_id in time_chunk_ids:
+                try:
+                    # Possible that this will return a single lightcurve, rather than a list of them
+                    cur_lcs = self.get_lightcurves(time_chunk_id=tc_id, inst=inst)
+                    # So we make sure that it IS a list
+                    if isinstance(cur_lcs, LightCurve):
+                        cur_lcs = [cur_lcs]
+                    all_rel_lcs += cur_lcs
+                except NotAssociatedError:
+                    pass
+            time_chunk_ids = np.array(time_chunk_ids)
+        elif time_chunk_ids is not None:
+            raise TypeError("Only integers and lists of integers may be passed for the 'time_chunk_ids' argument.")
+        else:
+            all_rel_lcs = self.all_lightcurves
+            time_chunk_ids = self.time_chunk_ids
+
         # This sets the fraction of the total x-width of the figure that is set between each axes
         buffer_frac = 0.008
-        # This calculates the total time length of all time chunks
-        # chunk_len = (self.time_chunks[:, 1] - self.time_chunks[:, 0]).value
+        # This calculates the total time length of all time chunks - note that we are selecting those specified by the
+        #  time_chunk_ids array, which by default is all time chunks, but can be set by the user
         chunk_len = (self.datetime_chunks[:, 1] - self.datetime_chunks[:, 0])
-        chunk_len = np.array([float(cl.total_seconds()) for cl in chunk_len])
+        chunk_len = np.array([float(cl.total_seconds()) for cl in chunk_len])[time_chunk_ids]
 
-        # Then finds what fraction of the total coverage each time chunk covers, taking into account the buffer
+        # Then finds what fraction of the total coverage each time chunk covers, taking into account the buffer (again
+        #  this is for those time chunks specified by the time chunk id argument, with the default being all chunks)
         chunk_frac = chunk_len / (chunk_len.sum() + buffer_frac*len(chunk_len)-1)
 
         # Proportion of vertical to horizontal extent of the slanted line that breaks the separate axes
@@ -1369,72 +1406,72 @@ class AggregateLightCurve(BaseAggregateProduct):
         axes_dict = {}
         # This is added to each iteration so that the next axes knows what x-position to start at
         cumu_x_pos = 0
-        # Iterate through the time chunks, each will have a sub-axes
-        for tc_id in self.time_chunk_ids:
+        # Iterate through the selected time chunks, each will have a sub-axes
+        for tc_id_ind, tc_id in enumerate(time_chunk_ids):
             # Grab the fraction of time coverage for this time chunk (e.g. size of this axes)
-            rel_frac = chunk_frac[tc_id]
+            rel_frac = chunk_frac[tc_id_ind]
 
             # We deal with axes differently depending on whether they are the first time chunk in a series, one in
             #  the middle of a series of time chunks, or the last. We also have to account for the fact that there
             #  could only be one or two time chunks. This all defines whether we plot break lines, which axes
             #  boundaries are visible, which axis tick labels are shown etc.
-            if tc_id == 0:
+            if tc_id_ind == 0:
                 # Adding a new axes, the size defined by the fractional coverage time, and the position by
                 #  cumu_x_pos (though that should always be zero for tc_id == 0). It extends the full height of
                 #  the figure
-                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1])
+                axes_dict[tc_id_ind] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1])
                 # Set up a y-label - other axes won't have this because they share the y-axis and we only want to
                 #  label the first one
                 y_lab = "Count-rate [{}]".format(self.all_lightcurves[0].count_rate.unit.to_string('latex'))
-                axes_dict[tc_id].set_ylabel(y_lab, fontsize=label_font_size)
+                axes_dict[tc_id_ind].set_ylabel(y_lab, fontsize=label_font_size)
 
                 # We set the upper and lower y-axis limits based on the maximum and minimum count rates across all
-                #  the lightcurves in this object, as the y-axis is shared - if the user hasn't specified their
-                #  own y-axis limits
+                #  the lightcurves that are to be plotted, as the y-axis is shared - if the user hasn't specified
+                #  their own y-axis limits
                 if y_lims is None:
-                    low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in self.all_lightcurves]).value*0.95
-                    upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in self.all_lightcurves]).value*1.05
+                    low_lim = min([(lc.count_rate-lc.count_rate_err).min() for lc in all_rel_lcs]).value*0.95
+                    upp_lim = max([(lc.count_rate+lc.count_rate_err).max() for lc in all_rel_lcs]).value*1.05
                 else:
                     # The user has specified axis limits, so we make sure to convert them to the y-axis unit
                     low_lim, upp_lim = y_lims.to(self.all_lightcurves[0].count_rate.unit).value
-                axes_dict[tc_id].set_ylim(low_lim, upp_lim)
+                axes_dict[tc_id_ind].set_ylim(low_lim, upp_lim)
 
                 # If there is more than one time chunk, we turn off the line on the right hand side of this initial
                 #  axes - so there is no unsightly barrier between it and the next axes - we also add slanted lines
                 #  to indicate a break in the y-axis
                 if self.num_time_chunks != 1:
-                    axes_dict[tc_id].spines.right.set_visible(False)
-                    axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
+                    axes_dict[tc_id_ind].spines.right.set_visible(False)
+                    axes_dict[tc_id_ind].plot([1, 1], [1, 0], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
 
                 # We make sure the ticks look how we want them
-                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=True, top=True)
+                axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=False, left=True, top=True)
 
             # In this case we are at a time chunk that is not the first, and not the last
-            elif tc_id != (self.num_time_chunks - 1):
+            elif tc_id_ind != (self.num_time_chunks - 1):
                 # Add the axes at the correct position, making sure to share the y-axis with the first axes
-                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
+                axes_dict[tc_id_ind] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
                 # Both the left hand and the right hand axis lines are turned off
-                axes_dict[tc_id].spines.left.set_visible(False)
-                axes_dict[tc_id].spines.right.set_visible(False)
+                axes_dict[tc_id_ind].spines.left.set_visible(False)
+                axes_dict[tc_id_ind].spines.right.set_visible(False)
                 # We make sure to setup the ticks as we want them - making sure that the y-axis is not labelled for
                 #  this one, and that the left and right ticks are turned off
-                axes_dict[tc_id].tick_params(direction='in', which='both', right=False, left=False, top=True,
-                                             labelleft=False)
+                axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=False, left=False, top=True,
+                                                 labelleft=False)
                 # This is what sets up the break lines on the left and right hand sides of the x-axis, at the top
                 #  and bottom
-                axes_dict[tc_id].plot([1, 1], [1, 0], transform=axes_dict[tc_id].transAxes, **break_kwargs)
-                axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
+                axes_dict[tc_id_ind].plot([1, 1], [1, 0], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
+                axes_dict[tc_id_ind].plot([0, 0], [0, 1], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
 
             # Finally this is triggered when we're at the last time chunks
             else:
-                axes_dict[tc_id] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
+                axes_dict[tc_id_ind] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
                 # The right hand axis line is visible, but not the left
-                axes_dict[tc_id].spines.right.set_visible(True)
-                axes_dict[tc_id].spines.left.set_visible(False)
+                axes_dict[tc_id_ind].spines.right.set_visible(True)
+                axes_dict[tc_id_ind].spines.left.set_visible(False)
                 # And we make sure to add the tick setup and ensure that the final break lines on the left are drawn
-                axes_dict[tc_id].tick_params(direction='in', which='both', right=True, left=False, top=True,
-                                             labelleft=False)
-                axes_dict[tc_id].plot([0, 0], [0, 1], transform=axes_dict[tc_id].transAxes, **break_kwargs)
+                axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=True, left=False, top=True,
+                                                 labelleft=False)
+                axes_dict[tc_id_ind].plot([0, 0], [0, 1], transform=axes_dict[tc_id_ind].transAxes, **break_kwargs)
 
             # Iterate the cumulative position
             cumu_x_pos += (rel_frac+buffer_frac)
@@ -1460,8 +1497,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         inst_colours = {inst: rel_cmap(inst_ind / (len(uniq_insts)-1)) for inst_ind, inst in enumerate(uniq_insts)}
 
         # Now we need to populate our carefully set up axes with DATA
-        for tc_id in self.time_chunk_ids:
-            ax = axes_dict[tc_id]
+        for tc_id_ind, tc_id in enumerate(time_chunk_ids):
+            ax = axes_dict[tc_id_ind]
             try:
                 # That this is the first part of the try-except, and won't trigger the except, is quite deliberate. It
                 #  sets up the x-axis tick labels, even if there are no data for the requested instrument (if the
@@ -1506,7 +1543,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         return axes_dict, fig
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
-             title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None):
+             title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
+             time_chunk_ids: Union[int, List[int]] = None):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1526,11 +1564,15 @@ class AggregateLightCurve(BaseAggregateProduct):
             plotted in this view method.
         :param Quantity y_lims: The lower and upper limits that should be applied to the y-axis of this plot. The
             default is None, in which case they will be determined automatically based on the data.
+        :param int/List[int] time_chunk_ids: This parameter can be used to control which time chunks are plotted on
+            this AggregateLightCurve view. The default is None, in which case all time chunks are plotted; however
+            the user may also pass a list of chunk IDs (or a single chunk ID) to limit the data that are shown.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims)
+        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
+                                     time_chunk_ids)
 
         # plt.tight_layout()
         # Display the plot
