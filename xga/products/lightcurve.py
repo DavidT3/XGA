@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:09. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1447,7 +1447,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                 axes_dict[tc_id_ind].tick_params(direction='in', which='both', right=False, left=True, top=True)
 
             # In this case we are at a time chunk that is not the first, and not the last
-            elif tc_id_ind != (self.num_time_chunks - 1):
+            elif tc_id_ind != (len(time_chunk_ids) - 1):
                 # Add the axes at the correct position, making sure to share the y-axis with the first axes
                 axes_dict[tc_id_ind] = fig.add_axes([cumu_x_pos, 0.0, rel_frac, 1], sharey=axes_dict[0])
                 # Both the left hand and the right hand axis lines are turned off
