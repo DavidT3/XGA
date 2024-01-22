@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 18:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 20:50. Copyright (c) The Contributors
+import re
 from datetime import datetime
 from typing import Union, List, Tuple
 from warnings import warn
@@ -13,7 +14,7 @@ from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError
+from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, TelescopeNotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
 from xga.utils import dict_search
 
@@ -907,57 +908,31 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  all the lightcurves that have been passed.
         self._energy_bounds = lightcurves[0].energy_bounds
 
-        # TODO This will need some TLC when support for multiple telescopes is implemented
-        # This sets the storage key as the same as the LightCurve, but we do account for different patterns accepted
-        #  for different instruments - as mos1 and 2 should be treated the same we don't look at the specific MOS
-        #  instrument. Having particular instrument behaviour like that will have to be re-examined for
-        #  non-XMM lightcurves
-        self._patterns = {}
-        for lc in lightcurves:
-            patt = lc.storage_key.split('_pattern')[-1]
-            # Turns mos1 and mos2 into just mos
-            rel_inst = lc.instrument.replace('1', '').replace('2', '')
-            if rel_inst not in self._patterns:
-                self._patterns[rel_inst] = patt
-            elif lc.instrument and self._patterns[rel_inst] != patt:
-                raise IncompatibleProductError("Lightcurves for the same instrument ({}) must have the same event "
-                                               "selection pattern.".format(rel_inst.upper()))
-
-        patts = [pk + 'pattern' + pv for pk, pv in self._patterns.items()]
-        # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
-        self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
-
         # This stores the ObsIDs and their instruments, for the lightcurves associated with this object
         self._rel_obs = {}
         # This array determines which lightcurves have overlapping temporal coverage
         overlapping = np.full((len(lightcurves), len(lightcurves)), False)
         for lc_ind, lc in enumerate(lightcurves):
-            # If an ObsID is already present in the rel_obs dict then we need to add the current instrument as part
-            #  of a new list, otherwise we need to append our current instrument to an existing list
-            if lc.obs_id not in self._rel_obs:
-                self._rel_obs[lc.obs_id] = [lc.instrument]
-            else:
-                self._rel_obs[lc.obs_id].append(lc.instrument)
+            # If a telescope is already present in the rel_obs dict then we need to add the current ObsID as part
+            #  of a new list, otherwise we need to make sure we add the current lightcurve ObsID and instrument, or
+            #  just instrument if the ObsID is already there
+            if lc.telescope not in self._rel_obs:
+                self._rel_obs[lc.telescope] = {lc.obs_id: [lc.instrument]}
+            elif lc.telescope in self._rel_obs and lc.obs_id not in self._rel_obs[lc.telescope]:
+                self._rel_obs[lc.telescope][lc.obs_id] = [lc.instrument]
+            elif lc.telescope in self._rel_obs and lc.obs_id in self._rel_obs[lc.telescope]:
+                self._rel_obs[lc.telescope][lc.obs_id].append(lc.instrument)
 
             # Use the LightCurve overlap checking method to figure out which of our set of light curves overlaps with
             #  the current one. Checking like this does include the current light curve which obviously will overlap,
             #  but we're setting up an overlap matrix and those values will be the diagonal, so we don't mind
             cur_overlap = lc.overlap_check(lightcurves)
-            print(lc.telescope, lc.obs_id)
-            print(cur_overlap)
-            print('')
             overlapping[lc_ind, :] = cur_overlap
-
-        plt.imshow(overlapping, origin='lower')
-        plt.show()
-
-        print(overlapping.shape)
 
         # Get the entries one up from the diagonal, we'll use them to split the light curves up into time chunks, which
         #  is where there are gaps between coverage. This works because there will be False overlap entries in the
         #  shifted diagonal of the matrix, and those are cases where there is a break in the observations
         split = np.diag(overlapping, 1)
-        print(len(split))
         split = np.insert(split, 0, False)
 
         # Here we want to index the light curves into time chunk groupings
@@ -975,46 +950,72 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         self._time_chunk_ids = np.arange(0, len(split_inds))
 
+        self._component_products = {tel: {} for tel in self.telescopes}
         # Maybe there is a more elegant, in-line, way of doing this, but I cannot be bothered to think of it
         for lc_ind, lc in enumerate(lightcurves):
             rel_grp = groupings[lc_ind]
-            if lc.obs_id not in self._component_products:
-                self._component_products[lc.obs_id] = {lc.instrument: {rel_grp: lc}}
-            elif lc.obs_id in self._component_products and lc.instrument not in self._component_products[lc.obs_id]:
-                self._component_products[lc.obs_id][lc.instrument] = {rel_grp: lc}
-            elif lc.obs_id in self._component_products and lc.instrument in self._component_products[lc.obs_id]:
-                self._component_products[lc.obs_id][lc.instrument][rel_grp] = lc
+            if lc.obs_id not in self._component_products[lc.telescope]:
+                self._component_products[lc.telescope][lc.obs_id] = {lc.instrument: {rel_grp: lc}}
+            elif (lc.obs_id in self._component_products[lc.telescope] and
+                  lc.instrument not in self._component_products[lc.telescope][lc.obs_id]):
+                self._component_products[lc.telescope][lc.obs_id][lc.instrument] = {rel_grp: lc}
+            elif (lc.obs_id in self._component_products[lc.telescope] and
+                  lc.instrument in self._component_products[lc.telescope][lc.obs_id]):
+                self._component_products[lc.telescope][lc.obs_id][lc.instrument][rel_grp] = lc
+
+        # This is all helps to set the storage key as the same as the LightCurve, but we do account for different
+        #  patterns accepted for different instruments - as mos1 and 2 should be treated the same we don't look at
+        #  the specific MOS instrument, same with eROSITA telescope modules.
+        self._patterns = {tel: {} for tel in self.telescope}
+        for lc in lightcurves:
+            patt = lc.storage_key.split('_pattern')[-1]
+            # Turns mos1 and mos2 into just mos, and tm1-7 into tm
+            rel_inst = re.sub(r'\d+', '', lc.instrument)
+            if rel_inst not in self._patterns[lc.telescope]:
+                self._patterns[lc.telescope][rel_inst] = patt
+            elif lc.instrument in self._patterns[lc.telescope] and self._patterns[lc.telescope][rel_inst] != patt:
+                raise IncompatibleProductError(
+                    "Lightcurves for the same instrument ({t}-{i}) must have the same event "
+                    "selection pattern.".format(t=lc.telescope, i=rel_inst.upper()))
+
+        patts = [pk + 'pattern' + pv for pk, pv in self._patterns.items()]
+        # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
+        self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
 
     # Start by defining properties, then internal (protected) methods, and then user facing methods
     @property
-    def obs_ids(self) -> list:
+    def obs_ids(self) -> dict:
         """
-        A property of this spectrum set that details which ObsIDs have contributed lightcurves to this object.
+        A property of this spectrum set that details which ObsIDs of which telescopes have contributed lightcurves
+        to this object.
 
-        :return: A list of ObsIDs.
-        :rtype: list
+        :return: A dictionary where the keys are telescope names and the values are lists of ObsIDs
+        :rtype: dict
         """
-        return list(self._rel_obs.keys())
+        return {t: list(self._rel_obs[t].keys()) for t in self._rel_obs}
 
     @property
     def instruments(self) -> dict:
         """
-        A property of this spectrum set that details which ObsIDs and instruments have contributed lightcurves
-        to this object. The top level keys are ObsIDs, and the values are lists of instruments.
+        A property of this aggregate light curve that details which ObsIDs and instruments of which telescopes have
+        contributed lightcurves to this object. The top level keys are telescopes, lower level keys are ObsIDs, and
+        the values are lists of instruments.
 
-        :return: A dictionary of lists, with the top level keys being ObsIDs, and the lists
-            containing instruments associated with those ObsIDs.
+        :return: A dictionary where the top level keys are telescopes, the lower level keys are ObsIDs, and
+            their values are lists of related instruments.
         :rtype: dict
         """
         return self._rel_obs
 
     @property
-    def telescopes(self) -> str:
+    def telescopes(self) -> List[str]:
         """
+        Property getter for telescopes that are associated with this aggregate light curve.
 
-        :return:
-        :rtype: str
+        :return: A list of telescope names with valid data related to this aggregate light curve.
+        :rtype: List[str]
         """
+        return list(self._rel_obs.keys())
 
     @property
     def src_name(self) -> str:
@@ -1044,7 +1045,7 @@ class AggregateLightCurve(BaseAggregateProduct):
     def all_lightcurves(self) -> List[LightCurve]:
         """
         Simple extra wrapper for get_lightcurve that allows the user to retrieve every single lightcurve associated
-        with this AggregateLightCurve instance, for all time chunk IDs, ObsIDs, and Instruments.
+        with this AggregateLightCurve instance, for all time chunk IDs, telescopes, ObsIDs, and Instruments.
 
         :return: A list of every single lightcurve associated with this object.
         :rtype: List[LightCurve]
@@ -1213,16 +1214,18 @@ class AggregateLightCurve(BaseAggregateProduct):
     @property
     def event_selection_patterns(self) -> dict:
         """
-        The event selection patterns used for different instruments that are associated with this AggregateLightCurve.
+        The event selection patterns used for different telescope instruments that are associated with
+        this AggregateLightCurve.
 
-        :return: A dictionary where keys are instrument names and values are event selection patterns.
+        :return: A dictionary where top level keys are telescope names, lower level keys are instrument names, and
+            values are event selection patterns.
         :rtype: dict
         """
         return self._patterns
 
     # Then define user-facing methods
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
-                        inst: str = None) -> Union[List[LightCurve], LightCurve]:
+                        inst: str = None, telescope: str = None) -> Union[List[LightCurve], LightCurve]:
         """
         This is the getter for the lightcurves stored in the AggregateLightCurve data storage structure. They can
         be retrieved based on ObsID and instrument.
@@ -1230,6 +1233,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param int time_chunk_id: The time chunk identifier to retrieve lightcurves for.
         :param str obs_id: Optionally, a specific obs_id to search for can be supplied.
         :param str inst: Optionally, a specific instrument to search for can be supplied.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied.
         :return: List of matching lightcurves, or just a LightCurve object if one match is found.
         :rtype: Union[List[LightCurve], LightCurve]
         """
@@ -1256,19 +1260,25 @@ class AggregateLightCurve(BaseAggregateProduct):
             tc_str = ", ".join(self.time_chunk_ids.astype(str))
             raise IndexError("{i} is not a time chunk ID associated with this AggregateLightCurve object. "
                              "Allowed time chunk IDs are; {a}".format(i=time_chunk_id, a=tc_str))
-        elif obs_id not in self.obs_ids and obs_id is not None:
-            raise NotAssociatedError("{0} is not associated with chunk {1} of this "
-                                     "AggregateLightCurve.".format(obs_id, time_chunk_id))
-        elif (obs_id is not None and obs_id in self.obs_ids) and \
-                (inst is not None and inst not in self.instruments[obs_id]):
-            raise NotAssociatedError("Instrument {1} is not associated with {0} for time chunk {2} of this "
-                                     "AggregateLightCurve.".format(obs_id, inst, time_chunk_id))
+        elif telescope not in self.telescopes and telescope is not None:
+            raise TelescopeNotAssociatedError("{0} is not associated with chunk {1} of this "
+                                              "AggregateLightCurve.".format(telescope, time_chunk_id))
+        elif ((telescope is not None and telescope in self.telescopes) and
+              (obs_id not in self.obs_ids[telescope] and obs_id is not None)):
+            raise NotAssociatedError("ObsID {o} is not associated with telescope {t} for chunk {tc} of this "
+                                     "AggregateLightCurve.".format(o=obs_id, tc=time_chunk_id, t=telescope))
+        elif ((telescope is not None and telescope in self.telescopes) and
+              (obs_id is not None and obs_id in self.obs_ids) and
+              (inst is not None and inst not in self.instruments[obs_id])):
+            raise NotAssociatedError("Instrument {i} is not associated with {t}-{o} for time chunk {tc} of this "
+                                     "AggregateLightCurve.".format(o=obs_id, i=inst, tc=time_chunk_id, t=telescope))
 
         matches = []
         for match in dict_search(time_chunk_id, self._component_products):
             out = []
             unpack_list(match)
-            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None):
+            if ((telescope == out[0] or telescope is None) and (obs_id == out[1] or obs_id is None)
+                    and (inst == out[2] or inst is None)):
                 matches.append(out[-1])
 
         # Here I only return the object if one match was found
