@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 22:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 22:40. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1330,7 +1330,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
-                 title_font_size: int = 20, inst_cmap: str = 'inferno', y_lims: Quantity = None) -> Tuple[dict, Figure]:
+                 title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1453,8 +1453,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         rel_cmap = plt.get_cmap(inst_cmap)
         # This goes through all the instruments for all the ObsIDs for all the telescopes, constructing a list of
         #  unique instrument names
-        uniq_insts = list(set([i for tel in self.instruments for oi in self.instruments[tel]
-                               for i in self.instruments[tel][oi]]))
+        uniq_insts = sorted(list(set([i for tel in self.instruments for oi in self.instruments[tel]
+                                      for i in self.instruments[tel][oi]])))
         # Then we simply loop through the instruments, normalising their index in the list by the total number (we want
         #  to feed values between zero and one into the colormap), and get the colours out
         inst_colours = {inst: rel_cmap(inst_ind / (len(uniq_insts)-1)) for inst_ind, inst in enumerate(uniq_insts)}
@@ -1506,7 +1506,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return axes_dict, fig
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
-             title_font_size: int = 18, inst_cmap: str = 'inferno', y_lims: Quantity = None):
+             title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
