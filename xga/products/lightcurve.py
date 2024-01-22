@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 09:45. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -386,7 +386,9 @@ class LightCurve(BaseProduct):
     @property
     def frac_exp(self) -> Quantity:
         """
-        The fractional exposure time for each entry in this light curve.
+        This should contain the correction factor for which all sensitivity effects (dead time, vignetting) are
+        taken into account - i.e. dividing by this should make lightcurves across different instruments/telescope
+        consistent.
 
         :return: Fractional exposure.
         :rtype: Quantity
