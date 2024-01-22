@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 11:13. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -630,7 +630,8 @@ class LightCurve(BaseProduct):
     def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'), lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
-                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True) -> Axes:
+                 label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True,
+                 fracexp_corr: bool = False) -> Axes:
         """
         A method that allows the user to retrieve a populated lightcurve visualisation axes, in a form that allows
         them to then add their own plots in additon to what has been automatically constructed. This is an alternative
@@ -651,6 +652,8 @@ class LightCurve(BaseProduct):
         :param int title_font_size: The fontsize to be used for the title.
         :param bool highlight_bad_times: Should periods of time that are NOT within a GTI be highlighted?
             Default is True.
+        :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :return: The input Axes, but populated with a lightcurve visualisation.
         :rtype: Axes
         """
@@ -672,17 +675,27 @@ class LightCurve(BaseProduct):
         elif hi_time_lim is not None and hi_time_lim.unit.is_equivalent(time_unit):
             hi_time_lim = hi_time_lim.to(time_unit)
 
+        # If the user wants the FRAC_EXP correction to be applied, we set the correction array to those values.
+        #  Otherwise it is just left as ones
+        if fracexp_corr:
+            corr_arr = self.frac_exp
+        else:
+            corr_arr = np.ones(len(self.frac_exp))
+
         if plot_sep:
             if self.src_count_rate is None:
                 raise ValueError("This light-curve is background subtracted, so we cannot plot the total and "
                                  "background separately.")
-            ax.errorbar(time_x.value, self.src_count_rate.value, yerr=self.src_count_rate_err.value, capsize=2,
-                        color=src_colour, label='Source', fmt='x')
-            ax.errorbar(time_x.value, self.bck_count_rate.value, yerr=self.bck_count_rate_err.value, capsize=2,
-                        color=bck_colour, label='Background', fmt='x')
+            ax.errorbar(time_x.value / corr_arr, self.src_count_rate.value / corr_arr,
+                        yerr=self.src_count_rate_err.value / corr_arr, capsize=2, color=src_colour, label='Source',
+                        fmt='x')
+            ax.errorbar(time_x.value / corr_arr, self.bck_count_rate.value / corr_arr,
+                        yerr=self.bck_count_rate_err.value / corr_arr, capsize=2, color=bck_colour,
+                        label='Background', fmt='x')
         else:
-            ax.errorbar(time_x.value, self.count_rate.value, yerr=self.count_rate_err.value, capsize=2,
-                        color=colour, label='Background subtracted', fmt='x')
+            ax.errorbar(time_x.value / corr_arr, self.count_rate.value / corr_arr,
+                        yerr=self.count_rate_err.value / corr_arr, capsize=2, color=colour,
+                        label='Background subtracted', fmt='x')
 
         if highlight_bad_times and (len(self.src_gti) != 1 or self.src_gti[0, 0] != self.start_time
                                     or self.src_gti[0, 1] != self.stop_time):
@@ -755,7 +768,7 @@ class LightCurve(BaseProduct):
              lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
              plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
              custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
-             highlight_bad_times: bool = True):
+             highlight_bad_times: bool = True, fracexp_corr: bool = False):
         """
         A method that creates and displays a visualisation of this lightcurve.
 
@@ -774,6 +787,8 @@ class LightCurve(BaseProduct):
         :param int title_font_size: The fontsize to be used for the title.
         :param bool highlight_bad_times: Should periods of time that are NOT within a GTI be highlighted?
             Default is True.
+        :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
@@ -781,7 +796,7 @@ class LightCurve(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
-                           custom_title, label_font_size, title_font_size, highlight_bad_times)
+                           custom_title, label_font_size, title_font_size, highlight_bad_times, fracexp_corr)
         plt.tight_layout()
         # Display the image
         plt.show()
@@ -1288,7 +1303,8 @@ class AggregateLightCurve(BaseAggregateProduct):
                                      "AggregateLightCurve.".format(time_chunk_id))
         return matches
 
-    def get_data(self, inst: str, date_time: bool = False) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+    def get_data(self, inst: str, date_time: bool = False, fracexp_corr: bool = False) \
+            -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
         """
         A get method to retrieve all count-rate and timing data for a particular instrument from this
         AggregateLightCurve. The data are in the correct temporal order.
@@ -1296,6 +1312,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param str inst: The instrument for which to retrieve the overall count-rate and time data.
         :param bool date_time: Whether the time data should be returned as an array of datetimes (not the default), or
             an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
+        :param bool fracexp_corr: Controls whether the data should be corrected for vignetting and deadtime
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. These
             are in the correct temporal order.
         :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
@@ -1315,8 +1333,12 @@ class AggregateLightCurve(BaseAggregateProduct):
                 continue
 
             # Append the current time chunk's chosen instrument's count rate data and error to their lists
-            cr_data.append(rel_lcs.count_rate)
-            cr_err_data.append(rel_lcs.count_rate_err)
+            if fracexp_corr:
+                cr_data.append(rel_lcs.count_rate / rel_lcs.frac_exp)
+                cr_err_data.append(rel_lcs.count_rate_err / rel_lcs.frac_exp)
+            else:
+                cr_data.append(rel_lcs.count_rate)
+                cr_err_data.append(rel_lcs.count_rate_err)
 
             # Do the same with the datetime
             cur_dt = rel_lcs.datetime
@@ -1334,7 +1356,7 @@ class AggregateLightCurve(BaseAggregateProduct):
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
                  time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear',
-                 fracexp_corr: bool = True) -> Tuple[dict, Figure]:
+                 fracexp_corr: bool = False) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1355,7 +1377,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param str yscale: The scaling that should be applied to the y-axis of this figure. Default is linear. Any
             matplotlib scale can be used.
         :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
-            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is True.
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
@@ -1559,7 +1581,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
              title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-             time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = True):
+             time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1585,7 +1607,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param str yscale: The scaling that should be applied to the y-axis of this figure. Default is linear. Any
             matplotlib scale can be used.
         :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
-            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is True.
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
