@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 09:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:25. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -141,7 +141,7 @@ class LightCurve(BaseProduct):
         self._time_sys = None
         # Here we store the x-axis, the time steps which the count-rates are attributed to
         self._time = None
-        # The fractional exposure time of the livetime for each data point
+        # The correction factor for each data point - should include vignetting and deadtime correction
         self._frac_exp = None
         # The background count-rate and count-rate uncertainty, scaled to account for the area difference between
         #  the source and background regions
@@ -1333,7 +1333,8 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-                 time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear') -> Tuple[dict, Figure]:
+                 time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear',
+                 fracexp_corr: bool = True) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1353,6 +1354,8 @@ class AggregateLightCurve(BaseAggregateProduct):
             the user may also pass a list of chunk IDs (or a single chunk ID) to limit the data that are shown.
         :param str yscale: The scaling that should be applied to the y-axis of this figure. Default is linear. Any
             matplotlib scale can be used.
+        :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is True.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
@@ -1528,7 +1531,12 @@ class AggregateLightCurve(BaseAggregateProduct):
             for rel_lc in rel_lcs:
                 ident = "{t} {o}-{i}".format(t=PRETTY_TELESCOPE_NAMES[rel_lc.telescope], o=rel_lc.obs_id,
                                              i=rel_lc.instrument)
-                ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
+                if fracexp_corr:
+                    plt_cr = rel_lc.count_rate.value / rel_lc.frac_exp
+                    print('waaaaaay')
+                else:
+                    plt_cr = rel_lc.count_rate.value
+                ax.errorbar(rel_lc.datetime, plt_cr, yerr=rel_lc.count_rate_err.value,
                             capsize=2, label=ident, fmt='x', color=inst_colours[rel_lc.instrument])
 
             ax.legend(loc='best')
@@ -1550,7 +1558,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
              title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-             time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear'):
+             time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = True):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1575,12 +1583,14 @@ class AggregateLightCurve(BaseAggregateProduct):
             the user may also pass a list of chunk IDs (or a single chunk ID) to limit the data that are shown.
         :param str yscale: The scaling that should be applied to the y-axis of this figure. Default is linear. Any
             matplotlib scale can be used.
+        :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is True.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
-                                     time_chunk_ids, yscale)
+                                     time_chunk_ids, yscale, fracexp_corr)
 
         # plt.tight_layout()
         # Display the plot
