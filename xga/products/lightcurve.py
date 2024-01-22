@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:14. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1331,7 +1331,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-                 time_chunk_ids: Union[int, List[int]] = None) -> Tuple[dict, Figure]:
+                 time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear') -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1349,6 +1349,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param int/List[int] time_chunk_ids: This parameter can be used to control which time chunks are plotted on
             this AggregateLightCurve view. The default is None, in which case all time chunks are plotted; however
             the user may also pass a list of chunk IDs (or a single chunk ID) to limit the data that are shown.
+        :param str yscale: The scaling that should be applied to the y-axis of this figure. Default is linear. Any
+            matplotlib scale can be used.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
@@ -1477,6 +1479,8 @@ class AggregateLightCurve(BaseAggregateProduct):
             cumu_x_pos += (rel_frac+buffer_frac)
             # And turn on minor ticks, because I prefer how that looks
             axes_dict[tc_id_ind].minorticks_on()
+            # Set the y-scale to the specified type (default is linear, but the user can override that)
+            axes_dict[tc_id_ind].set_yscale(yscale)
 
             # Setting the x-axis limits, based on the known time coverage of the time chunk
             axes_dict[tc_id_ind].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
@@ -1544,7 +1548,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
              title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-             time_chunk_ids: Union[int, List[int]] = None):
+             time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear'):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1567,12 +1571,14 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param int/List[int] time_chunk_ids: This parameter can be used to control which time chunks are plotted on
             this AggregateLightCurve view. The default is None, in which case all time chunks are plotted; however
             the user may also pass a list of chunk IDs (or a single chunk ID) to limit the data that are shown.
+        :param str yscale: The scaling that should be applied to the y-axis of this figure. Default is linear. Any
+            matplotlib scale can be used.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
-                                     time_chunk_ids)
+                                     time_chunk_ids, yscale)
 
         # plt.tight_layout()
         # Display the plot
