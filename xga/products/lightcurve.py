@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 23:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 23:40. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1476,10 +1476,10 @@ class AggregateLightCurve(BaseAggregateProduct):
             # Iterate the cumulative position
             cumu_x_pos += (rel_frac+buffer_frac)
             # And turn on minor ticks, because I prefer how that looks
-            axes_dict[tc_id].minorticks_on()
+            axes_dict[tc_id_ind].minorticks_on()
 
             # Setting the x-axis limits, based on the known time coverage of the time chunk
-            axes_dict[tc_id].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
+            axes_dict[tc_id_ind].set_xlim(self.datetime_chunks[tc_id, 0], self.datetime_chunks[tc_id, 1])
 
         # Create a single x-axis label for all axes, it looks ugly and is unnecessary to have one for each
         fig.text(0.5, -0.04, "Time", ha='center', fontsize=label_font_size)
