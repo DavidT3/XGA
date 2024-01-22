@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 11:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:54. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -79,7 +79,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     if not time_bin_size.unit.is_equivalent('s'):
         raise UnitConversionError("The 'time_bin_size' argument must be in units convertible to seconds.")
     else:
-        time_bin_size = time_bin_size.to('s').value
+        time_bin_size = time_bin_size.to('s')
 
     # Have to make sure that the user hasn't done anything daft here, hi_en must be larger than lo_en
     if lo_en >= hi_en:
@@ -92,7 +92,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     pn_patt, pn_patt_name = check_pattern(pn_patt, 'xmm')
     mos_patt, mos_patt_name = check_pattern(mos_patt, 'xmm')
 
-    extra_name = "_timebin{tb}_{l}-{u}keV".format(tb=time_bin_size, l=lo_en.value, u=hi_en.value)
+    extra_name = "_timebin{tb}_{l}-{u}keV".format(tb=time_bin_size.value, l=lo_en.value, u=hi_en.value)
 
     # Define the various SAS commands that need to be populated
     lc_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withrateset=yes " \
@@ -154,7 +154,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                 # If we can find an exact match then we don't need to generate this light curve, it already exists, so
                 #  we would move onto the next ObsID-instrument combo
                 check_lc = source.get_lightcurves(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], lo_en, hi_en,
-                                                  Quantity(time_bin_size, 's'), {'pn': pn_patt, 'mos': mos_patt},
+                                                  time_bin_size, {'pn': pn_patt, 'mos': mos_patt},
                                                   telescope='xmm')
                 exists = True
                 continue
@@ -270,9 +270,9 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                                   ex=extra_name)
 
             # Fills out the evselect command to make the source and background light curves
-            lc_cmd_str = lc_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, r=lc, tbs=time_bin_size, ex=expr)
+            lc_cmd_str = lc_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, r=lc, tbs=time_bin_size.value, ex=expr)
 
-            lcb_cmd_str = lc_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, r=b_lc, tbs=time_bin_size, ex=b_expr)
+            lcb_cmd_str = lc_cmd.format(d=dest_dir, ccf=ccf, e=evt_list.path, r=b_lc, tbs=time_bin_size.value, ex=b_expr)
 
             # Then we fill out the command which performs all the corrections (using source and background LC
             #  that actually makes them usable)

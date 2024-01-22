@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:54. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -78,7 +78,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     if not time_bin_size.unit.is_equivalent('s'):
         raise UnitConversionError("The 'time_bin_size' argument must be in units convertible to seconds.")
     else:
-        time_bin_size = time_bin_size.to('s').value
+        time_bin_size = time_bin_size.to('s')
 
     # Convert the integer pattern to a string
     patt = str(patt)
@@ -90,7 +90,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         lo_en = lo_en.to('keV')
         hi_en = hi_en.to('keV')
 
-    extra_name = "_timebin{tb}_{l}-{u}keV".format(tb=time_bin_size, l=lo_en.value, u=hi_en.value)
+    extra_name = "_timebin{tb}_{l}-{u}keV".format(tb=time_bin_size.value, l=lo_en.value, u=hi_en.value)
 
     # Define the various eSASS commands that need to be populated
     lc_cmd = ('cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="LC LCCORR" srcreg="{reg}" exttype="POINT" '
@@ -183,7 +183,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                 try:
                     # Got to check if this lightcurve already exists
                     check_lc = source.get_lightcurves(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], lo_en,
-                                                      hi_en, Quantity(time_bin_size, 's'), patt, 'erosita')
+                                                      hi_en, time_bin_size, patt, 'erosita')
                     exists = True
                 except NoProductAvailableError:
                     exists = False
