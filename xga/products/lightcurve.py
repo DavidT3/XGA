@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 21:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 22:17. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1330,7 +1330,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
-                 title_font_size: int = 20) -> Tuple[dict, Figure]:
+                 title_font_size: int = 20, inst_cmap: str = 'inferno') -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1341,10 +1341,11 @@ class AggregateLightCurve(BaseAggregateProduct):
             title containing the source name and energy band will be generated.
         :param int label_font_size: The font size for axes labels, default is 18.
         :param int title_font_size: The font size for the title, default is 20.
+        :param str inst_cmap: The colormap from which we draw colours to uniquely identify different instruments
+            plotted in this get_view method.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
-        # TODO this will need a little bit of TLC once this and the multi-mission branch cross paths
 
         # This sets the fraction of the total x-width of the figure that is set between each axes
         buffer_frac = 0.008
@@ -1439,6 +1440,18 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Create a single x-axis label for all axes, it looks ugly and is unnecessary to have one for each
         fig.text(0.5, -0.04, "Time", ha='center', fontsize=label_font_size)
 
+        # Fetching the colormap object specified by the user - this is what we draw colours from for each instrument
+        #  involved in this AggregateLightCurve. We want them all to be different (of course), but we also want
+        #  particular instruments to have consistent colouring across subplots (i.e. time chunks)
+        rel_cmap = plt.get_cmap(inst_cmap)
+        # This goes through all the instruments for all the ObsIDs for all the telescopes, constructing a list of
+        #  unique instrument names
+        uniq_insts = list(set([i for tel in self.instruments for oi in self.instruments[tel]
+                               for i in self.instruments[tel][oi]]))
+        # Then we simply loop through the instruments, normalising their index in the list by the total number (we want
+        #  to feed values between zero and one into the colormap), and get the colours out
+        inst_colours = {inst: rel_cmap(inst_ind / (len(uniq_insts)-1)) for inst_ind, inst in enumerate(uniq_insts)}
+
         # Now we need to populate our carefully set up axes with DATA
         for tc_id in self.time_chunk_ids:
             ax = axes_dict[tc_id]
@@ -1466,7 +1479,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                 ident = "{t} {o}-{i}".format(t=PRETTY_TELESCOPE_NAMES[rel_lc.telescope], o=rel_lc.obs_id,
                                              i=rel_lc.instrument)
                 ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
-                            capsize=2, label=ident, fmt='x')
+                            capsize=2, label=ident, fmt='x', color=inst_colours[rel_lc.instrument])
 
             ax.legend(loc='best')
 
@@ -1486,7 +1499,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         return axes_dict, fig
 
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
-             title_font_size: int = 18):
+             title_font_size: int = 18, inst_cmap: str = 'inferno'):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1502,11 +1515,13 @@ class AggregateLightCurve(BaseAggregateProduct):
             title containing the source name and energy band will be generated.
         :param int label_font_size: The font size for axes labels, default is 18.
         :param int title_font_size: The font size for the title, default is 20.
+        :param str inst_cmap: The colormap from which we draw colours to uniquely identify different instruments
+            plotted in this view method.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
-        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size)
+        ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap)
 
         # plt.tight_layout()
         # Display the plot
