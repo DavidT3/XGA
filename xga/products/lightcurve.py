@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 20:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 21:31. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -75,7 +75,7 @@ class LightCurve(BaseProduct):
         self._prod_type = "lightcurve"
 
         # Store the size of the time binning used to generate the lightcurve as an attribute
-        self._time_bin = time_bin_size
+        self._time_bin = time_bin_size.to('s')
 
         # Unfortunate local import to avoid circular import errors
         from xga.generate.common import check_pattern
@@ -114,9 +114,8 @@ class LightCurve(BaseProduct):
         else:
             lc_storage_name = "region"
 
-        # Won't include energy bounds in this right now because I think the update_products method will do that
-        #  part for us - bound_{l}-{u}keV l=lo_en.value, u=hi_en.value
-        lc_storage_name += "_timebin{tb}_pattern{p}".format(tb=time_bin_size, p=self._pattern_name)
+        # Add the time bin information
+        lc_storage_name += "_timebin{tb}_pattern{p}".format(tb=time_bin_size.value, p=self._pattern_name)
 
         # And we save the completed key to an attribute
         self._storage_key = lc_storage_name
@@ -966,7 +965,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         # This is all helps to set the storage key as the same as the LightCurve, but we do account for different
         #  patterns accepted for different instruments - as mos1 and 2 should be treated the same we don't look at
         #  the specific MOS instrument, same with eROSITA telescope modules.
-        self._patterns = {tel: {} for tel in self.telescope}
+        self._patterns = {tel: {} for tel in self.telescopes}
         for lc in lightcurves:
             patt = lc.storage_key.split('_pattern')[-1]
             # Turns mos1 and mos2 into just mos, and tm1-7 into tm
@@ -978,7 +977,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                     "Lightcurves for the same instrument ({t}-{i}) must have the same event "
                     "selection pattern.".format(t=lc.telescope, i=rel_inst.upper()))
 
-        patts = [pk + 'pattern' + pv for pk, pv in self._patterns.items()]
+        patts = [tel + "_".join([pk + 'pattern' + pv for pk, pv in pd.items()]) for tel, pd in self._patterns.items()]
         # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
         self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
 
