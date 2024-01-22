@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 21:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/01/2024, 21:34. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1467,7 +1467,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
             # Now we cycle through the light curves for the current time chunk and add them to the plot
             for rel_lc in rel_lcs:
-                ident = "{t} {o}-{i}".format(t='XMM', o=rel_lc.obs_id, i=rel_lc.instrument)
+                ident = "{t} {o}-{i}".format(t=rel_lc.telescope, o=rel_lc.obs_id, i=rel_lc.instrument)
                 ax.errorbar(rel_lc.datetime, rel_lc.count_rate.value, yerr=rel_lc.count_rate_err.value,
                             capsize=2, label=ident, fmt='x')
 
