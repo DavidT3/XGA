@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 09:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/01/2024, 14:07. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -796,7 +796,8 @@ class Image(BaseProduct):
         del self._header
         self._header = None
 
-    def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str]) -> Quantity:
+    def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str],
+                   ignore_bad_pix_coord: bool = False) -> Quantity:
         """
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
@@ -805,6 +806,8 @@ class Image(BaseProduct):
             pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
         :param Unit/str output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
             xmm_det (xmm_sky and xmm_det are defined for this module).
+        :param bool ignore_bad_pix_coord: Means that no error will be raised if an invalid pixel coordinate (i.e.
+            less than 0 or greater than the size of the image) is calculated. Default is False.
         :return: The converted coordinates.
         :rtype: Quantity
         """
@@ -889,16 +892,18 @@ class Image(BaseProduct):
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
             # outside the range covered by an image, but we can at least catch the error
-            if out_name == "pix" and np.any(out_coord < 0) and self._prod_type != "psf":
+            if out_name == "pix" and np.any(out_coord < 0) and self._prod_type != "psf" and not ignore_bad_pix_coord:
                 raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
             # Have to compare to the [1] element of shape because numpy arrays are flipped, and we want
             #  to compare x to x
-            elif out_name == "pix" and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf":
+            elif (out_name == "pix" and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf"
+                  and not ignore_bad_pix_coord):
                 raise ValueError("You've converted to pixel coordinates, and some x coordinates are larger than the "
                                  "image x-shape.")
             # Have to compare to the [0] element of shape because numpy arrays are flipped, and we want
             #  to compare y to y
-            elif out_name == "pix" and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf":
+            elif (out_name == "pix" and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf"
+                  and not ignore_bad_pix_coord):
                 raise ValueError("You've converted to pixel coordinates, and some y coordinates are larger than the "
                                  "image y-shape.")
 
