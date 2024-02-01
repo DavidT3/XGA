@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/02/2024, 09:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/02/2024, 12:05. Copyright (c) The Contributors
 
 import json
 import os
@@ -181,11 +181,12 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                             info['RA_PNT'] = evts_header["RA_CEN"]
                             info['DEC_PNT'] = evts_header["DEC_CEN"]
                         else:
-                            # I think this *should* be a fairly universal way of accessing the pointing coordinates, but
-                            #  I guess I'll find out if it isn't when I add more telescopes! For cases with multiple
-                            #  instruments this is going to overwrite the pointing coordinates each time, but as of now
-                            #  I am assuming they are co-aligned (or co-aligned enough for searching for observations). If
-                            #  that is not the case for a telescope I support in the future then I'll have to change this
+                            # I think this *should* be a fairly universal way of accessing the pointing
+                            #  coordinates, but I guess I'll find out if it isn't when I add more telescopes! For
+                            #  cases with multiple instruments this is going to overwrite the pointing coordinates
+                            #  each time, but as of now I am assuming they are co-aligned (or co-aligned enough for
+                            #  searching for observations). If that is not the case for a telescope I support in the
+                            #  future then I'll have to change this
                             info['RA_PNT'] = evts_header["RA_PNT"]
                             info['DEC_PNT'] = evts_header["DEC_PNT"]
 

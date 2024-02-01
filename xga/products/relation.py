@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/02/2024, 12:05. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -807,7 +807,7 @@ class ScalingRelation:
 
         return predicted_y
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (7, 7),
              data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
@@ -1290,7 +1290,7 @@ class AggregateScalingRelation:
 
         plt.show()
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (7, 7),
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
