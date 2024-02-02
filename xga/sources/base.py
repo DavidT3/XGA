@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 00:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/02/2024, 10:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -899,7 +899,8 @@ class BaseSource:
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
-        def parse_image_like(file_path: str, exact_type: str, telescope: str, merged: bool = False) -> Union[Image, ExpMap]:
+        def parse_image_like(file_path: str, exact_type: str, telescope: str,
+                             merged: bool = False) -> Union[Image, ExpMap]:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
@@ -1114,7 +1115,7 @@ class BaseSource:
                         #  file name preceding it to search for matching arf/rmf files
                         sp_info_str = cur_d + sp.split('/')[-1].split('_spec')[0]
 
-                        # Fairly self explanatory, need to find all the separate products needed to define an XGA
+                        # Fairly self-explanatory, need to find all the separate products needed to define an XGA
                         #  spectrum
                         arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
                         rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
