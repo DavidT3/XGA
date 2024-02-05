@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 15:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 17:11. Copyright (c) The Contributors
 
 import gc
 import os
@@ -507,16 +507,20 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     return results, bl_results
 
 
-def all_census_match(telescope: Union[str, list] = None) -> Tuple[dict, dict]:
+def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], dict] = None) -> Tuple[dict, dict]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
     telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
     CENSUS directly - however this does check against the blacklist, and will return things in the same style as
     the 'proper' matching functions.
 
+    The user can also pass a list of strings (or a dictionary of lists of strings in the case of multiple telescopes
+    being considered) to limit the ObsIDs from the census that are to be considered.
+
     :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
         which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
         a single telescope name, or a list of telescope names, to control which are used.
+    :param List[str]/dict obs_ids: ObsIDs that are to be considered
     :return: A dictionary of dataframes of matching ObsIDs, where the dictionary keys correspond to
         different telescopes. The second return is structured exactly the same, but represents observations that were
         completely excluded in the blacklist.
@@ -527,15 +531,34 @@ def all_census_match(telescope: Union[str, list] = None) -> Tuple[dict, dict]:
     #  validated telescope names (even if there is only one).
     telescope = check_telescope_choices(telescope)
 
+    # Here we parse the ObsID information (that the user can give us to limit the ObsIDs that should be considered
+    #  for this particular 'match'), to try to account for the different formats of information that can be passed
+    if obs_ids is None:
+        obs_ids = [None]*len(telescope)
+    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
+        raise TypeError("It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
+                        "pass a dictionary of lists of ObsIDs.")
+    elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
+        warn("None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
+             "viable observations.", stacklevel=2)
+        obs_ids = [None]*len(telescope)
+    elif obs_ids is not None and isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
+        obs_ids = [None if tel not in obs_ids else obs_ids[tel] for tel in telescope]
+
     # This dictionary stores any ObsIDs that were COMPLETELY blacklisted (i.e. all instruments were excluded)
     bl_results = {}
     # This is what the census entries are stored in
     results = {}
     for tel in telescope:
+        rel_obs_ids = obs_ids[tel]
         # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
         #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
         #  have non X-ray telescopes, like the OM on XMM).
         rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+        if rel_obs_ids is not None:
+            # If the ObsIDs under consideration for a particular telescope have been limited, then we include only
+            #  those ObsIDs that the user wanted us to include
+            rel_census = rel_census[rel_census['ObsID'].isin(rel_obs_ids)]
         rel_blacklist = BLACKLIST[tel]
 
         # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
