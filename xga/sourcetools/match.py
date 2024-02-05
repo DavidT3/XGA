@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 17:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 17:24. Copyright (c) The Contributors
 
 import gc
 import os
@@ -536,17 +536,24 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
     if obs_ids is not None and not isinstance(obs_ids, (dict, list)):
         raise TypeError("The 'obs_ids' argument must either be None, a list of ObsIDs (for a single telescope), or a "
                         "dictionary of lists of ObsIDs (for multiple telescopes).")
+    # In this case all observations are valid for all telescopes
     elif obs_ids is None:
         obs_ids = {tel: None for tel in telescope}
+    # If a list of ObsIDs is passed, but multiple telescopes are under consideration, then we can't really know what
+    #  to do so we have to throw an error
     elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
         raise TypeError("It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
                         "pass a dictionary of lists of ObsIDs.")
+    # However if dictionary is passed for ObsIDs but it doesn't relate to the telescopes we're looking at, we will
+    #  be forgiving and just use all observations
     elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
         warn("None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
              "viable observations.", stacklevel=2)
         obs_ids = {tel: None for tel in telescope}
+    # Here ObsIDs for some telescopes are passed - so for the others we'll use all observations
     elif obs_ids is not None and isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
         obs_ids = {tel: None if tel not in obs_ids else obs_ids[tel] for tel in telescope}
+    # This just makes sure that obs_ids is a dictionary regardless
     elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) == 1:
         obs_ids = {telescope[0]: obs_ids}
 
