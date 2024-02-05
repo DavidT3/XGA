@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 17:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 18:03. Copyright (c) The Contributors
 
 import gc
 import os
@@ -566,7 +566,9 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
         # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
         #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
         #  have non X-ray telescopes, like the OM on XMM).
-        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT']).copy()
+        # To make the output entirely the same as the matches on position we add a NaN distance column
+        rel_census.loc[:, 'dist'] = np.NaN
         if rel_obs_ids is not None:
             # If the ObsIDs under consideration for a particular telescope have been limited, then we include only
             #  those ObsIDs that the user wanted us to include
@@ -582,8 +584,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
 
         # These are the observations that have at  least some usable data.
         all_incl = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]
-        # To make the output entirely the same as the matches on position we add a NaN distance column
-        all_incl['dist'] = np.NaN
+
         results[tel] = all_incl
         # And we store the fully blacklisted observations in another dictionary
         bl_results[tel] = all_excl
