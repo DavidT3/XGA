@@ -4,7 +4,7 @@ sas
 sas.misc module
 ---------------
 
-.. automodule:: xga.sas.misc
+.. automodule:: xga.generate.sas.misc
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ sas.misc module
 sas.phot module
 ---------------
 
-.. automodule:: xga.sas.phot
+.. automodule:: xga.generate.sas.phot
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,7 +20,7 @@ sas.phot module
 sas.run module
 --------------
 
-.. automodule:: xga.sas.run
+.. automodule:: xga.generate.sas.run
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +28,7 @@ sas.run module
 sas.spec module
 ---------------
 
-.. automodule:: xga.sas.spec
+.. automodule:: xga.sas.generate.spec
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,7 +36,7 @@ sas.spec module
 sas.lightcurve module
 ---------------
 
-.. automodule:: xga.sas.lightcurve
+.. automodule:: xga.sas.generate.lightcurve
    :members:
    :undoc-members:
    :show-inheritance:

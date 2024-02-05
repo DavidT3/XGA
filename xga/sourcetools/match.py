@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 15:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 15:38. Copyright (c) The Contributors
 
 import gc
 import os
@@ -507,8 +507,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     return results, bl_results
 
 
-def all_census_match(telescope: Union[str, list] = None) \
-        -> Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]:
+def all_census_match(telescope: Union[str, list] = None) -> Tuple[dict, dict]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
     telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
@@ -521,7 +520,7 @@ def all_census_match(telescope: Union[str, list] = None) \
     :return: A dictionary of dataframes of matching ObsIDs, where the dictionary keys correspond to
         different telescopes. The second return is structured exactly the same, but represents observations that were
         completely excluded in the blacklist.
-    :rtype: Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]
+    :rtype: Tuple[dict, dict]
     """
 
     # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
