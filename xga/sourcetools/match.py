@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 15:32. Copyright (c) The Contributors
 
 import gc
 import os
@@ -503,6 +503,53 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         raise NoMatchFoundError("No {t} observation found within {a} of any input coordinate "
                                 "pairs.".format(a='/'.join([str(distance[t].to('deg')) for t in telescope]),
                                                 t='/'.join(telescope)))
+
+    return results, bl_results
+
+
+def all_census_match(telescope: Union[str, list] = None) \
+        -> Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]:
+    """
+    Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
+    telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
+    CENSUS directly - however this does check against the blacklist, and will return things in the same style as
+    the 'proper' matching functions.
+
+    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+        which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
+        a single telescope name, or a list of telescope names, to control which are used.
+    :return: A dictionary of dataframes of matching ObsIDs, where the dictionary keys correspond to
+        different telescopes. The second return is structured exactly the same, but represents observations that were
+        completely excluded in the blacklist.
+    :rtype: Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]
+    """
+
+    # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
+    #  validated telescope names (even if there is only one).
+    telescope = check_telescope_choices(telescope)
+
+    # This dictionary stores any ObsIDs that were COMPLETELY blacklisted (i.e. all instruments were excluded)
+    bl_results = {}
+    # This is what the census entries are stored in
+    results = {}
+    for tel in telescope:
+        # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
+        #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
+        #  have non X-ray telescopes, like the OM on XMM).
+        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+        rel_blacklist = BLACKLIST[tel]
+
+        # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
+        in_bl = rel_blacklist[rel_blacklist['ObsID'].isin(rel_census[rel_census["ObsID"].isin(rel_blacklist["ObsID"]
+                                                                                              )]['ObsID'])]
+        # Firstly we locate the 'exclude_{INST NAME}' columns for this telescope's blacklist
+        excl_col = [col for col in in_bl.columns if 'EXCLUDE' in col]
+        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == 'T' for excl in excl_col])]
+
+        # These are the observations that have at  least some usable data.
+        results[tel] = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]
+        # And we store the fully blacklisted observations in another dictionary
+        bl_results[tel] = all_excl
 
     return results, bl_results
 
