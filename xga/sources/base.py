@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/02/2024, 10:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 18:04. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -30,9 +30,9 @@ from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, I
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
 from ..products.lightcurve import LightCurve, AggregateLightCurve
 from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
-from ..sourcetools.match import _dist_from_source
+from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
-from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
+from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
     DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -67,6 +67,9 @@ class BaseSource:
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
+    :param List[str] sel_null_obs: If a NullSource is being declared, this argument controls the ObsIDs that are to
+        be selected, in any other circumstances it has no effect. This argument should either be None (in which
+        case all ObsIDs will be eligible) or a list of ObsIDs.
     :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
@@ -76,7 +79,7 @@ class BaseSource:
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  in_sample: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+                 search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
@@ -109,7 +112,20 @@ class BaseSource:
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        :param List[str] sel_null_obs: If a NullSource is being declared, this argument controls the ObsIDs that are to
+            be selected, in any other circumstances it has no effect. This argument should either be None (in which
+            case all ObsIDs will be eligible) or a list of ObsIDs.
         """
+
+        # This checks whether the overall source being declared is a NullSource - if it is that will affect the
+        #  behaviour of this init in some significant ways
+        if type(self) == NullSource:
+            # In this case a NullSource is being declared - won't be that common as specific source classes
+            #  are far more useful
+            null_source = True
+        else:
+            # This will be the case in the vast majority of cases
+            null_source = False
 
         # This tells the source that it is a part of a sample, which we will check to see whether to
         #  suppress (i.e. store in an attribute rather than display) warnings
@@ -133,7 +149,12 @@ class BaseSource:
         # The returns are dictionaries, where the key is the telescope name, and the values are dataframes of
         #  matching ObsIDs (for the first return, matches), or completely blacklisted (observations with SOME
         #  blacklisted instruments aren't included in this) ObsIDs (the second return).
-        matches, excluded = separation_match(ra, dec, search_distance, telescope)
+        if not null_source:
+            matches, excluded = separation_match(ra, dec, search_distance, telescope)
+        else:
+            # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
+            #  entire census of the telescopes specified by the user
+            matches, excluded = census_match(telescope, sel_null_obs)
 
         # Observations that seem like they can be used are stored in this dictionary - though some of them may be
         #  removed later after some checks. The top level keys will be telescopes
@@ -194,9 +215,19 @@ class BaseSource:
             new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
             obs = new_obs
 
+        # If this is a null source declaration then there is absolutely no point loading region files - as such we
+        #  pass this to self._initial_products and it will set all region paths to None, which we know the subsequent
+        #  region-based methods of BaseSource can handle
+        if null_source:
+            load_regions = False
+            null_load_products = False
+        else:
+            load_regions = True
+            null_load_products = False
+
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
-        self._products, region_dict, self._att_files = self._initial_products(obs)
+        self._products, region_dict, self._att_files = self._initial_products(obs, load_regions, null_load_products)
 
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
@@ -216,7 +247,8 @@ class BaseSource:
             self._att_files = new_atts
             region_dict = new_regs
 
-        # TODO UNDO HORRIBLE BODGE
+        # This is somewhat inelegant, but oh well; it ensures that there are individual instrument entries for each
+        #  ObsID in the products dictionary, for cases where the data are shipped with all instruments combined
         for tel in self._products:
             if COMBINED_INSTS[tel]:
                 for oi in obs[tel]:
@@ -744,7 +776,8 @@ class BaseSource:
             return self._supp_warn
 
     # Next up we define the protected methods of the class
-    def _initial_products(self, init_obs: dict) -> Tuple[dict, dict, dict]:
+    def _initial_products(self, init_obs: dict, load_regions: bool = True, load_products: bool = True) \
+            -> Tuple[dict, dict, dict]:
         """
         Assembles the initial dictionary structure of existing data products, for all selected
         telescopes, associated with this source.
@@ -752,6 +785,10 @@ class BaseSource:
         :param dict init_obs: The dictionary (top level keys are telescopes, the lower level keys are ObsIDs with
             values that are lists of instruments) of observations that have initially been identified as being
             relevant to this source.
+        :param bool load_regions: This controls whether we read in regions during the course of this method. The
+            default is True.
+        :param bool load_products: This controls whether products OTHER THAN EVENT LISTS are declared and stored in
+            the XGA source product structure.
         :return: A dictionary structure detailing the data products available at initialisation, another
             dictionary containing paths to region files, and another dictionary containing paths to attitude files.
         :rtype: Tuple[dict, dict, dict]
@@ -831,11 +868,12 @@ class BaseSource:
             else:
                 to_iter = [(o, tel) for o in cur_obs]
 
+            # Produces a list of the combinations of upper and lower energy bounds from the config file.
+            en_comb = zip(rel_sec["lo_en"], rel_sec["hi_en"])
+
             # We iterate through the pairs of ObsIDs and instrument defined by the initial dictionary of useful data
             #  passed into this method
             for oi in to_iter:
-                # Produces a list of the combinations of upper and lower energy bounds from the config file.
-                en_comb = zip(rel_sec["lo_en"], rel_sec["hi_en"])
                 # This is purely to make the code easier to read
                 obs_id = oi[0]
                 # This could be an instrument or a telescope name depending on whether the telescope in question has
@@ -864,22 +902,28 @@ class BaseSource:
                 else:
                     att_file = None
 
-                if os.path.exists(evt_file) and\
-                        ((att_file is not None and os.path.exists(att_file)) or att_file is None):
+                if (att_file is not None and os.path.exists(att_file)) or att_file is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
                     # Otherwise nothing can be done with it.
-                    obs_dict[tel][obs_id][inst] = {"events": EventList(evt_file, obs_id=obs_id, instrument=inst,
-                                                                       stdout_str="", stderr_str="", gen_cmd="",
-                                                                       telescope=tel)}
+                    evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
+                                         gen_cmd="",  telescope=tel)
+                    if not evt_list.usable:
+                        continue
+
+                    obs_dict[tel][obs_id][inst] = {"events": evt_list}
                     att_dict[tel][obs_id] = att_file
-                    # Dictionary updated with derived product names
-                    map_ret = map(read_default_products, en_comb)
-                    obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+                    if load_products:
+                        # Dictionary updated with derived product names
+                        map_ret = map(read_default_products, en_comb)
+                        obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
-                    #  hasn't created the directory at this stage
-                    if os.path.exists(reg_file):
+                    #  hasn't created the directory at this stage.
+                    # If the load_regions argument is False, then we aren't going to load regions even if the
+                    #  file path does exist - this can be useful for NullSource declarations, which don't care
+                    #  about regions
+                    if load_regions and os.path.exists(reg_file):
                         # Regions dictionary updated with path to local region file, if it exists
                         reg_dict[tel][obs_id] = reg_file
                     else:
@@ -4721,359 +4765,421 @@ class BaseSource:
         return sum([len(self.obs_ids[t]) for t in self.telescopes])
 
 
+class NullSource(BaseSource):
+    """
+    A useful, but very limited, source class, which is designed to enable the bulk generation of
+    non-source-specific products like images and exposure maps. This source doesn't represent a specific
+    astrophysical source, but rather whole sets of ObsIDs (which are not necessarily related). It is
+    possible to specify the particular observations to be included, but the default behaviour is to select
+    all observations available.
+
+    If large sets of ObsIDs are being included, this can take some time to declare.
+
+    :param List[str]/dict obs: The particular observations that are to be included in this NullSource
+        declaration. The default is None, in which case all ObsIDs are considered. If a single telescope is
+        being considered then a list of ObsIDs may be passed, but if a set of telescopes are being considered
+        then a dictionary of lists of ObsIDs, with telescope-name dictionary keys, should be passed.
+    :param str/List[str] telescope: The particular telescope(s) that are to be included in this NullSource
+        declaration. The default is None, in which case all telescopes are considered. Otherwise, this should
+        either be a single telescope name, or a list of telescope names.
+    """
+    def __init__(self, obs: List[str] = None, telescope: Union[str, List[str]] = None):
+        """
+        A useful, but very limited, source class, which is designed to enable the bulk generation of
+        non-source-specific products like images and exposure maps. This source doesn't represent a specific
+        astrophysical source, but rather whole sets of ObsIDs (which are not necessarily related). It is
+        possible to specify the particular observations to be included, but the default behaviour is to select
+        all observations available.
+
+        If large sets of ObsIDs are being included, this can take some time to declare.
+
+        :param List[str]/dict obs: The particular observations that are to be included in this NullSource
+            declaration. The default is None, in which case all ObsIDs are considered. If a single telescope is
+            being considered then a list of ObsIDs may be passed, but if a set of telescopes are being considered
+            then a dictionary of lists of ObsIDs, with telescope-name dictionary keys, should be passed.
+        :param str/List[str] telescope: The particular telescope(s) that are to be included in this NullSource
+            declaration. The default is None, in which case all telescopes are considered. Otherwise, this should
+            either be a single telescope name, or a list of telescope names.
+        """
+        # Just makes sure that if a single ObsID has been passed, then it is stored in a list - as all other
+        #  stages will expect it to be None, a list, or a dictionary
+        if isinstance(obs, str):
+            obs = [obs]
+
+        super().__init__(0, 0, None, "AllObservations", telescope=telescope, sel_null_obs=obs)
+
+        self._ra_dec = np.array([np.NaN, np.NaN])
+        self._nH = Quantity(np.NaN, self._nH.unit)
+
+
 # Was going to write this as a subclass of BaseSource, as it will behave largely the same, but I don't
 #  want it declaring XGA products for tens of thousands of images etc.
 # As such will replicate the base functionality of BaseSource that will allow evselect_image, expmap, cifbuild
 # SAS wrappers to work.
 # This does have a lot of straight copied code from BaseSource, but I don't mind in this instance
-class NullSource:
-    """
-    A useful, but very limited, source class. By default this source class will include all ObsIDs present in the
-    XGA census, and as such can be used for bulk generation of SAS products. It can also be made to only include
-    certain ObsIDs.
-
-
-    :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
-        will be included.
-    """
-    def __init__(self, obs: List[str] = None):
-        """
-        The method used to initiate the NullSource class.
-        """
-
-        raise NotImplementedError("This class is not currently functional with the new multi-mission setup for XGA.")
-
-        # To find all census entries with non-na coordinates
-        cleaned_census = CENSUS.dropna()
-        self._ra_dec = np.array([None, None])
-        # The user can specify ObsIDs to associate with the NullSource, or associate all
-        #  of them by leaving it as None
-        if obs is None:
-            self._name = "AllObservations"
-            obs = cleaned_census["ObsID"].values
-        else:
-            # I know this is an ugly nested if statements, but I only wanted to run obs_check once
-            obs = np.array(obs)
-            obs_check = [o in cleaned_census["ObsID"].values for o in obs]
-            # If all user entered ObsIDs are in the census, then all is fine
-            if all(obs_check):
-                self._name = "{}Observations".format(len(obs))
-            # If they aren't all in the census then that is decidedly not fine
-            elif not all(obs_check):
-                not_valid = np.array(obs)[~np.array(obs_check)]
-                raise ValueError("The following are not present in the XGA census, "
-                                 "{}".format(", ".join(not_valid)))
-
-        # Find out which
-        instruments = {o: [] for o in obs}
-        for o in obs:
-            if cleaned_census[cleaned_census["ObsID"] == o]["USE_PN"].values[0]:
-                instruments[o].append("pn")
-            if cleaned_census[cleaned_census["ObsID"] == o]["USE_MOS1"].values[0]:
-                instruments[o].append("mos1")
-            if cleaned_census[cleaned_census["ObsID"] == o]["USE_MOS2"].values[0]:
-                instruments[o].append("mos2")
-
-        # This checks that the observations have at least one usable instrument
-        self._obs = [o for o in obs if len(instruments[o]) > 0]
-        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
-
-        # Here we check to make sure that there is at least one valid ObsID remaining
-        if len(self._obs) == 0:
-            raise NoValidObservationsError("After checks using the XGA census, all ObsIDs associated with this "
-                                           "NullSource are considered unusable.")
-
-        # The SAS generation routine might need this information
-        self._att_files = {o: xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=o) for o in self._obs}
-
-        # Need the event list objects declared unfortunately
-        self._products = {o: {} for o in self._obs}
-        for o in self._obs:
-            for inst in self._instruments[o]:
-                evt_key = "clean_{}_evts".format(inst)
-                evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=o)
-                self._products[o][inst] = {"events": EventList(evt_file, obs_id=o, instrument=inst, stdout_str="",
-                                                               stderr_str="", gen_cmd="")}
-
-        # This is a queue for products to be generated for this source, will be a numpy array in practise.
-        # Items in the same row will all be generated in parallel, whereas items in the same column will
-        # be combined into a command stack and run in order.
-        self.queue = None
-        # Another attribute destined to be an array, will contain the output type of each command submitted to
-        # the queue array.
-        self.queue_type = None
-        # This contains an array of the paths of the final output of each command in the queue
-        self.queue_path = None
-        # This contains an array of the extra information needed to instantiate class
-        # after the SAS command has run
-        self.queue_extra_info = None
-
-    def get_att_file(self, obs_id: str) -> str:
-        """
-        Fetches the path to the attitude file for an XMM observation.
-
-        :param obs_id: The ObsID to fetch the attitude file for.
-        :return: The path to the attitude file.
-        :rtype: str
-        """
-        if obs_id not in self._products:
-            raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
-        else:
-            return self._att_files[obs_id]
-
-    @property
-    def obs_ids(self) -> List[str]:
-        """
-        Property getter for ObsIDs associated with this source that are confirmed to have events files.
-
-        :return: A list of the associated XMM ObsIDs.
-        :rtype: List[str]
-        """
-        return self._obs
-
-    @property
-    def instruments(self) -> Dict:
-        """
-        A property of a source that details which instruments have valid data for which observations.
-
-        :return: A dictionary of ObsIDs and their associated valid instruments.
-        :rtype: Dict
-        """
-        return self._instruments
-
-    def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
-                     extra_info: np.ndarray, stack: bool = False):
-        """
-        Small function to update the numpy array that makes up the queue of products to be generated.
-
-        :param np.ndarray cmd_arr: Array containing SAS commands.
-        :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
-            by the cmd array. e.g. image or expmap.
-        :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
-        :param np.ndarray extra_info: Array of extra information dictionaries
-        :param stack: Should these commands be executed after a preceding line of commands,
-            or at the same time.
-        :return:
-        """
-        if self.queue is None:
-            # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
-            # and with no real performance penalty
-            self.queue = cmd_arr
-            self.queue_type = p_type_arr
-            self.queue_path = p_path_arr
-            self.queue_extra_info = extra_info
-        elif stack:
-            self.queue = np.vstack((self.queue, cmd_arr))
-            self.queue_type = np.vstack((self.queue_type, p_type_arr))
-            self.queue_path = np.vstack((self.queue_path, p_path_arr))
-            self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
-        else:
-            self.queue = np.append(self.queue, cmd_arr, axis=0)
-            self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
-            self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
-            self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
-
-    def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
-        """
-        Calling this indicates that the queue is about to be processed, so this function combines SAS
-        commands along columns (command stacks), and returns N SAS commands to be run concurrently,
-        where N is the number of columns.
-
-        :return: List of strings, where the strings are bash commands to run SAS procedures, another
-            list of strings, where the strings are expected output types for the commands, a list of
-            lists of strings, where the strings are expected output paths for products of the SAS commands.
-        :rtype: Tuple[List[str], List[str], List[List[str]]]
-        """
-        if self.queue is None:
-            # This returns empty lists if the queue is undefined
-            processed_cmds = []
-            types = []
-            paths = []
-            extras = []
-        elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
-            processed_cmds = list(self.queue)
-            types = list(self.queue_type)
-            paths = [[str(path)] for path in self.queue_path]
-            extras = list(self.queue_extra_info)
-        else:
-            processed_cmds = [";".join(col) for col in self.queue.T]
-            types = list(self.queue_type[-1, :])
-            paths = [list(col.astype(str)) for col in self.queue_path.T]
-            extras = []
-            for col in self.queue_path.T:
-                # This nested dictionary comprehension combines a column of extra information
-                # dictionaries into one, for ease of access.
-                comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
-                extras.append(comb_extra)
-
-        # This is only likely to be called when processing is beginning, so this will wipe the queue.
-        self.queue = None
-        self.queue_type = None
-        self.queue_path = None
-        self.queue_extra_info = None
-        # The returned paths are lists of strings because we want to include every file in a stack to be able
-        # to check that exists
-        return processed_cmds, types, paths, extras
-
-    def update_products(self, prod_obj: BaseProduct):
-        """
-        This method will ONLY store images and exposure maps. Ideally I wouldn't store them as product objects
-        at all, but unfortunately exposure maps require an image to be generated. Unlike all other source classes,
-        ratemaps will not be generated when matching images and exposure maps are added.
-
-        :param BaseProduct prod_obj: The new product object to be added to the source object.
-        """
-        if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)) and prod_obj is not None:
-            raise TypeError("Only product objects can be assigned to sources.")
-        elif prod_obj.type != 'image' and prod_obj.type != 'expmap':
-            raise TypeError("Only images and exposure maps can be stored in a NullSource, {} objects "
-                            "cannot".format(prod_obj.type))
-
-        if prod_obj is not None:
-            en_bnds = prod_obj.energy_bounds
-            extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-            # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
-            #  this variable with just the energy key
-            en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
-
-            # Secondary checking step now I've added PSF correction
-            if type(prod_obj) == Image and prod_obj.psf_corrected:
-                extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + prod_obj.psf_algorithm + \
-                             str(prod_obj.psf_iterations)
-
-            # All information about where to place it in our storage hierarchy can be pulled from the product
-            # object itself
-            obs_id = prod_obj.obs_id
-            inst = prod_obj.instrument
-            p_type = prod_obj.type
-
-            # Double check that something is trying to add products from another source to the current one.
-            if obs_id != "combined" and obs_id not in self._products:
-                raise NotAssociatedError("{o} is not associated with this null source.".format(o=obs_id))
-            elif inst != "combined" and inst not in self._products[obs_id]:
-                raise NotAssociatedError(
-                    "{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
-
-            if extra_key not in self._products[obs_id][inst]:
-                self._products[obs_id][inst][extra_key] = {}
-            self._products[obs_id][inst][extra_key][p_type] = prod_obj
-
-    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
-                     just_obj: bool = True) -> List[BaseProduct]:
-        """
-        This is the getter for the products data structure of Source objects. Passing a 'product type'
-        such as 'events' or 'images' will return every matching entry in the products data structure.
-
-        :param str p_type: Product type identifier. e.g. image or expmap.
-        :param str obs_id: Optionally, a specific obs_id to search can be supplied.
-        :param str inst: Optionally, a specific instrument to search can be supplied.
-        :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
-        :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
-            or the other information that goes with it like ObsID and instrument.
-        :return: List of matching products.
-        :rtype: List[BaseProduct]
-        """
-
-        def unpack_list(to_unpack: list):
-            """
-            A recursive function to go through every layer of a nested list and flatten it all out. It
-            doesn't return anything because to make life easier the 'results' are appended to a variable
-            in the namespace above this one.
-
-            :param list to_unpack: The list that needs unpacking.
-            """
-            # Must iterate through the given list
-            for entry in to_unpack:
-                # If the current element is not a list then all is chill, this element is ready for appending
-                # to the final list
-                if not isinstance(entry, list):
-                    out.append(entry)
-                else:
-                    # If the current element IS a list, then obviously we still have more unpacking to do,
-                    # so we call this function recursively.
-                    unpack_list(entry)
-
-        if obs_id not in self._products and obs_id is not None:
-            raise NotAssociatedError("{o} is not associated with {s}.".format(o=obs_id, s=self.name))
-        elif inst not in XMM_INST and inst is not None:
-            raise ValueError("{} is not an allowed instrument".format(inst))
-
-        matches = []
-        # Iterates through the dict search return, but each match is likely to be a very nested list,
-        # with the degree of nesting dependant on product type (as event lists live a level up from
-        # images for instance
-        for match in dict_search(p_type, self._products):
-            out = []
-            unpack_list(match)
-            # Only appends if this particular match is for the obs_id and instrument passed to this method
-            # Though all matches will be returned if no obs_id/inst is passed
-            if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key in out or extra_key is None) and not just_obj:
-                matches.append(out)
-            elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
-                    and (extra_key in out or extra_key is None) and just_obj:
-                matches.append(out[-1])
-        return matches
-
-    # This is used to name files and directories so this is not allowed to change.
-    @property
-    def name(self) -> str:
-        """
-        The name of the source, either given at initialisation or generated from the user-supplied coordinates.
-
-        :return: The name of the source.
-        :rtype: str
-        """
-        return self._name
-
-    @property
-    def num_pn_obs(self) -> int:
-        """
-        Getter method that gives the number of PN observations.
-
-        :return: Integer number of PN observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'pn' in self._products[o]])
-
-    @property
-    def num_mos1_obs(self) -> int:
-        """
-        Getter method that gives the number of MOS1 observations.
-
-        :return: Integer number of MOS1 observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
-
-    @property
-    def num_mos2_obs(self) -> int:
-        """
-        Getter method that gives the number of MOS2 observations.
-
-        :return: Integer number of MOS2 observations associated with this source
-        :rtype: int
-        """
-        return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
-
-    def info(self):
-        """
-        Just prints a couple of pieces of information about the NullSource
-        """
-        print("\n-----------------------------------------------------")
-        print("Source Name - {}".format(self._name))
-        print("XMM ObsIDs - {}".format(self.__len__()))
-        print("PN Observations - {}".format(self.num_pn_obs))
-        print("MOS1 Observations - {}".format(self.num_mos1_obs))
-        print("MOS2 Observations - {}".format(self.num_mos2_obs))
-        print("-----------------------------------------------------\n")
-
-    def __len__(self) -> int:
-        """
-        Method to return the length of the products dictionary (which means the number of
-        individual ObsIDs associated with this source), when len() is called on an instance of this class.
-
-        :return: The integer length of the top level of the _products nested dictionary.
-        :rtype: int
-        """
-        return len(self.obs_ids)
+# class OldNullSource:
+#     """
+#     A useful, but very limited, source class. By default this source class will include all ObsIDs present in the
+#     XGA census, and as such can be used for bulk generation of SAS products. It can also be made to only include
+#     certain ObsIDs.
+#
+#     :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
+#         will be included.
+#     :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+#         set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+#         default is None, in which case all available telescopes will be used. The user can pass a single name
+#         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+#         telescopes), or a list of telescope names.
+#     """
+#     def __init__(self, obs: List[str] = None, telescope: Union[str, List[str]] = None):
+#         """
+#         The method used to initiate the NullSource class, a useful, but very limited, source class. By default
+#         this source class will include all ObsIDs present in the XGA census, and as such can be used for bulk
+#         generation of images and exposure maps. It can also be made to only include certain ObsIDs.
+#
+#         :param List obs: An optional list of ObsIDs to include in the NullSource, otherwise all available ObsIDs
+#             will be included.
+#         :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+#             set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+#             default is None, in which case all available telescopes will be used. The user can pass a single name
+#             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+#             telescopes), or a list of telescope names.
+#         """
+#
+#         print(CENSUS)
+#         stop
+#
+#         # To find all census entries with non-na coordinates
+#         cleaned_census = CENSUS.dropna()
+#         self._ra_dec = np.array([None, None])
+#         # The user can specify ObsIDs to associate with the NullSource, or associate all
+#         #  of them by leaving it as None
+#         if obs is None:
+#             self._name = "AllObservations"
+#             obs = cleaned_census["ObsID"].values
+#         else:
+#             # I know this is an ugly nested if statements, but I only wanted to run obs_check once
+#             obs = np.array(obs)
+#             obs_check = [o in cleaned_census["ObsID"].values for o in obs]
+#             # If all user entered ObsIDs are in the census, then all is fine
+#             if all(obs_check):
+#                 self._name = "{}Observations".format(len(obs))
+#             # If they aren't all in the census then that is decidedly not fine
+#             elif not all(obs_check):
+#                 not_valid = np.array(obs)[~np.array(obs_check)]
+#                 raise ValueError("The following are not present in the XGA census, "
+#                                  "{}".format(", ".join(not_valid)))
+#
+#         # Find out which
+#         instruments = {o: [] for o in obs}
+#         for o in obs:
+#             if cleaned_census[cleaned_census["ObsID"] == o]["USE_PN"].values[0]:
+#                 instruments[o].append("pn")
+#             if cleaned_census[cleaned_census["ObsID"] == o]["USE_MOS1"].values[0]:
+#                 instruments[o].append("mos1")
+#             if cleaned_census[cleaned_census["ObsID"] == o]["USE_MOS2"].values[0]:
+#                 instruments[o].append("mos2")
+#
+#         # This checks that the observations have at least one usable instrument
+#         self._obs = [o for o in obs if len(instruments[o]) > 0]
+#         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+#
+#         # Here we check to make sure that there is at least one valid ObsID remaining
+#         if len(self._obs) == 0:
+#             raise NoValidObservationsError("After checks using the XGA census, all ObsIDs associated with this "
+#                                            "NullSource are considered unusable.")
+#
+#         # The SAS generation routine might need this information
+#         self._att_files = {o: xga_conf["XMM_FILES"]["attitude_file"].format(obs_id=o) for o in self._obs}
+#
+#         # Need the event list objects declared unfortunately
+#         self._products = {o: {} for o in self._obs}
+#         for o in self._obs:
+#             for inst in self._instruments[o]:
+#                 evt_key = "clean_{}_evts".format(inst)
+#                 evt_file = xga_conf["XMM_FILES"][evt_key].format(obs_id=o)
+#                 self._products[o][inst] = {"events": EventList(evt_file, obs_id=o, instrument=inst, stdout_str="",
+#                                                                stderr_str="", gen_cmd="")}
+#
+#         # This is a queue for products to be generated for this source, will be a numpy array in practise.
+#         # Items in the same row will all be generated in parallel, whereas items in the same column will
+#         # be combined into a command stack and run in order.
+#         self.queue = None
+#         # Another attribute destined to be an array, will contain the output type of each command submitted to
+#         # the queue array.
+#         self.queue_type = None
+#         # This contains an array of the paths of the final output of each command in the queue
+#         self.queue_path = None
+#         # This contains an array of the extra information needed to instantiate class
+#         # after the SAS command has run
+#         self.queue_extra_info = None
+#
+#     def get_att_file(self, obs_id: str) -> str:
+#         """
+#         Fetches the path to the attitude file for an XMM observation.
+#
+#         :param obs_id: The ObsID to fetch the attitude file for.
+#         :return: The path to the attitude file.
+#         :rtype: str
+#         """
+#         if obs_id not in self._products:
+#             raise NotAssociatedError("{o} is not associated with {s}".format(o=obs_id, s=self.name))
+#         else:
+#             return self._att_files[obs_id]
+#
+#     @property
+#     def obs_ids(self) -> List[str]:
+#         """
+#         Property getter for ObsIDs associated with this source that are confirmed to have events files.
+#
+#         :return: A list of the associated XMM ObsIDs.
+#         :rtype: List[str]
+#         """
+#         return self._obs
+#
+#     @property
+#     def instruments(self) -> Dict:
+#         """
+#         A property of a source that details which instruments have valid data for which observations.
+#
+#         :return: A dictionary of ObsIDs and their associated valid instruments.
+#         :rtype: Dict
+#         """
+#         return self._instruments
+#
+#     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
+#                      extra_info: np.ndarray, stack: bool = False):
+#         """
+#         Small function to update the numpy array that makes up the queue of products to be generated.
+#
+#         :param np.ndarray cmd_arr: Array containing SAS commands.
+#         :param np.ndarray p_type_arr: Array of product type identifiers for the products generated
+#             by the cmd array. e.g. image or expmap.
+#         :param np.ndarray p_path_arr: Array of final product paths if cmd is successful
+#         :param np.ndarray extra_info: Array of extra information dictionaries
+#         :param stack: Should these commands be executed after a preceding line of commands,
+#             or at the same time.
+#         :return:
+#         """
+#         if self.queue is None:
+#             # I could have done all of these in one array with 3 dimensions, but felt this was easier to read
+#             # and with no real performance penalty
+#             self.queue = cmd_arr
+#             self.queue_type = p_type_arr
+#             self.queue_path = p_path_arr
+#             self.queue_extra_info = extra_info
+#         elif stack:
+#             self.queue = np.vstack((self.queue, cmd_arr))
+#             self.queue_type = np.vstack((self.queue_type, p_type_arr))
+#             self.queue_path = np.vstack((self.queue_path, p_path_arr))
+#             self.queue_extra_info = np.vstack((self.queue_extra_info, extra_info))
+#         else:
+#             self.queue = np.append(self.queue, cmd_arr, axis=0)
+#             self.queue_type = np.append(self.queue_type, p_type_arr, axis=0)
+#             self.queue_path = np.append(self.queue_path, p_path_arr, axis=0)
+#             self.queue_extra_info = np.append(self.queue_extra_info, extra_info, axis=0)
+#
+#     def get_queue(self) -> Tuple[List[str], List[str], List[List[str]], List[dict]]:
+#         """
+#         Calling this indicates that the queue is about to be processed, so this function combines SAS
+#         commands along columns (command stacks), and returns N SAS commands to be run concurrently,
+#         where N is the number of columns.
+#
+#         :return: List of strings, where the strings are bash commands to run SAS procedures, another
+#             list of strings, where the strings are expected output types for the commands, a list of
+#             lists of strings, where the strings are expected output paths for products of the SAS commands.
+#         :rtype: Tuple[List[str], List[str], List[List[str]]]
+#         """
+#         if self.queue is None:
+#             # This returns empty lists if the queue is undefined
+#             processed_cmds = []
+#             types = []
+#             paths = []
+#             extras = []
+#         elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
+#             processed_cmds = list(self.queue)
+#             types = list(self.queue_type)
+#             paths = [[str(path)] for path in self.queue_path]
+#             extras = list(self.queue_extra_info)
+#         else:
+#             processed_cmds = [";".join(col) for col in self.queue.T]
+#             types = list(self.queue_type[-1, :])
+#             paths = [list(col.astype(str)) for col in self.queue_path.T]
+#             extras = []
+#             for col in self.queue_path.T:
+#                 # This nested dictionary comprehension combines a column of extra information
+#                 # dictionaries into one, for ease of access.
+#                 comb_extra = {k: v for ext_dict in col for k, v in ext_dict.items()}
+#                 extras.append(comb_extra)
+#
+#         # This is only likely to be called when processing is beginning, so this will wipe the queue.
+#         self.queue = None
+#         self.queue_type = None
+#         self.queue_path = None
+#         self.queue_extra_info = None
+#         # The returned paths are lists of strings because we want to include every file in a stack to be able
+#         # to check that exists
+#         return processed_cmds, types, paths, extras
+#
+#     def update_products(self, prod_obj: BaseProduct):
+#         """
+#         This method will ONLY store images and exposure maps. Ideally I wouldn't store them as product objects
+#         at all, but unfortunately exposure maps require an image to be generated. Unlike all other source classes,
+#         ratemaps will not be generated when matching images and exposure maps are added.
+#
+#         :param BaseProduct prod_obj: The new product object to be added to the source object.
+#         """
+#         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct)) and prod_obj is not None:
+#             raise TypeError("Only product objects can be assigned to sources.")
+#         elif prod_obj.type != 'image' and prod_obj.type != 'expmap':
+#             raise TypeError("Only images and exposure maps can be stored in a NullSource, {} objects "
+#                             "cannot".format(prod_obj.type))
+#
+#         if prod_obj is not None:
+#             en_bnds = prod_obj.energy_bounds
+#             extra_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+#             # As the extra_key variable can be altered if the Image is PSF corrected, I'll also make
+#             #  this variable with just the energy key
+#             en_key = "bound_{l}-{u}".format(l=float(en_bnds[0].value), u=float(en_bnds[1].value))
+#
+#             # Secondary checking step now I've added PSF correction
+#             if type(prod_obj) == Image and prod_obj.psf_corrected:
+#                 extra_key += "_" + prod_obj.psf_model + "_" + str(prod_obj.psf_bins) + "_" + prod_obj.psf_algorithm + \
+#                              str(prod_obj.psf_iterations)
+#
+#             # All information about where to place it in our storage hierarchy can be pulled from the product
+#             # object itself
+#             obs_id = prod_obj.obs_id
+#             inst = prod_obj.instrument
+#             p_type = prod_obj.type
+#
+#             # Double check that something is trying to add products from another source to the current one.
+#             if obs_id != "combined" and obs_id not in self._products:
+#                 raise NotAssociatedError("{o} is not associated with this null source.".format(o=obs_id))
+#             elif inst != "combined" and inst not in self._products[obs_id]:
+#                 raise NotAssociatedError(
+#                     "{i} is not associated with XMM observation {o}".format(i=inst, o=obs_id))
+#
+#             if extra_key not in self._products[obs_id][inst]:
+#                 self._products[obs_id][inst][extra_key] = {}
+#             self._products[obs_id][inst][extra_key][p_type] = prod_obj
+#
+#     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
+#                      just_obj: bool = True) -> List[BaseProduct]:
+#         """
+#         This is the getter for the products data structure of Source objects. Passing a 'product type'
+#         such as 'events' or 'images' will return every matching entry in the products data structure.
+#
+#         :param str p_type: Product type identifier. e.g. image or expmap.
+#         :param str obs_id: Optionally, a specific obs_id to search can be supplied.
+#         :param str inst: Optionally, a specific instrument to search can be supplied.
+#         :param str extra_key: Optionally, an extra key (like an energy bound) can be supplied.
+#         :param bool just_obj: A boolean flag that controls whether this method returns just the product objects,
+#             or the other information that goes with it like ObsID and instrument.
+#         :return: List of matching products.
+#         :rtype: List[BaseProduct]
+#         """
+#
+#         def unpack_list(to_unpack: list):
+#             """
+#             A recursive function to go through every layer of a nested list and flatten it all out. It
+#             doesn't return anything because to make life easier the 'results' are appended to a variable
+#             in the namespace above this one.
+#
+#             :param list to_unpack: The list that needs unpacking.
+#             """
+#             # Must iterate through the given list
+#             for entry in to_unpack:
+#                 # If the current element is not a list then all is chill, this element is ready for appending
+#                 # to the final list
+#                 if not isinstance(entry, list):
+#                     out.append(entry)
+#                 else:
+#                     # If the current element IS a list, then obviously we still have more unpacking to do,
+#                     # so we call this function recursively.
+#                     unpack_list(entry)
+#
+#         if obs_id not in self._products and obs_id is not None:
+#             raise NotAssociatedError("{o} is not associated with {s}.".format(o=obs_id, s=self.name))
+#         elif inst not in XMM_INST and inst is not None:
+#             raise ValueError("{} is not an allowed instrument".format(inst))
+#
+#         matches = []
+#         # Iterates through the dict search return, but each match is likely to be a very nested list,
+#         # with the degree of nesting dependant on product type (as event lists live a level up from
+#         # images for instance
+#         for match in dict_search(p_type, self._products):
+#             out = []
+#             unpack_list(match)
+#             # Only appends if this particular match is for the obs_id and instrument passed to this method
+#             # Though all matches will be returned if no obs_id/inst is passed
+#             if (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+#                     and (extra_key in out or extra_key is None) and not just_obj:
+#                 matches.append(out)
+#             elif (obs_id == out[0] or obs_id is None) and (inst == out[1] or inst is None) \
+#                     and (extra_key in out or extra_key is None) and just_obj:
+#                 matches.append(out[-1])
+#         return matches
+#
+#     # This is used to name files and directories so this is not allowed to change.
+#     @property
+#     def name(self) -> str:
+#         """
+#         The name of the source, either given at initialisation or generated from the user-supplied coordinates.
+#
+#         :return: The name of the source.
+#         :rtype: str
+#         """
+#         return self._name
+#
+#     @property
+#     def num_pn_obs(self) -> int:
+#         """
+#         Getter method that gives the number of PN observations.
+#
+#         :return: Integer number of PN observations associated with this source
+#         :rtype: int
+#         """
+#         return len([o for o in self.obs_ids if 'pn' in self._products[o]])
+#
+#     @property
+#     def num_mos1_obs(self) -> int:
+#         """
+#         Getter method that gives the number of MOS1 observations.
+#
+#         :return: Integer number of MOS1 observations associated with this source
+#         :rtype: int
+#         """
+#         return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
+#
+#     @property
+#     def num_mos2_obs(self) -> int:
+#         """
+#         Getter method that gives the number of MOS2 observations.
+#
+#         :return: Integer number of MOS2 observations associated with this source
+#         :rtype: int
+#         """
+#         return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
+#
+#     def info(self):
+#         """
+#         Just prints a couple of pieces of information about the NullSource
+#         """
+#         print("\n-----------------------------------------------------")
+#         print("Source Name - {}".format(self._name))
+#         print("XMM ObsIDs - {}".format(self.__len__()))
+#         print("PN Observations - {}".format(self.num_pn_obs))
+#         print("MOS1 Observations - {}".format(self.num_mos1_obs))
+#         print("MOS2 Observations - {}".format(self.num_mos2_obs))
+#         print("-----------------------------------------------------\n")
+#
+#     def __len__(self) -> int:
+#         """
+#         Method to return the length of the products dictionary (which means the number of
+#         individual ObsIDs associated with this source), when len() is called on an instance of this class.
+#
+#         :return: The integer length of the top level of the _products nested dictionary.
+#         :rtype: int
+#         """
+#         return len(self.obs_ids)
