@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 22:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 14:56. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -75,11 +75,18 @@ class BaseSource:
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
+    :param List[str] sel_null_obs: If a NullSource is being declared, this argument controls the ObsIDs that are to
+        be selected, in any other circumstances it has no effect. This argument should either be None (in which
+        case all ObsIDs will be eligible) or a list of ObsIDs.
+    :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
+        configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
+        set to False.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  in_sample: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None):
+                 search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
+                 null_load_products: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
@@ -115,6 +122,9 @@ class BaseSource:
         :param List[str] sel_null_obs: If a NullSource is being declared, this argument controls the ObsIDs that are to
             be selected, in any other circumstances it has no effect. This argument should either be None (in which
             case all ObsIDs will be eligible) or a list of ObsIDs.
+        :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
+            configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
+            set to False.
         """
 
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
@@ -216,14 +226,12 @@ class BaseSource:
             obs = new_obs
 
         # If this is a null source declaration then there is absolutely no point loading region files - as such we
-        #  pass this to self._initial_products and it will set all region paths to None, which we know the subsequent
+        #  pass this to self._initial_products, and it will set all region paths to None, which we know the subsequent
         #  region-based methods of BaseSource can handle
         if null_source:
             load_regions = False
-            null_load_products = False
         else:
             load_regions = True
-            null_load_products = False
 
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
@@ -4782,8 +4790,12 @@ class NullSource(BaseSource):
     :param str/List[str] telescope: The particular telescope(s) that are to be included in this NullSource
         declaration. The default is None, in which case all telescopes are considered. Otherwise, this should
         either be a single telescope name, or a list of telescope names.
+    :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
+        configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
+        set to False.
     """
-    def __init__(self, obs: List[str] = None, telescope: Union[str, List[str]] = None):
+    def __init__(self, obs: List[str] = None, telescope: Union[str, List[str]] = None,
+                 null_load_products: bool = False):
         """
         A useful, but very limited, source class, which is designed to enable the bulk generation of
         non-source-specific products like images and exposure maps. This source doesn't represent a specific
@@ -4800,13 +4812,17 @@ class NullSource(BaseSource):
         :param str/List[str] telescope: The particular telescope(s) that are to be included in this NullSource
             declaration. The default is None, in which case all telescopes are considered. Otherwise, this should
             either be a single telescope name, or a list of telescope names.
+        :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
+            configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
+            set to False.
         """
         # Just makes sure that if a single ObsID has been passed, then it is stored in a list - as all other
         #  stages will expect it to be None, a list, or a dictionary
         if isinstance(obs, str):
             obs = [obs]
 
-        super().__init__(0, 0, None, "AllObservations", telescope=telescope, sel_null_obs=obs)
+        super().__init__(0, 0, None, "AllObservations", telescope=telescope, sel_null_obs=obs,
+                         null_load_products=null_load_products)
 
         self._ra_dec = np.array([np.NaN, np.NaN])
         self._nH = Quantity(np.NaN, self._nH.unit)
