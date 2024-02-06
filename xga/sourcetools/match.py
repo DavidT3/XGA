@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 18:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 14:01. Copyright (c) The Contributors
 
 import gc
 import os
@@ -46,68 +46,86 @@ def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
 
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                        initial_results: Union[DataFrame, List[DataFrame]]):
+                        initial_results: dict):
     """
-    An internal function that takes the results of a simple match and assembles a list of unique ObsIDs which are of
-    interest to the coordinate(s) we're searching for data for.  Sets of RA and Decs that were found to be near XMM data by
-    the initial simple match are also created and returned.
+    An internal function that takes the results of a separation match and assembles the lists of unique ObsIDs for
+    the requested telescopes which are of interest to the coordinate(s) we're searching for data for. Sets of RA
+    and Decs that were found to be near XMM data by the initial simple match are also created and returned.
 
     :param float/np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees. To find matches for multiple
         coordinate pairs, pass an array.
     :param float/np.ndarray src_dec: Dec coordinate(s) of the source(s), in degrees. To find matches for multiple
         coordinate pairs, pass an array.
-    :param DataFrame/List[DataFrame] initial_results: The result of a simple_xmm_match run.
+    :param dict initial_results: The result of a separation_match run.
     :return: The simple match initial results (normalised so that they are a list of dataframe, even if only one
         source is being searched for), a list of  unique ObsIDs, unique string representations generated from RA and
         Dec for the positions  we're looking at, an array of dataframes for those coordinates that are near an
-        XMM observation according to the initial match, and the RA and Decs that are near an XMM observation
+        observation according to the initial match, and the RA and Decs that are near an observation
         according to the initial simple match. The final output is a dictionary with ObsIDs as keys, and arrays of
         source coordinates that are an initial match with them.
     """
-    # If only one coordinate was passed, the return from simple_xmm_match will just be a dataframe, and I want
-    #  a list of dataframes because its iterable and easier to deal with more generally
-    if isinstance(initial_results, pd.DataFrame):
-        initial_results = [initial_results]
-    # This is a horrible bodge. I add an empty DataFrame to the end of the list of DataFrames returned by
-    #  simple_xmm_match. This is because (when I turn init_res into a numpy array), if all of the DataFrames have
-    #  data (so if all the input coordinates fall near an observation) then numpy tries to be clever and just turns
-    #  it into a 3D array - this throws off the rest of the code. As such I add a DataFrame at the end with no data
-    #  to makes sure numpy doesn't screw me over like that.
-    initial_results += [DataFrame(columns=['ObsID', 'RA_PNT', 'DEC_PNT', 'USE_PN', 'USE_MOS1', 'USE_MOS2', 'dist'])]
+    # TODO Honestly I think I should just rewrite this - at the moment I just want to convert it so it acts the same
+    #  as it did but for multi-mission stuff though
 
-    # These reprs are what I use as dictionary keys to store matching information in a dictionary during
-    #  the multithreading approach, I construct a list of them for ALL of the input coordinates, regardless of
-    #  whether they passed the initial call to simple_xmm_match or not
-    all_repr = [repr(src_ra[ind]) + repr(src_dec[ind]) for ind in range(0, len(src_ra))]
+    final_obs_ids = {}
+    final_repr = {}
+    final_res = {}
+    final_ra = {}
+    final_dec = {}
+    final_obs_id_srcs = {}
+    for tel in initial_results:
+        rel_init_res = initial_results[tel]
+        # If only one coordinate was passed, the return from simple_xmm_match will just be a dataframe, and I want
+        #  a list of dataframes because its iterable and easier to deal with more generally
+        if isinstance(rel_init_res, pd.DataFrame):
+            rel_init_res = [rel_init_res]
+        # This is a horrible bodge. I add an empty DataFrame to the end of the list of DataFrames returned by
+        #  simple_xmm_match. This is because (when I turn init_res into a numpy array), if all of the DataFrames have
+        #  data (so if all the input coordinates fall near an observation) then numpy tries to be clever and just turns
+        #  it into a 3D array - this throws off the rest of the code. As such I add a DataFrame at the end with no data
+        #  to makes sure numpy doesn't screw me over like that.
+        rel_init_res += [DataFrame(columns=['ObsID', 'RA_PNT', 'DEC_PNT', 'USE_PN', 'USE_MOS1', 'USE_MOS2', 'dist'])]
 
-    # This constructs a masking array that tells us which of the coordinates had any sort of return from
-    #  simple_xmm_match - if further check is True then a coordinate fell near an observation and the exposure
-    #  map should be investigated.
-    further_check = np.array([len(t) > 0 for t in initial_results])
-    # Incidentally we don't need to check whether these are all False, because simple_xmm_match will already have
-    #  errored if that was the case
-    # Now construct cut down initial matching result, ra, and dec arrays
-    rel_res = np.array(initial_results, dtype=object)[further_check]
-    # The further_check masking array is ignoring the last entry here because that corresponds to the empty DataFrame
-    #  that I artificially added to bodge numpy slightly further up in the code
-    rel_ra = src_ra[further_check[:-1]]
-    rel_dec = src_dec[further_check[:-1]]
+        # These reprs are what I use as dictionary keys to store matching information in a dictionary during
+        #  the multithreading approach, I construct a list of them for ALL of the input coordinates, regardless of
+        #  whether they passed the initial call to simple_xmm_match or not
+        all_repr = [repr(src_ra[ind]) + repr(src_dec[ind]) for ind in range(0, len(src_ra))]
+        final_repr[tel] = all_repr
 
-    # Nested list comprehension that extracts all the ObsIDs that are mentioned in the initial matching
-    #  information, turning that into a set removes any duplicates, and then it gets turned back into a list.
-    # This is just used to know what exposure maps need to be generated
-    obs_ids = list(set([o for t in initial_results for o in t['ObsID'].values]))
+        # This constructs a masking array that tells us which of the coordinates had any sort of return from
+        #  simple_xmm_match - if further check is True then a coordinate fell near an observation and the exposure
+        #  map should be investigated.
+        further_check = np.array([len(t) > 0 for t in rel_init_res])
+        # Incidentally we don't need to check whether these are all False, because simple_xmm_match will already have
+        #  errored if that was the case
+        # Now construct cut down initial matching result, ra, and dec arrays
+        rel_res = np.array(rel_init_res, dtype=object)[further_check]
+        final_res[tel] = rel_res
+        # The further_check masking array is ignoring the last entry here because that corresponds to the
+        #  empty DataFrame that I artificially added to bodge numpy slightly further up in the code
+        rel_ra = src_ra[further_check[:-1]]
+        rel_dec = src_dec[further_check[:-1]]
+        final_ra[tel] = rel_ra
+        final_dec[tel] = rel_dec
 
-    # This assembles a big numpy array with every source coordinate and its ObsIDs (source coordinate will have one
-    #  entry per ObsID associated with them).
-    repeats = [len(cur_res) for cur_res in rel_res]
-    full_info = np.vstack([np.concatenate([cur_res['ObsID'].to_numpy() for cur_res in rel_res]),
-                           np.repeat(rel_ra, repeats), np.repeat(rel_dec, repeats)]).T
+        # Nested list comprehension that extracts all the ObsIDs that are mentioned in the initial matching
+        #  information, turning that into a set removes any duplicates, and then it gets turned back into a list.
+        # This is just used to know what exposure maps need to be generated
+        obs_ids = list(set([o for t in rel_init_res for o in t['ObsID'].values]))
+        final_obs_ids[tel] = obs_ids
 
-    # This assembles a dictionary that links source coordinates to ObsIDs (ObsIDs are the keys)
-    obs_id_srcs = {o: full_info[np.where(full_info[:, 0] == o)[0], :][:, 1:] for o in obs_ids}
+        # This assembles a big numpy array with every source coordinate and its ObsIDs (source coordinate will have one
+        #  entry per ObsID associated with them).
+        repeats = [len(cur_res) for cur_res in rel_res]
+        full_info = np.vstack([np.concatenate([cur_res['ObsID'].to_numpy() for cur_res in rel_res]),
+                               np.repeat(rel_ra, repeats), np.repeat(rel_dec, repeats)]).T
 
-    return initial_results, obs_ids, all_repr, rel_res, rel_ra, rel_dec, obs_id_srcs
+        # This assembles a dictionary that links source coordinates to ObsIDs (ObsIDs are the keys)
+        final_obs_id_srcs[tel] = {o: full_info[np.where(full_info[:, 0] == o)[0], :][:, 1:] for o in obs_ids}
+
+        initial_results = rel_init_res
+
+    return initial_results, final_obs_ids, final_repr, final_res, final_ra, final_dec, final_obs_id_srcs
 
 
 def _separation_search(ra: float, dec: float, telescope: str, search_rad: float) \
@@ -328,6 +346,91 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
     return obs_id, matched
 
 
+def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], dict] = None) -> Tuple[dict, dict]:
+    """
+    Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
+    telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
+    CENSUS directly - however this does check against the blacklist, and will return things in the same style as
+    the 'proper' matching functions.
+
+    The user can also pass a list of strings (or a dictionary of lists of strings in the case of multiple telescopes
+    being considered) to limit the ObsIDs from the census that are to be considered.
+
+    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+        which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
+        a single telescope name, or a list of telescope names, to control which are used.
+    :param List[str]/dict obs_ids: ObsIDs that are to be considered
+    :return: A dictionary of dataframes of matching ObsIDs, where the dictionary keys correspond to
+        different telescopes. The second return is structured exactly the same, but represents observations that were
+        completely excluded in the blacklist.
+    :rtype: Tuple[dict, dict]
+    """
+
+    # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
+    #  validated telescope names (even if there is only one).
+    telescope = check_telescope_choices(telescope)
+
+    # Here we parse the ObsID information (that the user can give us to limit the ObsIDs that should be considered
+    #  for this particular 'match'), to try to account for the different formats of information that can be passed
+    if obs_ids is not None and not isinstance(obs_ids, (dict, list)):
+        raise TypeError("The 'obs_ids' argument must either be None, a list of ObsIDs (for a single telescope), or a "
+                        "dictionary of lists of ObsIDs (for multiple telescopes).")
+    # In this case all observations are valid for all telescopes
+    elif obs_ids is None:
+        obs_ids = {tel: None for tel in telescope}
+    # If a list of ObsIDs is passed, but multiple telescopes are under consideration, then we can't really know what
+    #  to do so we have to throw an error
+    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
+        raise TypeError("It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
+                        "pass a dictionary of lists of ObsIDs.")
+    # However if dictionary is passed for ObsIDs but it doesn't relate to the telescopes we're looking at, we will
+    #  be forgiving and just use all observations
+    elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
+        warn("None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
+             "viable observations.", stacklevel=2)
+        obs_ids = {tel: None for tel in telescope}
+    # Here ObsIDs for some telescopes are passed - so for the others we'll use all observations
+    elif obs_ids is not None and isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
+        obs_ids = {tel: None if tel not in obs_ids else obs_ids[tel] for tel in telescope}
+    # This just makes sure that obs_ids is a dictionary regardless
+    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) == 1:
+        obs_ids = {telescope[0]: obs_ids}
+
+    # This dictionary stores any ObsIDs that were COMPLETELY blacklisted (i.e. all instruments were excluded)
+    bl_results = {}
+    # This is what the census entries are stored in
+    results = {}
+    for tel in telescope:
+        rel_obs_ids = obs_ids[tel]
+        # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
+        #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
+        #  have non X-ray telescopes, like the OM on XMM).
+        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT']).copy()
+        # To make the output entirely the same as the matches on position we add a NaN distance column
+        rel_census.loc[:, 'dist'] = np.NaN
+        if rel_obs_ids is not None:
+            # If the ObsIDs under consideration for a particular telescope have been limited, then we include only
+            #  those ObsIDs that the user wanted us to include
+            rel_census = rel_census[rel_census['ObsID'].isin(rel_obs_ids)]
+        rel_blacklist = BLACKLIST[tel]
+
+        # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
+        in_bl = rel_blacklist[rel_blacklist['ObsID'].isin(rel_census[rel_census["ObsID"].isin(rel_blacklist["ObsID"]
+                                                                                              )]['ObsID'])]
+        # Firstly we locate the 'exclude_{INST NAME}' columns for this telescope's blacklist
+        excl_col = [col for col in in_bl.columns if 'EXCLUDE' in col]
+        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == 'T' for excl in excl_col])]
+
+        # These are the observations that have at  least some usable data.
+        all_incl = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]
+
+        results[tel] = all_incl
+        # And we store the fully blacklisted observations in another dictionary
+        bl_results[tel] = all_excl
+
+    return results, bl_results
+
+
 def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
                      num_cores: int = NUM_CORES) \
@@ -507,128 +610,59 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     return results, bl_results
 
 
-def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], dict] = None) -> Tuple[dict, dict]:
-    """
-    Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
-    telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
-    CENSUS directly - however this does check against the blacklist, and will return things in the same style as
-    the 'proper' matching functions.
+def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
+                      distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
+                      num_cores: int = NUM_CORES):
 
-    The user can also pass a list of strings (or a dictionary of lists of strings in the case of multiple telescopes
-    being considered) to limit the ObsIDs from the census that are to be considered.
+    # Checks whether there are multiple input coordinates or just one. If one then the floats are turned into
+    #  an array of length one to make later code easier to write (i.e. everything is iterable regardless)
+    if isinstance(src_ra, float) and isinstance(src_dec, float):
+        src_ra = np.array([src_ra])
+        src_dec = np.array([src_dec])
+        num_cores = 1
 
-    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
-        which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
-        a single telescope name, or a list of telescope names, to control which are used.
-    :param List[str]/dict obs_ids: ObsIDs that are to be considered
-    :return: A dictionary of dataframes of matching ObsIDs, where the dictionary keys correspond to
-        different telescopes. The second return is structured exactly the same, but represents observations that were
-        completely excluded in the blacklist.
-    :rtype: Tuple[dict, dict]
-    """
-
-    # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
-    #  validated telescope names (even if there is only one).
-    telescope = check_telescope_choices(telescope)
-
-    # Here we parse the ObsID information (that the user can give us to limit the ObsIDs that should be considered
-    #  for this particular 'match'), to try to account for the different formats of information that can be passed
-    if obs_ids is not None and not isinstance(obs_ids, (dict, list)):
-        raise TypeError("The 'obs_ids' argument must either be None, a list of ObsIDs (for a single telescope), or a "
-                        "dictionary of lists of ObsIDs (for multiple telescopes).")
-    # In this case all observations are valid for all telescopes
-    elif obs_ids is None:
-        obs_ids = {tel: None for tel in telescope}
-    # If a list of ObsIDs is passed, but multiple telescopes are under consideration, then we can't really know what
-    #  to do so we have to throw an error
-    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
-        raise TypeError("It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
-                        "pass a dictionary of lists of ObsIDs.")
-    # However if dictionary is passed for ObsIDs but it doesn't relate to the telescopes we're looking at, we will
-    #  be forgiving and just use all observations
-    elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
-        warn("None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
-             "viable observations.", stacklevel=2)
-        obs_ids = {tel: None for tel in telescope}
-    # Here ObsIDs for some telescopes are passed - so for the others we'll use all observations
-    elif obs_ids is not None and isinstance(obs_ids, dict) and any([tel not in obs_ids for tel in telescope]):
-        obs_ids = {tel: None if tel not in obs_ids else obs_ids[tel] for tel in telescope}
-    # This just makes sure that obs_ids is a dictionary regardless
-    elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) == 1:
-        obs_ids = {telescope[0]: obs_ids}
-
-    # This dictionary stores any ObsIDs that were COMPLETELY blacklisted (i.e. all instruments were excluded)
-    bl_results = {}
-    # This is what the census entries are stored in
-    results = {}
-    for tel in telescope:
-        rel_obs_ids = obs_ids[tel]
-        # We grab the observation census for the current telescope, and drop any rows that have a NaN coordinate (this
-        #  can happen for calibration pointings, and pointings where X-ray telescopes weren't used, for telescopes that
-        #  have non X-ray telescopes, like the OM on XMM).
-        rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT']).copy()
-        # To make the output entirely the same as the matches on position we add a NaN distance column
-        rel_census.loc[:, 'dist'] = np.NaN
-        if rel_obs_ids is not None:
-            # If the ObsIDs under consideration for a particular telescope have been limited, then we include only
-            #  those ObsIDs that the user wanted us to include
-            rel_census = rel_census[rel_census['ObsID'].isin(rel_obs_ids)]
-        rel_blacklist = BLACKLIST[tel]
-
-        # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
-        in_bl = rel_blacklist[rel_blacklist['ObsID'].isin(rel_census[rel_census["ObsID"].isin(rel_blacklist["ObsID"]
-                                                                                              )]['ObsID'])]
-        # Firstly we locate the 'exclude_{INST NAME}' columns for this telescope's blacklist
-        excl_col = [col for col in in_bl.columns if 'EXCLUDE' in col]
-        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == 'T' for excl in excl_col])]
-
-        # These are the observations that have at  least some usable data.
-        all_incl = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]
-
-        results[tel] = all_incl
-        # And we store the fully blacklisted observations in another dictionary
-        bl_results[tel] = all_excl
-
-    return results, bl_results
-
-
-def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     distance: Quantity = Quantity(30.0, 'arcmin'), num_cores: int = NUM_CORES) \
-        -> Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]:
-    """
-    Returns XMM ObsIDs within a given distance from the input ra and dec values.
-
-    :param float/np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees. To find matches for multiple
-        coordinate pairs, pass an array.
-    :param float/np.ndarray src_dec: DEC coordinate(s) of the source(s), in degrees. To find matches for multiple
-        coordinate pairs, pass an array.
-    :param Quantity distance: The distance to search for XMM observations within, default should be
-        able to match a source on the edge of an observation to the centre of the observation.
-    :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
-        if multiple coordinate pairs are passed.
-    :return: A dataframe containing ObsID, RA_PNT, and DEC_PNT of matching XMM observations, and a dataframe
-        containing information on observations that would have been a match, but that are in the blacklist.
-    :rtype: Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]
-    """
-    warn("The XGA 'simple_xmm_match' function is now a wrapper for the more general 'seperation_match' "
-         "function, which can search multiple telescopes, and will be removed soon.", stacklevel=2)
-    # This is now a wrapper for the new separation_match function, because 'simple_xmm_match' is the equivalent
-    #  from when XGA only supported XMM - this function will eventually be removed.
-    res, bl_res = separation_match(src_ra, src_dec, distance, 'xmm', num_cores)
-    # Two possible outputs, depending on whether there is a single input coordinate or multiple - the return needs
-    #  to be exactly as it would have been from the original, so we make sure there are no dictionaries
-    if isinstance(res, list):
-        res = [r['xmm'] for r in res]
-        bl_res = [br['xmm'] for br in bl_res]
+    # Again if there's just one source I don't really care about a progress bar, so I turn it off
+    if len(src_ra) != 1:
+        prog_dis = False
     else:
-        res = res['xmm']
-        bl_res = bl_res['xmm']
+        prog_dis = True
 
-    return res, bl_res
+    # This is the initial call to the simple_xmm_match function. This gives us knowledge of which coordinates are
+    #  worth checking further, and which ObsIDs should be checked for those coordinates.
+    init_res, init_bl = separation_match(src_ra, src_dec, distance, telescope, num_cores=num_cores)
+
+    # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
+    #  that allows for a list of ObsIDs to be passed rather than coordinates
+    from ..sources import NullSource
+    # This is telescope-specific, and thus isn't generalised to new telescope implementations, but oh well
+    if 'xmm' in init_res:
+        from ..generate.sas import eexpmap
+    if 'erosita' in init_res:
+        pass
+
+    # This function constructs a list of unique ObsIDs that we have determined are of interest to us using the simple
+    #  match function, then sets up a NullSource and generate exposure maps that will be used to figure out if the
+    #  sources are actually on a pointing. Also returns cut down lists of RA, Decs etc. that are the sources
+    #  which the simple match found to be near XMM data
+    init_res, obs_ids, all_repr, rel_res, rel_ra, rel_dec, obs_id_srcs = _process_init_match(src_ra, src_dec, init_res)
+
+    # I don't super like this way of doing it, but this is where exposure maps generated by XGA will be stored, so
+    #  we check and remove any ObsID that already has had exposure maps generated for that ObsID. Normally XGA sources
+    #  do this automatically, but NullSource is not as clever as that
+    epath = OUTPUT + "{o}/{o}_{i}_0.5-2.0keVexpmap.fits"
+    obs_ids = [o for o in obs_ids if not os.path.exists(epath.format(o=o, i='pn'))
+               and not os.path.exists(epath.format(o=o, i='mos1')) and not os.path.exists(epath.format(o=o, i='mos2'))]
+
+    try:
+        # Declaring the NullSource with all the ObsIDs that; a) we need to use to check whether coordinates fall on
+        #  an XMM camera, and b) don't already have exposure maps generated
+        obs_src = NullSource(obs_ids)
+        # Run exposure map generation for those ObsIDs
+        eexpmap(obs_src, num_cores=num_cores)
+    except NoValidObservationsError:
+        pass
 
 
-# TODO These matching functions will also need to be rewritten, but the mechanisms to support them (i.e. exposure map
-#  generation for non-XMM telescopes) aren't implemented yet.
 def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray], num_cores: int = NUM_CORES):
     """
     An extension to the simple_xmm_match function, this first finds ObsIDs close to the input coordinate(s), then it
@@ -746,6 +780,8 @@ def on_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     return results
 
 
+# TODO These matching functions will also need to be rewritten, but the mechanisms to support them (i.e. exposure map
+#  generation for non-XMM telescopes) aren't implemented yet.
 def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      src_type: Union[str, List[str]], num_cores: int = NUM_CORES) -> np.ndarray:
     """
@@ -879,3 +915,38 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     to_return = np.array(to_return)
 
     return to_return
+
+
+def simple_xmm_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
+                     distance: Quantity = Quantity(30.0, 'arcmin'), num_cores: int = NUM_CORES) \
+        -> Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]:
+    """
+    Returns XMM ObsIDs within a given distance from the input ra and dec values.
+
+    :param float/np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees. To find matches for multiple
+        coordinate pairs, pass an array.
+    :param float/np.ndarray src_dec: DEC coordinate(s) of the source(s), in degrees. To find matches for multiple
+        coordinate pairs, pass an array.
+    :param Quantity distance: The distance to search for XMM observations within, default should be
+        able to match a source on the edge of an observation to the centre of the observation.
+    :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
+        if multiple coordinate pairs are passed.
+    :return: A dataframe containing ObsID, RA_PNT, and DEC_PNT of matching XMM observations, and a dataframe
+        containing information on observations that would have been a match, but that are in the blacklist.
+    :rtype: Tuple[Union[DataFrame, List[DataFrame]], Union[DataFrame, List[DataFrame]]]
+    """
+    warn("The XGA 'simple_xmm_match' function is now a wrapper for the more general 'separation_match' "
+         "function, which can search multiple telescopes, and will be removed soon.", stacklevel=2)
+    # This is now a wrapper for the new separation_match function, because 'simple_xmm_match' is the equivalent
+    #  from when XGA only supported XMM - this function will eventually be removed.
+    res, bl_res = separation_match(src_ra, src_dec, distance, 'xmm', num_cores)
+    # Two possible outputs, depending on whether there is a single input coordinate or multiple - the return needs
+    #  to be exactly as it would have been from the original, so we make sure there are no dictionaries
+    if isinstance(res, list):
+        res = [r['xmm'] for r in res]
+        bl_res = [br['xmm'] for br in bl_res]
+    else:
+        res = res['xmm']
+        bl_res = bl_res['xmm']
+
+    return res, bl_res
