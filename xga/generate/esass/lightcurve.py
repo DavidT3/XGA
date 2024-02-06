@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 16:44. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -232,7 +232,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
                 # TODO Decide on the best generation type (i.e. REGULAR OR REGULAR+/-
                 cmd_str = lc_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str, breg=b_reg,
-                                        i=inst_no, ts=tstep, lct='REGULAR', lcp=str(time_bin_size),
+                                        i=inst_no, ts=tstep, lct='REGULAR', lcp=str(time_bin_size.to('s').value),
                                         le=str(lo_en.value), lm=str(hi_en.value), lcg=str(lc_gamma), pat=patt)
 
                 rename_srctool_id = inst_srctool_id[inst_ind]
