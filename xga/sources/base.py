@@ -4795,6 +4795,8 @@ class NullSource(BaseSource):
     :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
         configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
         set to False.
+    :param bool load_products: This controls whether existing XGA GENERATED products should be loaded on
+        declaration of the source. Default is True.
     """
     def __init__(self, obs: Union[List[str], dict, str] = None, telescope: Union[str, List[str]] = None,
                  null_load_products: bool = False, load_products: bool = True):
@@ -4818,7 +4820,7 @@ class NullSource(BaseSource):
             configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
             set to False.
         :param bool load_products: This controls whether existing XGA GENERATED products should be loaded on
-            declaration of the source. Default is True
+            declaration of the source. Default is True.
         """
         # Just makes sure that if a single ObsID has been passed, then it is stored in a list - as all other
         #  stages will expect it to be None, a list, or a dictionary
