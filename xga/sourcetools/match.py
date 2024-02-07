@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 09:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 10:05. Copyright (c) The Contributors
 
 import gc
 import os
@@ -732,51 +732,56 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
                         #  because we're iterating through telescopes
                         order_list.append(repr(r)+repr(d))
 
-                        #         for ra_ind, r in enumerate(rel_ra):
-                        #             d = rel_dec[ra_ind]
-                        #             o = rel_res[ra_ind]['ObsID'].values
-                        #             e_matches[repr(r) + repr(d)] = _on_obs_id(r, d, o)[2]
-                        #             order_list.append(repr(r) + repr(d))
-                        #             onwards.update(1)
-
+                    # We get the relevant ObsIDs for the current RA-Dec position
                     oi = rel_res[tel][ra_ind]['ObsID'].values
+                    # Then we can use the new NullSource class to retrieve the exposure maps relevant to those
+                    #  observations - any that aren't valid observations (i.e. are fully blacklisted) will have
+                    #  already been excluded during the declaration of the source, so we do check if the relevant
+                    #  ObsIDs are present in the source structure first
                     e_maps = [ex for o in oi if o in obs_src.obs_ids[tel]
                               for ex in obs_src.get_products('expmap', obs_id=o, telescope=tel)]
 
+                    # Running the search for the position being on the exposure maps (it doesn't matter that we've
+                    #  possibly retrieved exposure maps in multiple energy bands for the same ObsID-Inst, the
+                    #  _on_obs_id method will account for that
                     search_results = _on_obs_id(r, d, e_maps)
                     e_matches[repr(r) + repr(d)][tel] = search_results[2]
                     onwards.update(1)
     else:
-        for tel in telescope:
+        for tel in obs_src.telescopes:
             # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
-            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(tel), total=len(src_ra)) \
+            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(tel), total=len(rel_ra[tel])) \
                     as onwards, Pool(num_cores) as pool:
                 def match_loop_callback(match_info):
                     nonlocal onwards  # The progress bar will need updating
-                    nonlocal c_matches
+                    nonlocal e_matches
                     nonlocal tel
 
-                    c_matches[repr(match_info[0]) + repr(match_info[1])][tel] = match_info[2]
-                    fully_blacklisted[repr(match_info[0]) + repr(match_info[1])][tel] = match_info[3]
-
+                    e_matches[repr(match_info[0]) + repr(match_info[1])][tel] = match_info[2]
                     onwards.update(1)
 
-                for ra_ind, r in enumerate(src_ra):
-                    d = src_dec[ra_ind]
+                for ra_ind, r in enumerate(rel_ra[tel]):
+                    d = rel_dec[tel][ra_ind]
 
                     # The top layer of the c_matches and fully_blacklisted dictionaries are the ra-dec combinations,
                     #  and then a layer down from that are the telescope names, and their values are the dataframes. I
                     #  just need to make sure that there is an empty dictionary for the telescope key names to be
                     #  written into
-                    if (repr(r) + repr(d)) not in c_matches:
-                        c_matches[repr(r) + repr(d)] = {}
-                        fully_blacklisted[repr(r) + repr(d)] = {}
+                    if (repr(r) + repr(d)) not in e_matches:
+                        e_matches[repr(r) + repr(d)] = {}
                         # Also add to the order list here because otherwise multiple of the same entry will be entered
                         #  because we're iterating through telescopes
                         order_list.append(repr(r)+repr(d))
-                    # We're searching the census of the current telescope (i.e. tel) here, with the search distance
-                    #  defined either by the user or using the default values built into XGA
-                    pool.apply_async(_separation_search, args=(r, d, tel, distance[tel].to('deg').value),
+
+                    # We get the relevant ObsIDs for the current RA-Dec position
+                    oi = rel_res[tel][ra_ind]['ObsID'].values
+                    # Then we can use the new NullSource class to retrieve the exposure maps relevant to those
+                    #  observations - any that aren't valid observations (i.e. are fully blacklisted) will have
+                    #  already been excluded during the declaration of the source, so we do check if the relevant
+                    #  ObsIDs are present in the source structure first
+                    e_maps = [ex for o in oi if o in obs_src.obs_ids[tel]
+                              for ex in obs_src.get_products('expmap', obs_id=o, telescope=tel)]
+                    pool.apply_async(_on_obs_id, args=(r, d, e_maps),
                                      callback=match_loop_callback)
 
                 pool.close()  # No more tasks can be added to the pool
