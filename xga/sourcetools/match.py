@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:45. Copyright (c) The Contributors
 
 import gc
 import os
@@ -805,8 +805,8 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     :param int num_cores: The number of cores that can be used for the matching process.
     :return: An array the same length as the sets of input coordinates (ordering is the same). If there are no
         matches for a source then the element will be None, if there are matches then the element will be a
-        dictionary, with the key(s) being ObsID(s) and the values being a list of region objects (or more
-        likely just one object).
+        dictionary, with top key(s) being telescope names, lower level keys being ObsID(s), and the values being a
+        list of region objects (or more likely just one object).
     :rtype: np.ndarray
     """
     # Checks the input src_type argument, and makes it a list even if it is just a single string - easier
