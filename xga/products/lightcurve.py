@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 11:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 09:05. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -731,13 +731,13 @@ class LightCurve(BaseProduct):
         if custom_title is not None:
             ax.set_title(custom_title, fontsize=title_font_size)
         elif self.src_name is not None:
-            ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+            ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
                                                                         i=self.instrument.upper(),
                                                                         l=self.energy_bounds[0].to('keV').value,
                                                                         u=self.energy_bounds[1].to('keV').value),
                          fontsize=title_font_size)
         else:
-            ax.set_title("{t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t='XMM', o=self.obs_id,
+            ax.set_title("{t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
                                                                     i=self.instrument.upper(),
                                                                     l=self.energy_bounds[0].to('keV').value,
                                                                     u=self.energy_bounds[1].to('keV').value),
