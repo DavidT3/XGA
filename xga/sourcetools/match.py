@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 10:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:31. Copyright (c) The Contributors
 
 import gc
 import os
@@ -17,7 +17,7 @@ from regions import read_ds9, PixelRegion, SkyRegion
 from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST
-from ..exceptions import NoMatchFoundError, NoRegionsError, XGAConfigError
+from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableError
 from ..utils import SRC_REGION_COLOURS, check_telescope_choices
 
 
@@ -157,52 +157,41 @@ def _on_obs_id(ra: float, dec: float, exp_maps: Union['ExpMap', List['ExpMap']])
 
 
 def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List[float], np.ndarray], obs_id: str,
-               allowed_colours: List[str]) -> Tuple[str, dict]:
+               telescope: str, im: 'Image', allowed_colours: List[str]) -> Tuple[str, dict]:
     """
     Internal function to search a particular ObsID's region files for matches to the sources defined in the RA
     and Dec arguments. This is achieved using the Regions module, and a region is a 'match' to a source if the
-    source coordinates fall somewhere within the region, and the region is of an acceptable coloru (defined in
+    source coordinates fall somewhere within the region, and the region is of an acceptable colour (defined in
     allowed_colours). This requires that both images and region files are properly setup in the XGA config file.
 
     :param float/List[float]/np.ndarray ra: The set of source RA coords to match with the obs_id's regions.
     :param float/List[float]/np.ndarray dec: The set of source DEC coords to match with the obs_id's regions.
     :param str obs_id: The ObsID whose regions we are matching to.
+    :param str telescope: The telescope whose regions we're checking for a match.
+    :param Image im: The image (as an XGA Image product) that goes with the regions being checked.
     :param List[str] allowed_colours: The colours of region that should be accepted as a match.
     :return: The ObsID that was being searched, and a dictionary of matched regions (the keys are unique
         representations of the sources passed in), and the values are lists of region objects.
     :rtype: Tuple[str, dict]
     """
-    from ..products import Image
 
     if isinstance(ra, float):
         ra = [ra]
         dec = [dec]
 
     # From that ObsID construct a path to the relevant region file using the XGA config
-    reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
-    im_path = None
-    # We need to check whether any of the images in the config file exist for this ObsID - have to use the
-    #  pre-configured images in case the region files are in pixel coordinates
-    for key in ['pn_image', 'mos1_image', 'mos2_image']:
-        for en_comb in zip(xga_conf["XMM_FILES"]["lo_en"], xga_conf["XMM_FILES"]["hi_en"]):
-            cur_path = xga_conf["XMM_FILES"][key].format(obs_id=obs_id, lo_en=en_comb[0], hi_en=en_comb[1])
-            if os.path.exists(cur_path):
-                im_path = cur_path
+    reg_path = xga_conf["{}_FILES".format(telescope.upper())]["region_file"].format(obs_id=obs_id)
 
     # This dictionary stores the match regions for each coordinate
     matched = {}
 
     # If there is a region file to search then we can proceed
-    if os.path.exists(reg_path) and im_path is not None:
+    if os.path.exists(reg_path):
         # onwards.write("None of the specified image files for {} can be located - skipping region match "
         #               "search.".format(obs_id))
 
         # Reading in the region file using the Regions module
         og_ds9_regs = read_ds9(reg_path)
-
-        # Bodged declaration, the instrument and energy bounds don't matter - all I need this for is the
-        #  nice way it extracts the WCS information that I need
-        im = Image(im_path, obs_id, '', '', '', '', Quantity(0, 'keV'), Quantity(1, 'keV'), )
 
         # There's nothing for us to do if there are no regions in the region file, so we continue onto the next
         #  possible ObsID match (if there is one) - same deal if there is no WCS information in the image
@@ -248,7 +237,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
                 if len(match_within) != 0:
                     matched[cur_repr] = match_within
 
-        del im
+        im.unload()
 
     gc.collect()
     return obs_id, matched
@@ -786,17 +775,16 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     return results
 
 
-# TODO These matching functions will also need to be rewritten, but the mechanisms to support them (i.e. exposure map
-#  generation for non-XMM telescopes) aren't implemented yet.
-def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     src_type: Union[str, List[str]], num_cores: int = NUM_CORES) -> np.ndarray:
+def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],  src_type: Union[str, List[str]],
+                 distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
+                 num_cores: int = NUM_CORES) -> np.ndarray:
     """
     A function which, if XGA has been configured with access to pre-generated region files, will search for region
     matches for a set of source coordinates passed in by the user. A region match is defined as when a source
     coordinate falls within a source region with a particular colour (largely used to represent point vs
     extended) - the type of region that should be matched to can be defined using the src_type argument.
 
-    The simple_xmm_match function will be run before the source matching process, to narrow down the sources which
+    The separation_match function will be run before the source matching process, to narrow down the sources which
     need to have the more expensive region matching performed, as well as to identify which ObsID(s) should be
     examined for each source.
 
@@ -806,6 +794,14 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         coordinate pairs, pass an array.
     :param str/List[str] src_type: The type(s) of region that should be matched to. Pass either 'ext' or 'pnt' or
         a list containing both.
+    :param Quantity/dict distance: The distance to search for observations within, the default is None in which case
+        standard search distances for different telescopes are used. The user may pass a single Quantity to use for
+        all telescopes, a dictionary with keys corresponding to ALL or SOME of the telescopes specified by the
+        'telescope' argument. In the case where only SOME of the telescopes are specified in a distance dictionary,
+        the default XGA values will be used for any that are missing.
+    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+        which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
+        a single telescope name, or a list of telescope names, to control which are used.
     :param int num_cores: The number of cores that can be used for the matching process.
     :return: An array the same length as the sets of input coordinates (ordering is the same). If there are no
         matches for a source then the element will be None, if there are matches then the element will be a
@@ -830,90 +826,145 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     for st in src_type:
         allowed_colours += SRC_REGION_COLOURS[st]
 
-    # Checks to make sure that the user has actually pointed XGA at a set of region files (and images they were
-    #  generated from, in case said region files are in pixel coordinates).
-    if xga_conf["XMM_FILES"]["region_file"] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
-        raise NoRegionsError("The configuration file does not contain information on region files, so this function "
-                             "cannot continue.")
-    elif xga_conf["XMM_FILES"]['pn_image'] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg" and \
-            xga_conf["XMM_FILES"]['mos1_image'] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg" and \
-            xga_conf["XMM_FILES"]['mos2_image'] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
-        raise XGAConfigError("This function requires at least one set of images (PN, MOS1, or MOS2) be referenced in "
-                             "the XGA configuration file.")
-
     # This runs the simple xmm match and gathers the results.
-    s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
+    s_match, s_match_bl = separation_match(src_ra, src_dec, distance, telescope, num_cores=num_cores)
     # The initial results are then processed into some more useful formats.
     s_match, uniq_obs_ids, all_repr, rel_res, rel_ra, rel_dec, \
         obs_id_srcs = _process_init_match(src_ra, src_dec, s_match)
+
+    # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
+    #  that allows for a list of ObsIDs to be passed rather than coordinates
+    from ..sources import NullSource
+
+    # Declaring the NullSource with all the ObsIDs
+    obs_src = NullSource(uniq_obs_ids, list(uniq_obs_ids.keys()), True, False)
+
+    # Think I have to iterate through the telescopes here, as for each one I'll need to ensure that there is
+    #  region file information available in the configuration section
+    tel_reg_avail = []
+    for tel in obs_src.telescopes:
+        rel_sec = "{t}_FILES".format(t=tel.upper())
+
+        default_reg = "/this/is/optional/{t}_obs/regions/{obs_id}/regions.reg".format(t=tel, obs_id='{obs_id}')
+        # Checks to make sure that the user has actually pointed XGA at a set of region files (and images they were
+        #  generated from, in case said region files are in pixel coordinates).
+        if xga_conf[rel_sec]["region_file"] == default_reg:
+            tel_reg_avail.append(False)
+        else:
+            tel_reg_avail.append(True)
+
+    if not any(tel_reg_avail):
+        raise NoRegionsError("The configuration file does not contain information on region files for any relevant "
+                             "telescope, so this function cannot continue.")
 
     # This is the dictionary in which matching information is stored
     reg_match_info = {rp: {} for rp in all_repr}
     # If the user only wants us to use one core, then we don't make a Pool because that would just add overhead
     if num_cores == 1:
-        with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards:
-            # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
-            #  considered this more efficient than iterating through the sources and possibly reading in WCS
-            #  information for the same ObsID in many different processes (the non-parallelised version just calls
-            #  the same internal function so its setup the same).
-            for cur_obs_id in obs_id_srcs:
-                cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
-                cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
-                # Runs the matching function
-                match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours)
-                # Adds to the match storage dictionary, but so that the top keys are source representations, and
-                #  the lower level keys are ObsIDs
-                for cur_repr in match_inf[1]:
-                    reg_match_info[cur_repr][match_inf[0]] = match_inf[1][cur_repr]
-                onwards.update(1)
-
-    else:
-        # This is to store exceptions that are raised in separate processes, so they can all be raised at the end.
-        search_errors = []
-        # We setup a Pool with the number of cores the user specified (or the default).
-        with tqdm(desc="Searching for ObsID region matches", total=len(uniq_obs_ids)) as onwards, Pool(
-                num_cores) as pool:
-            # This is called when a match process finished successfully, and the results need storing
-            def match_loop_callback(match_info):
-                nonlocal onwards  # The progress bar will need updating
-                nonlocal reg_match_info
-                # Adds to the match storage dictionary, but so that the top keys are source representations, and
-                #  the lower level keys are ObsIDs
-                for cur_repr in match_info[1]:
-                    reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
-
-                onwards.update(1)
-
-            # This is called when a process errors out.
-            def error_callback(err):
-                nonlocal onwards
-                nonlocal search_errors
-                # Stores the exception object in a list for later.
-                search_errors.append(err)
-                onwards.update(1)
-
-            for cur_obs_id in obs_id_srcs:
+        for tel in obs_src.telescopes:
+            with tqdm(desc="Searching for {t} ObsID region matches".format(t=tel),
+                      total=len(uniq_obs_ids[tel])) as onwards:
                 # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
                 #  considered this more efficient than iterating through the sources and possibly reading in WCS
-                #  information for the same ObsID in many different processes.
-                cur_ra_arr = obs_id_srcs[cur_obs_id][:, 0]
-                cur_dec_arr = obs_id_srcs[cur_obs_id][:, 1]
-                pool.apply_async(_in_region, args=(cur_ra_arr, cur_dec_arr, cur_obs_id, allowed_colours),
-                                 callback=match_loop_callback, error_callback=error_callback)
+                #  information for the same ObsID in many different processes (the non-parallelised version just calls
+                #  the same internal function so its setup the same).
+                for cur_obs_id in obs_id_srcs[tel]:
+                    if cur_obs_id not in obs_src.obs_ids[tel]:
+                        onwards.update(1)
+                        continue
 
-            pool.close()  # No more tasks can be added to the pool
-            pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+                    cur_ra_arr = obs_id_srcs[tel][cur_obs_id][:, 0]
+                    cur_dec_arr = obs_id_srcs[tel][cur_obs_id][:, 1]
 
-        # If any errors occurred during the matching process, they are all raised here as a grouped exception
-        if len(search_errors) != 0:
-            ExceptionGroup("The following exceptions were raised in the multi-threaded region finder", search_errors)
+                    try:
+                        rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
+                    except NoProductAvailableError:
+                        warn("No pre-existing image can be found for {t}-{o}; this is required for checking if regions "
+                             "and coordinates intersect.".format(t=tel, o=cur_obs_id), stacklevel=2)
+                        onwards.update(1)
+                        continue
+
+                    # Runs the matching function
+                    match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_obs_id, tel, rel_im, allowed_colours)
+                    # Adds to the match storage dictionary, but so that the top keys are source representations, and
+                    #  the lower level keys are ObsIDs
+                    for cur_repr in match_inf[1]:
+                        if tel not in reg_match_info[cur_repr]:
+                            reg_match_info[cur_repr][tel] = {match_inf[0]: match_inf[1][cur_repr]}
+                        else:
+                            reg_match_info[cur_repr][tel][match_inf[0]] = match_inf[1][cur_repr]
+                    onwards.update(1)
+
+    else:
+        for tel in obs_src.telescopes:
+            # This is to store exceptions that are raised in separate processes, so they can all be raised at the end.
+            search_errors = []
+            # We setup a Pool with the number of cores the user specified (or the default).
+            with tqdm(desc="Searching for {t} ObsID region matches".format(t=tel), total=len(uniq_obs_ids[tel])) \
+                  as onwards, Pool(num_cores) as pool:
+                # This is called when a match process finished successfully, and the results need storing
+                def match_loop_callback(match_info):
+                    nonlocal onwards  # The progress bar will need updating
+                    nonlocal reg_match_info
+                    # Adds to the match storage dictionary, but so that the top keys are source representations, and
+                    #  the lower level keys are ObsIDs
+                    for cur_repr in match_info[1]:
+                        reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
+
+                    onwards.update(1)
+
+                # This is called when a process errors out.
+                def error_callback(err):
+                    nonlocal onwards
+                    nonlocal search_errors
+                    # Stores the exception object in a list for later.
+                    search_errors.append(err)
+                    onwards.update(1)
+
+                for cur_obs_id in obs_id_srcs[tel]:
+                    if cur_obs_id not in obs_src.obs_ids[tel]:
+                        onwards.update(1)
+                        continue
+
+                    # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
+                    #  considered this more efficient than iterating through the sources and possibly reading in WCS
+                    #  information for the same ObsID in many different processes.
+                    cur_ra_arr = obs_id_srcs[tel][cur_obs_id][:, 0]
+                    cur_dec_arr = obs_id_srcs[tel][cur_obs_id][:, 1]
+
+                    try:
+                        rel_im = obs_src.get_images(cur_obs_id, telescope=tel)[0]
+                    except NoProductAvailableError:
+                        warn("No pre-existing image can be found for {t}-{o}; this is required for checking if regions "
+                             "and coordinates intersect.".format(t=tel, o=cur_obs_id), stacklevel=2)
+                        onwards.update(1)
+                        continue
+
+                    # Runs the matching function
+                    # match_inf = _in_region(cur_ra_arr, cur_dec_arr, cur_obs_id, tel, rel_im, allowed_colours)
+                    pool.apply_async(_in_region, args=(cur_ra_arr, cur_dec_arr, cur_obs_id,  tel, rel_im,
+                                                       allowed_colours),
+                                     callback=match_loop_callback, error_callback=error_callback)
+
+                pool.close()  # No more tasks can be added to the pool
+                pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+
+            # If any errors occurred during the matching process, they are all raised here as a grouped exception
+            if len(search_errors) != 0:
+                ExceptionGroup("The following exceptions were raised in the multi-threaded region finder",
+                               search_errors)
 
     # This formats the match and no-match information so that the output is the same length and order as the input
     #  source lists
     to_return = []
     for cur_repr in all_repr:
-        if len(reg_match_info[cur_repr]) != 0:
-            to_return.append(reg_match_info[cur_repr])
+        to_ret_en = {}
+        for tel in reg_match_info[cur_repr]:
+            if len(reg_match_info[cur_repr][tel]) != 0:
+                to_ret_en[tel] = reg_match_info[cur_repr]
+
+        if len(to_ret_en) != 0:
+            to_return.append(to_ret_en)
         else:
             to_return.append(None)
 
