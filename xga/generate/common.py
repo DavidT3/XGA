@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:57. Copyright (c) The Contributors
 
 import os
 from subprocess import Popen, PIPE
@@ -71,8 +71,6 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     elif p_type == "cross arfs":
         prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
                            telescope=extra_info["telescope"])
-    elif "NullSource" in src:
-        prod = None
     else:
         raise NotImplementedError("Not implemented yet")
 
