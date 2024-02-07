@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 21:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 22:27. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -877,9 +877,6 @@ class BaseSource:
             else:
                 to_iter = [(o, tel) for o in cur_obs]
 
-            # Produces a list of the combinations of upper and lower energy bounds from the config file.
-            en_comb = zip(rel_sec["lo_en"], rel_sec["hi_en"])
-
             # We iterate through the pairs of ObsIDs and instrument defined by the initial dictionary of useful data
             #  passed into this method
             for oi in to_iter:
@@ -894,6 +891,10 @@ class BaseSource:
                     inst = 'combined'
                 else:
                     inst = inst_or_tel
+
+                # Produces a list of the combinations of upper and lower energy bounds from the config file. If it
+                #  isn't in the loop EVERYTHING breaks
+                en_comb = zip(rel_sec["lo_en"], rel_sec["hi_en"])
 
                 # First off, we set up the relevant paths to various important files that we're going to
                 #  ingest. The first one is the current relevant event list.
