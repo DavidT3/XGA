@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 19:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 21:10. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4784,7 +4784,7 @@ class NullSource(BaseSource):
 
     If large sets of ObsIDs are being included, this can take some time to declare.
 
-    :param List[str]/dict obs: The particular observations that are to be included in this NullSource
+    :param List[str]/dict/str obs: The particular observations that are to be included in this NullSource
         declaration. The default is None, in which case all ObsIDs are considered. If a single telescope is
         being considered then a list of ObsIDs may be passed, but if a set of telescopes are being considered
         then a dictionary of lists of ObsIDs, with telescope-name dictionary keys, should be passed.
@@ -4795,7 +4795,7 @@ class NullSource(BaseSource):
         configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
         set to False.
     """
-    def __init__(self, obs: List[str] = None, telescope: Union[str, List[str]] = None,
+    def __init__(self, obs: Union[List[str], dict, str] = None, telescope: Union[str, List[str]] = None,
                  null_load_products: bool = False):
         """
         A useful, but very limited, source class, which is designed to enable the bulk generation of
@@ -4806,7 +4806,7 @@ class NullSource(BaseSource):
 
         If large sets of ObsIDs are being included, this can take some time to declare.
 
-        :param List[str]/dict obs: The particular observations that are to be included in this NullSource
+        :param List[str]/dict/str obs: The particular observations that are to be included in this NullSource
             declaration. The default is None, in which case all ObsIDs are considered. If a single telescope is
             being considered then a list of ObsIDs may be passed, but if a set of telescopes are being considered
             then a dictionary of lists of ObsIDs, with telescope-name dictionary keys, should be passed.
