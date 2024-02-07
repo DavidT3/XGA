@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:43. Copyright (c) The Contributors
 
 import gc
 import os
@@ -909,7 +909,10 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
                     # Adds to the match storage dictionary, but so that the top keys are source representations, and
                     #  the lower level keys are ObsIDs
                     for cur_repr in match_info[1]:
-                        reg_match_info[cur_repr][match_info[0]] = match_info[1][cur_repr]
+                        if tel not in reg_match_info[cur_repr]:
+                            reg_match_info[cur_repr][tel] = {match_info[0]: match_info[1][cur_repr]}
+                        else:
+                            reg_match_info[cur_repr][tel][match_info[0]] = match_info[1][cur_repr]
 
                     onwards.update(1)
 
@@ -961,7 +964,7 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
         to_ret_en = {}
         for tel in reg_match_info[cur_repr]:
             if len(reg_match_info[cur_repr][tel]) != 0:
-                to_ret_en[tel] = reg_match_info[cur_repr]
+                to_ret_en[tel] = reg_match_info[cur_repr][tel]
 
         if len(to_ret_en) != 0:
             to_return.append(to_ret_en)
