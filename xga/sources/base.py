@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 22:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 11:46. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4797,7 +4797,7 @@ class NullSource(BaseSource):
         set to False.
     """
     def __init__(self, obs: Union[List[str], dict, str] = None, telescope: Union[str, List[str]] = None,
-                 null_load_products: bool = False):
+                 null_load_products: bool = False, load_products: bool = True):
         """
         A useful, but very limited, source class, which is designed to enable the bulk generation of
         non-source-specific products like images and exposure maps. This source doesn't represent a specific
@@ -4817,6 +4817,8 @@ class NullSource(BaseSource):
         :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
             configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
             set to False.
+        :param bool load_products: This controls whether existing XGA GENERATED products should be loaded on
+            declaration of the source. Default is True
         """
         # Just makes sure that if a single ObsID has been passed, then it is stored in a list - as all other
         #  stages will expect it to be None, a list, or a dictionary
@@ -4824,7 +4826,7 @@ class NullSource(BaseSource):
             obs = [obs]
 
         super().__init__(0, 0, None, "AllObservations", telescope=telescope, sel_null_obs=obs,
-                         null_load_products=null_load_products)
+                         null_load_products=null_load_products, load_products=load_products)
 
         self._ra_dec = np.array([np.NaN, np.NaN])
         self._nH = Quantity(np.NaN, self._nH.unit)
