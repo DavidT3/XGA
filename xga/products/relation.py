@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/02/2024, 10:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/02/2024, 10:44. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -823,7 +823,7 @@ class ScalingRelation:
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
         :param tuple figsize: A custom figure size for the plot, default is (8, 8) if NO third data axis is being
-            shown, and (9, 8) if there is one.
+            shown, and (10, 8) if there is one.
         :param str data_colour: The colour to use for the data points in the plot, default is black.
         :param str model_colour: The colour to use for the model in the plot. Default is None in which case
             the value of the model_colour property of the relation is used.
@@ -908,7 +908,7 @@ class ScalingRelation:
         if not show_third_dim and figsize is None:
             figsize = (8, 8)
         elif show_third_dim and figsize is None:
-            figsize = (9, 8)
+            figsize = (10, 8)
 
         # Setting up the matplotlib figure
         fig = plt.figure(figsize=figsize)
@@ -1315,7 +1315,8 @@ class AggregateScalingRelation:
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
-             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None):
+             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
+             y_lims: Quantity = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -1350,6 +1351,8 @@ class AggregateScalingRelation:
             plot, including the unit string.
         :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
             plot, including the unit string.
+        :param Quantity y_lims: If not set, this method will define appropriate limits from the y-data and/or models
+            associated with this aggregate relation.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up, so I think the duplication is justified.
@@ -1479,6 +1482,16 @@ class AggregateScalingRelation:
             plt.plot(model_x * rel.x_norm.value, model_lower, color=m_colour, linestyle="--")
             ax.fill_between(model_x * rel.x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
                             facecolor=m_colour, alpha=0.6, interpolate=True)
+
+        # Here we check to see if the user has some manually defined y-axis limits that they want to impose, and we
+        #  also make sure that their units are correct
+        if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
+            raise UnitConversionError("Manually specified y-limits have units ({mu}) that are not compatible with "
+                                      "the y-axis unit of this scaling relation "
+                                      "({su}).".format(mu=y_lims.unit.to_string(), su=self.y_unit.to_string()))
+        elif y_lims is not None:
+            y_lims = y_lims.to(self.y_unit)
+            plt.ylim(*y_lims.value)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
