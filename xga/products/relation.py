@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/02/2024, 10:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/02/2024, 11:16. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -781,7 +781,8 @@ class ScalingRelation:
         #  user passed those on init) - if they aren't a warning will be issued
         if self.x_lims is not None and len(x_values[(x_values < self.x_lims[0]) | (x_values > self.x_lims[1])]) != 0:
             warn("Some of the x values you have passed are outside the validity range of this relation "
-                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()))
+                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()),
+                 stacklevel=2)
 
         # Need to check if any power of E(z) was applied to the y-axis data before fitting, if so (and no
         #  cosmo/redshift was passed) then it's time to throw an error.
@@ -899,7 +900,7 @@ class ScalingRelation:
         #  have set show_third_dim=True, we set it back to False
         if show_third_dim and self.third_dimension_data is None:
             warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
-                 "the creation of this scaling relation. Setting 'show_third_dim' to False.")
+                 "the creation of this scaling relation. Setting 'show_third_dim' to False.", stacklevel=2)
             show_third_dim = False
 
         # We then set the default figure size (assuming the user hasn't passed one they want to replace it) with
@@ -1179,14 +1180,14 @@ class AggregateScalingRelation:
         x_names = [sr.x_name for sr in relations]
         if len(set(x_names)) != 1:
             self._x_name = " or ".join(list(set(x_names)))
-            warn('Not all of these ScalingRelations have the same x-axis names.')
+            warn('Not all of these ScalingRelations have the same x-axis names.', stacklevel=2)
         else:
             self._x_name = relations[0].x_name
 
         y_names = [sr.y_name for sr in relations]
         if len(set(y_names)) != 1:
             self._y_name = " or ".join(list(set(y_names)))
-            warn('Not all of these ScalingRelations have the same y-axis names.')
+            warn('Not all of these ScalingRelations have the same y-axis names.', stacklevel=2)
         else:
             self._y_name = relations[0].y_name
 
