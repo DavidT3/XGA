@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/02/2024, 11:10. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -377,7 +377,8 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         # product is assigned to that these are merged products - combinations of all available data
         sources_extras.append(np.array([{"lo_en": lo_en, "hi_en": hi_en, "obs_id": "combined",
                                          "instrument": "combined", "psf_corr": psf_corr, "psf_algo": psf_algo,
-                                         "psf_model": psf_model, "psf_iter": psf_iter, "psf_bins": psf_bins}]))
+                                         "psf_model": psf_model, "psf_iter": psf_iter, "psf_bins": psf_bins,
+                                         "telescope": 'xmm'}]))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value=to_mosaic))
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
