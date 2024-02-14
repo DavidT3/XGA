@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/02/2024, 12:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:19. Copyright (c) The Contributors
 
 import json
 import os
@@ -174,10 +174,10 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                         #  events into memory, as we might be doing this a bunch of times
                         evts_header = read_header(evt_path)
 
-                        # For the eROSITA fields it seems that RA_CEN and DEC_CEN are the best ways of defining where
-                        #  the data is located on the sky (particularly for eRASS as RA_PNT and DEC_PNT are both
-                        #  always zero).
-                        if tel == 'erosita':
+                        # For the eRASS fields it seems that RA_CEN and DEC_CEN are the best ways of defining where
+                        #  the data is located on the sky. Non-survey modes however should use the RA_PNT and DEC_PNT
+                        #  headers, as RA_CEN etc. are 0 (conversely RA_PNT etc. are 0 for eRASS).
+                        if tel == 'erosita' and evts_header['OBS_MODE'] == 'SURVEY':
                             info['RA_PNT'] = evts_header["RA_CEN"]
                             info['DEC_PNT'] = evts_header["DEC_CEN"]
                         else:
