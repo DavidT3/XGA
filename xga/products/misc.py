@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 12:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 12:26. Copyright (c) The Contributors
+
 from warnings import warn
 
 from fitsio import read_header, FITSHDR
@@ -105,10 +106,3 @@ class EventList(BaseProduct):
         # And if they want the header gone then we use the property delete method for header
         if unload_header:
             del self.header
-
-
-
-
-
-
-
