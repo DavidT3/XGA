@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:38. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -78,10 +78,10 @@ class BaseProduct:
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
         if telescope == 'xmm':
-            self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
+            self._gen_error, self._gen_warn, self._other_error = self.parse_stderr()
         else:
-            self._sas_error = []
-            self._sas_warn = []
+            self._gen_error = []
+            self._gen_warn = []
             self._other_error = []
         self._obs_id = obs_id
         self._inst = instrument
@@ -220,30 +220,30 @@ class BaseProduct:
         return sas_errs_msgs, parsed_sas_warns, other_err_lines
 
     @property
-    def sas_errors(self) -> List[str]:
+    def gen_errors(self) -> List[str]:
         """
-        Property getter for the confirmed SAS errors associated with a product.
+        Property getter for the confirmed generation errors associated with a product.
 
-        :return: The list of confirmed SAS errors.
+        :return: The list of confirmed generation errors.
         :rtype: List[Dict]
         """
-        return self._sas_error
+        return self._gen_error
 
     @property
-    def sas_warnings(self) -> List[Dict]:
+    def gen_warnings(self) -> List[Dict]:
         """
-        Property getter for the confirmed SAS warnings associated with a product.
+        Property getter for the confirmed generation warnings associated with a product.
 
-        :return: The list of confirmed SAS warnings.
+        :return: The list of confirmed generation warnings.
         :rtype: List[Dict]
         """
-        return self._sas_warn
+        return self._gen_warn
 
     def raise_errors(self):
         """
         Method to raise the errors parsed from std_err string.
         """
-        for error in self._sas_error:
+        for error in self._gen_error:
             raise SASGenerationError(error)
 
         # This is for any unresolved errors.
@@ -295,9 +295,10 @@ class BaseProduct:
     @property
     def errors(self) -> List[str]:
         """
-        Property getter for non-SAS errors detected during the generation of a product.
+        Property getter for non-parsed errors detected during the generation of a product.
 
-        :return: A list of errors that aren't related to SAS.
+        :return: A list of errors that haven't been successfully linked to a generation process specific to a
+            telescope.
         :rtype: List[str]
         """
         return self._other_error
@@ -489,7 +490,7 @@ class BaseAggregateProduct:
         sas_err_list = []
         for p in self._component_products:
             prod = self._component_products[p]
-            sas_err_list += prod.sas_errors
+            sas_err_list += prod.gen_errors
         return sas_err_list
 
     @property

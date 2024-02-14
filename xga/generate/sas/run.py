@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:38. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -145,10 +145,10 @@ def sas_call(sas_func):
                 product: BaseProduct
                 ext_info = "- {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
-                if len(product.sas_errors) == 1:
-                    to_raise.append(SASGenerationError(product.sas_errors[0] + ext_info))
-                elif len(product.sas_errors) > 1:
-                    errs = [SASGenerationError(e + ext_info) for e in product.sas_errors]
+                if len(product.gen_errors) == 1:
+                    to_raise.append(SASGenerationError(product.gen_errors[0] + ext_info))
+                elif len(product.gen_errors) > 1:
+                    errs = [SASGenerationError(e + ext_info) for e in product.gen_errors]
                     to_raise += errs
 
                 if len(product.errors) == 1:
