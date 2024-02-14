@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 14:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:00. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -199,32 +199,21 @@ class BaseProduct:
             :rtype: Tuple[List[dict], List[str]]
             """
             parsed_esass = []
-            # This is a crude way of looking for SAS error/warning strings ONLY
-            esass_lines = [line for line in split_stderr if "** " in line and ": {}".format(err_type) in line]
+            # This is a crude way of looking for eSASS error/warning strings ONLY
+            if err_type == 'error':
+                esass_lines = [line for line in split_stderr if "**ERROR" in line or '**STOP' in line]
+            elif err_type == 'warning':
+                esass_lines = [line for line in split_stderr if "**WARN" in line]
+
             for err in esass_lines:
                 try:
-                    # This tries to split out the SAS task that produced the error
-                    originator = err.split("** ")[-1].split(":")[0]
-                    # And this should split out the actual error name
-                    err_ident = err.split(": {} (".format(err_type))[-1].split(")")[0]
+                    # This tries to split out the eSASS task that produced the error
+                    originator = err.split(" **")[0].split(":")[0].replace(" ", "")
+                    # The eROSITA errors don't seem to have specific names, so this will be the same for all
+                    err_ident = "eROSITAError"
                     # Actual error message
-                    err_body = err.split("({})".format(err_ident))[-1].strip("\n").strip(", ").strip(" ")
+                    err_body = err.split(" **")[-1].split("** ")[-1]
 
-                    if err_type == "error":
-                        error_sign = ['STOP']
-                        # Checking to see we can find any indication of an error
-                        esass_err_match = [esass_err for esass_err in error_sign if err_ident.lower()
-                                           in esass_err.lower()]
-                    elif err_type == "warning":
-                        raise NotImplementedError("WORKING ON IT")
-                        # Checking to see if the error identity is in the list of SAS warnings
-                        esass_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower()
-                                           in sas_err.lower()]
-
-                    if len(esass_err_match) != 1:
-                        originator = ""
-                        err_ident = ""
-                        err_body = ""
                 except IndexError:
                     originator = ""
                     err_ident = ""
@@ -271,15 +260,13 @@ class BaseProduct:
 
         elif self.telescope == 'erosita':
             # err_str being "" is ideal, hopefully means that nothing has gone wrong
-            if self.unprocessed_stderr != "":
+            if self.unprocessed_stdout != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                err_lines = [e for e in self.unprocessed_stdout.split('\n') if e != '']
                 # Fingers crossed each line is a separate error
                 parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
-                # parsed_tel_warns, esass_warn_lines = find_sas(err_lines, "warning")
-
-                print(parsed_esass_errs)
+                parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
 
                 # tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
                 #                  for e in parsed_sas_errs]
