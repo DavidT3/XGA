@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 14:19. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -77,12 +77,9 @@ class BaseProduct:
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
-        if telescope == 'xmm':
-            self._gen_error, self._gen_warn, self._other_error = self.parse_stderr()
-        else:
-            self._gen_error = []
-            self._gen_warn = []
-            self._other_error = []
+
+        # The base attributes for products - they let it know which telescope it came from, which instrument, and
+        #  which specific observation - amongst other things
         self._obs_id = obs_id
         self._inst = instrument
         self._tele = telescope
@@ -90,6 +87,11 @@ class BaseProduct:
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
+
+        # This is now telescope aware, and will look for errors formatted in the way expected for a particular
+        #  backend software for the telescope - to help with legacy support I am going to have it check for XMM
+        #  formatted errors if telescope was set to None on declaration
+        self._gen_error, self._gen_warn, self._other_error = self.parse_stderr()
 
         # Any extra information which a processing step might want to store in this base product - generally only
         #  used when a product has been generated that doesn't need its only product class, but is being put in
@@ -135,16 +137,17 @@ class BaseProduct:
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
-        come from SAS, and other unidentifiable errors. The SAS errors are returned with the actual error
-        name, the error message, and the SAS routine that caused the error.
+        come from a telescope-specific software package (e.g. SAS, or eSASS), and other unidentifiable errors. The
+        telescope-specific errors are returned with the error name, the error message, and the routine that
+        caused the error.
 
-        :return: A list of dictionaries containing parsed, confirmed SAS errors, another containing SAS warnings,
-            and another list of unidentifiable errors that occured in the stderr.
+        :return: A list of dictionaries containing parsed, confirmed telescope-specific errors, another containing
+            telescope-specific warnings, and another list of unidentifiable errors that occurred in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
         def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
-            Function to search for and parse SAS errors and warnings.
+            Function to search for and parse SAS (XMM software) errors and warnings.
 
             :param list split_stderr: The stderr string split on line endings.
             :param str err_type: Should this look for errors or warnings?
@@ -185,39 +188,125 @@ class BaseProduct:
                 parsed_sas.append({"originator": originator, "name": err_ident, "message": err_body})
             return parsed_sas, sas_lines
 
+        def find_esass(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+            """
+            Function to search for and parse eSASS (eROSITA software) errors and warnings.
+
+            :param list split_stderr: The stderr string split on line endings.
+            :param str err_type: Should this look for errors or warnings?
+            :return: Returns the dictionary of parsed errors/warnings, as well as all lines
+                with eSASS errors/warnings in.
+            :rtype: Tuple[List[dict], List[str]]
+            """
+            parsed_esass = []
+            # This is a crude way of looking for SAS error/warning strings ONLY
+            esass_lines = [line for line in split_stderr if "** " in line and ": {}".format(err_type) in line]
+            for err in esass_lines:
+                try:
+                    # This tries to split out the SAS task that produced the error
+                    originator = err.split("** ")[-1].split(":")[0]
+                    # And this should split out the actual error name
+                    err_ident = err.split(": {} (".format(err_type))[-1].split(")")[0]
+                    # Actual error message
+                    err_body = err.split("({})".format(err_ident))[-1].strip("\n").strip(", ").strip(" ")
+
+                    if err_type == "error":
+                        error_sign = ['STOP']
+                        # Checking to see we can find any indication of an error
+                        esass_err_match = [esass_err for esass_err in error_sign if err_ident.lower()
+                                           in esass_err.lower()]
+                    elif err_type == "warning":
+                        raise NotImplementedError("WORKING ON IT")
+                        # Checking to see if the error identity is in the list of SAS warnings
+                        esass_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower()
+                                           in sas_err.lower()]
+
+                    if len(esass_err_match) != 1:
+                        originator = ""
+                        err_ident = ""
+                        err_body = ""
+                except IndexError:
+                    originator = ""
+                    err_ident = ""
+                    err_body = ""
+
+                parsed_esass.append({"originator": originator, "name": err_ident, "message": err_body})
+            return parsed_esass, esass_lines
+
+        # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
+
         # Defined as empty as they are returned by this method
-        sas_errs_msgs = []
-        parsed_sas_warns = []
+        tel_errs_msgs = []
+        parsed_tel_warns = []
         other_err_lines = []
-        # err_str being "" is ideal, hopefully means that nothing has gone wrong
-        if self.unprocessed_stderr != "":
-            # Errors will be added to the error summary, then raised later
-            # That way if people try except the error away the object will have been constructed properly
-            err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
-            # Fingers crossed each line is a separate error
-            parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
-            parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-            sas_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                             for e in parsed_sas_errs]
+        if self.telescope is None or self.telescope == 'xmm':
+            # err_str being "" is ideal, hopefully means that nothing has gone wrong
+            if self.unprocessed_stderr != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
+                parsed_tel_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-            # These are impossible to predict the form of, so they won't be parsed
-            other_err_lines = [line for line in err_lines if line not in sas_err_lines
-                               and line not in sas_warn_lines and line != "" and "warn" not in line]
-            # Adding some advice
-            for e_ind, e in enumerate(other_err_lines):
-                if 'seg' in e.lower() and 'fault' in e.lower():
-                    other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
-                                              'and have a look at where your coordinate lies.'
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_sas_errs]
 
-        if len(sas_errs_msgs) > 0:
-            self._usable = False
-            self._why_unusable.append("SASErrorPresent")
-        if len(other_err_lines) > 0:
-            self._usable = False
-            self._why_unusable.append("OtherErrorPresent")
+                # These are impossible to predict the form of, so they won't be parsed
+                other_err_lines = [line for line in err_lines if line not in sas_err_lines
+                                   and line not in sas_warn_lines and line != "" and "warn" not in line]
+                # Adding some advice
+                for e_ind, e in enumerate(other_err_lines):
+                    if 'seg' in e.lower() and 'fault' in e.lower():
+                        other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                                                  'and have a look at where your coordinate lies.'
 
-        return sas_errs_msgs, parsed_sas_warns, other_err_lines
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("SASErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.telescope == 'erosita':
+            # err_str being "" is ideal, hopefully means that nothing has gone wrong
+            if self.unprocessed_stderr != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
+                # parsed_tel_warns, esass_warn_lines = find_sas(err_lines, "warning")
+
+                print(parsed_esass_errs)
+
+                # tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                #                  for e in parsed_sas_errs]
+                #
+                # # These are impossible to predict the form of, so they won't be parsed
+                # other_err_lines = [line for line in err_lines if line not in sas_err_lines
+                #                    and line not in sas_warn_lines and line != "" and "warn" not in line]
+                # # Adding some advice
+                # for e_ind, e in enumerate(other_err_lines):
+                #     if 'seg' in e.lower() and 'fault' in e.lower():
+                #         other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                #                                   'and have a look at where your coordinate lies.'
+
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("SASErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.unprocessed_stderr == "":
+            # This should only trigger if the telescope is not XMM or eROSITa AND there was a non-empty string passed
+            #  for the stderr
+            warn("We do not currently support checking {t}-specific backend software stderr for issues - feel free to "
+                 "contact the developer team and request this feature.", stacklevel=2)
+
+        return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
     @property
     def gen_errors(self) -> List[str]:
