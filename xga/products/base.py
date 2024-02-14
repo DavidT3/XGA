@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:02. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -259,6 +259,8 @@ class BaseProduct:
                 self._why_unusable.append("OtherErrorPresent")
 
         elif self.telescope == 'erosita':
+            # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
+            #  than stderr
             # err_str being "" is ideal, hopefully means that nothing has gone wrong
             if self.unprocessed_stdout != "":
                 # Errors will be added to the error summary, then raised later
@@ -268,21 +270,16 @@ class BaseProduct:
                 parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
                 parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
 
-                # tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                #                  for e in parsed_sas_errs]
-                #
-                # # These are impossible to predict the form of, so they won't be parsed
-                # other_err_lines = [line for line in err_lines if line not in sas_err_lines
-                #                    and line not in sas_warn_lines and line != "" and "warn" not in line]
-                # # Adding some advice
-                # for e_ind, e in enumerate(other_err_lines):
-                #     if 'seg' in e.lower() and 'fault' in e.lower():
-                #         other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
-                #                                   'and have a look at where your coordinate lies.'
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_esass_errs]
+
+                # These are impossible to predict the form of, so they won't be parsed
+                other_err_lines = [line for line in err_lines if line not in parsed_esass_errs
+                                   and line not in esass_warn_lines and line != "" and "warn" not in line]
 
             if len(tel_errs_msgs) > 0:
                 self._usable = False
-                self._why_unusable.append("SASErrorPresent")
+                self._why_unusable.append("eSASSErrorPresent")
             if len(other_err_lines) > 0:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
