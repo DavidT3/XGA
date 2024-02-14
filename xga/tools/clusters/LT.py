@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 16:14. Copyright (c) The Contributors
 
 from typing import Tuple
 from warnings import warn
@@ -325,7 +325,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  the errors we're parsing, we SHOULD be able to rely on them being a certain format, but we had better
             #  be safe
             bad_gen = [en for en in poss_bad_gen if en in samp.names]
-            if telescope == 'xmm' and (len(bad_gen) != len(poss_bad_gen)):
+            if len(bad_gen) != len(poss_bad_gen):
                 # If there are entries in poss_bad_gen that ARE NOT names in the sample, then something has gone wrong
                 #  with the error parsing, and we need to warn the user.
                 problem = [en for en in poss_bad_gen if en not in samp.names]
@@ -334,8 +334,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                      "offending strings are, {}".format(', '.join(problem)), stacklevel=2)
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
-            if telescope == 'xmm' and len(bad_gen) == 0:
-                raise ProductGenerationError("Failed to identify sources for which SAS spectrum generation failed.")
+            if len(bad_gen) == 0:
+                raise ProductGenerationError("Failed to identify sources for which spectrum generation failed.")
 
             # We define the indices that WON'T have been removed from the sample (so these can be used to address
             #  things like the pr_rs quantity we defined up top
