@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
 
 
 class eROSITAImplentationError(Exception):
@@ -124,13 +124,11 @@ class XSPECNotFoundError(Exception):
             return 'XSPECNotFoundError has been raised'
 
 
-# I do not know if I will keep this as is or expand out into different errors
-# The trouble is there are many hundreds of possible SAS errors, and I don't know if I
-# want a class for all of them
-class SASGenerationError(Exception):
+class ProductGenerationError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if an error is found to have occured during a run of a part of the SAS software.
+        Exception raised if an error is found to have occurred during a run of backend software that generates
+        products for a telescope supported by XGA - equivalent to the now-removed SASGenerationError, but more general.
 
         :param expression:
         :param message:

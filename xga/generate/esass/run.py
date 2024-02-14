@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 16:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -38,15 +38,6 @@ def esass_call(esass_func):
             sources = args[0]
         else:
             raise TypeError("Please pass a source, NullSource, or sample object.")
-
-        # TODO this check somewhere else and properly!
-        """
-        # Checking that at least some of the sources have eROSITA data associated with them
-        sources = [src for src in sources if 'erosita' in src._telescope]
-        # Raising an error if no erosita sources have been passed
-        if len(sources) == 0:
-            raise SourceNotFoundError("Please pass a source that has eROSITA data associated with it.")
-        """
 
         # This is the output from whatever function this is a decorator for
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = esass_func(*args, **kwargs)
@@ -142,14 +133,13 @@ def esass_call(esass_func):
             to_raise = []
             for product in results[entry]:
                 product: BaseProduct
-                # TODO deal with processing errors from the std_out for esass 
-                """
+
                 ext_info = "- {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
-                if len(product.sas_errors) == 1:
-                    to_raise.append(SASGenerationError(product.sas_errors[0] + ext_info))
-                elif len(product.sas_errors) > 1:
-                    errs = [SASGenerationError(e + ext_info) for e in product.sas_errors]
+                if len(product.gen_errors) == 1:
+                    to_raise.append(SASGenerationError(product.gen_errors[0] + ext_info))
+                elif len(product.gen_errors) > 1:
+                    errs = [SASGenerationError(e + ext_info) for e in product.gen_errors]
                     to_raise += errs
 
                 if len(product.errors) == 1:
@@ -157,10 +147,8 @@ def esass_call(esass_func):
                 elif len(product.errors) > 1:
                     errs = [SASGenerationError(e + "-" + ext_info) for e in product.errors]
                     to_raise += errs
-                """
 
-                # ccfs aren't actually stored in the source product storage, but they are briefly put into
-                #  BaseProducts for error parsing etc. So if the product type is None we don't store it
+                # If the product type is None we don't store it
                 if product.type is not None and product.usable and prod_type_str != "annular spectrum set components":
                     # For each product produced for this source, we add it to the storage hierarchy
                     sources[ind].update_products(product)
@@ -207,7 +195,7 @@ def esass_call(esass_func):
         """
         # And here are all the errors during SAS generation, if any
         if len(all_to_raise) != 0:
-            raise SASGenerationError(all_to_raise)
+            raise ProductGenerationError(all_to_raise)
         """
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/01/2024, 09:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
 
 from typing import Tuple
 from warnings import warn
@@ -10,7 +10,7 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
-from xga.exceptions import ModelNotAssociatedError, SASGenerationError
+from xga.exceptions import ModelNotAssociatedError, ProductGenerationError
 from xga.generate.esass import srctool_spectrum
 from xga.generate.sas import evselect_spectrum
 from xga.products import ScalingRelation
@@ -313,10 +313,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                  min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             else:
                 raise NotImplementedError("Support for telescopes other than XMM and eROSITA is not yet implemented.")
-            # If the end of evselect_spectrum doesn't throw a SASGenerationError then we know we're all good, so we
+            # If the end of evselect_spectrum doesn't throw a ProductGenerationError then we know we're all good, so we
             #  define the not_bad_gen_ind to just contain an index for all the clusters
             not_bad_gen_ind = np.nonzero(samp.names)
-        except SASGenerationError as err:
+        except ProductGenerationError as err:
             # Otherwise if something went wrong we can parse the error messages and extract the names of the sources
             #  for which the error occurred
             poss_bad_gen = list(set([me.message.split(' is the associated source')[0].split('- ')[-1]
@@ -329,13 +329,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 # If there are entries in poss_bad_gen that ARE NOT names in the sample, then something has gone wrong
                 #  with the error parsing, and we need to warn the user.
                 problem = [en for en in poss_bad_gen if en not in samp.names]
-                warn("SASGenerationError parsing has recovered a string that is not a source name, a "
+                warn("ProductGenerationError parsing has recovered a string that is not a source name, a "
                      "problem source may not have been removed from the sample (contact the development team). The "
                      "offending strings are, {}".format(', '.join(problem)), stacklevel=2)
 
             # Just to be safe I'm adding a check to make sure bad_gen has entries
             if telescope == 'xmm' and len(bad_gen) == 0:
-                raise SASGenerationError("Failed to identify sources for which SAS spectrum generation failed.")
+                raise ProductGenerationError("Failed to identify sources for which SAS spectrum generation failed.")
 
             # We define the indices that WON'T have been removed from the sample (so these can be used to address
             #  things like the pr_rs quantity we defined up top

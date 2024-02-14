@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -9,7 +9,7 @@ from warnings import warn
 from tqdm import tqdm
 
 from xga import SAS_AVAIL, SAS_VERSION
-from xga.exceptions import SASGenerationError, SASNotFoundError
+from xga.exceptions import ProductGenerationError, SASNotFoundError
 from xga.generate.common import execute_cmd
 from xga.products import BaseProduct, AnnularSpectra
 from xga.samples.base import BaseSample
@@ -146,15 +146,15 @@ def sas_call(sas_func):
                 ext_info = "- {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
                 if len(product.gen_errors) == 1:
-                    to_raise.append(SASGenerationError(product.gen_errors[0] + ext_info))
+                    to_raise.append(ProductGenerationError(product.gen_errors[0] + ext_info))
                 elif len(product.gen_errors) > 1:
-                    errs = [SASGenerationError(e + ext_info) for e in product.gen_errors]
+                    errs = [ProductGenerationError(e + ext_info) for e in product.gen_errors]
                     to_raise += errs
 
                 if len(product.errors) == 1:
-                    to_raise.append(SASGenerationError(product.errors[0] + "-" + ext_info))
+                    to_raise.append(ProductGenerationError(product.errors[0] + "-" + ext_info))
                 elif len(product.errors) > 1:
-                    errs = [SASGenerationError(e + "-" + ext_info) for e in product.errors]
+                    errs = [ProductGenerationError(e + "-" + ext_info) for e in product.errors]
                     to_raise += errs
 
                 # ccfs aren't actually stored in the source product storage, but they are briefly put into
@@ -204,7 +204,7 @@ def sas_call(sas_func):
 
         # And here are all the errors during SAS generation, if any
         if len(all_to_raise) != 0:
-            raise SASGenerationError(all_to_raise)
+            raise ProductGenerationError(all_to_raise)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
