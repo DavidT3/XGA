@@ -1,6 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/10/2023, 15:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 12:20. Copyright (c) The Contributors
+from warnings import warn
 
+from fitsio import read_header, FITSHDR
 
 from . import BaseProduct
 
@@ -33,6 +35,77 @@ class EventList(BaseProduct):
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "events"
+
+        # These store the header of the event list fits file (if read in), as well as the main table of event
+        #  information (again if read in).
+        self._header = None
+        self._data = None
+
+    # This absolutely doesn't get a setter considering it's the header object
+    @property
+    def header(self) -> FITSHDR:
+        """
+        Property getter allowing access to the astropy fits header object of this event list.
+
+        :return: The header of the primary data table of the event list.
+        :rtype: FITSHDR
+        """
+        # If the header attribute is None then we know we have to read the header in
+        if self._header is None:
+            self._read_header_on_demand()
+        return self._header
+
+    @header.deleter
+    def header(self):
+        """
+        Property deleter for the header of this EventList instance. The self._header attribute is removed from
+        memory, and then self._header is explicitly set to None so that self._read_header_on_demand() will be
+        triggered if you ever want the header from this object again.
+        """
+        del self._header
+        self._header = None
+
+    def _read_header_on_demand(self):
+        """
+        This will read the event list header into memory, without loading the data from the event list main table. That
+        way the user can get access to the summary information stored in the header without wasting a lot of memory.
+        """
+        try:
+            # Reads only the header information
+            self._header = read_header(self.path)
+        except OSError:
+            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
+                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
+                                    "with {s}.".format(f=self.path, s=self.src_name))
+
+    def unload(self, unload_data: bool = True, unload_header: bool = True):
+        """
+        This method allows you to safely remove the header and/or data information stored in memory.
+
+        :param bool unload_data: Specifies whether the data should be unloaded from memory. Default is True, as the
+            event list data is liable to take up far more memory than the header, meaning it is more likely to need to
+            be removed.
+        :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is True.
+        """
+        # TODO This will need to be altered when reading event tables in is supported.
+        if unload_data is True:
+            unload_data = False
+            warn("The EventList class doesn't yet support reading event tables into memory yet, so they do not need "
+                 "to be removed.", stacklevel=2)
+
+        # Doesn't make sense in this case, as the method wouldn't do anything - as it was probably a mistake to call
+        #  the method like this I throw an error so the user knows
+        if not unload_data and not unload_header:
+            raise ValueError("At least one of the 'unload_data' and 'unload_header' arguments must be True.")
+
+        # Pretty simple, if the user wants the data gone then we use the existing property delete method for data
+        if unload_data:
+            del self.data
+
+        # And if they want the header gone then we use the property delete method for header
+        if unload_header:
+            del self.header
+
 
 
 
