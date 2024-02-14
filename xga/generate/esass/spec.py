@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/02/2024, 10:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:03. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
 from random import randint
 from typing import Union, List
+from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
@@ -31,6 +32,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     as for things like the standard srctool_spectrum function which produce 'global' spectra. Each spectrum
     generated is accompanied by a background spectrum, as well as the necessary ancillary files.
 
+    NOTE: We do yet allow the user to specify their desired values for 'tstep' and 'xgrid', though this will be
+    supported in a future release. We currently set default value of 'tstep=0.5' for survey observations, and
+    'tstep=100.0' for pointed observations; the 'tstep' values used for background spectrum generation are four
+    times larger. The default evtool value for 'xgrid' is used.
+
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
@@ -55,6 +61,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # TODO MORE COMMENTS
+
+    # TODO This will change in a future release, so that the user can control it - see issue #1113. The definitions
+    #  are up the top of the function as a reminder
+    t_step_survey = 0.5
+    t_step_point = 100
 
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
@@ -231,6 +242,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                 # Just grabs the event list object
                 evt_list = pack[-1]
+
+                # eROSITA observations have the potential to be in pointed or survey modes - we change the time step
+                #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
+                #  the pointing of the spacecraft won't be changing appreciably
+                if evt_list.header['OBS_MODE'] == 'POINTED':
+                    t_step = t_step_point
+                elif evt_list.header['OBS_MODE'] == 'SURVEY':
+                    t_step = t_step_survey
+                else:
+                    warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
+                         "survey mode value ({ts})".format(om=evt_list.header['OBS_TYPE'], ts=t_step_survey),
+                         stacklevel=2)
+                    t_step = t_step_survey
+
                 # Sets up the file names of the output files, adding a random number so that the
                 #  function for generating annular spectra doesn't clash and try to use the same folder
                 # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
@@ -331,8 +356,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 src_reg_str = reg  # dealt with in get_annular_esass_region
 
                 # TODO allow user to chose tstep and xgrid
-                # TODO CHANGE BACK
-                tstep = 0.5  # put it as 0.5 for now
                 bsrc_reg_str = b_reg
                 # Defining the grouping keywords
                 if group_spec and min_counts is not None:
@@ -351,14 +374,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 if isinstance(source, ExtendedSource):
                     # We have a slightly different command for extended and point sources
                     s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
-                                                       i=inst_no, ts=tstep, em=im.path, et=et)
+                                                       i=inst_no, ts=t_step, em=im.path, et=et)
                 else:
                     s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
-                                                       i=inst_no, ts=tstep)
+                                                       i=inst_no, ts=t_step)
 
                 # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
                 sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
-                                                      i=inst_no, ts=tstep*4)
+                                                      i=inst_no, ts=t_step*4)
                 # Filling out the grouping command
                 grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
@@ -550,6 +573,11 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     It is possible to generate both grouped and ungrouped spectra using this function, with the degree
     of grouping set by the min_counts and min_sn parameters.
 
+    NOTE: We do yet allow the user to specify their desired values for 'tstep' and 'xgrid', though this will be
+    supported in a future release. We currently set default value of 'tstep=0.5' for survey observations, and
+    'tstep=100.0' for pointed observations; the 'tstep' values used for background spectrum generation are four
+    times larger. The default evtool value for 'xgrid' is used.
+
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
         the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
@@ -590,6 +618,11 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
     annuli, specifically using data from the eROSITA telescope.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
     to measure spectroscopic quantities in a three dimensional space.
+
+    NOTE: We do yet allow the user to specify their desired values for 'tstep' and 'xgrid', though this will be
+    supported in a future release. We currently set default value of 'tstep=0.5' for survey observations, and
+    'tstep=100.0' for pointed observations; the 'tstep' values used for background spectrum generation are four
+    times larger. The default evtool value for 'xgrid' is used.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
