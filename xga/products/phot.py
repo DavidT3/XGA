@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/01/2024, 14:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:49. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -125,7 +125,12 @@ class Image(BaseProduct):
         # TODO I am not yet dealing with multi-telescope images, because I don't quite know how we're going
         #  to tackle that yet
         # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
-        if obs_id == 'combined' or instrument == 'combined':
+        # ALSO - this is the only place where it is possible that the PROPERTY header is None (i.e. the header has
+        #  not been read in from the file) without an error. That will happen specifically when eROSITA software
+        #  fails to generate a tile image properly - the file path will exist but the file itself is garbled. It'll
+        #  be caught and an error will be thrown once the generation processes are complete, and none of this will
+        #  matter
+        if self.header is not None and (obs_id == 'combined' or instrument == 'combined'):
             # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
             #  in any file headers
             if obs_inst_combs is not None:
@@ -221,36 +226,45 @@ class Image(BaseProduct):
         # Import here to avoid circular import woes
         from ..imagetools.misc import find_all_wcs
 
+        errored = False
         try:
             # Reads only the header information
             self._header = read_header(self.path)
-        except OSError:
-            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
-                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                    "with {s}.".format(f=self.path, s=self.src_name))
+        except OSError as err:
 
-        # XMM images typically have two, both useful, so we'll find all available and store them
-        wcses = find_all_wcs(self._header)
-
-        # Just iterating through and assigning to the relevant attributes
-        for w in wcses:
-            axes = [ax.lower() for ax in w.axis_type_names]
-            if "ra" in axes and "dec" in axes:
-                if self._wcs_radec is None:
-                    self._wcs_radec = w
-            elif "x" in axes and "y" in axes:
-                if self._wcs_xmmXY is None:
-                    self._wcs_xmmXY = w
-            elif "detx" in axes and "dety" in axes:
-                if self._wcs_xmmdetXdetY is None:
-                    self._wcs_xmmdetXdetY = w
+            # This is really more specific than I would like, but in cases where eROSITA IKE-MPE border tile images
+            #  fail to generate properly, header opening fails with this error, which stops a more predictable XGA
+            #  formatted error being shown
+            if 'FITSIO status = 224: missing NAXISn keywords' in str(err):
+                errored = True
             else:
-                raise ValueError("This type of WCS is not recognised!")
+                raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                                        "associated with {s}.".format(f=self.path, s=self.src_name))
 
-        # I'll only strongly require that the pixel-RADEC WCS is found
-        if self._wcs_radec is None:
-            raise FailedProductError("SAS has generated this image without a WCS capable of "
-                                     "going from pixels to RA-DEC.")
+        if not errored:
+            # XMM images typically have two, both useful, so we'll find all available and store them
+            wcses = find_all_wcs(self._header)
+
+            # Just iterating through and assigning to the relevant attributes
+            for w in wcses:
+                axes = [ax.lower() for ax in w.axis_type_names]
+                if "ra" in axes and "dec" in axes:
+                    if self._wcs_radec is None:
+                        self._wcs_radec = w
+                elif "x" in axes and "y" in axes:
+                    if self._wcs_xmmXY is None:
+                        self._wcs_xmmXY = w
+                elif "detx" in axes and "dety" in axes:
+                    if self._wcs_xmmdetXdetY is None:
+                        self._wcs_xmmdetXdetY = w
+                else:
+                    raise ValueError("This type of WCS is not recognised!")
+
+            # I'll only strongly require that the pixel-RADEC WCS is found
+            if self._wcs_radec is None:
+                raise FailedProductError("SAS has generated this image without a WCS capable of "
+                                         "going from pixels to RA-DEC.")
 
     def _process_regions(self, path: str = None, reg_objs: Union[List[Union[PixelRegion, SkyRegion]], dict] = None) \
             -> dict:
