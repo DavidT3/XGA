@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:23. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -246,13 +246,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # eROSITA observations have the potential to be in pointed or survey modes - we change the time step
                 #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
                 #  the pointing of the spacecraft won't be changing appreciably
-                if evt_list.header['OBS_MODE'] == 'POINTED':
+                if evt_list.header['OBS_MODE'] == 'POINTING':
                     t_step = t_step_point
                 elif evt_list.header['OBS_MODE'] == 'SURVEY':
                     t_step = t_step_survey
                 else:
                     warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
-                         "survey mode value ({ts})".format(om=evt_list.header['OBS_TYPE'], ts=t_step_survey),
+                         "survey mode value ({ts})".format(om=evt_list.header['OBS_MODE'], ts=t_step_survey),
                          stacklevel=2)
                     t_step = t_step_survey
 
