@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/02/2024, 11:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 09:07. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -112,7 +112,8 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
 
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, im))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
+                               "telescope": 'xmm'})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
@@ -228,7 +229,8 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
 
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, exp_map))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst})
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
+                               "telescope": 'xmm'})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
@@ -555,7 +557,8 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # get stored in extra info.
                 final_paths.append(os.path.join(OUTPUT, 'xmm', obs_id, psf_file))
                 extra_info.append({"obs_id": obs_id, "instrument": inst, "model": psf_model, "chunks_per_side": bins,
-                                   "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords})
+                                   "files": psf_files, "x_bounds": x_bound_coords, "y_bounds": y_bound_coords,
+                                   "telescope": 'xmm'})
 
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
