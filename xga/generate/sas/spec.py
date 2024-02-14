@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/01/2024, 10:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 09:08. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -435,7 +435,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "b_arf_path": '',
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
                                "min_sn": min_sn, "over_sample": over_sample, "central_coord": source.default_coord,
-                               "from_region": from_region})
+                               "from_region": from_region,
+                               "telescope": 'xmm'})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -856,7 +857,8 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                               'obs_id': obs_id,
                               'inst': inst,
                               'src_ann_id': sp_comb[0].annulus_ident,
-                              'cross_ann_id': sp_comb[1].annulus_ident}
+                              'cross_ann_id': sp_comb[1].annulus_ident,
+                              "telescope": 'xmm'}
 
                 src_paths = np.concatenate([src_paths, [OUTPUT + "{o}/".format(o=obs_id) + c_arf_name]])
                 # Go through and concatenate things to the source lists defined above
