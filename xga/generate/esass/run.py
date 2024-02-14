@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:11. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from ..common import execute_cmd
 from ... import eSASS_AVAIL
-from ...exceptions import eSASSNotFoundError
+from ...exceptions import eSASSNotFoundError, ProductGenerationError
 from ...products import BaseProduct, AnnularSpectra
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -137,15 +137,15 @@ def esass_call(esass_func):
                 ext_info = "- {s} is the associated source, the specific data used is " \
                            "{o}-{i}.".format(s=sources[ind].name, o=product.obs_id, i=product.instrument)
                 if len(product.gen_errors) == 1:
-                    to_raise.append(SASGenerationError(product.gen_errors[0] + ext_info))
+                    to_raise.append(ProductGenerationError(product.gen_errors[0] + ext_info))
                 elif len(product.gen_errors) > 1:
-                    errs = [SASGenerationError(e + ext_info) for e in product.gen_errors]
+                    errs = [ProductGenerationError(e + ext_info) for e in product.gen_errors]
                     to_raise += errs
 
                 if len(product.errors) == 1:
-                    to_raise.append(SASGenerationError(product.errors[0] + "-" + ext_info))
+                    to_raise.append(ProductGenerationError(product.errors[0] + "-" + ext_info))
                 elif len(product.errors) > 1:
-                    errs = [SASGenerationError(e + "-" + ext_info) for e in product.errors]
+                    errs = [ProductGenerationError(e + "-" + ext_info) for e in product.errors]
                     to_raise += errs
 
                 # If the product type is None we don't store it
@@ -191,12 +191,11 @@ def esass_call(esass_func):
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         for error in raised_errors:
             raise error
-        # TODO dealing with esass errors
-        """
-        # And here are all the errors during SAS generation, if any
+
+        # And here are all the errors during product generation, if any
         if len(all_to_raise) != 0:
             raise ProductGenerationError(all_to_raise)
-        """
+
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
         if len(sources) == 1:
