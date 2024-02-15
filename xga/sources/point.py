@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2023, 16:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:54. Copyright (c) The Contributors
 
 from typing import Tuple, Dict, Union, List
 
@@ -45,6 +45,10 @@ class Star(PointSource):
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for
+        analysis, default is 0.9.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
         True. This option is here so that sample objects can regenerate all merged products at once, which is
         more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
@@ -68,8 +72,8 @@ class Star(PointSource):
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 regen_merged: bool = True, in_sample: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+                 clean_obs=True, clean_obs_threshold=0.9, regen_merged: bool = True, in_sample: bool = False,
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
         """
         An init of the XGA Star source class.
 
@@ -98,6 +102,10 @@ class Star(PointSource):
         :param cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for
+            analysis, default is 0.9.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
             True. This option is here so that sample objects can regenerate all merged products at once, which is
             more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
@@ -131,8 +139,8 @@ class Star(PointSource):
 
         # Run the init of the PointSource superclass
         super().__init__(ra, dec, None, name, point_radius, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                         back_out_rad_factor, cosmology, load_products, load_fits, regen_merged, in_sample, telescope,
-                         search_distance)
+                         back_out_rad_factor, cosmology, load_products, load_fits, clean_obs, clean_obs_threshold,
+                         regen_merged, in_sample, telescope, search_distance)
 
         # Checking that the distance argument (as redshift isn't really valid for objects within our galaxy) is
         #  in a unit that we understand and approve of
