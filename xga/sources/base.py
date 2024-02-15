@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:56. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -864,6 +864,18 @@ class BaseSource:
 
         else:
             self._peaks[self.telescopes[0]]['combined'] = new_peak.to('deg')
+
+    @property
+    def all_peaks(self) -> dict:
+        """
+        A property that provides access to the dictionary of all peak coordinates measured by this source.
+
+        :return: A dictionary where the top-level keys are telescope names, mid level keys are ObsIDs (including a
+            'combined' ObsID, which is the primary peak for a telescope), and coordinates as values. Note that the
+            individual ObsID entries will be None unless XGA was specifically told to compute their peaks.
+        :rtype: dict
+        """
+        return self._peaks
 
     # Next up we define the protected methods of the class
     def _initial_products(self, init_obs: dict, load_regions: bool = True, load_products: bool = True) \
