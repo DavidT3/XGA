@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:48. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -16,7 +16,7 @@ from .. import DEFAULT_COSMO
 from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoValidObservationsError, \
     NoProductAvailableError
 from ..products import RateMap
-from ..sourcetools import rad_to_ang, ang_to_rad, nh_lookup
+from ..sourcetools import rad_to_ang, ang_to_rad
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -108,7 +108,8 @@ class ExtendedSource(BaseSource):
         """
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
-                         search_distance)
+                         search_distance, back_inn_rad_factor=back_inn_rad_factor,
+                         back_out_rad_factor=back_out_rad_factor)
 
         self._custom_region_radius = None
         # Setting up the custom region radius attributes
@@ -134,27 +135,9 @@ class ExtendedSource(BaseSource):
         # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak
 
-        # Here we deal with the user defined background region, if an annulus surrounding the source is
-        #  to be used. First though, we check whether that the outer radius factor is larger than the inner radius
-        #  factor.
-        if back_out_rad_factor <= back_inn_rad_factor:
-            raise ValueError("The 'back_out_rad_factor' argument must be larger than the 'back_inn_rad_factor' "
-                             "argument.")
-        self._back_inn_factor = back_inn_rad_factor
-        self._back_out_factor = back_out_rad_factor
-
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to('keV')
         self._peak_hi_en = peak_hi_en.to('keV')
-        self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
-        self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
-        for tel in self.telescopes:
-            self._peaks[tel]['combined'] = None
-            self._peaks_near_edge[tel]['combined'] = None
-
-        self._chosen_peak_cluster = {}
-        self._other_peak_clusters = {}
-        self._snr = {}
 
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
@@ -174,13 +157,6 @@ class ExtendedSource(BaseSource):
                         warn(warn_text, stacklevel=2)
                     else:
                         self._supp_warn.append(warn_text)
-
-        # TODO remove this properly when the changes are finalised.
-        # for tel in self.telescopes:
-        #     for obs_id in self.obs_ids[tel]:
-        #         # Generating and storing these because they should only
-        #         cur_im = self.get_products("image", obs_id, telescope=tel)[0]
-        #         self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
 
         # Constructs the detected dictionary, detailing whether the source has been detected IN REGION FILES
         #  in each observation.
@@ -267,77 +243,6 @@ class ExtendedSource(BaseSource):
         :rtype: Tuple[ndarray, List[ndarray]]
         """
         return self._chosen_peak_cluster, self._other_peak_clusters
-
-    def _all_peaks(self, method: str):
-        """
-        An internal method that finds the X-ray peaks for all the available telescopes, observations, and
-        instruments, as well as the combined ratemap. Peak positions for individual ratemap products are allowed
-        to not converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap
-        fails to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
-        attribute, to allow a property getter easy access.
-
-        :param str method: The method to be used for peak finding.
-        """
-
-        for tel in self.telescopes:
-            try:
-                comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-            except NoProductAvailableError:
-                # TODO Make this more elegant
-                if tel == 'xmm':
-                    # I didn't want to import this here, but otherwise circular imports become a problem
-                    from xga.generate.sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-                else:
-                    warn("Generating the combined images required for this is not supported for {t} currently.",
-                         stacklevel=2)
-                    comb_rt = None
-
-            # TODO return this to not checking if comb_rt is None once other telescopes fully supported
-            if self._use_peak and comb_rt is not None:
-                coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt, method=method)
-                # Updating nH for new coord, probably won't make a difference most of the time
-                self._nH = nh_lookup(coord)[0]
-            else:
-                # If we don't care about peak finding then this is the one to go for
-                coord = self.ra_dec
-                converged = True
-                cluster_coords = np.ndarray([])
-                other_coords = []
-                if comb_rt is not None:
-                    near_edge = comb_rt.near_edge(coord)
-                else:
-                    # TODO remove this once full other telescope support is implemented
-                    near_edge = False
-
-            # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
-            if converged:
-                self._peaks[tel]["combined"] = coord
-                self._peaks_near_edge[tel]["combined"] = near_edge
-                # I'm only going to save the point cluster positions for the combined ratemap
-                self._chosen_peak_cluster[tel] = cluster_coords
-                self._other_peak_clusters[tel] = other_coords
-            else:
-                raise PeakConvergenceFailedError("Peak finding on the combined {t} ratemap failed to converge within "
-                                                 "15kpc for {n} in the {l}-{u} energy "
-                                                 "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en,
-                                                                t=tel))
-
-        # for obs in self.obs_ids:
-        #     for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
-        #         if self._use_peak:
-        #             coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
-        #             if converged:
-        #                 self._peaks[obs][rt.instrument] = coord
-        #                 self._peaks_near_edge[obs][rt.instrument] = near_edge
-        #             else:
-        #                 self._peaks[obs][rt.instrument] = None
-        #                 self._peaks_near_edge[obs][rt.instrument] = None
-        #         else:
-        #             self._peaks[obs][rt.instrument] = self.ra_dec
-        #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
 
     def find_peak(self, rt: RateMap, method: str = "hierarchical", num_iter: int = 20, peak_unit: UnitBase = deg) \
             -> Tuple[Quantity, bool, bool, ndarray, List]:
@@ -537,6 +442,10 @@ class PointSource(BaseSource):
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for
+        analysis, default is 0.9.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
         True. This option is here so that sample objects can regenerate all merged products at once, which is
         more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
@@ -557,8 +466,8 @@ class PointSource(BaseSource):
     def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
-                 regen_merged: bool = True, in_sample: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+                 clean_obs=True, clean_obs_threshold=0.9, regen_merged: bool = True, in_sample: bool = False,
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
         """
         The init of the general XGA point source class.
 
@@ -583,6 +492,10 @@ class PointSource(BaseSource):
         :param cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for
+            analysis, default is 0.9.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
             True. This option is here so that sample objects can regenerate all merged products at once, which is
             more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
@@ -602,7 +515,8 @@ class PointSource(BaseSource):
         """
 
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
-                         search_distance)
+                         search_distance, back_inn_rad_factor=back_inn_rad_factor,
+                         back_out_rad_factor=back_out_rad_factor)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("pnt")
@@ -638,52 +552,27 @@ class PointSource(BaseSource):
             raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
 
-        # TODO remove this properly when the changes are finalised.
-        # for tel in self.telescopes:
-        #     for obs_id in self.obs_ids[tel]:
-        #         # Generating and storing these because they should only
-        #         cur_im = self.get_products("image", obs_id, telescope=tel)[0]
-        #         self._interloper_masks[tel][obs_id] = self._generate_interloper_mask(cur_im)
+        # Here we clean the observations (if requested), to make sure the point source does actually lie
+        #  on the detector and not just near it. We'll use a pretty harsh acceptance fraction by default
+        if clean_obs:
+            reject_dict = self.obs_check("point", clean_obs_threshold)
+            if len(reject_dict) != 0:
+                # Use the source method to remove data we've decided isn't worth keeping
+                self.disassociate_obs(reject_dict)
+                if len(self._obs) == 0:
+                    raise NoValidObservationsError("Observation cleaning has been run and there are no remaining"
+                                                   " observations. ")
 
-        # Here we automatically clean the observations, to make sure the point source does actually lie
-        #  on the detector and not just near it
-        # Use a pretty harsh acceptance fraction
-        reject_dict = self.obs_check("point", 0.9)
-        if len(reject_dict) != 0:
-            # Use the source method to remove data we've decided isn't worth keeping
-            self.disassociate_obs(reject_dict)
-            if len(self._obs) == 0:
-                raise NoValidObservationsError("Observation cleaning has been run and there are no remaining"
-                                               " observations. ")
-
-            # TODO Generalise this to more telescopes once generation is better supported
-            if regen_merged and 'xmm' in self.telescopes:
-                from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                # TODO Generalise this to more telescopes once generation is better supported
+                if regen_merged and 'xmm' in self.telescopes:
+                    from ..generate.sas import emosaic
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
         # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak
 
-        # Here we deal with the user defined background region, if an annulus surrounding the source is
-        #  to be used. First though, we check whether that the outer radius factor is larger than the inner radius
-        #  factor.
-        # TODO Honestly why isn't this in BaseSource?? - it gets repeated in PointSource and ExtendedSource, which
-        #  seems silly
-        if back_out_rad_factor <= back_inn_rad_factor:
-            raise ValueError("The 'back_out_rad_factor' argument must be larger than the 'back_inn_rad_factor' "
-                             "argument.")
-        self._back_inn_factor = back_inn_rad_factor
-        self._back_out_factor = back_out_rad_factor
-
-        self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
-        self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
-        for tel in self.telescopes:
-            self._peaks[tel]['combined'] = None
-            self._peaks_near_edge[tel]['combined'] = None
-
-        self._all_peaks()
-
+        self._all_peaks('simple', 'point')
         if self._use_peak:
             self._default_coord = self.peak
 
@@ -709,53 +598,18 @@ class PointSource(BaseSource):
         # TODO THIS IS CURRENTLY A HUGE BODGE, AND WILL NEED TO BE ALTERED
         return self._peaks['xmm']["combined"]
 
-    def _all_peaks(self):
-
-        # TODO WHY THE FUCK ISN'T THIS JUST ONE METHOD IN BASESOURCE???
-        for tel in self.telescopes:
-            try:
-                comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-            except NoProductAvailableError:
-                # TODO Make this more elegant
-                if tel == 'xmm':
-                    # I didn't want to import this here, but otherwise circular imports become a problem
-                    from xga.generate.sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-                else:
-                    warn("Generating the combined images required for this is not supported for {t} currently.",
-                         stacklevel=2)
-                    comb_rt = None
-
-            # TODO return this to not checking if comb_rt is None once other telescopes fully supported
-            if self._use_peak and comb_rt is not None:
-                coord, near_edge = self.find_peak(comb_rt)
-                # Updating nH for new coord, probably won't make a difference most of the time
-                self._nH = nh_lookup(coord)[0]
-            else:
-                # If we don't care about peak finding then this is the boi to go for
-                coord = self.ra_dec
-                if comb_rt is not None:
-                    near_edge = comb_rt.near_edge(coord)
-                else:
-                    # TODO remove this once full other telescope support is implemented
-                    near_edge = False
-
-            self._peaks[tel]["combined"] = coord
-            self._peaks_near_edge[tel]["combined"] = near_edge
-
     def find_peak(self, rt: RateMap, peak_unit: UnitBase = deg) -> Tuple[Quantity, bool]:
         """
         Uses a simple 'brightest pixel' method to measure a peak coordinate for the point source.
 
         :param RateMap rt: The RateMap to measure the peak from.
+
         :param UnitBase peak_unit: The desired output unit of the peak.
         :return:  The peak, and a boolean flag as to whether the peak is near an edge.
         :rtype: Tuple[Quantity, bool]
         """
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
-        aperture_mask = self.get_mask("search", 'xmm', rt.obs_id, central_coords)[0]
+        aperture_mask = self.get_mask("search", rt.telescope, rt.obs_id, central_coords)[0]
         peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
 
         return peak, near_edge
