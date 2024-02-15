@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 15:06. Copyright (c) The Contributors
 
 import os
 from shutil import rmtree
@@ -102,9 +102,43 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                 continue
 
             evt_list = pack[-1]
-            # ASSUMPTION4 new output directory structure
-            dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
-                                                                   n=source.name)
+
+            # Unfortunately, specifying exactly what boundaries to generate images within is a bit difficult for
+            #  eROSITA data - primarily because there is some variety in how the data are taken/presented.
+            # It is pretty easy to decide for pointed observations - we know the FoV diameter of eROSITA is
+            #  1.03 degrees, so we just make a standard size of image that is slightly larger
+            if evt_list.header['OBS_MODE'] == "POINTING":
+                # The virtual pixel size is 1.3888889095849E-5 degrees - so 87 of them is equal to 4.35 arcseconds,
+                #  which is the normal binning for XCS, so that is what I'll start with
+                re_bin = 87
+                x_size = np.ceil(1.05 / 1.3888889095849e-5 / re_bin).astype(int)
+                y_size = x_size
+
+            # If the SKYFIELD is blank, but the OBS_MODE wasn't 'POINTING' then it (I think) can only be a calibration
+            #  and performance verification field (i.e. eFEDS or some of the others). Firstly we specify the size for
+            #  eFEDS fields - the x and y sizes are based on me experimenting, so take with a pinch of salt
+            elif evt_list.header['SKYFIELD'] == "" and 'eFEDS' in evt_list.header["OBJECT"]:
+                re_bin = 87
+                x_size = np.ceil(7.5 / 1.3888889095849e-5 / re_bin).astype(int)
+                y_size = np.ceil(9 / 1.3888889095849e-5 / re_bin).astype(int)
+
+            # This one was based on the size of the eta cha survey field, but I think I am going to leave it as the
+            #  catchall for the CalPV fields, at least before I can test them exhaustively
+            # TODO revisit this if necessary
+            elif evt_list.header['SKYFIELD'] == "":
+                re_bin = 87
+                x_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
+                y_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
+
+            # And if we're here then hopefully we're dealing with an eRASS skytile! In that case we're going to adopt
+            #  the standard eRASS size of 3.6x3.6 degrees, but with our own default binning
+            else:
+                re_bin = 87
+                x_size = np.ceil(3.6 / 1.3888889095849e-5 / re_bin).astype(int)
+                y_size = x_size
+
+            dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value,
+                                                                                u=hi_en.value, n=source.name)
             im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -112,14 +146,16 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                 rmtree(dest_dir)
 
             os.makedirs(dest_dir)
-            cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes "
-                        "emin={l} emax={u} events=no size='auto' rebin=87 center_position=0; mv * ../; cd ..; rm -r {d}".format(d=dest_dir, e=evt_list.path,
-                                                                                 i=im, l=lo_en.value, u=hi_en.value ))
+            cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
+                        "size='{xs} {ys}' rebin={rb} center_position=0; mv * ../; cd ..; "
+                        "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
+                                           xs=x_size, ys=y_size))
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
             final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst, "telescope": "erosita"})
+            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
+                               "telescope": "erosita"})
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
