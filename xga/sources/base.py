@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:18. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2145,7 +2145,8 @@ class BaseSource:
                     rel_rts = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
                     if not isinstance(rel_rts, list):
                         rel_rts = [rel_rts]
-                    comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec) for rt in rel_rts])]
+                    comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec).to('s').value
+                                                           for rt in rel_rts])]
                 else:
                     warn_text = ("Generating the combined images required for this is not supported for {t} "
                                  "currently - associated with source {n}").format(t=tel, n=self.name)
