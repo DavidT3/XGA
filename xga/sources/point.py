@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:00. Copyright (c) The Contributors
 
 from typing import Tuple, Dict, Union, List
 
@@ -72,8 +72,9 @@ class Star(PointSource):
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 clean_obs=True, clean_obs_threshold=0.9, regen_merged: bool = True, in_sample: bool = False,
-                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
+                 clean_obs: bool = True, clean_obs_threshold: float = 0.9, regen_merged: bool = True,
+                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
         """
         An init of the XGA Star source class.
 
