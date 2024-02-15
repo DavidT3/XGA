@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:06. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -271,6 +271,9 @@ class PointSample(BaseSample):
         radius for the background region. Default is 1.5.
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
     :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
@@ -288,13 +291,14 @@ class PointSample(BaseSample):
                  point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, clean_obs: bool = True,
+                 clean_obs_threshold: float = 0.9, no_prog_bar: bool = False,
                  psf_corr: bool = False, telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None):
         """
         The init method of the PointSample class.
 
-            :param np.ndarray ra: The right-ascensions of the point sources, in degrees.
+        :param np.ndarray ra: The right-ascensions of the point sources, in degrees.
         :param np.ndarray dec: The declinations of the point sources, in degrees.
         :param np.ndarray redshift: The redshifts of the point sources, optional. Default is None.
         :param np.ndarray name: The names of the point sources, optional. If no names are supplied
@@ -313,6 +317,9 @@ class PointSample(BaseSample):
             radius for the background region. Default is 1.5.
         :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
         :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
         :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
@@ -381,7 +388,8 @@ class PointSample(BaseSample):
                     self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en,
                                                    back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
                                                    regen_merged=False, in_sample=True, telescope=telescope,
-                                                   search_distance=search_distance)
+                                                   search_distance=search_distance, clean_obs=clean_obs,
+                                                   clean_obs_threshold=clean_obs_threshold)
                     self._point_radii.append(pr.value)
                     # I know this will write to this over and over, but it seems a bit silly to check whether this has
                     #  been set yet when all radii should be forced to be the same unit
@@ -392,7 +400,8 @@ class PointSample(BaseSample):
                          "supplied coordinates".format(n))
                     self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                    back_out_rad_factor, cosmology, True, load_fits, regen_merged=False,
-                                                   in_sample=True, telescope=telescope, search_distance=search_distance)
+                                                   in_sample=True, telescope=telescope, search_distance=search_distance,
+                                                   clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold)
                     final_names.append(n)
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"

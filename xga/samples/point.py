@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:06. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -99,6 +99,9 @@ class StarSample(BaseSample):
             radius for the background region. Default is 1.5.
         :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
         :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
         :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
