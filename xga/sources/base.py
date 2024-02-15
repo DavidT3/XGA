@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:15. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2130,17 +2130,29 @@ class BaseSource:
                     emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
                 elif tel == 'erosita':
-                    warn("Generating the combined images required for this is not supported for eROSITA - we will use "
-                         "the highest exposure ObsID instead.", stacklevel=2)
+                    warn_text = ("Generating the combined images required for this is not supported for eROSITA - we "
+                                 "will use the highest exposure ObsID instead - associated with source "
+                                 "{n}").format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
+
                     from xga.generate.esass import evtool_image, expmap
                     evtool_image(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     expmap(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
                     rel_rts = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+                    if not isinstance(rel_rts, list):
+                        rel_rts = [rel_rts]
                     comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec) for rt in rel_rts])]
                 else:
-                    warn("Generating the combined images required for this is not supported for {t} currently.",
-                         stacklevel=2)
+                    warn_text = ("Generating the combined images required for this is not supported for {t} "
+                                 "currently - associated with source {n}").format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
                     comb_rt = None
 
             # TODO return this to not checking if comb_rt is None once other telescopes fully supported
