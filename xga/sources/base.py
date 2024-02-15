@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:47. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -81,12 +81,16 @@ class BaseSource:
     :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
         configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
         set to False.
+    :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+    :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+        radius for the background region. Default is 1.5.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  in_sample: bool = False, telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
-                 null_load_products: bool = False):
+                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
@@ -125,6 +129,10 @@ class BaseSource:
         :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
             configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
             set to False.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
         """
 
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
@@ -412,10 +420,6 @@ class BaseSource:
         # Set up an attribute where a default central coordinate will live
         self._default_coord = self.ra_dec
 
-        # Init the radius multipliers that define the outer and inner edges of a background annulus
-        self._back_inn_factor = 1.05
-        self._back_out_factor = 1.5
-
         # Initialisation of fit result attributes
         self._fit_results = {tel: {} for tel in self.telescopes}
         self._test_stat = {tel: {} for tel in self.telescopes}
@@ -456,6 +460,15 @@ class BaseSource:
 
         self._chosen_peak_cluster = {}
         self._other_peak_clusters = {}
+
+        # Here we deal with the user defined background region, if an annulus surrounding the source is
+        #  to be used. First though, we check whether that the outer radius factor is larger than the inner radius
+        #  factor.
+        if back_out_rad_factor <= back_inn_rad_factor:
+            raise ValueError("The 'back_out_rad_factor' argument must be larger than the 'back_inn_rad_factor' "
+                             "argument.")
+        self._back_inn_factor = back_inn_rad_factor
+        self._back_out_factor = back_out_rad_factor
 
         # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
         #  they don't include enough of the object we care about).
