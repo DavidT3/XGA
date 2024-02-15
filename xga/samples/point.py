@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:03. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -46,6 +46,9 @@ class StarSample(BaseSample):
         radius for the background region. Default is 1.5.
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
     :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
@@ -64,9 +67,9 @@ class StarSample(BaseSample):
                  match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
-                 psf_corr: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, clean_obs: bool = True,
+                 clean_obs_threshold: float = 0.9, no_prog_bar: bool = False, psf_corr: bool = False,
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
         """
          The init of the StarSample XGA class.
 
@@ -140,6 +143,7 @@ class StarSample(BaseSample):
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.generate.sas import evselect_image, eexpmap, emosaic
+        from ..generate.esass import evtool_image, expmap
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, None, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar,
@@ -149,6 +153,10 @@ class StarSample(BaseSample):
             eexpmap(self, peak_lo_en, peak_hi_en)
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        if 'erosita' in self.telescopes:
+            evtool_image(self, peak_lo_en, peak_hi_en)
+            expmap(self, peak_lo_en, peak_hi_en)
 
         # Remove the BaseSources
         del self._sources
@@ -184,7 +192,8 @@ class StarSample(BaseSample):
                     self._sources[n] = Star(r, d, di, n, pm, pr, match_radius, use_peak, peak_lo_en, peak_hi_en,
                                             back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
                                             regen_merged=False, in_sample=True, telescope=telescope,
-                                            search_distance=search_distance)
+                                            search_distance=search_distance, clean_obs=clean_obs,
+                                            clean_obs_threshold=clean_obs_threshold)
                     self._point_radii.append(pr.value)
                     self._distances.append(di)
                     self._proper_motions.append(pm)

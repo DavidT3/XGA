@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:03. Copyright (c) The Contributors
+
 from typing import Union, List
 from warnings import warn
 
@@ -111,6 +112,7 @@ class ExtendedSample(BaseSample):
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.generate.sas import evselect_image, eexpmap, emosaic
+        from ..generate.esass import evtool_image, expmap
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
@@ -123,6 +125,10 @@ class ExtendedSample(BaseSample):
             eexpmap(self, peak_lo_en, peak_hi_en)
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        if 'erosita' in self.telescopes:
+            evtool_image(self, peak_lo_en, peak_hi_en)
+            expmap(self, peak_lo_en, peak_hi_en)
 
         # Remove the initial BaseSources that were declared
         del self._sources
@@ -333,7 +339,8 @@ class PointSample(BaseSample):
                              " must be one entry per object passed to this sample object.")
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.sas import evselect_image, eexpmap, emosaic
+        from xga.generate.sas import evselect_image, eexpmap, emosaic
+        from ..generate.esass import evtool_image, expmap
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
@@ -344,6 +351,10 @@ class PointSample(BaseSample):
             eexpmap(self, peak_lo_en, peak_hi_en)
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        if 'erosita' in self.telescopes:
+            evtool_image(self, peak_lo_en, peak_hi_en)
+            expmap(self, peak_lo_en, peak_hi_en)
 
         del self._sources
         self._sources = {}
@@ -368,8 +379,9 @@ class PointSample(BaseSample):
                 #  thrown I have to catch it and not add that source to this sample.
                 try:
                     self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en,
-                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                   load_fits, False, True, telescope, search_distance)
+                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
+                                                   regen_merged=False, in_sample=True, telescope=telescope,
+                                                   search_distance=search_distance)
                     self._point_radii.append(pr.value)
                     # I know this will write to this over and over, but it seems a bit silly to check whether this has
                     #  been set yet when all radii should be forced to be the same unit
@@ -378,9 +390,9 @@ class PointSample(BaseSample):
                 except PeakConvergenceFailedError:
                     warn("The peak finding algorithm has not converged for {}, using user "
                          "supplied coordinates".format(n))
-                    self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en,
-                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                   load_fits, False, True, telescope, search_distance)
+                    self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
+                                                   back_out_rad_factor, cosmology, True, load_fits, regen_merged=False,
+                                                   in_sample=True, telescope=telescope, search_distance=search_distance)
                     final_names.append(n)
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"

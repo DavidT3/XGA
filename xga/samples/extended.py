@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:03. Copyright (c) The Contributors
 
 from typing import List
 
@@ -126,6 +126,7 @@ class ClusterSample(BaseSample):
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.generate.sas import evselect_image, eexpmap, emosaic
+        from ..generate.esass import evtool_image, expmap
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
@@ -139,6 +140,10 @@ class ClusterSample(BaseSample):
             eexpmap(self, peak_lo_en, peak_hi_en)
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        if 'erosita' in self.telescopes:
+            evtool_image(self, peak_lo_en, peak_hi_en)
+            expmap(self, peak_lo_en, peak_hi_en)
 
         # Now that we've made those images the BaseSource objects aren't required anymore, we're about
         #  to define GalaxyClusters
