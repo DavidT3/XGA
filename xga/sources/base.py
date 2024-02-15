@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 11:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 16:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -22,7 +22,7 @@ from regions import read_ds9, PixelRegion
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, NoProductAvailableError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, \
-    NotSampleMemberError, TelescopeNotAssociatedError
+    NotSampleMemberError, TelescopeNotAssociatedError, PeakConvergenceFailedError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -425,7 +425,6 @@ class BaseSource:
         self._luminosities = {tel: {} for tel in self.telescopes}
 
         # Initialisation of attributes related to Extended and GalaxyCluster sources
-        self._peaks = None
         # Initialisation of allowed overdensity radii as None
         if not hasattr(self, 'r200'):
             self._r200 = None
@@ -448,6 +447,15 @@ class BaseSource:
         # Peaks don't really have any meaning for the BaseSource class, so even though this is a boolean variable
         #  when populated properly I set it to None here
         self._use_peak = None
+        # Here we set up storage structures for peak coordinates - though they may never be filled.
+        self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
+        for tel in self.telescopes:
+            self._peaks[tel]['combined'] = None
+            self._peaks_near_edge[tel]['combined'] = None
+
+        self._chosen_peak_cluster = {}
+        self._other_peak_clusters = {}
 
         # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
         #  they don't include enough of the object we care about).
@@ -460,7 +468,6 @@ class BaseSource:
         # The user does have control over whether this happens or not though.
         # This goes at the end of init to make sure everything necessary has been declared
         if os.path.exists(OUTPUT) and load_products:
-            # TODO THIS ALSO NEEDS COMPLETELY REDOING
             self._existing_xga_products(load_fits)
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
@@ -2078,6 +2085,103 @@ class BaseSource:
             raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
 
         return matched_prods
+
+    def _all_peaks(self, method: str, source_type: str):
+        """
+        An internal method that finds the X-ray peaks for all the available telescopes, observations, and
+        instruments, as well as the combined ratemap. Peak positions for individual ratemap products are allowed
+        to not converge, and will just write None to the peak dictionary, but if the peak of the combined ratemap
+        fails to converge an error will be thrown. The combined ratemap peak will also be stored by itself in an
+        attribute, to allow a property getter easy access.
+
+        :param str method: The method to be used for peak finding.
+        :param str source_type: Whether the source is point or extended, as this affects how the find_peak method
+            works. For extended it will be iterative, but not for the point source.
+        """
+        # TODO Make this all more elegant
+
+        if self == BaseSource:
+            raise TypeError("This internal method cannot be used from BaseSource!")
+
+        if source_type not in ['extended', 'point']:
+            raise ValueError("The 'source_type' argument must either be 'extended' or 'point'.")
+
+        for tel in self.telescopes:
+            try:
+                comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+            except NoProductAvailableError:
+                if tel == 'xmm':
+                    # I didn't want to import this here, but otherwise circular imports become a problem
+                    from xga.generate.sas import emosaic
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+                elif tel == 'erosita':
+                    warn("Generating the combined images required for this is not supported for eROSITA - we will use "
+                         "the highest exposure ObsID instead.", stacklevel=2)
+                    from xga.generate.esass import evtool_image, expmap
+                    evtool_image(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    expmap(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+
+                    rel_rts = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+                    comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec) for rt in rel_rts])]
+                else:
+                    warn("Generating the combined images required for this is not supported for {t} currently.",
+                         stacklevel=2)
+                    comb_rt = None
+
+            # TODO return this to not checking if comb_rt is None once other telescopes fully supported
+            if self._use_peak and comb_rt is not None and source_type == 'extended':
+                coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(comb_rt, method=method)
+                # Updating nH for new coord, probably won't make a difference most of the time
+                self._nH = nh_lookup(coord)[0]
+
+            elif self._use_peak and comb_rt is not None and source_type == 'point':
+                coord, near_edge = self.find_peak(comb_rt)
+                # Updating nH for new coord, probably won't make a difference most of the time
+                self._nH = nh_lookup(coord)[0]
+
+            else:
+                # If we don't care about peak finding then this is the one to go for
+                coord = self.ra_dec
+                converged = True
+                cluster_coords = np.ndarray([])
+                other_coords = []
+                if comb_rt is not None:
+                    near_edge = comb_rt.near_edge(coord)
+                else:
+                    # TODO remove this once full other telescope support is implemented
+                    near_edge = False
+
+            # Unfortunately if the peak convergence fails for the combined ratemap I have to raise an error
+            if source_type == 'extended' and converged:
+                self._peaks[tel]["combined"] = coord
+                self._peaks_near_edge[tel]["combined"] = near_edge
+                # I'm only going to save the point cluster positions for the combined ratemap
+                self._chosen_peak_cluster[tel] = cluster_coords
+                self._other_peak_clusters[tel] = other_coords
+            elif source_type == 'point':
+                self._peaks[tel]["combined"] = coord
+                self._peaks_near_edge[tel]["combined"] = near_edge
+            else:
+                raise PeakConvergenceFailedError("Peak finding on the combined {t} ratemap failed to converge within "
+                                                 "15kpc for {n} in the {l}-{u} energy "
+                                                 "band.".format(n=self.name, l=self._peak_lo_en, u=self._peak_hi_en,
+                                                                t=tel))
+
+        # for obs in self.obs_ids:
+        #     for rt in self.get_products("ratemap", obs_id=obs, extra_key=en_key, just_obj=True):
+        #         if self._use_peak:
+        #             coord, near_edge, converged, cluster_coords, other_coords = self.find_peak(rt)
+        #             if converged:
+        #                 self._peaks[obs][rt.instrument] = coord
+        #                 self._peaks_near_edge[obs][rt.instrument] = near_edge
+        #             else:
+        #                 self._peaks[obs][rt.instrument] = None
+        #                 self._peaks_near_edge[obs][rt.instrument] = None
+        #         else:
+        #             self._peaks[obs][rt.instrument] = self.ra_dec
+        #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
 
     # This is used to name files and directories so this is not allowed to change.
     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
