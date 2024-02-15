@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:24. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -188,7 +188,7 @@ class ExtendedSource(BaseSource):
 
         # Call to a method that goes through all the observations and finds the X-ray peak. Also at the same
         #  time finds the X-ray peak of the combined ratemap (an essential piece of information).
-        self._all_peaks(peak_find_method)
+        self._all_peaks(peak_find_method, 'extended')
         if self._use_peak:
             self._default_coord = self.peak
 
