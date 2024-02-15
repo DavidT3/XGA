@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:50. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -803,6 +803,67 @@ class BaseSource:
                                        "not been suppressed.".format(n=self.name))
         else:
             return self._supp_warn
+
+    @property
+    def peak(self) -> Quantity:
+        """
+        A property getter for the COMBINED X-ray peak coordinates - if multiple telescopes are associated with the
+        source then this will return the peak that is likely to be the 'best', though that is based on very simplistic
+        assumptions of particular telescopes being 'better' than others for this use. All peak coordinates are made
+        available through the 'all_peaks' property.
+
+        :return: The fiducial X-ray peak coordinates.
+        :rtype: Quantity
+        """
+        if any([tel not in ['xmm', 'erosita'] for tel in self.telescopes]):
+            raise NotImplementedError("This property will not work if there are any telescopes apart from XMM and "
+                                      "eROSITA associated - this should never be seen by a non-developer, but if it "
+                                      "please get in touch.")
+
+        if len(self.telescopes) > 1:
+            warn_text = ("Multiple telescopes are associated with source {n} - we do not yet support combining "
+                         "peak information, so the XMM peak is being returned.").format(n=self.name)
+            if not self._samp_member:
+                warn(warn_text, stacklevel=2)
+            else:
+                self._supp_warn.append(warn_text)
+            peak = self._peaks['xmm']["combined"]
+
+        else:
+            peak = self._peaks[self.telescopes[0]]['combined']
+
+        return peak
+
+    @peak.setter
+    def peak(self, new_peak: Quantity):
+        """
+        Allows the user to update the peak value used during analyses manually.
+
+        :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
+        """
+        if any([tel not in ['xmm', 'erosita'] for tel in self.telescopes]):
+            raise NotImplementedError("This property will not work if there are any telescopes apart from XMM and "
+                                      "eROSITA associated - this should never be seen by a non-developer, but if it "
+                                      "please get in touch.")
+
+        if not new_peak.unit.is_equivalent("deg"):
+            raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
+        elif len(new_peak) != 2:
+            raise ValueError("Please pass an astropy Quantity, in units of degrees, with two entries - "
+                             "one for RA and one for DEC.")
+
+        if len(self.telescopes) > 1:
+            warn_text = ("Multiple telescopes are associated with source {n} - we do not yet support combining "
+                         "peak information, so the passed coordinate was set as the XMM peak.").format(n=self.name)
+            if not self._samp_member:
+                warn(warn_text, stacklevel=2)
+            else:
+                self._supp_warn.append(warn_text)
+
+            self._peaks['xmm']["combined"] = new_peak.to("deg")
+
+        else:
+            self._peaks[self.telescopes[0]]['combined'] = new_peak.to('deg')
 
     # Next up we define the protected methods of the class
     def _initial_products(self, init_obs: dict, load_regions: bool = True, load_products: bool = True) \
