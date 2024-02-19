@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 11:11. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2227,6 +2227,8 @@ class BaseSource:
                         warn(warn_text, stacklevel=2)
                     else:
                         self._supp_warn.append(warn_text)
+                    comb_rt = None
+                else:
                     comb_rt = None
 
             # TODO return this to not checking if comb_rt is None once other telescopes fully supported
