@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 12:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 15:21. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -85,12 +85,15 @@ class BaseSource:
             radius for the background region. Default is 1.05.
     :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
         radius for the background region. Default is 1.5.
+    :param bool load_regions: Whether this BaseSource should load in region files corresponding to the associated
+            ObsIDs or not. Default is True.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  in_sample: bool = False, telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
-                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5):
+                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 load_regions: bool = True):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
@@ -133,6 +136,8 @@ class BaseSource:
             radius for the background region. Default is 1.05.
         :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
             radius for the background region. Default is 1.5.
+        :param bool load_regions: Whether this BaseSource should load in region files corresponding to the associated
+            ObsIDs or not. Default is True.
         """
 
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
@@ -237,9 +242,10 @@ class BaseSource:
         #  pass this to self._initial_products, and it will set all region paths to None, which we know the subsequent
         #  region-based methods of BaseSource can handle
         if null_source:
+            # We're overriding the passed value here
             load_regions = False
         else:
-            load_regions = True
+            # Load regions has been passed in, so we'll just use whatever has been specified
             null_load_products = True
 
         # Now we run the method which takes those initially identified observations and goes looking for their
@@ -5032,8 +5038,8 @@ class NullSource(BaseSource):
         if isinstance(obs, str):
             obs = [obs]
 
-        super().__init__(0, 0, None, "AllObservations", telescope=telescope, sel_null_obs=obs,
-                         null_load_products=null_load_products, load_products=load_products)
+        super().__init__(0, 0, None, "AllObservations", load_products=load_products, telescope=telescope,
+                         sel_null_obs=obs, null_load_products=null_load_products)
 
         self._ra_dec = np.array([np.NaN, np.NaN])
         self._nH = Quantity(np.NaN, self._nH.unit)
