@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 15:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 15:55. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -397,8 +397,13 @@ class BaseSource:
         # --------------------------------------------------------------------------------------------------
 
         # ---------------------------------- Setting up general attributes ---------------------------------
-        # The nh_lookup function returns average and weighted average values, so just take the first
-        self._nH = nh_lookup(self.ra_dec)[0]
+        # The nh_lookup function returns average and weighted average values, so just take the first. If this is a
+        #  BaseSource and part of a sample then we're going to avoid the call to nh_lookup, for efficiency
+        if in_sample and type(self) == BaseSource:
+            self._nH = Quantity(np.NaN, 'cm^-2')
+        else:
+            self._nH = nh_lookup(self.ra_dec)[0]
+
         self._redshift = redshift
         self._cosmo = cosmology
         if redshift is not None:
