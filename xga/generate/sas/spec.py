@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 09:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 11:29. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -286,6 +286,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 try:
                     detmap_evts = source.get_products("events", obs_id=obs_id, inst='pn', telescope='xmm')[0]
                 except NotAssociatedError:
+                    # If we must use a MOS detmap then we have to use the MOS expression
+                    d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
+                    try:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+opp, telescope='xmm')[0]
+                    except NotAssociatedError:
+                        detmap_evts = source.get_products("events", obs_id=obs_id, inst='mos'+cur, telescope='xmm')[0]
+                # TODO REMOVE THIS
+                except IndexError:
+                    print('----------')
+                    print('{o} for {s} is where the detmap thing is happening'.format(o=obs_id, s=source.name))
+                    print(source.disassociated_obs)
+                    print(source.instruments)
+                    print('----------')
+
                     # If we must use a MOS detmap then we have to use the MOS expression
                     d_expr = "expression='#XMMEA_EM && (PATTERN <= 12) && (FLAG .eq. 0)'"
                     try:
