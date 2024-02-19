@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 11:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 12:23. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2658,7 +2658,7 @@ class BaseSource:
                                      "{n}.".format(o=obs_id, n=self.name, t=telescope))
         # Finally we can see if supplied instruments are valid, if telescope and ObsID are supplied
         elif (telescope is not None and telescope in self.telescopes) and \
-                (obs_id is not None and obs_id not in self.obs_ids[telescope]) and \
+                (obs_id is not None and obs_id in self.obs_ids[telescope]) and \
                 (inst is not None and inst not in self.instruments[telescope][obs_id]):
             raise NotAssociatedError("{t}-{o} is associated with {n}, but {i} is not associated with that "
                                      "observation".format(t=telescope, o=obs_id, n=self.name, i=inst))
