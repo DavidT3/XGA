@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 10:57. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2196,13 +2196,13 @@ class BaseSource:
             try:
                 comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
             except NoProductAvailableError:
-                if tel == 'xmm':
+                if self._use_peak and tel == 'xmm':
                     # I didn't want to import this here, but otherwise circular imports become a problem
                     from xga.generate.sas import emosaic
                     emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-                elif tel == 'erosita':
+                elif self._use_peak and tel == 'erosita':
                     warn_text = ("Generating the combined images required for this is not supported for eROSITA - we "
                                  "will use the highest exposure ObsID instead - associated with source "
                                  "{n}").format(t=tel, n=self.name)
@@ -2220,7 +2220,7 @@ class BaseSource:
                         rel_rts = [rel_rts]
                     comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec).to('s').value
                                                            for rt in rel_rts])]
-                else:
+                elif self._use_peak:
                     warn_text = ("Generating the combined images required for this is not supported for {t} "
                                  "currently - associated with source {n}").format(t=tel, n=self.name)
                     if not self._samp_member:
