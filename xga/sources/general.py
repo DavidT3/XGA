@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/02/2024, 07:52. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -534,7 +534,7 @@ class PointSource(BaseSource):
                 self.disassociate_obs(reject_dict)
                 if len(self._obs) == 0:
                     raise NoValidObservationsError("Observation cleaning has been run and there are no remaining"
-                                                   " observations. ")
+                                                   " observations.")
 
                 # TODO Generalise this to more telescopes once generation is better supported
                 if regen_merged and 'xmm' in self.telescopes:
