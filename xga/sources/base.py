@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2024, 06:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/02/2024, 09:22. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4613,8 +4613,10 @@ class BaseSource:
                 #  other ObsID's regions
                 self._interloper_masks[tel] = {o: {} for o in self.obs_ids[tel] + ['combined']}
             elif whole_obsid_dis and tel not in self._other_regions:
-                del self._interloper_regions[tel]
-                del self._interloper_masks[tel]
+                if tel in self._interloper_regions:
+                    del self._interloper_regions[tel]
+                if tel in self._interloper_masks:
+                    del self._interloper_masks[tel]
 
         if len(self._obs) == 0:
             raise NoValidObservationsError("No observations remain associated with {} after cleaning".format(self.name))
