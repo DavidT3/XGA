@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 15:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 19:24. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4618,7 +4618,7 @@ class BaseSource:
 
         # We attempt to load in matching XGA products if that was the behaviour set by load_products on init
         if self._load_products:
-            self._existing_xga_products(self._load_fits)
+            self._existing_xga_products(self._load_fits, True)
 
     def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
         """
