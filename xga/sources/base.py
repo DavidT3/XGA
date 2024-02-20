@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 19:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 21:41. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4603,7 +4603,7 @@ class BaseSource:
                     warn("All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name),
                          stacklevel=2)
 
-            if whole_obsid_dis:
+            if whole_obsid_dis and tel in self._interloper_regions:
                 # We replace the interloper regions entry for this telescope (i.e. the combined list of contaminant
                 #  regions) here, as it is possible we may have disassociated an ObsID and left its regions behind here.
                 # If an ObsID has been entirely removed, it will no longer be in '_other_regions' so this should work
