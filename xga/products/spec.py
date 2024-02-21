@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 12:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/02/2024, 09:53. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1791,13 +1791,15 @@ class AnnularSpectra(BaseAggregateProduct):
         self._proper_radii = None
         self._proper_ann_centres = None
 
+        # self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
+        #                             for ai in range(self._num_ann)}
+        # self._component_products = {o: {i: {ai: None for ai in range(self._num_ann)}
+        #                                 for i in self._instruments[o]} for o in self.obs_ids}
+
         # Finally storing the spectra inside the product, though with multiple layers of products
         # This sets up the component products dictionary, allowing for the separated storage of
-        #  spectra from different ObsIDs
-        self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
-                                    for ai in range(self._num_ann)}
-        self._component_products = {o: {i: {ai: None for ai in range(self._num_ann)}
-                                        for i in self._instruments[o]} for o in self.obs_ids}
+        #  spectra from different ObsIDs. We don't require that every ObsID-inst combo has an entry for every annulus
+        self._component_products = {o: {i: {} for i in self._instruments[o]} for o in self.obs_ids}
         # And putting the spectra in their place
         for s in spectra:
             self._component_products[s.obs_id][s.instrument][s.annulus_ident] = s
