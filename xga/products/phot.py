@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2024, 09:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2024, 13:34. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1051,7 +1051,8 @@ class Image(BaseProduct):
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                 ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None) -> Axes:
+                 ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None,
+                 custom_title: str = None) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -1095,6 +1096,8 @@ class Image(BaseProduct):
         :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
             is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
             not None, low_val_lim must be as well.
+        :param str custom_title: If set, this will overwrite the automatically generated title for this
+            visualisation. Default is None.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -1134,21 +1137,26 @@ class Image(BaseProduct):
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
-        if self.src_name is not None:
-            title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
-                                                      l=self._energy_bounds[0].to("keV").value,
-                                                      u=self._energy_bounds[1].to("keV").value, t=self.type)
+        # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
+        #  title - otherwise we use the custom title and don't add anything to it
+        if custom_title is None:
+            if self.src_name is not None:
+                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
+                                                          l=self._energy_bounds[0].to("keV").value,
+                                                          u=self._energy_bounds[1].to("keV").value, t=self.type)
+            else:
+                title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
+                                                    u=self._energy_bounds[1].to("keV").value, t=self.type)
+
+            # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
+            if self.psf_corrected:
+                title += ' - PSF Corrected'
+
+            # And smoothed as well
+            if self.smoothed:
+                title += ' - Smoothed'
         else:
-            title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
-                                                u=self._energy_bounds[1].to("keV").value, t=self.type)
-
-        # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
-        if self.psf_corrected:
-            title += ' - PSF Corrected'
-
-        # And smoothed as well
-        if self.smoothed:
-            title += ' - Smoothed'
+            title = custom_title
 
         ax.set_title(title)
 
@@ -1255,7 +1263,7 @@ class Image(BaseProduct):
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
              stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None):
+             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None, custom_title: str = None):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -1297,6 +1305,8 @@ class Image(BaseProduct):
         :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
             is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
             not None, low_val_lim must be as well.
+        :param str custom_title: If set, this will overwrite the automatically generated title for this
+            visualisation. Default is None.
         """
 
         # Create figure object
@@ -1305,7 +1315,7 @@ class Image(BaseProduct):
         ax = plt.gca()
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness, low_val_lim, upp_val_lim)
+                           ch_thickness, low_val_lim, upp_val_lim, custom_title)
         cbar = plt.colorbar(ax.images[0])
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
@@ -1320,7 +1330,8 @@ class Image(BaseProduct):
                   zoom_in: bool = False, manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                   radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
                   stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                  ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None):
+                  ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None,
+                  custom_title: str = None):
         """
         This is entirely equivalent to the view() method, but instead of displaying the view it will save it to
         a path of your choosing.
@@ -1363,6 +1374,8 @@ class Image(BaseProduct):
         :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
             is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
             not None, low_val_lim must be as well.
+        :param str custom_title: If set, this will overwrite the automatically generated title for this
+            visualisation. Default is None.
         """
 
         # Create figure object
@@ -1373,7 +1386,7 @@ class Image(BaseProduct):
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness, low_val_lim, upp_val_lim)
+                           ch_thickness, low_val_lim, upp_val_lim, custom_title)
         cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string('latex'))
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
