@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/02/2024, 19:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/02/2024, 09:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1255,7 +1255,7 @@ class Image(BaseProduct):
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
              stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-             ch_thickness: float = 0.8):
+             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -1291,6 +1291,12 @@ class Image(BaseProduct):
             the 'regions' property setter, should they be displayed. Default is False.
         :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
             certain circumstances. Default is 0.8.
+        :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
+            not None, upp_val_lim must be as well.
+        :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
+            not None, low_val_lim must be as well.
         """
 
         # Create figure object
@@ -1299,7 +1305,7 @@ class Image(BaseProduct):
         ax = plt.gca()
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness)
+                           ch_thickness, low_val_lim, upp_val_lim)
         cbar = plt.colorbar(ax.images[0])
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
@@ -1314,7 +1320,7 @@ class Image(BaseProduct):
                   zoom_in: bool = False, manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                   radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
                   stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                  ch_thickness: float = 0.8):
+                  ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None):
         """
         This is entirely equivalent to the view() method, but instead of displaying the view it will save it to
         a path of your choosing.
@@ -1351,6 +1357,12 @@ class Image(BaseProduct):
             the 'regions' property setter, should they be displayed. Default is False.
         :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
             certain circumstances. Default is 0.8.
+        :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
+            not None, upp_val_lim must be as well.
+        :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
+            not None, low_val_lim must be as well.
         """
 
         # Create figure object
@@ -1361,7 +1373,7 @@ class Image(BaseProduct):
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness)
+                           ch_thickness, low_val_lim, upp_val_lim)
         cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string('latex'))
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
