@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/02/2024, 19:38. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1051,7 +1051,7 @@ class Image(BaseProduct):
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                 ch_thickness: float = 0.8) -> Axes:
+                 ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -1089,6 +1089,12 @@ class Image(BaseProduct):
             the 'regions' property setter, should they be displayed. Default is False.
         :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
             certain circumstances. Default is 0.8.
+        :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
+            not None, upp_val_lim must be as well.
+        :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
+            not None, low_val_lim must be as well.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -1100,6 +1106,17 @@ class Image(BaseProduct):
             plot_data = self.data * mask
         else:
             plot_data = self.data
+
+        # We check that the values that set manual value limits are legal, otherwise we throw an error
+        check_lim_arg = [low_val_lim is None, upp_val_lim is None]
+        if any(check_lim_arg) and not all(check_lim_arg):
+            raise ValueError("Either 'low_val_lim' and 'upp_val_lim' are both None, or both have values.")
+        elif not all(check_lim_arg) and low_val_lim >= upp_val_lim:
+            raise ValueError("The 'low_val_lim' argument must be lower than 'upp_val_lim'.")
+        elif not all(check_lim_arg):
+            interval = ManualInterval(low_val_lim, upp_val_lim)
+        else:
+            interval = MinMaxInterval()
 
         # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
         #  pixels that we can - it makes the view look better
@@ -1137,7 +1154,7 @@ class Image(BaseProduct):
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=stretch)
+        norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
         # If we want to plot point clusters on the image, then we go here
@@ -1956,7 +1973,7 @@ class Image(BaseProduct):
 
         def _change_interval(self, boundaries: Tuple):
             """
-            This method is called when a change is made to the RangeSlider that controls the inverval range
+            This method is called when a change is made to the RangeSlider that controls the interval range
             of the data that is displayed.
 
             :param Tuple boundaries: The lower and upper boundary currently selected by the RangeSlider
