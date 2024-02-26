@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:13. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -829,18 +829,14 @@ class ScalingRelation:
 
         # errors
         if x_errors is not None and self.model_func == power_law:
-            # TODO Remove obviously, should be slope
-            print(self.pars[0, 0])
-            term_one = (self.y_norm*(1/ez)*(x_values/self.x_norm)**self.pars[0, 0] * self.pars[1, 1])**2
-            # TODO Remove obviously, should be norm
-            print(self.pars[1, 0])
-            term_two = ((self.y_norm*(1/ez)*self.pars[1, 0]*(1/self.x_norm)**self.pars[0, 0] * self.pars[0, 0] *
-                        x_values**(self.pars[0, 0] - 1))*self.pars[0, 1])**2
+            term_one = (self.y_norm.value*(1/ez)*(x_values.value/self.x_norm.value)**self.pars[0, 0] * self.pars[1, 1])**2
+            term_two = ((self.y_norm.value*(1/ez)*self.pars[1, 0]*(1/self.x_norm.value)**self.pars[0, 0] * self.pars[0, 0] *
+                        x_values.value**(self.pars[0, 0] - 1))*self.pars[0, 1])**2
 
-            term_three = ((self.y_norm*(self.pars[1, 0]*(x_values/5)**self.pars[0, 0])/ez)*(np.log(x_values)-np.log(self.x_norm)) *
-                          x_errors)**2
+            term_three = ((self.y_norm.value*(self.pars[1, 0]*(x_values.value/5)**self.pars[0, 0])/ez)*(np.log(x_values.value)-np.log(self.x_norm.value)) *
+                          x_errors.value)**2
 
-            predicted_y_errs = np.sqrt(term_one + term_two + term_three)
+            predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
             predicted_y = np.concatenate([predicted_y, predicted_y_errs], axis=1)
 
         return predicted_y
