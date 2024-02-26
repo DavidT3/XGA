@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:35. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -790,6 +790,7 @@ class ScalingRelation:
         elif x_errors is not None and x_errors.isscalar != x_values.isscalar:
             raise ValueError("If either 'x_errors' or 'x_values' is scalar, then both must be.")
 
+        # TODO this might work with a single value that passes two x errors for a single value
         # We average the uncertainties if there are minus and plus values (bad I know)
         if x_errors is not None and x_errors.ndim == 2:
             x_errors = x_errors.mean(axis=1)
@@ -829,12 +830,21 @@ class ScalingRelation:
 
         # errors
         if x_errors is not None and self.model_func == power_law:
-            term_one = (self.y_norm.value*(1/ez)*(x_values.value/self.x_norm.value)**self.pars[0, 0] * self.pars[1, 1])**2
-            term_two = ((self.y_norm.value*(1/ez)*self.pars[1, 0]*(1/self.x_norm.value)**self.pars[0, 0] * self.pars[0, 0] *
-                        x_values.value**(self.pars[0, 0] - 1))*self.pars[0, 1])**2
+            slope = self.pars[0, 0]
+            slope_err = self.pars[0, 1]
+            norm = self.pars[1, 0]
+            norm_err = self.pars[1, 1]
 
-            term_three = ((self.y_norm.value*(self.pars[1, 0]*(x_values.value/self.y_norm.value)**self.pars[0, 0])/ez)*(np.log(x_values.value)-np.log(self.x_norm.value)) *
+            term_one = ((self.y_norm.value*(1/ez)*(x_values.value/self.x_norm.value)**self.pars[0, 0]) * self.pars[1, 1])**2
+            print(term_one)
+
+            term_two = (((self.y_norm.value*(1/ez)*self.pars[1, 0]*(1/self.x_norm.value)**self.pars[0, 0] * self.pars[0, 0] *
+                        x_values.value**(self.pars[0, 0] - 1)))*self.pars[0, 1])**2
+            print(term_two)
+
+            term_three = (((self.y_norm.value*(self.pars[1, 0]*(x_values.value/self.y_norm.value)**self.pars[0, 0])/ez)*(np.log(x_values.value)-np.log(self.x_norm.value))) *
                           x_errors.value)**2
+            print(term_three)
             predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
 
             print(predicted_y)
@@ -842,7 +852,7 @@ class ScalingRelation:
             if x_values.isscalar:
                 predicted_y = Quantity([predicted_y, predicted_y_errs])
             else:
-                predicted_y = np.concatenate([predicted_y, predicted_y_errs], axis=0)
+                predicted_y = np.hstack([predicted_y, predicted_y_errs])
 
         return predicted_y
 
