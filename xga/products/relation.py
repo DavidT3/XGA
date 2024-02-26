@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:58. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -814,10 +814,10 @@ class ScalingRelation:
 
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
         #  to the exact units the fit was done in. This includes dividing by the x_norm value
-        x_values = x_values.to(self.x_unit) / self.x_norm
+        x_values = x_values.to(self.x_unit)
         # Then we just pass the x_values into the model, along with fit parameters. Then multiply by
         #  the y normalisation
-        predicted_y = self._model_func(x_values.value, *self.pars[:, 0]) * self.y_norm
+        predicted_y = self._model_func((x_values / self.x_norm).value, *self.pars[:, 0]) * self.y_norm
 
         # If there was a power of E(z) applied to the data, we undo it for the prediction.
         if self._ez_power is not None:
