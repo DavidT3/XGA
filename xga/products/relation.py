@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 18:10. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -783,9 +783,12 @@ class ScalingRelation:
         # Check that if x errors have been passed, they're in the right units
         if x_errors is not None and x_errors.unit != x_values.unit:
             raise UnitConversionError("The x errors are not in the same units as 'x_values'.")
-        elif x_errors is not None and len(x_errors) != len(x_values):
+        elif (x_errors is not None and not x_errors.isscalar and not x_values.isscalar and
+              len(x_errors) != len(x_values)):
             raise ValueError("The length of the 'x_errors' argument ({xe}) should be the same as the 'x_values' "
                              "argument({xv}).".format(xe=len(x_errors), xv=len(x_values)))
+        elif x_errors is not None and x_errors.isscalar != x_values.isscalar:
+            raise ValueError("If either 'x_errors' or 'x_values' is scalar, then both must be.")
 
         # We average the uncertainties if there are minus and plus values (bad I know)
         if x_errors is not None and x_errors.ndim == 2:
