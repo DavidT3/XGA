@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 21:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 21:14. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -320,18 +320,27 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  spectral fit - as such we are reading out the measured temperatures here
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
-            txs = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                          min_sn=min_sn, over_sample=over_sample)[:, 0]
+            tx_all = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
+                             min_sn=min_sn, over_sample=over_sample)
+            txs = tx_all[:, 0]
+            tx_errs = tx_all[:, 1]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
-            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                          min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                          hi_en=rel_lum_bounds[1])[:, 0]
-            txs = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
+            lx_all = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
+                             hi_en=rel_lum_bounds[1])
+            lxs = lx_all[:, 0]
+            lx_errs = lx_all[:, 1:]
+            # We can also propagate errors in the predict method - so we pass the lx_errs
+            tx_all = temp_lum_rel.predict(lxs, samp.redshifts, cosmo, lx_errs)
+            txs = tx_all[:, 0]
+            tx_errs = tx_all[:, 1]
 
         # This uses the scaling relation to predict the overdensity radius from the measured temperatures
-        pr_rs = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo)
+        pr_rs_all = rad_temp_rel.predict(txs, samp.redshifts, samp.cosmo, tx_errs)
+        pr_rs = pr_rs_all[:, 0]
+        pr_r_errs = pr_rs_all[:, 1]
 
         # It is possible that some of these radius entries are going to be NaN - the result of NaN temperature values
         #  passed through the 'predict' method of the scaling relation. As such we identify any NaN results and
