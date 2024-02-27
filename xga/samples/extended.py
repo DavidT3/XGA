@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 22:30. Copyright (c) The Contributors
 
 from typing import List
 
@@ -68,6 +68,39 @@ class ClusterSample(BaseSample):
         """
         The init of the ClusterSample XGA class, for the analysis of a large sample of galaxy clusters.
         Takes information on the clusters to enable analyses.
+
+        :param np.ndarray ra: The right-ascensions of the clusters, in degrees.
+        :param np.ndarray dec: The declinations of the clusters, in degrees.
+        :param np.ndarray redshift: The redshifts of the clusters, required for cluster analysis.
+        :param np.ndarray name: The names of the clusters.
+        :param Quantity r200: Values for the R200s of the clusters. At least one overdensity radius must be passed.
+        :param Quantity r500: Values for the R500s of the clusters. At least one overdensity radius must be passed.
+        :param Quantity r2500: Values for the R2500s of the clusters. At least one overdensity radius must be passed.
+        :param np.ndarray richness: Optical richnesses of the clusters, optional.
+        :param np.ndarray richness_err: Uncertainties on the optical richnesses of the clusters, optional.
+        :param Quantity wl_mass: Weak lensing masses of the clusters, optional.
+        :param Quantity wl_mass_err: Uncertainties on the weak lensing masses of the clusters, optional.
+        :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+        :param bool use_peak: Whether peak position should be found and used.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+            from. Default is 0.5keV
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+            from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
+            case the brightest unmasked pixel within the source region will be selected.
         """
 
         # I don't like having this here, but it does avoid a circular import problem
