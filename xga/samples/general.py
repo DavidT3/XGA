@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 13:54. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -52,6 +52,10 @@ class ExtendedSample(BaseSample):
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
@@ -59,7 +63,8 @@ class ExtendedSample(BaseSample):
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
                  psf_corr: bool = False, peak_find_method: str = "hierarchical",
-                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
+                 clean_obs: bool = True, clean_obs_reg: str = "custom", clean_obs_threshold: float = 0.3):
         """
         The init method of the ExtendedSample class.
 
@@ -95,6 +100,10 @@ class ExtendedSample(BaseSample):
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         """
         if custom_region_radius is not None and not isinstance(custom_region_radius, Quantity):
             raise TypeError("Please pass None or a quantity object for custom_region_radius, rather than an "
@@ -154,7 +163,8 @@ class ExtendedSample(BaseSample):
                     # Declare a generic extended source, telling it is that it is part of a sample with in_sample=True
                     self._sources[n] = ExtendedSource(r, d, z, n, cr, use_peak, peak_lo_en, peak_hi_en,
                                                       back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                      load_fits, peak_find_method, True, telescope, search_distance)
+                                                      load_fits, peak_find_method, True, telescope, search_distance,
+                                                      clean_obs, clean_obs_reg, clean_obs_threshold)
                     if isinstance(cr, Quantity):
                         self._custom_radii.append(cr.value)
                         # I know this will write to this over and over, but it seems a bit silly to check
@@ -170,7 +180,8 @@ class ExtendedSample(BaseSample):
                     # Have to re-declare the source if peak finding failed
                     self._sources[n] = ExtendedSource(r, d, z, n, cr, False, peak_lo_en, peak_hi_en,
                                                       back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                      load_fits, peak_find_method, True, telescope, search_distance)
+                                                      load_fits, peak_find_method, True, telescope, search_distance,
+                                                      clean_obs, clean_obs_reg, clean_obs_threshold)
                     final_names.append(n)
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"
