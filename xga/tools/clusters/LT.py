@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 09:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 09:46. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -367,8 +367,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  failures or some such thing)
         if cur_rad_errs is None:
             cur_rad_errs = pr_r_errs
+        else:
+            # Have to trim the cur_rad_errs array to match, as we don't currently store overdensity radius errors within
+            #  source classes
+            cur_rad_errs = np.delete(cur_rad_errs, bad_pr_rs)
 
-        print(cur_rad_errs)
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
         #  slow everything down.
