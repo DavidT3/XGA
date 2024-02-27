@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:25. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -835,18 +835,15 @@ class ScalingRelation:
             norm = self.pars[1, 0]
             norm_err = self.pars[1, 1]
 
-            print(self.y_norm.value, ez, x_values.value, self.pars[0, 0], self.pars[1, 1])
             term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) * self.pars[1, 1])**2
             print(term_one, '\n')
 
-            term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * ((1/self.x_norm.value)**self.pars[0, 0]) * self.pars[0, 0] *
-                        x_values.value**(self.pars[0, 0] - 1)))*self.pars[0, 1])**2
+            print(self.y_norm.value, ez, x_values.value, self.pars[1, 0], self.pars[0, 0], self.pars[0, 1])
+            term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * self.pars[0, 0] * ((1/self.x_norm.value)**self.pars[0, 0]) *
+                        x_values.value**(self.pars[0, 0] - 1)))*(x_errors.value/self.x_norm.value))**2
             print(term_two, '\n')
 
-            term_three = (((self.y_norm.value*(self.pars[1, 0]*(x_values.value/self.y_norm.value)**self.pars[0, 0])/ez)*(np.log(x_values.value)-np.log(self.x_norm.value))) *
-                          x_errors.value)**2
-
-            term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0]*((x_values.value/self.x_norm.value)**self.pars[0, 0])*np.log(x_values.value/self.x_norm.value))*(x_errors.value/self.x_norm.value))**2
+            term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0]*((x_values.value/self.x_norm.value)**self.pars[0, 0])*np.log(x_values.value/self.x_norm.value))*self.pars[0, 1])**2
 
             print(term_three, '\n')
             predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
