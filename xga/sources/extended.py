@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 13:49. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -175,7 +175,8 @@ class GalaxyCluster(ExtendedSource):
 
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits,
-                         peak_find_method, in_sample, telescope, search_distance)
+                         peak_find_method, in_sample, telescope, search_distance, clean_obs, clean_obs_reg,
+                         clean_obs_threshold, regen_merged)
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.
@@ -192,30 +193,6 @@ class GalaxyCluster(ExtendedSource):
             self._wl_mass_err = wl_mass_err.to("Msun")
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
-
-        if clean_obs and clean_obs_reg in self._radii:
-            # Use this method to figure out what data to throw away
-            reject_dict = self.obs_check(clean_obs_reg, clean_obs_threshold)
-            if len(reject_dict) != 0:
-                # Use the source method to remove data we've decided isn't worth keeping
-                self.disassociate_obs(reject_dict)
-                # I used to run these just so there is an up to date combined ratemap, but its quite
-                #  inefficient to do it on an individual basis if dealing with a sample, so the user will have
-                #  to run those commands themselves later
-                # Now I will run them only if the regen_merged flag is True
-                if regen_merged:
-                    from ..generate.sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    self._all_peaks(peak_find_method)
-
-                    # And finally this sets the default coordinate to the peak if use peak is True
-                    if self._use_peak:
-                        self._default_coord = self.peak
-
-        # Throws an error if a poor choice of region has been made
-        elif clean_obs and clean_obs_reg not in self._radii:
-            raise NoRegionsError("{c} is not associated with {s}".format(c=clean_obs_reg, s=self.name))
 
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2024, 07:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 13:49. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -61,6 +61,11 @@ class ExtendedSource(BaseSource):
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+    :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
@@ -68,7 +73,8 @@ class ExtendedSource(BaseSource):
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO,  load_products: bool = True, load_fits: bool = False,
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
-                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
+                 clean_obs=True, clean_obs_reg="custom", clean_obs_threshold=0.3, regen_merged: bool = True):
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
@@ -93,8 +99,8 @@ class ExtendedSource(BaseSource):
         :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
             is hierarchical, simple may also be passed.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
-            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
-            is False. User should only set to True to remove warnings.
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar.
+            Default is False. User should only set to True to remove warnings.
         :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
             set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
             default is None, in which case all available telescopes will be used. The user can pass a single name
@@ -105,6 +111,11 @@ class ExtendedSource(BaseSource):
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
         """
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
@@ -185,6 +196,33 @@ class ExtendedSource(BaseSource):
         elif all(flat_det) and self._custom_region_radius is None and "GalaxyCluster" not in repr(self):
             raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region or "
                                  "overdensity radius has been passed. No analysis is possible.".format(n=self.name))
+
+        if clean_obs and clean_obs_reg in self._radii:
+            # Use this method to figure out what data to throw away
+            reject_dict = self.obs_check(clean_obs_reg, clean_obs_threshold)
+            if len(reject_dict) != 0:
+                # Use the source method to remove data we've decided isn't worth keeping
+                self.disassociate_obs(reject_dict)
+                # I used to run these just so there is an up to date combined ratemap, but its quite
+                #  inefficient to do it on an individual basis if dealing with a sample, so the user will have
+                #  to run those commands themselves later
+                # Now I will run them only if the regen_merged flag is True
+                if regen_merged:
+                    # TODO Implement for eROSITA when merging is possible
+                    if 'xmm' in self.telescopes:
+                        from ..generate.sas import emosaic
+                        emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                        emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    self._all_peaks(peak_find_method, 'extended')
+
+                    # And finally this sets the default coordinate to the peak if use peak is True
+                    if self._use_peak:
+                        self._default_coord = self.peak
+
+        # Throws an error if a poor choice of region has been made
+        elif clean_obs and clean_obs_reg not in self._radii:
+            raise NoRegionsError("{c} is not associated with {s}".format(c=clean_obs_reg, s=self.name))
+
 
         # Call to a method that goes through all the observations and finds the X-ray peak. Also at the same
         #  time finds the X-ray peak of the combined ratemap (an essential piece of information).
