@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:57. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -771,7 +771,7 @@ class ScalingRelation:
         :param Quantity x_errors: The uncertainties for passed x-values. Default is None. If this argument is not None
             then uncertainties in x-value and the model fit will be propagated to a final prediction uncertainty. If
             minus and plus uncertainties are passed then they will be averaged before propagation.
-        :return: The predicted y values.
+        :return: The predicted y values (and predicted uncertainties if x-errors were passed).
         :rtype: Quantity
         """
         # Got to check that people aren't passing any nonsense x quantities in
@@ -797,8 +797,6 @@ class ScalingRelation:
         elif x_errors is not None and x_values.isscalar and not x_errors.isscalar and len(x_errors) == 2:
             x_errors = x_errors.mean()
 
-        print(x_errors)
-        print('')
         # This is a check that all passed x values are within the validity limits of this relation (if the
         #  user passed those on init) - if they aren't a warning will be issued
         if self.x_lims is not None and len(x_values[(x_values < self.x_lims[0]) | (x_values > self.x_lims[1])]) != 0:
@@ -834,19 +832,30 @@ class ScalingRelation:
 
         # errors
         if x_errors is not None and self.model_func == power_law:
-            term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) * self.pars[1, 1])**2
+            # This is just the error propagation for a powerlaw - the standard form of a scaling relation
+            term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) *
+                        self.pars[1, 1])**2
 
-            term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * self.pars[0, 0] * ((1/self.x_norm.value)**self.pars[0, 0]) *
-                        x_values.value**(self.pars[0, 0] - 1)))*x_errors.value)**2
+            term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * self.pars[0, 0] *
+                          ((1/self.x_norm.value)**self.pars[0, 0]) *
+                          x_values.value**(self.pars[0, 0] - 1)))*x_errors.value)**2
 
-            term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0]*((x_values.value/self.x_norm.value)**self.pars[0, 0])*np.log(x_values.value/self.x_norm.value))*self.pars[0, 1])**2
+            term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0] *
+                           ((x_values.value/self.x_norm.value)**self.pars[0, 0]) *
+                           np.log(x_values.value/self.x_norm.value))*self.pars[0, 1])**2
 
             predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
 
+            # We use a slightly different method of combining the predicted value and uncertainty depending on whether
+            #  a single x-value was passed, or a set of them.
             if x_values.isscalar:
                 predicted_y = Quantity([predicted_y, predicted_y_errs])
             else:
                 predicted_y = np.vstack([predicted_y, predicted_y_errs]).T
+
+        elif x_errors is not None and self.model_func != power_law:
+            raise NotImplementedError("Error propagation for scaling relation models other than 'power_law' is not "
+                                      "implemented yet.")
 
         return predicted_y
 
