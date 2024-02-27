@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 21:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 22:00. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -263,6 +263,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     #  radii for each cluster
     rad_hist = {n: [start_aperture.value] for n in samp.names}
 
+    # This will hopefully be eventually replaced with GalaxyCluster instances storing their own overdensity radius
+    #  errors, but for now we use a quantity to keep track of the uncertainties we calculate for the radii. We
+    #  initially set it up as None because then we can create an appropriately sized quantity after the first run
+    #  of spectrum generation, taking into account any systems that failed for some reason
+    cur_rad_errs = None
+
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
@@ -347,6 +353,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  remove the radii from the pr_rs array as we're going to do the same for the clusters in the sample
         bad_pr_rs = np.where(np.isnan(pr_rs))[0]
         pr_rs = np.delete(pr_rs, bad_pr_rs)
+        pr_r_errs = np.delete(pr_r_errs, bad_pr_rs)
         acc_rad = np.delete(acc_rad, bad_pr_rs)
 
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
@@ -357,6 +364,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         for name in samp.names[bad_pr_rs]:
             del samp[name]
 
+        # If this is the first iteration then cur_rad_errs will be None, and we need to set up a quantity that is the
+        #  same length as the sample (which could be smaller than it was initially because of spectrum generation
+        #  failures or some such thing)
+        if cur_rad_errs is None:
+            cur_rad_errs = pr_r_errs
+
         # There was probably a more elegant way to do this, but if the pipeline is operating in frozen temperature mode
         #  I read out the lxs from the current sample, and convert them into temperature estimations using the
         #  temperature-luminosity scaling relation. Those estimates are set as the start_temp value, and so will be
@@ -364,10 +377,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # This HAS to go here because it is after sources have been deleted from the sample (if any are) and BEFORE
         #  the overdensity radius calculated from this iteration is added to the sources
         if freeze_temp:
-            lxs = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
-                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                          hi_en=rel_lum_bounds[1])[:, 0]
-            start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo)
+            all_lx = samp.Lx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
+                             hi_en=rel_lum_bounds[1])
+            lxs = all_lx[:, 0]
+            lx_errs = all_lx[:, 1]
+            all_start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo, lx_errs)
+            start_temp = all_start_temp[:, 0]
+            start_temp_errs = all_start_temp[:, 1]
 
         # The basis of this method is that we measure a temperature, starting in some user-specified fixed aperture,
         #  and then use that to predict an overdensity radius (something far more useful than a fixed aperture). This
@@ -383,6 +400,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         # The clusters which DON'T have previously accepted radii have their radii updated from those predicted from
         #  temperature
         new_rads[~acc_rad] = pr_rs[~acc_rad]
+
+        # Then that process is repeated for the radius errors, which are not currently stored by the GalaxyClusters
+        new_rad_errs = cur_rad_errs.copy()
+        new_rad_errs[~acc_rad] = pr_r_errs[~acc_rad]
+        # Yes I know...
+        cur_rad_errs = new_rad_errs
+
         # Use the new radius value inferred from the temperature + scaling relation and add it to the ClusterSample (or
         #  just re-adding the same value as is already here if that radius has converged and been accepted).
         if o_dens == 'r500':
@@ -412,7 +436,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # This is probably unnecessary, but rather than rely on ordering staying the same, I am making a lookup
     #  dictionary for the start temperatures IF the pipeline was operating in frozen-temperature mode
     if freeze_temp:
-        start_temp_lookup = {sn: start_temp[sn_ind] for sn_ind, sn in enumerate(samp.names)}
+        start_temp_lookup = {sn: [start_temp[sn_ind], start_temp_errs[sn_ind]] for sn_ind, sn in enumerate(samp.names)}
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
@@ -440,11 +464,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # Grab the relevant source out of the ClusterSample object
             rel_src = samp[row['name']]
             rel_rad = rel_src.get_radius(o_dens, 'kpc')
+            rel_rad_err = cur_rad_errs[np.where(samp.names == rel_src.name)[0]]
 
             # These will be to store the read-out temperature and luminosity values, and their corresponding
             #  column names for the dataframe - we make sure that the measure radius is present in the data
-            vals = [rel_rad.value]
-            cols = [o_dens]
+            vals = [rel_rad.value, rel_rad_err.value]
+            cols = [o_dens, o_dens + '+-']
 
             # If the user let XGA determine a peak coordinate for the cluster, we will need to add it to the results
             #  as all the spectra for the cluster were generated with that as the central point
@@ -470,10 +495,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 #  sources - instead we use the look-up dictionary for the final temperatures arrived at by feeding
                 #  the luminosity into a temperature-luminosity relation.
                 else:
-                    # I am going to make a distinction in the column name for temperatures arrived at by this
-                    #  route - there are also currently no uncertainties
-                    vals += [start_temp_lookup[rel_src.name].value]
-                    cols += ['froz_Tx' + o_dens[1:]]
+                    # Will make a distinction in the column name for temperatures arrived at by this route
+                    vals += [start_temp_lookup[rel_src.name][0].value, start_temp_lookup[rel_src.name][1].value,
+                             start_temp_lookup[rel_src.name][1].value]
+                    cols += ['froz_Tx' + o_dens[1:], 'froz_Tx' + o_dens[1:] + '-', 'froz_Tx' + o_dens[1:] + '+']
 
                 # Cycle through every available luminosity, this will return all luminosities in all energy bands
                 #  requested by the user with lum_en
