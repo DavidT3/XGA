@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:39. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -787,14 +787,18 @@ class ScalingRelation:
               len(x_errors) != len(x_values)):
             raise ValueError("The length of the 'x_errors' argument ({xe}) should be the same as the 'x_values' "
                              "argument({xv}).".format(xe=len(x_errors), xv=len(x_values)))
-        elif x_errors is not None and x_errors.isscalar != x_values.isscalar:
-            raise ValueError("If either 'x_errors' or 'x_values' is scalar, then both must be.")
+        elif x_errors is not None and x_errors.isscalar and not x_values.isscalar:
+            raise ValueError("Pass either a non-scalar set of 'x_values' and 'x_errors', a scalar value for both, or a "
+                             "scalar value for 'x_values' and a two-entry value for 'x_errors' (for plus and minus).")
 
-        # TODO this might work with a single value that passes two x errors for a single value
         # We average the uncertainties if there are minus and plus values (bad I know)
         if x_errors is not None and x_errors.ndim == 2:
             x_errors = x_errors.mean(axis=1)
+        elif x_errors is not None and x_values.isscalar and len(x_errors) == 2:
+            x_errors = x_errors.mean()
 
+        print(x_errors)
+        print('')
         # This is a check that all passed x values are within the validity limits of this relation (if the
         #  user passed those on init) - if they aren't a warning will be issued
         if self.x_lims is not None and len(x_values[(x_values < self.x_lims[0]) | (x_values > self.x_lims[1])]) != 0:
@@ -830,26 +834,15 @@ class ScalingRelation:
 
         # errors
         if x_errors is not None and self.model_func == power_law:
-            slope = self.pars[0, 0]
-            slope_err = self.pars[0, 1]
-            norm = self.pars[1, 0]
-            norm_err = self.pars[1, 1]
-
             term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) * self.pars[1, 1])**2
-            print(term_one, '\n')
 
-            print(self.y_norm.value, ez, x_values.value, self.pars[1, 0], self.pars[0, 0], self.pars[0, 1])
             term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * self.pars[0, 0] * ((1/self.x_norm.value)**self.pars[0, 0]) *
                         x_values.value**(self.pars[0, 0] - 1)))*x_errors.value)**2
-            print(term_two, '\n')
 
             term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0]*((x_values.value/self.x_norm.value)**self.pars[0, 0])*np.log(x_values.value/self.x_norm.value))*self.pars[0, 1])**2
 
-            print(term_three, '\n')
             predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
 
-            print(predicted_y)
-            print(predicted_y_errs)
             if x_values.isscalar:
                 predicted_y = Quantity([predicted_y, predicted_y_errs])
             else:
