@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2024, 10:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2024, 10:43. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1017,7 +1017,7 @@ class ScalingRelation:
                     #  to data coordinates.
                     inv_tran = ax.transData.inverted()
                     lab_data_coord = inv_tran.transform((cur_fig_coord[0]+(point_label_offset[0]*x_size),
-                                                         cur_fig_coord[1]+(point_label_offset[0]*y_size)))
+                                                         cur_fig_coord[1]+(point_label_offset[1]*y_size)))
                     plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
                              color=point_label_colour)
 
