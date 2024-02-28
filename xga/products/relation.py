@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 19:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/02/2024, 19:57. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS, BASE_COLORS, Colormap, CSS4_COLORS, Normalize
 from matplotlib.ticker import FuncFormatter
 
-from ..models import MODEL_PUBLICATION_NAMES
+from ..models import MODEL_PUBLICATION_NAMES, power_law
 
 # This is the default colour cycle for the AggregateScalingRelation view method
 PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateblue', 'goldenrod']
@@ -756,7 +756,7 @@ class ScalingRelation:
         plt.show()
 
     def predict(self, x_values: Quantity, redshift: Union[float, np.ndarray] = None,
-                cosmo: Cosmology = None) -> Quantity:
+                cosmo: Cosmology = None, x_errors: Quantity = None) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
         appropriate set of x values. If a power of E(z) was applied to the y-axis data before fitting, and that
@@ -768,7 +768,10 @@ class ScalingRelation:
             only necessary if the 'dim_hubb_ind' argument was set on declaration. Default is None.
         :param Cosmology cosmo: The cosmology in which we wish to predict values. This is only necessary if the
             'dim_hubb_ind' argument was set on declaration. Default is None.
-        :return: The predicted y values.
+        :param Quantity x_errors: The uncertainties for passed x-values. Default is None. If this argument is not None
+            then uncertainties in x-value and the model fit will be propagated to a final prediction uncertainty. If
+            minus and plus uncertainties are passed then they will be averaged before propagation.
+        :return: The predicted y values (and predicted uncertainties if x-errors were passed).
         :rtype: Quantity
         """
         # Got to check that people aren't passing any nonsense x quantities in
@@ -776,6 +779,23 @@ class ScalingRelation:
             raise UnitConversionError('Values of x passed to the predict method ({xp}) must be convertible '
                                       'to the x-axis units of this scaling relation '
                                       '({xr}).'.format(xp=x_values.unit.to_string(), xr=self.x_unit.to_string()))
+
+        # Check that if x errors have been passed, they're in the right units
+        if x_errors is not None and x_errors.unit != x_values.unit:
+            raise UnitConversionError("The x errors are not in the same units as 'x_values'.")
+        elif (x_errors is not None and not x_errors.isscalar and not x_values.isscalar and
+              len(x_errors) != len(x_values)):
+            raise ValueError("The length of the 'x_errors' argument ({xe}) should be the same as the 'x_values' "
+                             "argument({xv}).".format(xe=len(x_errors), xv=len(x_values)))
+        elif x_errors is not None and x_errors.isscalar and not x_values.isscalar:
+            raise ValueError("Pass either a non-scalar set of 'x_values' and 'x_errors', a scalar value for both, or a "
+                             "scalar value for 'x_values' and a two-entry value for 'x_errors' (for plus and minus).")
+
+        # We average the uncertainties if there are minus and plus values (bad I know)
+        if x_errors is not None and x_errors.ndim == 2:
+            x_errors = x_errors.mean(axis=1)
+        elif x_errors is not None and x_values.isscalar and not x_errors.isscalar and len(x_errors) == 2:
+            x_errors = x_errors.mean()
 
         # This is a check that all passed x values are within the validity limits of this relation (if the
         #  user passed those on init) - if they aren't a warning will be issued
@@ -796,14 +816,46 @@ class ScalingRelation:
 
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
         #  to the exact units the fit was done in. This includes dividing by the x_norm value
-        x_values = x_values.to(self.x_unit) / self.x_norm
+        x_values = x_values.to(self.x_unit)
         # Then we just pass the x_values into the model, along with fit parameters. Then multiply by
         #  the y normalisation
-        predicted_y = self._model_func(x_values.value, *self.pars[:, 0]) * self.y_norm
+        predicted_y = self._model_func((x_values / self.x_norm).value, *self.pars[:, 0]) * self.y_norm
 
         # If there was a power of E(z) applied to the data, we undo it for the prediction.
         if self._ez_power is not None:
-            predicted_y /= (cosmo.efunc(redshift)**self._ez_power)
+            # We store this so that error propogation can use it later
+            ez = (cosmo.efunc(redshift)**self._ez_power)
+            predicted_y /= ez
+        else:
+            # This means that error propagation doesn't need to keep checking whether there is an ez power stored
+            ez = np.ones(len(predicted_y))
+
+        # errors
+        if x_errors is not None and self.model_func == power_law:
+            # This is just the error propagation for a powerlaw - the standard form of a scaling relation
+            term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) *
+                        self.pars[1, 1])**2
+
+            term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * self.pars[0, 0] *
+                          ((1/self.x_norm.value)**self.pars[0, 0]) *
+                          x_values.value**(self.pars[0, 0] - 1)))*x_errors.value)**2
+
+            term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0] *
+                           ((x_values.value/self.x_norm.value)**self.pars[0, 0]) *
+                           np.log(x_values.value/self.x_norm.value))*self.pars[0, 1])**2
+
+            predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
+
+            # We use a slightly different method of combining the predicted value and uncertainty depending on whether
+            #  a single x-value was passed, or a set of them.
+            if x_values.isscalar:
+                predicted_y = Quantity([predicted_y, predicted_y_errs])
+            else:
+                predicted_y = np.vstack([predicted_y, predicted_y_errs]).T
+
+        elif x_errors is not None and self.model_func != power_law:
+            raise NotImplementedError("Error propagation for scaling relation models other than 'power_law' is not "
+                                      "implemented yet.")
 
         return predicted_y
 
