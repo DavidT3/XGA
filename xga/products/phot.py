@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 17:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 17:48. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2400,16 +2400,13 @@ class Image(BaseProduct):
                 #  associated with the parent product, and then another list with the key 'new'; for regions
                 #  that have been added during the editing.
                 new_reg_dict = {o: [] for o in self._parent_phot_obj.obs_ids}
-                print('waaaay')
-                print(new_reg_dict)
-                print('nowaaaay')
                 new_reg_dict['new'] = []
 
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
                 #  just for visualisation (for instance showing an analysis/background region) and can't be
                 #  turned on or off, can't be edited, and shouldn't be saved.
                 rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
-
+                print(rel_artists)
                 for artist in rel_artists:
                     # Fetches the boolean variable that describes if the region was edited
                     altered = self._edited_dict[artist]
