@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 14:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 14:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1885,10 +1885,6 @@ class Image(BaseProduct):
             #  always run prior to any artists being added that are just there to indicate analysis regions, see
             #  toward the end of the __init__ for what I mean.
 
-            print(len(self._im_ax.artists))
-
-            print(rel_artists)
-            print('')
             if len(rel_artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
                 for o in self._regions:
                     for region in self._regions[o]:
@@ -1921,6 +1917,8 @@ class Image(BaseProduct):
 
                 # Need to update this in this case
                 rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+
+            print(len(self._im_ax.artists))
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
