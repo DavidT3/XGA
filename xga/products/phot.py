@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 17:08. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2400,6 +2400,9 @@ class Image(BaseProduct):
                 #  associated with the parent product, and then another list with the key 'new'; for regions
                 #  that have been added during the editing.
                 new_reg_dict = {o: [] for o in self._parent_phot_obj.obs_ids}
+                print('waaaay')
+                print(new_reg_dict)
+                print('nowaaaay')
                 new_reg_dict['new'] = []
 
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
