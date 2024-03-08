@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 17:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 18:50. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1878,9 +1878,8 @@ class Image(BaseProduct):
             # These artists are the ones that represent regions, the ones in self._ignore_arts are there
             #  just for visualisation (for instance showing an analysis/background region) and can't be
             #  turned on or off, can't be edited, and shouldn't be saved.
-            rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
-            print(self._im_ax.artists)
-            print(self._im_ax.patches)
+            # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+            rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
 
             # This will trigger in initial cases where there ARE regions associated with the photometric product
             #  that has spawned this InteractiveView, but they haven't been added as artists yet. ALSO, this will
@@ -1918,7 +1917,8 @@ class Image(BaseProduct):
                         self._artist_region[art_reg] = region
 
                 # Need to update this in this case
-                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
@@ -2405,7 +2405,8 @@ class Image(BaseProduct):
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
                 #  just for visualisation (for instance showing an analysis/background region) and can't be
                 #  turned on or off, can't be edited, and shouldn't be saved.
-                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
                 for artist in rel_artists:
                     # Fetches the boolean variable that describes if the region was edited
                     altered = self._edited_dict[artist]
