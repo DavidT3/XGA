@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 14:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 15:01. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2106,6 +2106,7 @@ class Image(BaseProduct):
             #  we don't want to save the updated region list in the existing _regions attribute as that
             #  might break things
             cur_regs = self._update_reg_list()
+            print(cur_regs)
             # Iterating through the flattened region dictionary
             for r in [r for o, rl in cur_regs.items() for r in rl]:
                 # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
