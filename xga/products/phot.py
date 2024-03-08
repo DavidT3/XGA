@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2024, 13:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 14:43. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1884,6 +1884,9 @@ class Image(BaseProduct):
             #  that has spawned this InteractiveView, but they haven't been added as artists yet. ALSO, this will
             #  always run prior to any artists being added that are just there to indicate analysis regions, see
             #  toward the end of the __init__ for what I mean.
+            print(self._regions.items())
+            print(rel_artists)
+            print('')
             if len(rel_artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
                 for o in self._regions:
                     for region in self._regions[o]:
