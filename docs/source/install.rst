@@ -2,13 +2,13 @@ Installing and Configuring XGA
 ==============
 
 This is a slightly more complex installation than many Python modules, but shouldn't be too difficult. If you're
-having issues feel free to contact me.
+having issues feel free to get in contact (see :doc:`Getting Help` section).
 
 Data Required For Using This Module
 -----------------------------------
 
-**This is very important** - Currently, to make use of this module, you **must** have access to cleaned XMM-Newton
-event lists, as XGA is not yet capable of producing them itself.
+**This is very important** - Currently, to make use of this module, you **must** have access to **either** cleaned XMM-Newton or eROSITA
+event lists. For aquiring and cleaning X-ray data, the Python module `DAXA https://github.com/DavidT3/DAXA`_. is recommended. 
 
 Region Files
 ------------

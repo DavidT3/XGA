@@ -34,11 +34,13 @@ Multi-Mission XGA
 The user may provide XGA with a dataset containing observations from multiple X-ray missions, so that any 
 product generatation and analysis will utilise all the X-ray missions the user has data for. 
 Currently XGA supports XMM and eROSITA. Combining products from different telescopes is not yet possible 
-through XGA. For example in the diagram below, at step 1, the user is declaring a source. XGA searches the dataset
-and find that the source lies in one eROSITA observation (Obs1), and two XMM observations (Obs3, and Obs4). The in step 2
-when the user uses XGA to make a product for that source, three products are made for each associated observation. 
+through XGA.  
 
 .. image:: images/intro.png
+
+For example in the diagram below, at step 1, the user is declaring a source. XGA searches the dataset
+and find that the source lies in one eROSITA observation (Obs1), and two XMM observations (Obs3, and Obs4). The in step 2
+when the user uses XGA to make a product for that source, three products are made for each associated observation.
 
 Crediting
 ---------
