@@ -8,7 +8,7 @@ Data Required For Using This Module
 -----------------------------------
 
 **This is very important** - Currently, to make use of this module, you **must** have access to **either** cleaned XMM-Newton or eROSITA
-event lists. For aquiring and cleaning X-ray data, the Python module `DAXA https://github.com/DavidT3/DAXA`_. is recommended. 
+event lists. For aquiring and cleaning X-ray data, the Python module `DAXA <https://github.com/DavidT3/DAXA>`_ is recommended. 
 
 Region Files
 ------------
