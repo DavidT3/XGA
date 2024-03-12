@@ -3,8 +3,8 @@ Multi-Mission XGA
 
 This section details the available features and caveats of each XGA compatible X-ray mission.
 
-XMM
----
+.. toctree::
+   :maxdepth: 1
 
-eROSITA
--------
+   Sources <notebooks/multi-mission/sources.ipynb>
+
