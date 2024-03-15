@@ -105,6 +105,9 @@ To mount a server, one can follow the steps:
 
 Here the '-ovolname' argument controls the name of the directory on your local machine. 
 
+To unmount use the command:
+.. code-block::
+    umount -f /localpath 
 
 
 XGA's First Run After Configuration
