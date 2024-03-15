@@ -1,7 +1,7 @@
 A note on XGA's parallelism
 ===========================
 
-In every SAS function built into XGA (and indeed many functions in other parts of the module), you will find a
+In every many functions built into XGA, you will find a
 **num_cores** keyword argument which tells the function how many cores on your local machine it is allowed to use. The
 default value is 90% of the available cores on your system, though you are of course free to set your own value when
 you call the functions.
