@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/03/2024, 18:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/03/2024, 12:01. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2106,7 +2106,6 @@ class Image(BaseProduct):
             #  we don't want to save the updated region list in the existing _regions attribute as that
             #  might break things
             cur_regs = self._update_reg_list()
-            print(cur_regs)
             # Iterating through the flattened region dictionary
             for r in [r for o, rl in cur_regs.items() for r in rl]:
                 # If the rotation angle is zero then the conversion to mask by the regions module will be upset,
@@ -2966,8 +2965,8 @@ class RateMap(Image):
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
                         allow_negative: bool = False):
         """
-        A signal to noise calculation method which takes information on source and background regions, then uses
-        that to calculate a signal to noise for the source. This was primarily motivated by the desire to produce
+        A signal-to-noise calculation method which takes information on source and background regions, then uses
+        that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
         valid SNR values for combined data, where uneven exposure times across the combined field of view could
         cause issues with the usual approach of just summing the counts in the region images and scaling by area.
         This method can also measure signal to noises without exposure time correction.
@@ -2978,8 +2977,8 @@ class RateMap(Image):
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
-        :return: A signal to noise value for the source region.
+            zero, which results in a lower signal-to-noise (and can result in a negative signal to noise).
+        :return: A signal-to-noise value for the source region.
         :rtype: float
         """
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
