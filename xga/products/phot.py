@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/03/2024, 12:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/03/2024, 13:31. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2973,11 +2973,11 @@ class RateMap(Image):
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
-        :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+        :param bool exp_corr: Should signal-to-noise be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-            zero, which results in a lower signal-to-noise (and can result in a negative signal to noise).
+            zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
         :return: A signal-to-noise value for the source region.
         :rtype: float
         """
