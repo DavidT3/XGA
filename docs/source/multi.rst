@@ -8,4 +8,5 @@ This section details the available features and caveats of each XGA compatible X
 
    Sources <notebooks/multi-mission/sources.ipynb>
    Products <notebooks/multi-mission/products.ipynb>
+   Analysis <notebooks/multi-mission/analysis.ipynb>
 
