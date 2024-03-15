@@ -95,7 +95,7 @@ with your setup, please get in touch or raise an issue.
 **Remote Data Access:** If your data lives on a remote server, and you want to use XGA on a local machine, it is recommended
 to set up an SFTP connection and mounting the server as an external volume. Then you can fill out the configuration
 file with paths going through the mount folder.
-To mount a server, one can follow the steps:
+To mount a server, one can follow the steps
 
 .. code-block::
     brew install sshfs
@@ -105,7 +105,8 @@ To mount a server, one can follow the steps:
 
 Here the '-ovolname' argument controls the name of the directory on your local machine. 
 
-To unmount use the command:
+To unmount use the command
+
 .. code-block::
     umount -f /localpath 
 
