@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/02/2024, 13:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/03/2024, 13:31. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1878,12 +1878,14 @@ class Image(BaseProduct):
             # These artists are the ones that represent regions, the ones in self._ignore_arts are there
             #  just for visualisation (for instance showing an analysis/background region) and can't be
             #  turned on or off, can't be edited, and shouldn't be saved.
-            rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+            # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+            rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
 
             # This will trigger in initial cases where there ARE regions associated with the photometric product
             #  that has spawned this InteractiveView, but they haven't been added as artists yet. ALSO, this will
             #  always run prior to any artists being added that are just there to indicate analysis regions, see
             #  toward the end of the __init__ for what I mean.
+
             if len(rel_artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
                 for o in self._regions:
                     for region in self._regions[o]:
@@ -1915,7 +1917,8 @@ class Image(BaseProduct):
                         self._artist_region[art_reg] = region
 
                 # Need to update this in this case
-                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
@@ -2401,8 +2404,8 @@ class Image(BaseProduct):
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
                 #  just for visualisation (for instance showing an analysis/background region) and can't be
                 #  turned on or off, can't be edited, and shouldn't be saved.
-                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
-
+                # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
                 for artist in rel_artists:
                     # Fetches the boolean variable that describes if the region was edited
                     altered = self._edited_dict[artist]
@@ -2962,20 +2965,20 @@ class RateMap(Image):
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
                         allow_negative: bool = False):
         """
-        A signal to noise calculation method which takes information on source and background regions, then uses
-        that to calculate a signal to noise for the source. This was primarily motivated by the desire to produce
+        A signal-to-noise calculation method which takes information on source and background regions, then uses
+        that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
         valid SNR values for combined data, where uneven exposure times across the combined field of view could
         cause issues with the usual approach of just summing the counts in the region images and scaling by area.
         This method can also measure signal to noises without exposure time correction.
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
-        :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+        :param bool exp_corr: Should signal-to-noise be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
-        :return: A signal to noise value for the source region.
+            zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+        :return: A signal-to-noise value for the source region.
         :rtype: float
         """
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
