@@ -10,3 +10,9 @@ To see the number of cores which have automatically allocated to XGA, you can im
 base xga module. You can also manually set this value globally, before running anything. Either set the
 *num_cores* option in the [XGA_SETUP] section of the configuration file, or simply set the NUM_CORES constant
 imported from xga.
+
+To see the number of cores which have automatically allocated to XGA, you can import the NUM_CORES constant from the base xga module
+
+.. code-block::
+    from xga import NUM_CORES
+    NUM_CORES
