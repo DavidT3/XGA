@@ -11,7 +11,6 @@ Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
 
    Introduction <intro.rst>
    Installation <install.rst>
-   Multi-Mission <multi.rst>
    Tutorials <tutorials.rst>
    Advanced Tutorials <advanced_tutorials.rst>
    XGA Pipelines <pipeline_tutorials.rst>
