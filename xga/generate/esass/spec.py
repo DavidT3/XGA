@@ -368,10 +368,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     group_type = ''
                     group_scale = ''
 
-                im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
-                                       telescope='erosita')
                 # Fills out the srctool command to make the main and background spectra
                 if isinstance(source, ExtendedSource):
+                    # We only need the image path for extended source generation 
+                    im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
+                        telescope='erosita')
                     # We have a slightly different command for extended and point sources
                     s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
                                                        i=inst_no, ts=t_step, em=im.path, et=et)
