@@ -1,8 +1,7 @@
 Planned XGA Features
 ========================
 
-* **Support for other X-ray telescopes** - XGA's purpose is to facilitate the exploitation of the complete public X-ray archive, hence the aim is to support all X-ray telescopes eventually.
-Currently XMM and eROSITA are supported, and the software is setup so that integrating new telescope-specific softwares should not be an arduous task. If you are interested in integrating 
+* **Support for other X-ray telescopes** - XGA's purpose is to facilitate the exploitation of the complete public X-ray archive, hence the aim is to support all X-ray telescopes eventually. Currently XMM and eROSITA are supported, and the software is setup so that integrating new telescope-specific softwares should not be an arduous task. If you are interested in integrating 
 a telescope into XGA please reach out to the development team (:doc:`support`). 
 
 * **Creating a Docker image for users to download** - Creating a Docker environment with all relevant software already installed.
