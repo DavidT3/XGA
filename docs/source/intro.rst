@@ -79,5 +79,5 @@ paper accompanying this package, which can be found in the :doc:`publications` s
 Contributing
 ------------
 
-If wish to contribute to XGA, have feature suggestions, or any comments at all, then please go to the
+If you wish to contribute to XGA, have feature suggestions, or any comments at all, then please go to the
 "Getting Support" section and submit an issue on GitHub/email the development team, we will be happy to hear from you!
