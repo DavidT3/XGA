@@ -26,11 +26,11 @@ Generating
 
 For both individual sources or whole samples, all through a consistent Python interface, XGA can generate:
 
-* images
-* exposure maps
-* rate maps
-* spectra
-* lightcurves
+* Images
+* Exposure maps
+* Rate maps
+* Spectra
+* Lightcurves
 
 XGA generated products are then saved into the source storage structure, so that
 they may be viewed and plotted within Python, and used in subsequent analysis.
@@ -38,21 +38,21 @@ they may be viewed and plotted within Python, and used in subsequent analysis.
 Analysing
 ---------
 
-Once the neccessary products have been generated, this module also can perform further analysis. Through XGA the user can:
+Once the neccessary products have been generated, further analysis may be performed. Through XGA the user can:
 
-* fit models to spectra via XSPEC
-* yield temperature, luminosity, and photon index values from these fits
-* apply PSF corrections to images
-* calculate count rates and fluxes
-* find X-ray peaks of sources
-* fit radial profiles of temperature, density, and metallicity 
+* Fit models to spectra via XSPEC
+* Yield temperature, luminosity, and photon index values from these fits
+* Apply PSF corrections to images
+* Calculate count rates and fluxes
+* Find X-ray peaks of sources
+* Fit radial profiles of temperature, density, and metallicity 
 
 For specific source types, more complex analysis options are available. For galaxy clusters the user may:
 
-* generate scaling relations
-* measure a gas mass
-* fit sets of annular spectra (this can be done for any extended source)
-* measure a hydrostatic mass
+* Generate scaling relations
+* Measure a gas mass
+* Fit sets of annular spectra (this can be done for any extended source)
+* Measure a hydrostatic mass
 
 
 Multi-Mission Data
@@ -61,9 +61,10 @@ Multi-Mission Data
 The user may provide XGA with a dataset containing observations from multiple X-ray missions, so that any 
 product generatation and analysis will utilise all the X-ray telescopes that the user has data for. 
 
-.. image:: images/multimission.png
+.. image:: images/mulitmission.png
 
 Currently XGA supports interaction with:
+
 * **XMM** via Science Analysis System (SAS)
 * **eROSITA** via eROSITA Science Analysis Software System (eSASS) 
 
@@ -73,7 +74,7 @@ To see full details of XGA treatment of different missions see the :doc:`multi` 
 Crediting
 ---------
 
-While XGA is a piece of open source software, we would appreciate it if any work that makes use of it would cite the
+While XGA is a piece of open source software, it would be appreciated if any work that makes use of it would cite the
 paper accompanying this package, which can be found in the :doc:`publications` section.
 
 Contributing
