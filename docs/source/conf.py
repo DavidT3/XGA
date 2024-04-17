@@ -108,9 +108,6 @@ autodoc_member_order = 'bysource'
 # This should make nbsphinx highlight notebooks better
 highlight_language = 'ipython3'
 
-# This alllows notebooks to run and error - need this for the time being
-nbsphinx_allow_errors = True
-
 
 # -- Options for HTML output -------------------------------------------------
 
