@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/03/2024, 12:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/04/2024, 09:34. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2455,11 +2455,13 @@ class BaseSource:
 
                 # Double check that something is trying to add products from another source to the current one.
                 if obs_id != "combined" and obs_id not in self.obs_ids[tel]:
-                    raise NotAssociatedError("{t}-{o} is not associated with this X-ray "
-                                             "source.".format(t=tel, o=obs_id))
+                    raise NotAssociatedError("{t}-{o} is not associated with source {n}.".format(t=tel, o=obs_id,
+                                                                                                 n=self.name))
                 elif inst != "combined" and inst not in self.instruments[tel][obs_id]:
                     raise NotAssociatedError("{i} is not associated with {t} observation "
-                                             "{o}".format(i=inst, o=obs_id, t=PRETTY_TELESCOPE_NAMES[tel]))
+                                             "{o} for source {n}.".format(i=inst, o=obs_id,
+                                                                          t=PRETTY_TELESCOPE_NAMES[tel],
+                                                                          n=self.name))
 
                 if extra_key is not None and obs_id != "combined":
                     # If there is no entry for this 'extra key' (energy band for instance) already, we must make one
