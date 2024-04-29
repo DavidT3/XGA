@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/04/2024, 10:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/04/2024, 10:18. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -278,8 +278,8 @@ def sas_call(sas_func):
                 sources[ind].update_products(ann_spec)
 
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
-        for error in raised_errors:
-            raise error
+        if len(raised_errors) != 0:
+            raise Exception(raised_errors)
 
         # And here are all the errors during SAS generation, if any
         if len(all_to_raise) != 0:
