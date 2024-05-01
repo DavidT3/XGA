@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/04/2024, 09:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/05/2024, 09:30. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -89,8 +89,16 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     # This is deliberately an all encompassing except - as I want to modify the message of what error may get thrown
     #  and then I will re-raise it, just it will include the source, ObsID, and instrument that caused the issue
     except Exception as err:
-        err.args = (err.args[0] + "- {s} is the associated source, the specific data used is " \
-                                  "{o}-{i}.".format(s=src, o=extra_info["obs_id"], i=extra_info["instrument"]), )
+        # Some possible errors (I'm looking at you OSError) tend to have a number as their first argument and then
+        #  the actual message as the second. In most cases though, I think just the first is populated
+        if len(err.args) == 1:
+            err.args = (err.args[0] + "- {s} is the associated source, the specific data used is " \
+                                      "{o}-{i}.".format(s=src, o=extra_info["obs_id"], i=extra_info["instrument"]), )
+        # But if there are two we do want to include them both
+        else:
+            err.args = (err.args[0], err.args[1] + "- {s} is the associated source, the specific data used is "
+                                                   "{o}-{i}.".format(s=src, o=extra_info["obs_id"],
+                                                                     i=extra_info["instrument"]))
         raise err
 
 
@@ -287,8 +295,6 @@ def sas_call(sas_func):
 
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
         if len(raised_errors) != 0:
-
-
             raise Exception(raised_errors)
 
         # And here are all the errors during SAS generation, if any
