@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/10/2023, 23:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/05/2024, 15:59. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -664,13 +664,13 @@ class GasDensity3D(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         plt.hist(gas_mass_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel("Gas Mass [M$_{\odot}$]")
+        plt.xlabel(r"Gas Mass [M$_{\odot}$]")
         plt.title("Gas Mass Distribution at {}".format(outer_rad.to_string()))
 
         mass_label = gas_mass.to("10^13Msun")
         vals_label = str(mass_label[0].round(2).value) + "^{+" + str(mass_label[2].round(2).value) + "}" + \
                      "_{-" + str(mass_label[1].round(2).value) + "}"
-        res_label = r"$\rm{M_{gas}} = " + vals_label + "10^{13}M_{\odot}$"
+        res_label = r"$\rm{M_{gas}} = " + vals_label + r"10^{13}M_{\odot}$"
 
         plt.axvline(gas_mass[0].value, color='red', label=res_label)
         plt.axvline(gas_mass[0].value-gas_mass[1].value, color='red', linestyle='dashed')
@@ -1511,13 +1511,13 @@ class HydrostaticMass(BaseProfile1D):
 
         # Plot the histogram and set up labels
         plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + " M$_{\odot}$")
+        plt.xlabel(self._y_axis_name + r" M$_{\odot}$")
         plt.title("Mass Distribution at {}".format(radius.to_string()))
 
         lab_hy_mass = hy_mass.to("10^14Msun")
         vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
                      "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
-        res_label = r"$\rm{M_{hydro}} = " + vals_label + "10^{14}M_{\odot}$"
+        res_label = r"$\rm{M_{hydro}} = " + vals_label + r"10^{14}M_{\odot}$"
 
         # And this just plots the 'result' on the distribution as a series of vertical lines
         plt.axvline(hy_mass[0].value, color='red', label=res_label)
