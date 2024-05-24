@@ -170,16 +170,25 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_extras = []
     sources_types = []
     for s_ind, source in enumerate(sources):
-
-        # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
-        #  beginning of this function), so we're just skipping all the individual sources that don't have eROSITA data
-        if 'erosita' not in source.telescopes:
-            continue
-
         source: BaseSource
         cmds = []
         final_paths = []
         extra_info = []
+
+        # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
+        #  bugs occuring in the esass_call wrapper
+        if 'erosita' not in source.telescopes:
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            # This contains any other information that will be needed to instantiate the class
+            # once the eSASS cmd has run
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+            
+            # then we can continue with the rest of the sources
+            continue
 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
