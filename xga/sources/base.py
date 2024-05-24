@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/04/2024, 09:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/05/2024, 15:28. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4822,7 +4822,7 @@ class BaseSource:
         print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
         if self._use_peak is not None and self._use_peak:
-            print("X-ray Peak - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
+            print("X-ray Peak - ({0}, {1}) degrees".format(*self.peak.value))
         print("nH - {}".format(self.nH))
         if self._redshift is not None:
             print("Redshift - {}".format(round(self._redshift, 3)))
