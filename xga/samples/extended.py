@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 17:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/05/2024, 12:23. Copyright (c) The Contributors
 
 from typing import List
 
@@ -161,10 +161,13 @@ class ClusterSample(BaseSample):
                 #  super ugly.
                 d = dec[ind]
                 z = redshift[ind]
-                # The replace is there because source declaration removes spaces from any passed names,
-                n = name[ind].replace(' ', '')
+                # The replace is there because source declaration removes spaces from any passed names, as well as
+                #  replacing '_' with '-'
+                # TODO Why am I doing it like this again?
+                n = name[ind].replace(' ', '').replace("_", "-")
                 # Declaring the BaseSample higher up weeds out those objects that aren't in any XMM observations
                 #  So we want to check that the current object name is in the list of objects that have data
+
                 if n in self.names:
                     # I know this code is a bit ugly, but oh well
                     if r200 is not None and not r200.isscalar:
@@ -284,8 +287,8 @@ class ClusterSample(BaseSample):
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
-            raise NoValidObservationsError(
-                "No Galaxy Clusters have been declared, none of the sample passed the cleaning steps.")
+            raise NoValidObservationsError("No Galaxy Clusters have been declared, none of the sample passed the "
+                                           "cleaning steps.")
 
         # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
