@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/05/2024, 10:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/05/2024, 10:48. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1004,12 +1004,18 @@ class BaseSource:
         #  those objects and add them to the storage structure
         if len(ann_spec_constituents) != 0:
             for set_id in ann_spec_constituents:
-                if ann_spec_usable[set_id]:
-                    ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                    if self._redshift is not None:
-                        # If we know the redshift we will add the radii to the annular spectra in proper distance units
-                        ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                    self.update_products(ann_spec_obj, update_inv=False)
+                try:
+                    if ann_spec_usable[set_id]:
+                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                        if self._redshift is not None:
+                            # If we know the redshift we will add the radii to the annular spectra in proper
+                            #  distance units
+                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                        self.update_products(ann_spec_obj, update_inv=False)
+                except AttributeError:
+                    # This should hopefully act to catch the NoneType has no attribute problems that have plagued this
+                    #  class - while I find a better general solution that should solve this properly
+                    pass
 
         # Here we load in any combined images and exposure maps that may have been generated
         os.chdir(OUTPUT + 'combined')
