@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/05/2024, 15:07. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -74,7 +74,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
 
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
-    if os.path.exists(out_file + "_info.csv") and run_type == "fit":
+    if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
@@ -108,7 +108,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
                 usable = False
         # I'm going to try returning the file path as that should be pickleable
         res_tables = out_file + ".fits"
-    elif os.path.exists(out_file) and run_type == "conv_factors":
+    elif os.path.exists(out_file) and run_type == "conv_factors" and usable:
         res_tables = out_file
         usable = True
     else:
