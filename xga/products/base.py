@@ -557,26 +557,26 @@ class BaseAggregateProduct:
         return self._energy_bounds
 
     @property
-    def sas_errors(self) -> List:
+    def gen_errors(self) -> List[List[str]]:
         """
-        Equivelant to the BaseProduct sas_errors property, but reports any SAS errors stored in the component products.
+        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the component products.
 
-        :return: A list of SAS errors related to component products.
+        :return: A list of telescope software errors related to component products.
         :rtype: List
         """
-        sas_err_list = []
+        tel_soft_err_list = []
         for p in self._component_products:
             prod = self._component_products[p]
-            sas_err_list += prod.gen_errors
-        return sas_err_list
+            tel_soft_err_list += prod.gen_errors
+        return tel_soft_err_list
 
     @property
-    def errors(self) -> List:
+    def errors(self) -> List[List[str]]:
         """
-        Equivelant to the BaseProduct errors property, but reports any non-SAS errors stored in the
+        Equivelant to the BaseProduct errors property, but reports any non-telescope software errors stored in the
         component products.
 
-        :return: A list of non-SAS errors related to component products.
+        :return: A list of non-telescope software errors related to component products.
         :rtype: List
         """
         err_list = []
@@ -588,7 +588,7 @@ class BaseAggregateProduct:
     @property
     def unprocessed_stderr(self) -> List:
         """
-        Equivelant to the BaseProduct sas_errors unprocessed_stderr, but returns a list of all the unprocessed
+        Equivelant to the BaseProduct gen_errors unprocessed_stderr, but returns a list of all the unprocessed
         standard error outputs.
 
         :return: List of stderr outputs.

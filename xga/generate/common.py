@@ -62,7 +62,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     elif p_type == "psf" and "NullSource" not in src:
         prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                        extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
-                       extra_info["instrument"], out, err, cmd)
+                       extra_info["instrument"], out, err, cmd, telescope=extra_info['telescope'])
     elif p_type == 'light curve' and "NullSource" not in src:
         prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                           extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],

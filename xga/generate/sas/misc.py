@@ -51,14 +51,25 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
     sources_extras = []
     sources_types = []
     for source in sources:
-        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), so we're just skipping all the individual sources that don't have XMM data
-        if 'xmm' not in source.telescopes:
-            continue
-
         cmds = []
         final_paths = []
         extra_info = []
+
+        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
+        #  bugs occuring in the sas_call wrapper
+        if 'xmm' not in source.telescopes:
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            # This contains any other information that will be needed to instantiate the class
+            # once the SAS cmd has run
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="ccf"))
+            
+            # then we can continue with the rest of the sources
+            continue
+
         for obs_id in source.obs_ids['xmm']:
             # Fetch an events list for this ObsID, doesn't matter which
             some_evt_lists = source.get_products("events", obs_id=obs_id, telescope='xmm')
