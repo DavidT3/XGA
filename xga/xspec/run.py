@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/05/2024, 15:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/05/2024, 16:53. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -117,6 +117,8 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
 
     if 'LoVoCCS-48A' in x_script:
         print(usable, res_tables)
+        print(err)
+        # print(out)
 
     return res_tables, src, usable, error, warn
 
