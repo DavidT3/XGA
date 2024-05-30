@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 12:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 14:32. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -773,7 +773,7 @@ class GasDensity3D(BaseProfile1D):
             #  closest value to the Delta*critical density we're looking for
             rads = Quantity(np.arange(*brackets.value, step_size.value), 'kpc')
 
-            rad_gas_masses = self.gas_mass(model, rads, fit_method=model_fit_method)[0].T
+            rad_gas_masses = Quantity([self.gas_mass(model, r, fit_method=model_fit_method)[0] for r in rads])
 
             # The masses contained within the test radii, the transpose is just there because the array output
             #  by that function is weirdly ordered - there is an issue open that will remind to eventually change that
@@ -781,6 +781,8 @@ class GasDensity3D(BaseProfile1D):
 
             # Calculating the density from those gas masses - uses the radii that the masses were measured within, and
             #  using the baryon fraction to scale to total masses
+            # TODO this baryon frac divide only works when passing a single float - FIGURE OUT HOW TO MEASURE
+            #  UNCERTAINTIES WITH THIS METHOD
             rad_dens = (rad_gas_masses[:, 0] / (4 * np.pi * (rads ** 3) / 3)) / baryon_frac
             # Finds the difference between the density array calculated above and the requested
             #  overdensity (i.e. Delta * the critical density of the Universe at the source redshift).
