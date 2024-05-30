@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/05/2024, 16:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 10:56. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -62,7 +62,8 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
-    err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line]
+    err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line
+                     if "No acceptable spectra are left after the cleaning step" not in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
     warn_err_lines = [line.split("***Warning: ")[-1] for line in err if "***Warning" in line]
@@ -115,10 +116,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         res_tables = None
         usable = False
 
-    if 'LoVoCCS-48A' in x_script:
-        print(usable, res_tables)
-        print(err)
-        # print(out)
+    print(usable, res_tables, err_out_lines, err_err_lines)
 
     return res_tables, src, usable, error, warn
 

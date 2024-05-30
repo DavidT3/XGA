@@ -293,7 +293,7 @@ if {{$run_pre_check == True}} {{
 
     # The fit script has to exit here if no spectra made it past our cleaning
     if {{[llength $final_spec_paths] == 0}} {{
-        puts "***Error: No acceptable spectra are left after the cleaning step"
+        puts stderr "***Error: No acceptable spectra are left after the cleaning step"
         exit
     }}
     #############################################
