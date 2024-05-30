@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 16:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 17:15. Copyright (c) The Contributors
 
 from typing import Tuple
 from warnings import warn
@@ -333,8 +333,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  spectral fit - as such we are reading out the measured temperatures here
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
-            tx_all = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec, min_counts=min_counts,
-                             min_sn=min_sn, over_sample=over_sample)
+            tx_all = samp.Tx(samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
             txs = tx_all[:, 0]
             tx_errs = tx_all[:, 1]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
