@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 11:44. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -62,6 +62,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
+    # We ignore that particular string in the errors identified from stdout because if we don't just it being
+    #  present in the if statement in the executed script is enough to make XGA think that the fit failed, even if
+    #  that error message was never printed at all
     err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line
                      if "No acceptable spectra are left after the cleaning step" not in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
@@ -115,8 +118,6 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     else:
         res_tables = None
         usable = False
-
-    print(usable, res_tables, err_out_lines, err_err_lines)
 
     return res_tables, src, usable, error, warn
 
