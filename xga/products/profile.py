@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 11:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 12:03. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -658,7 +658,7 @@ class GasDensity3D(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         plt.hist(gas_mass_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel("Gas Mass [M$_{\odot}$]")
+        plt.xlabel(r"Gas Mass [M$_{\odot}$]")
         plt.title("Gas Mass Distribution at {}".format(outer_rad.to_string()))
 
         mass_label = gas_mass.to("10^13Msun")
@@ -715,9 +715,9 @@ class GasDensity3D(BaseProfile1D):
 
         return gm_prof
 
-    def overdensity_radius(self, delta: int, redshift: float, cosmo, baryon_frac: Union[float, np.ndarray],
+    def overdensity_radius(self, delta: int, model: str, redshift: float, cosmo, baryon_frac: Union[float, np.ndarray],
                            init_lo_rad: Quantity = Quantity(100, 'kpc'), init_hi_rad: Quantity = Quantity(3500, 'kpc'),
-                           init_step: Quantity = Quantity(100, 'kpc'),
+                           init_step: Quantity = Quantity(100, 'kpc'), model_fit_method: str = 'mcmc',
                            out_unit: Union[Unit, str] = Unit('kpc')) -> Quantity:
         """
         This method uses the gas mass profile (combined with an assumption of the baryon fraction of the source
@@ -734,6 +734,7 @@ class GasDensity3D(BaseProfile1D):
         this time), finding the radius that corresponds to the minimum density difference value.
 
         :param int delta: The overdensity factor for which a radius is to be calculated.
+        :param str model: The name of the model from which to derive the gas mass.
         :param float redshift: The redshift of the cluster.
         :param cosmo: The cosmology in which to calculate the overdensity. Should be an astropy cosmology instance.
         :param float/np.ndarray baryon_frac: The baryon fraction that should be used to scale gas mass measurements
@@ -746,6 +747,7 @@ class GasDensity3D(BaseProfile1D):
         :param Quantity init_step: The step size for the first radii array generated to find the wide brackets
             around the requested overdensity radius. Default value is 100 kpc, recommend that you don't set it
             smaller than 10 kpc.
+        :param str model_fit_method: The method that was used to fit the model, default is 'mcmc'.
         :param Unit/str out_unit: The unit that this method should output the radius with.
         :return: The calculated overdensity radius.
         :rtype: Quantity
@@ -753,10 +755,10 @@ class GasDensity3D(BaseProfile1D):
         def turning_point(brackets: Quantity, step_size: Quantity) -> Quantity:
             """
             This is the meat of the overdensity_radius method. It goes looking for radii that bracket the
-            requested overdensity radius. This works by calculating an array of masses, calculating densities
-            from them and the radius array, then calculating the difference between Delta*critical density at
-            source redshift. Where the difference array flips from being positive to negative is where the
-            bracketing radii are.
+            requested overdensity radius. This works by calculating an array of gas masses, scaling them to total
+            mass estimates, calculating densities from them and the radius array, then calculating the difference
+            between Delta*critical density at source redshift. Where the difference array flips from being positive
+            to negative is where the bracketing radii are.
 
             :param Quantity brackets: The brackets within which to generate our array of radii.
             :param Quantity step_size: The step size for the array of radii
@@ -770,11 +772,16 @@ class GasDensity3D(BaseProfile1D):
             # This sets up a range of radii within which to calculate masses, which in turn are used to find the
             #  closest value to the Delta*critical density we're looking for
             rads = Quantity(np.arange(*brackets.value, step_size.value), 'kpc')
+
+            rad_gas_masses = self.gas_mass(model, rads, fit_method=model_fit_method)[0].T
+
             # The masses contained within the test radii, the transpose is just there because the array output
             #  by that function is weirdly ordered - there is an issue open that will remind to eventually change that
-            rad_masses = self.mass(rads)[0].T
-            # Calculating the density from those masses - uses the radii that the masses were measured within
-            rad_dens = rad_masses[:, 0] / (4 * np.pi * (rads ** 3) / 3)
+            # rad_masses = self.mass(rads)[0].T
+
+            # Calculating the density from those gas masses - uses the radii that the masses were measured within, and
+            #  using the baryon fraction to scale to total masses
+            rad_dens = (rad_gas_masses[:, 0] / (4 * np.pi * (rads ** 3) / 3)) / baryon_frac
             # Finds the difference between the density array calculated above and the requested
             #  overdensity (i.e. Delta * the critical density of the Universe at the source redshift).
             rad_dens_diffs = rad_dens - (delta * z_crit_dens)
@@ -811,6 +818,9 @@ class GasDensity3D(BaseProfile1D):
         if not out_unit.is_equivalent('kpc'):
             raise UnitConversionError("The out_unit argument must be supplied with a unit that is convertible "
                                       "to kpc. Angular units such as deg are not currently supported.")
+
+        # GENERAL NOTE - we don't check the input model name because we'll be calling the gas_mass() method in a bit
+        #  and that already checks the input model name
 
         # Obviously redshift can't be negative, and I won't allow zero redshift because it doesn't
         #  make sense for clusters and completely changes how distance calculations are done.
