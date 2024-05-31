@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 10:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 12:38. Copyright (c) The Contributors
 
 from typing import Tuple, Union
 from warnings import warn
@@ -154,6 +154,7 @@ def gas_mass_radius_pipeline(sample_data: pd.DataFrame, delta: int, baryon_frac:
     # This while loop (never thought I'd be using one of them in XGA!) will keep going either until all radii have been
     #  accepted OR until we reach the maximum number  of iterations
     while acc_rad.sum() != len(samp) and iter_num < max_iter:
+        print(txs)
         # TODO Decide whether conv_outer_radius will actually be the start aperture all the time
         dps = inv_abel_fitted_model(samp, sb_model, psf_corr=psf_corr, psf_bins=10, psf_iter=psf_iter,
                                     psf_model=psf_model, outer_radius=o_dens, use_peak=use_peak,
@@ -175,6 +176,9 @@ def gas_mass_radius_pipeline(sample_data: pd.DataFrame, delta: int, baryon_frac:
         pr_rs = np.delete(temp_new_rads, bad_pr_rs)
         # pr_r_errs = np.delete(pr_r_errs, bad_pr_rs)
         acc_rad = np.delete(acc_rad, bad_pr_rs)
+
+        # Have to remove the failures from this because it is used for the density profile measurements
+        txs = np.delete(txs, bad_pr_rs)
 
         # I am also actually going to remove the clusters with NaN results from the sample - if the NaN was caused
         #  by something like a fit not converging then it's going to keep trying over and over again and that could
