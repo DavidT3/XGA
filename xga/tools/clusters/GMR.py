@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 09:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 09:55. Copyright (c) The Contributors
 
 from typing import Tuple, Union
 from warnings import warn
@@ -162,8 +162,8 @@ def gas_mass_radius_pipeline(sample_data: pd.DataFrame, delta: int, baryon_frac:
         # TODO test out analytical king vs direct numerical inv. abel
         temp_new_rads = []
         for dp in dps:
-            rel_src = samp[dp.src_name]
             if dp is not None:
+                rel_src = samp[dp.src_name]
                 dp.fit(dens_model, show_warn=False)
                 new_rad = dp.overdensity_radius(delta, dens_model, rel_src.redshift, rel_src.cosmo, baryon_frac)
                 temp_new_rads.append(new_rad)
