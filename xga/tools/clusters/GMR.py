@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 12:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 15:30. Copyright (c) The Contributors
 
 from typing import Tuple, Union
 from warnings import warn
@@ -224,5 +224,65 @@ def gas_mass_radius_pipeline(sample_data: pd.DataFrame, delta: int, baryon_frac:
         # Got to increment the counter otherwise the while loop may go on and on forever :O
         iter_num += 1
 
-    # TODO This is temporary because I want to set this running and go home
-    return samp, rad_hist
+    # Throw a warning if the maximum number of iterations being reached was the reason the loop exited
+    if iter_num == max_iter:
+        warn(
+            "The radius measurement process reached the maximum number of iterations; as such one or more clusters "
+            "may have unconverged radii.", stacklevel=2)
+
+    for row_ind, row in loaded_samp_data.iterrows():
+        # We're iterating through the rows of the sample information passed in, because we want there to be an
+        #  entry even if the LT pipeline didn't succeed. As such we have to check if the current row's cluster
+        #  is actually still a part of the sample
+        if row['name'] in samp.names:
+            # Grab the relevant source out of the ClusterSample object
+            rel_src = samp[row['name']]
+            rel_rad = rel_src.get_radius(o_dens, 'kpc')
+
+            # These will be to store the read-out temperature and luminosity values, and their corresponding
+            #  column names for the dataframe - we make sure that the measure radius is present in the data
+            vals = [rel_rad.value]  # rel_rad_err.value
+            cols = [o_dens]  # , o_dens + '+-'
+
+            # If the user let XGA determine a peak coordinate for the cluster, we will need to add it to the results
+            #  as all the spectra for the cluster were generated with that as the central point
+            if use_peak:
+                vals += [*rel_src.peak.value]
+                cols += ['peak_ra', 'peak_dec']
+
+            # TODO Store gas mass ideally
+
+            # We know that at least the radius will always be there to be added to the dataframe, so we add the
+            #  information in vals and cols
+            loaded_samp_data.loc[row_ind, cols] = vals
+
+    # If the user wants to save the resulting dataframe to disk then we do so
+    if save_samp_results_path is not None:
+        loaded_samp_data.to_csv(save_samp_results_path, index=False)
+
+    # Finally, we put together the radius history throughout the iteration-convergence process
+    radius_hist_df = pd.DataFrame.from_dict(rad_hist, orient='index')
+
+    # There is already an array detailing whether particular radii have been 'accepted' (i.e. converged) or not, but
+    #  it only contains entries for those clusters which are still loaded in the ClusterSample - in the next part
+    #  of this pipeline I assemble a radius history dataframe (for all clusters that were initially in the
+    #  ClusterSample), and want the final column to declare if they converged or not.
+    rad_hist_acc_rad = []
+    for row_ind, row in loaded_samp_data.iterrows():
+        if row['name'] in samp.names:
+            # Did this radius converge?
+            converged = acc_rad[np.argwhere(samp.names == row['name'])[0][0]]
+        else:
+            converged = False
+        rad_hist_acc_rad.append(converged)
+
+    # We add the final column which just tells the user whether the radius was converged or not
+    radius_hist_df['converged'] = rad_hist_acc_rad
+
+    # And if the user wants this saved as well they can
+    if save_rad_history_path is not None:
+        # This one I keep indexing set to True, because the names of the clusters are acting as the index for
+        #  this dataframe
+        radius_hist_df.to_csv(save_rad_history_path, index=True, index_label='name')
+
+    return samp, loaded_samp_data, radius_hist_df
