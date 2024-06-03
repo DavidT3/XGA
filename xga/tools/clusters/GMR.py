@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/05/2024, 15:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/06/2024, 09:14. Copyright (c) The Contributors
 
 from typing import Tuple, Union
 from warnings import warn
@@ -35,6 +35,10 @@ def gas_mass_radius_pipeline(sample_data: pd.DataFrame, delta: int, baryon_frac:
                              save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
                              timeout: Quantity = Quantity(1, 'hr'), num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
+
+    # TODO LET THE USER CHOOSE THESE
+    init_lo_rad = Quantity(300, 'kpc')
+    init_hi_rad = Quantity(2000, 'kpc')
 
     # I want the sample to be passed in as a DataFrame, so I can easily extract the information I need
     if not isinstance(sample_data, pd.DataFrame):
@@ -165,8 +169,17 @@ def gas_mass_radius_pipeline(sample_data: pd.DataFrame, delta: int, baryon_frac:
             if dp is not None:
                 rel_src = samp[dp.src_name]
                 dp.fit(dens_model, show_warn=False)
-                new_rad = dp.overdensity_radius(delta, dens_model, rel_src.redshift, rel_src.cosmo, baryon_frac,
-                                                init_lo_rad=Quantity(300, 'kpc'), init_hi_rad=Quantity(2000, 'kpc'))
+                try:
+                    new_rad = dp.overdensity_radius(delta, dens_model, rel_src.redshift, rel_src.cosmo, baryon_frac,
+                                                    init_lo_rad=init_lo_rad,
+                                                    init_hi_rad=init_hi_rad)
+                # This method can raise a ValueError if the init_lo_rad and init_hi_rad values don't bracket the
+                #  overdensity - so we have to be able to catch that error
+                except ValueError:
+                    warn("The radius range defined by 'init_lo_rad' ({l}) and 'init_hi_rad' ({u}) does not appear to "
+                         "bracket the requested overdensity ({o}) radius for "
+                         "{s}.".format(l=init_lo_rad, u=init_hi_rad, o=delta, s=rel_src.name), stacklevel=2)
+                    new_rad = Quantity(np.NaN, 'kpc')
                 temp_new_rads.append(new_rad)
             else:
                 temp_new_rads.append(Quantity(np.NaN, 'kpc'))
