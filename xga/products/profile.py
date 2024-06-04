@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 14:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2024, 16:36. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -749,7 +749,8 @@ class GasDensity3D(BaseProfile1D):
             smaller than 10 kpc.
         :param str model_fit_method: The method that was used to fit the model, default is 'mcmc'.
         :param Unit/str out_unit: The unit that this method should output the radius with.
-        :return: The calculated overdensity radius.
+        :return: A non-scalar astropy Quantity, containing the calculated radius (0th entry), as well as
+            negative (1st entry), and positive (2nd entry) uncertainties.
         :rtype: Quantity
         """
         def turning_point(brackets: Quantity, step_size: Quantity) -> Quantity:
@@ -855,7 +856,10 @@ class GasDensity3D(BaseProfile1D):
         else:
             tight_bracket = wide_bracket
 
-        return ((tight_bracket[0]+tight_bracket[1])/2).to(out_unit)
+        # We define the final radius to be the midpoint of the two 'tight brackets'
+        final_rad = ((tight_bracket[0]+tight_bracket[1])/2).to(out_unit)
+
+        return final_rad
 
 
 class ProjectedGasTemperature1D(BaseProfile1D):

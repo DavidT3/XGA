@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2024, 16:36. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -442,6 +442,33 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
+            src: GalaxyCluster
+
+            # Grab the model to be fit to this surface brightness profile - we do it here because we want to use
+            #  the name of the model to search for a previously created matching density profile before we waste
+            #  time re-running density model creation
+            cur_model = model[src_ind]
+            if isinstance(cur_model, str):
+                model_name = cur_model
+            else:
+                model_name = cur_model.name
+
+            # First of all, we try to retrieve a matching, existing, density profile - no point doing it again
+            try:
+                # Determine the central coordinate to be used, to pass to the get method to find an existing profile
+                if use_peak:
+                    centre = src.peak
+                else:
+                    centre = src.ra_dec
+                # This should retrieve the density profile that this function would create as currently configured,
+                #  if the profile already exists
+                d_prof = src.get_density_profiles(out_rads[src_ind], model_name, obs_id[src_ind], inst[src_ind],
+                                                  centre, None, pix_step, min_snr, psf_corr, psf_model, psf_bins,
+                                                  psf_algo, psf_iter)
+                final_dens_profs.append(d_prof)
+                continue
+            except NoProductAvailableError:
+                pass
 
             sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                               psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
@@ -452,14 +479,9 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                 src.update_products(sb_prof)
 
             # Fit the user chosen model to sb_prof
-            cur_model = model[src_ind]
             sb_prof.fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn,
                         progress_bar=False)
-
-            if isinstance(cur_model, str):
-                model_r = sb_prof.get_model_fit(cur_model, fit_method)
-            else:
-                model_r = sb_prof.get_model_fit(cur_model.name, fit_method)
+            model_r = sb_prof.get_model_fit(model_name, fit_method)
 
             if model_r.success:
                 dens_rads = sb_prof.radii.copy()
