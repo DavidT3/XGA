@@ -9,7 +9,7 @@ import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid
+from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList
 from ..products.lightcurve import LightCurve
 from ..sources import BaseSource
 from ..utils import OUTPUT
@@ -71,6 +71,9 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     elif p_type == "cross arfs":
         prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
                            telescope=extra_info["telescope"])
+    elif p_type == 'events':
+        prod = EventList(p_path[0], extra_info['obs_id'], extra_info['instrument'], out, err, cmd, 
+                         telescope=extra_info['telescope'], obs_ids=extra_info['obs_ids'])
     else:
         raise NotImplementedError("Not implemented yet")
 

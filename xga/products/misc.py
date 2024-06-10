@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 12:26. Copyright (c) The Contributors
 
+from typing import List
 from warnings import warn
 
 from fitsio import read_header, FITSHDR
@@ -19,9 +20,10 @@ class EventList(BaseProduct):
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the event list.
     :param str telescope: The telescope that is the source of this event list. The default is None.
+    :param List[str] obs_ids: The obs ids that were combined to make this event list. The default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, telescope: str = None):
+                 gen_cmd: str, telescope: str = None, obs_ids: List[str] = None):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -41,6 +43,26 @@ class EventList(BaseProduct):
         #  information (again if read in).
         self._header = None
         self._data = None
+
+        if obs_ids is not None and not isinstance(obs_ids, List):
+            raise ValueError("The 'obs_ids' argument nust be a list of strings.")
+
+        if obs_ids is not None and not all(isinstance(obs, str) for obs in obs_ids):
+            raise ValueError("The 'obs_ids' argument nust be a list of strings.")
+        
+        self._obs_ids = obs_ids
+    
+    @property
+    def obs_ids(self) -> list:
+        """
+        Property getter for the ObsIDs that are involved in this image, if combined. Otherwise will return a list
+        with one element, the single relevant ObsID.
+
+        :return: List of ObsIDs involved in this image.
+        :rtype: list
+        """
+
+        return self._obs_ids
 
     # This absolutely doesn't get a setter considering it's the header object
     @property
