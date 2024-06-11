@@ -4,21 +4,66 @@
 import os
 from shutil import rmtree
 from typing import Union
+from random import randint
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
 from .run import esass_call
 from ... import OUTPUT, NUM_CORES
-from ...exceptions import TelescopeNotAssociatedError
+from ...exceptions import TelescopeNotAssociatedError, NoProductAvailableError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
+from ...products.misc import EventList
+from .misc import evtool_combine_evts
+
+def _img_size_from_header(evt_list: EventList):
+    """
+    Internal function to work out the XGA image size for eROSITA observations.
+
+    :param Eventlist evt_list: An EventList product object.
+    """
+        # Unfortunately, specifying exactly what boundaries to generate images within is a bit difficult for
+    #  eROSITA data - primarily because there is some variety in how the data are taken/presented.
+    # It is pretty easy to decide for pointed observations - we know the FoV diameter of eROSITA is
+    #  1.03 degrees, so we just make a standard size of image that is slightly larger
+    if evt_list.header['OBS_MODE'] == "POINTING":
+        # The virtual pixel size is 1.3888889095849E-5 degrees - so 87 of them is equal to 4.35 arcseconds,
+        #  which is the normal binning for XCS, so that is what I'll start with
+        re_bin = 87
+        x_size = np.ceil(1.05 / 1.3888889095849e-5 / re_bin).astype(int)
+        y_size = x_size
+
+    # If the SKYFIELD is blank, but the OBS_MODE wasn't 'POINTING' then it (I think) can only be a calibration
+    #  and performance verification field (i.e. eFEDS or some of the others). Firstly we specify the size for
+    #  eFEDS fields - the x and y sizes are based on me experimenting, so take with a pinch of salt
+    elif evt_list.header['SKYFIELD'] == "" and 'eFEDS' in evt_list.header["OBJECT"]:
+        re_bin = 87
+        x_size = np.ceil(7.5 / 1.3888889095849e-5 / re_bin).astype(int)
+        y_size = np.ceil(9 / 1.3888889095849e-5 / re_bin).astype(int)
+
+    # This one was based on the size of the eta cha survey field, but I think I am going to leave it as the
+    #  catchall for the CalPV fields, at least before I can test them exhaustively
+    # TODO revisit this if necessary
+    elif evt_list.header['SKYFIELD'] == "":
+        re_bin = 87
+        x_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
+        y_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
+
+    # And if we're here then hopefully we're dealing with an eRASS skytile! In that case we're going to adopt
+    #  the standard eRASS size of 3.6x3.6 degrees, but with our own default binning
+    else:
+        re_bin = 87
+        x_size = np.ceil(3.6 / 1.3888889095849e-5 / re_bin).astype(int)
+        y_size = x_size
+    
+    return re_bin, x_size, y_size
 
 
 @esass_call
 def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
-                 hi_en: Quantity = Quantity(10, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
+                 hi_en: Quantity = Quantity(10, 'keV'), combine_obs: bool = False, num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for a configuration of the eSASS evtool command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -28,6 +73,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     :param BaseSource/NullSource/BaseSample sources: A single source object, or a sample of sources.
     :param Quantity lo_en: The lower energy limit for the image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image, in astropy energy units.
+    :param bool combine_obs: Setting this to False will generate an image for each associated observation, instead of for one combined observation.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
@@ -97,76 +143,92 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             
             # then we can continue with the rest of the sources
             continue
+        
+        if not combine_obs:
+            # Check which event lists are associated with each individual source
+            for pack in source.get_products("events", telescope='erosita', just_obj=False):
+                obs_id = pack[1]
+                inst = pack[2]
+                if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+                    os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
-        # Check which event lists are associated with each individual source
-        for pack in source.get_products("events", telescope='erosita', just_obj=False):
-            obs_id = pack[1]
-            inst = pack[2]
-            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                os.mkdir(OUTPUT + 'erosita/' + obs_id)
+                en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+                # ASSUMPTION5 source.get_products has a telescope parameter
+                exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
+                        if en_id in match]
+                if len(exists) == 1 and exists[0][-1].usable:
+                    continue
 
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            # ASSUMPTION5 source.get_products has a telescope parameter
-            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
-                      if en_id in match]
+                evt_list = pack[-1]
+
+                re_bin, x_size, y_size = _img_size_from_header(evt_list)
+
+                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value,
+                                                                                    u=hi_en.value, n=source.name)
+                im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+
+                # If something got interrupted and the temp directory still exists, this will remove it
+                if os.path.exists(dest_dir):
+                    rmtree(dest_dir)
+
+                os.makedirs(dest_dir)
+                cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
+                            "size='{xs} {ys}' rebin={rb} center_position=0; mv * ../; cd ..; "
+                            "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
+                                            xs=x_size, ys=y_size))
+
+                # This is the products final resting place, if it exists at the end of this command
+                # ASSUMPTION4 new output directory structure
+                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
+                extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
+                                "telescope": "erosita"})
+            
+        else:
+            # Checking if a combined event list has be made already
+            try:
+                exists = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
+            except NoProductAvailableError:
+                exists = []
+
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
+            
+            # This requires combined event lists - this function will generate them
+            source = evtool_combine_evts(source)
 
-            evt_list = pack[-1]
+            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+            # getting Eventlist product
+            evt_list = source.get_products("combined_events", just_obj=True, telescope="erosita")[0]
+            obs_id = evt_list.obs_id
+            inst = evt_list.instrument
+            re_bin, x_size, y_size = _img_size_from_header(evt_list)
 
-            # Unfortunately, specifying exactly what boundaries to generate images within is a bit difficult for
-            #  eROSITA data - primarily because there is some variety in how the data are taken/presented.
-            # It is pretty easy to decide for pointed observations - we know the FoV diameter of eROSITA is
-            #  1.03 degrees, so we just make a standard size of image that is slightly larger
-            if evt_list.header['OBS_MODE'] == "POINTING":
-                # The virtual pixel size is 1.3888889095849E-5 degrees - so 87 of them is equal to 4.35 arcseconds,
-                #  which is the normal binning for XCS, so that is what I'll start with
-                re_bin = 87
-                x_size = np.ceil(1.05 / 1.3888889095849e-5 / re_bin).astype(int)
-                y_size = x_size
+            # The files produced by this function will now be stored in the combined directory.
+            final_dest_dir = OUTPUT + "erosita/combined/"
+            rand_ident = randint(0, 1e+8)
+            # Makes absolutely sure that the random integer hasn't already been used
+            while len([f for f in os.listdir(final_dest_dir)
+                    if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
+                rand_ident = randint(0, 1e+8)
 
-            # If the SKYFIELD is blank, but the OBS_MODE wasn't 'POINTING' then it (I think) can only be a calibration
-            #  and performance verification field (i.e. eFEDS or some of the others). Firstly we specify the size for
-            #  eFEDS fields - the x and y sizes are based on me experimenting, so take with a pinch of salt
-            elif evt_list.header['SKYFIELD'] == "" and 'eFEDS' in evt_list.header["OBJECT"]:
-                re_bin = 87
-                x_size = np.ceil(7.5 / 1.3888889095849e-5 / re_bin).astype(int)
-                y_size = np.ceil(9 / 1.3888889095849e-5 / re_bin).astype(int)
-
-            # This one was based on the size of the eta cha survey field, but I think I am going to leave it as the
-            #  catchall for the CalPV fields, at least before I can test them exhaustively
-            # TODO revisit this if necessary
-            elif evt_list.header['SKYFIELD'] == "":
-                re_bin = 87
-                x_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
-                y_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
-
-            # And if we're here then hopefully we're dealing with an eRASS skytile! In that case we're going to adopt
-            #  the standard eRASS size of 3.6x3.6 degrees, but with our own default binning
-            else:
-                re_bin = 87
-                x_size = np.ceil(3.6 / 1.3888889095849e-5 / re_bin).astype(int)
-                y_size = x_size
-
-            dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value,
-                                                                                u=hi_en.value, n=source.name)
-            im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
-
+            dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
             # If something got interrupted and the temp directory still exists, this will remove it
             if os.path.exists(dest_dir):
                 rmtree(dest_dir)
 
-            os.makedirs(dest_dir)
+            os.mkdir(dest_dir)
+
+            im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+
             cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
                         "size='{xs} {ys}' rebin={rb} center_position=0; mv * ../; cd ..; "
                         "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
-                                           xs=x_size, ys=y_size))
-
+                                        xs=x_size, ys=y_size))
             # This is the products final resting place, if it exists at the end of this command
-            # ASSUMPTION4 new output directory structure
-            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
+            final_paths.append(os.path.join(final_dest_dir, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                               "telescope": "erosita"})
+                            "telescope": "erosita"})
+
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
