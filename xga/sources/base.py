@@ -1428,6 +1428,24 @@ class BaseSource:
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
                                          update_inv=False)
+            
+            # now assigning combined event lists
+            rel_inven = inven[inven['type'] == 'events']
+            for row_ind, row in rel_inven.iterrows():
+                o_split = row['obs_ids'].split('/')
+                i_split = row['insts'].split('/')
+                # Assemble a set of observations-instrument strings for the current row, to test against the
+                #  src_oi_set we assembled earlier
+                test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
+                # getting a list of obs_ids to parse to the Eventlist object
+                obs_list = list(set(o_split))
+                # First we make sure the sets are the same length, if they're not then we know before starting that this
+                #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
+                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
+                #  match exactly and the product can be loaded
+                if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
+                    evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
+                    self.update_products(evt_list, update_inv=False)
 
             os.chdir(og_dir)
 
