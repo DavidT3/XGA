@@ -244,7 +244,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
             os.mkdir(dest_dir)
 
-            im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
+            im = "{r}_{l}-{u}keVimg.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
 
             cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
                         "size='{xs} {ys}' rebin={rb} center_position='{c}'; mv * ../; cd ..; "
@@ -424,7 +424,6 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             obs_id = evt_list.obs_id
             inst = evt_list.instrument
             ref_im = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
-            exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             # The files produced by this function will now be stored in the combined directory.
             final_dest_dir = OUTPUT + "erosita/combined/"
@@ -440,6 +439,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 rmtree(dest_dir)
 
             os.mkdir(dest_dir)
+            
+            exp_map = "{r}_{l}-{u}keVexpmap.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
 
             # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
             #  terminal, which causes 'device not available' errors
