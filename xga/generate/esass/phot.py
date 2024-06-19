@@ -16,49 +16,74 @@ from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
 from ...products.misc import EventList
+from ...products import BaseProduct
 from .misc import evtool_combine_evts
 
-def _img_size_from_header(evt_list: EventList):
+def _img_params_from_evtlist(evt_list: EventList):
     """
-    Internal function to work out the XGA image size for eROSITA observations.
-
+    Internal function to work out the XGA image size and centre position for eROSITA observations. This is done using 
+    the minimum and maximum of the ra and dec, with a 1% buffer, as the corners of the image.
+    
     :param Eventlist evt_list: An EventList product object.
     """
-        # Unfortunately, specifying exactly what boundaries to generate images within is a bit difficult for
-    #  eROSITA data - primarily because there is some variety in how the data are taken/presented.
-    # It is pretty easy to decide for pointed observations - we know the FoV diameter of eROSITA is
-    #  1.03 degrees, so we just make a standard size of image that is slightly larger
-    if evt_list.header['OBS_MODE'] == "POINTING":
-        # The virtual pixel size is 1.3888889095849E-5 degrees - so 87 of them is equal to 4.35 arcseconds,
-        #  which is the normal binning for XCS, so that is what I'll start with
-        re_bin = 87
-        x_size = np.ceil(1.05 / 1.3888889095849e-5 / re_bin).astype(int)
-        y_size = x_size
 
-    # If the SKYFIELD is blank, but the OBS_MODE wasn't 'POINTING' then it (I think) can only be a calibration
-    #  and performance verification field (i.e. eFEDS or some of the others). Firstly we specify the size for
-    #  eFEDS fields - the x and y sizes are based on me experimenting, so take with a pinch of salt
-    elif evt_list.header['SKYFIELD'] == "" and 'eFEDS' in evt_list.header["OBJECT"]:
-        re_bin = 87
-        x_size = np.ceil(7.5 / 1.3888889095849e-5 / re_bin).astype(int)
-        y_size = np.ceil(9 / 1.3888889095849e-5 / re_bin).astype(int)
+    # returns a QTable of only the RA and DEC columns
+    rel_tbl = evt_list.get_columns_from_data(['RA', 'DEC'])
 
-    # This one was based on the size of the eta cha survey field, but I think I am going to leave it as the
-    #  catchall for the CalPV fields, at least before I can test them exhaustively
-    # TODO revisit this if necessary
-    elif evt_list.header['SKYFIELD'] == "":
-        re_bin = 87
-        x_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
-        y_size = np.ceil(7 / 1.3888889095849e-5 / re_bin).astype(int)
+    # This gives these values in degrees
+    ramin = rel_tbl['RA'].min()
+    ramax = rel_tbl['RA'].max()
+    demin = rel_tbl['DEC'].min()
+    demax = rel_tbl['DEC'].max()
 
-    # And if we're here then hopefully we're dealing with an eRASS skytile! In that case we're going to adopt
-    #  the standard eRASS size of 3.6x3.6 degrees, but with our own default binning
+    # deleting this to save memory
+    del rel_tbl
+
+    # we want the minimum separation, ie. between ra=1 and ra=359 we want a difference of 2, not 358
+    if abs(ramin - ramax) > 180:
+        rasep = abs(ramin - ramax + 360)
     else:
-        re_bin = 87
-        x_size = np.ceil(3.6 / 1.3888889095849e-5 / re_bin).astype(int)
-        y_size = x_size
+        rasep = ramin - ramax
+
+    decsep = abs(demin - demax)
+
+    # Now we have a 1% border around this to ensure all events are captured
+    rasep = rasep + rasep*0.01
+    decsep = decsep + decsep*0.01
+
+    # Then we work out the x_size and y_size of the image in pixels
+    rebin = 87
+    # The virtual pixel size is 1.3888889095849E-5 degrees - so 87 of them is equal to 4.35 arcseconds,
+    #  which is the normal binning for XCS, so that is what I'll start with
+    x_size = np.ceil(rasep / 1.3888889095849e-5 / rebin).astype(int)
+    y_size = np.ceil(decsep / 1.3888889095849e-5 / rebin).astype(int)
+
+    if evt_list.obs_id != 'combined':
+        # for evt lists made of one tile, the centre of the image will be at 0, 0
+        centre_pos = "0 0"
+    else:
+        # For evt_lists that are made of multiple tiles, need to calculate the center position
+        # returns a QTable of only the X and Y columns
+        rel_tbl = evt_list.get_columns_from_data(['X', 'Y'])
+
+        # This gives these values in degrees
+        xmin = rel_tbl['X'].min()
+        xmax = rel_tbl['X'].max()
+        ymin = rel_tbl['Y'].min()
+        ymax = rel_tbl['Y'].max()
+
+        # deleting this to save memory
+        del rel_tbl
+
+        xsep = abs(xmin - xmax)
+        ysep = abs(ymin - ymax)
+        
+        xcen = int(xsep/2)
+        ycen = int(ysep/2)
+
+        centre_pos = f"{xcen} {ycen}"
     
-    return re_bin, x_size, y_size
+    return rebin, x_size, y_size, centre_pos
 
 
 @esass_call
@@ -73,7 +98,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     :param BaseSource/NullSource/BaseSample sources: A single source object, or a sample of sources.
     :param Quantity lo_en: The lower energy limit for the image, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the image, in astropy energy units.
-    :param bool combine_obs: Setting this to False will generate an image for each associated observation, instead of for one combined observation.
+    :param bool combine_obs: Setting this to False will generate an image for each associated observation, 
+        instead of for one combined observation.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
@@ -161,7 +187,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
                 evt_list = pack[-1]
 
-                re_bin, x_size, y_size = _img_size_from_header(evt_list)
+                re_bin, x_size, y_size, centre_pos = _img_params_from_evtlist(evt_list)
 
                 dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value,
                                                                                     u=hi_en.value, n=source.name)
@@ -173,9 +199,9 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
                 os.makedirs(dest_dir)
                 cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
-                            "size='{xs} {ys}' rebin={rb} center_position=0; mv * ../; cd ..; "
+                            "size='{xs} {ys}' rebin={rb} center_position='{c}'; mv * ../; cd ..; "
                             "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
-                                            xs=x_size, ys=y_size))
+                                            xs=x_size, ys=y_size, c=centre_pos))
 
                 # This is the products final resting place, if it exists at the end of this command
                 # ASSUMPTION4 new output directory structure
@@ -190,7 +216,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             except NoProductAvailableError:
                 exists = []
 
-            if len(exists) == 1 and exists[0][-1].usable:
+            if isinstance(exists, BaseProduct) and exists.usable:
                 continue
             
             # This requires combined event lists - this function will generate them
@@ -201,7 +227,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             evt_list = source.get_products("combined_events", just_obj=True, telescope="erosita")[0]
             obs_id = evt_list.obs_id
             inst = evt_list.instrument
-            re_bin, x_size, y_size = _img_size_from_header(evt_list)
+            re_bin, x_size, y_size, centre_pos = _img_params_from_evtlist(evt_list)
 
             # The files produced by this function will now be stored in the combined directory.
             final_dest_dir = OUTPUT + "erosita/combined/"
@@ -221,9 +247,9 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
             cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
-                        "size='{xs} {ys}' rebin={rb} center_position=0; mv * ../; cd ..; "
+                        "size='{xs} {ys}' rebin={rb} center_position='{c}'; mv * ../; cd ..; "
                         "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
-                                        xs=x_size, ys=y_size))
+                                        xs=x_size, ys=y_size, c=centre_pos))
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(final_dest_dir, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
@@ -243,7 +269,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
 @esass_call
 def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
-           hi_en: Quantity = Quantity(10, 'keV'), num_cores: int = NUM_CORES, disable_progress: bool = False):
+           hi_en: Quantity = Quantity(10, 'keV'), combine_obs: bool = False, num_cores: int = NUM_CORES, disable_progress: bool = False):
     """
     A convenient Python wrapper for the eSASS expmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
@@ -253,6 +279,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources.
     :param Quantity lo_en: The lower energy limit for the expmap, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the expmap, in astropy energy units.
+    :param bool combine_obs: Setting this to False will generate an image for each associated observation,
+        instead of for one combined observation.
     :param int num_cores: The number of cores to use (if running locally), default is set to
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
@@ -301,7 +329,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
     # To generate an exposure map one must have a reference image. 
     # If they do not already exist, these commands should generate them.
-    sources = evtool_image(sources, lo_en, hi_en)
+    sources = evtool_image(sources, lo_en, hi_en, combine_obs=combine_obs)
 
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
@@ -333,39 +361,86 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             
             # then we can continue with the rest of the sources
             continue
+        
+        if not combine_obs:
+            # Check which event lists are associated with each individual source
+            for pack in source.get_products("events",  telescope='erosita', just_obj=False):
+                obs_id = pack[1]
+                inst = pack[2]
+                # ASSUMPTION4 new output directory structure
+                if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
+                    os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
-        # Check which event lists are associated with each individual source
-        for pack in source.get_products("events",  telescope='erosita', just_obj=False):
-            obs_id = pack[1]
-            inst = pack[2]
-            # ASSUMPTION4 new output directory structure
-            if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                os.mkdir(OUTPUT + 'erosita/' + obs_id)
+                en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+                # ASSUMPTION5 source.get_products has a telescope parameter
+                exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
+                                                                telescope='erosita')
+                        if en_id in match]
+                if len(exists) == 1 and exists[0][-1].usable:
+                    continue
+                # Generating an exposure map requires a reference image.
+                # ASSUMPTION5 source.get_products has a telescope parameter
+                ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False,
+                                                                telescope='erosita')
+                        if en_id in match][0][-1]
+                # Set up the paths and names of files
+                evt_list = pack[-1]
+                # ASSUMPTION4 new output directory structure
+                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, 
+                                                                                    u=hi_en.value, n=source.name)
+                exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            # ASSUMPTION5 source.get_products has a telescope parameter
-            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
-                                                             telescope='erosita')
-                      if en_id in match]
-            if len(exists) == 1 and exists[0][-1].usable:
+                # If something got interrupted and the temp directory still exists, this will remove it
+                if os.path.exists(dest_dir):
+                    rmtree(dest_dir)
+
+                os.makedirs(dest_dir)
+                # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
+                #  terminal, which causes 'device not available' errors
+                cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
+                            "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
+                            "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
+                                                                u=hi_en.value, em=exp_map, d=dest_dir))
+
+                # This is the products final resting place, if it exists at the end of this command
+                # ASSUMPTION4 new output directory structure
+                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, exp_map))
+                extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
+                                "telescope": "erosita"})
+        else:
+            # Checking if a combined event list has be made already
+            try:
+                exists = source.get_combined_expmaps(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
+            except NoProductAvailableError:
+                exists = []
+
+            if isinstance(exists, BaseProduct) and exists.usable:
                 continue
-            # Generating an exposure map requires a reference image.
-            # ASSUMPTION5 source.get_products has a telescope parameter
-            ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False,
-                                                             telescope='erosita')
-                      if en_id in match][0][-1]
-            # Set up the paths and names of files
-            evt_list = pack[-1]
-            # ASSUMPTION4 new output directory structure
-            dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, 
-                                                                                u=hi_en.value, n=source.name)
+            
+            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+            # getting Eventlist product
+            evt_list = source.get_products("combined_events", just_obj=True, telescope="erosita")[0]
+            # defining values needed for esass expmap command
+            obs_id = evt_list.obs_id
+            inst = evt_list.instrument
+            ref_im = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
             exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
 
+            # The files produced by this function will now be stored in the combined directory.
+            final_dest_dir = OUTPUT + "erosita/combined/"
+            rand_ident = randint(0, 1e+8)
+            # Makes absolutely sure that the random integer hasn't already been used
+            while len([f for f in os.listdir(final_dest_dir)
+                    if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
+                rand_ident = randint(0, 1e+8)
+            
+            dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
             # If something got interrupted and the temp directory still exists, this will remove it
             if os.path.exists(dest_dir):
                 rmtree(dest_dir)
 
-            os.makedirs(dest_dir)
+            os.mkdir(dest_dir)
+
             # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
             #  terminal, which causes 'device not available' errors
             cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
@@ -375,9 +450,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
-            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, exp_map))
+            final_paths.append(os.path.join(final_dest_dir, exp_map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                               "telescope": "erosita"})
+                            "telescope": "erosita"})
+
+
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
