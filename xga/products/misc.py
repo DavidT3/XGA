@@ -4,7 +4,9 @@
 from typing import List
 from warnings import warn
 
+from astropy.table import QTable
 from fitsio import read_header, FITSHDR
+import fitsio
 
 from . import BaseProduct
 
@@ -38,7 +40,7 @@ class EventList(BaseProduct):
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "events"
-
+        self._telescope = telescope
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
         self._header = None
@@ -51,6 +53,11 @@ class EventList(BaseProduct):
             raise ValueError("The 'obs_ids' argument nust be a list of strings.")
         
         self._obs_ids = obs_ids
+    
+    @property
+    def bounding_corners(self) -> List:
+        data
+
     
     @property
     def obs_ids(self) -> list:
@@ -101,6 +108,47 @@ class EventList(BaseProduct):
                                     "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
                                     "with {s}.".format(f=self.path, s=self.src_name))
 
+    @property
+    def data(self) -> QTable:
+        """
+        Property getter allowing access to the astropy fits header object of this event list.
+
+        :return: The header of the primary data table of the event list.
+        :rtype: astropy.table.QTable
+        """
+        # If the header attribute is None then we know we have to read the header in
+        if self._data is None:
+            self._read_data_on_demand()
+        return self._data
+
+    @data.deleter
+    def data(self):
+        """
+        Property deleter for the data of this EventList instance. The self._data attribute is removed from
+        memory, and then self._data is explicitly set to None so that self._read_data_on_demand() will be
+        triggered if you ever want the header from this object again.
+        """
+        del self._data
+        self._data = None
+
+    def _read_data_on_demand(self):
+        """
+        This will read the event list table into memory.
+        """
+        if self._telescope != 'erosita':
+            raise NotImplementedError("Reading Eventlist tables is not yet implemented for telescopes that aren't eROSITA.")
+        else:
+            try:
+                # reads the events table into a np.recarray
+                arr = fitsio.read(self.path, ext=1)
+                # I prefer QTables to recarrays
+                self._data = QTable(arr)
+
+            except OSError:
+                raise FileNotFoundError("FITSIO read method cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
+                                        "with {s}.".format(f=self.path, s=self.src_name))
+
     def unload(self, unload_data: bool = True, unload_header: bool = True):
         """
         This method allows you to safely remove the header and/or data information stored in memory.
@@ -110,12 +158,6 @@ class EventList(BaseProduct):
             be removed.
         :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is True.
         """
-        # TODO This will need to be altered when reading event tables in is supported.
-        if unload_data is True:
-            unload_data = False
-            warn("The EventList class doesn't yet support reading event tables into memory yet, so they do not need "
-                 "to be removed.", stacklevel=2)
-
         # Doesn't make sense in this case, as the method wouldn't do anything - as it was probably a mistake to call
         #  the method like this I throw an error so the user knows
         if not unload_data and not unload_header:
