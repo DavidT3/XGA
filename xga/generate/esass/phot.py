@@ -43,7 +43,7 @@ def _img_params_from_evtlist(evt_list: EventList):
     if abs(ramin - ramax) > 180:
         rasep = abs(ramin - ramax + 360)
     else:
-        rasep = ramin - ramax
+        rasep = abs(ramin - ramax)
 
     decsep = abs(demin - demax)
 
@@ -202,6 +202,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                             "size='{xs} {ys}' rebin={rb} center_position='{c}'; mv * ../; cd ..; "
                             "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
                                             xs=x_size, ys=y_size, c=centre_pos))
+                print(cmds)
 
                 # This is the products final resting place, if it exists at the end of this command
                 # ASSUMPTION4 new output directory structure
@@ -439,7 +440,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 rmtree(dest_dir)
 
             os.mkdir(dest_dir)
-            
+
             exp_map = "{r}_{l}-{u}keVexpmap.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
 
             # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
@@ -451,7 +452,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
             # This is the products final resting place, if it exists at the end of this command
             # ASSUMPTION4 new output directory structure
-            final_paths.append(os.path.join(final_dest_dir, exp_map))
+            final_paths.append(os.path.join(final_dest_dir, exp_2map))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
                             "telescope": "erosita"})
 
