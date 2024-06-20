@@ -782,7 +782,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
     innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
     outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
     srctool_spectrum(sources, outermost_rads, innermost_rads, group_spec, min_counts, min_sn, num_cores,
-                     disable_progress, combine_tm)
+                     disable_progress, combine_tm, combine_obs=False)
 
     # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
     #  the correct annuli, which is why I have to iterate through the sources and radii
@@ -810,8 +810,8 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
             # This contains any other information that will be needed to instantiate the class
             # once the eSASS cmd has run
             all_extras.append(np.array(src_extras))
-            src_out_types.append()
-            
+            all_out_types.append(src_out_types)
+
             # then we can continue with the rest of the sources
             continue
 
@@ -847,9 +847,8 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
             for r_ind in range(len(radii[s_ind])-1):
                 # Generate the eSASS commands for the current annulus of the current source, for all observations
                 spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                          min_sn, num_cores, disable_progress, combine_tm, True)
+                                          min_sn, num_cores, disable_progress, combine_tm, combine_obs=False)
 
-                print(spec_cmd_out[4])
                 # Read out some of the output into variables to be modified
                 interim_paths = spec_cmd_out[5][0]
                 interim_extras = spec_cmd_out[6][0]
@@ -931,8 +930,8 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                 src_cmds = np.concatenate([src_cmds, new_cmds])
                 src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
                 src_extras = np.concatenate([src_extras, interim_extras])
-        src_out_types = np.array(src_out_types)
 
+        src_out_types = np.array(src_out_types)
         # This adds the current sources final commands to the 'all sources' lists
         all_cmds.append(src_cmds)
         all_paths.append(src_paths)
