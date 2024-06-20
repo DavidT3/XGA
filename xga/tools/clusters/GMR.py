@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2024, 22:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/06/2024, 10:51. Copyright (c) The Contributors
 
 from typing import Tuple, Union
 from warnings import warn
