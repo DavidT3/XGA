@@ -2700,7 +2700,7 @@ class BaseSource:
             raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
         # If the telescope IS associated and the ObsID has been supplied then we can check that it is valid
         elif (telescope is not None and telescope in self.telescopes) and \
-                (obs_id is not None and obs_id not in self.obs_ids[telescope]):
+                (obs_id is not None and obs_id != 'combined' and obs_id not in self.obs_ids[telescope]):
             raise NotAssociatedError("{o} is not associated with the {t} telescope for "
                                      "{n}.".format(o=obs_id, n=self.name, t=telescope))
         # Finally we can see if supplied instruments are valid, if telescope and ObsID are supplied
