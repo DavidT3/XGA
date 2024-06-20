@@ -27,17 +27,17 @@ def _img_params_from_evtlist(evt_list: EventList):
     :param Eventlist evt_list: An EventList product object.
     """
 
-    # returns a QTable of only the RA and DEC columns
-    rel_tbl = evt_list.get_columns_from_data(['RA', 'DEC'])
+    # returns a dataframe of only the RA and DEC columns
+    rel_df = evt_list.get_columns_from_data(['RA', 'DEC'])
 
     # This gives these values in degrees
-    ramin = rel_tbl['RA'].min()
-    ramax = rel_tbl['RA'].max()
-    demin = rel_tbl['DEC'].min()
-    demax = rel_tbl['DEC'].max()
+    ramin = rel_df['RA'].min()
+    ramax = rel_df['RA'].max()
+    demin = rel_df['DEC'].min()
+    demax = rel_df['DEC'].max()
 
     # deleting this to save memory
-    del rel_tbl
+    del rel_df
 
     # we want the minimum separation, ie. between ra=1 and ra=359 we want a difference of 2, not 358
     if abs(ramin - ramax) > 180:
@@ -64,16 +64,16 @@ def _img_params_from_evtlist(evt_list: EventList):
     else:
         # For evt_lists that are made of multiple tiles, need to calculate the center position
         # returns a QTable of only the X and Y columns
-        rel_tbl = evt_list.get_columns_from_data(['X', 'Y'])
+        rel_df = evt_list.get_columns_from_data(['X', 'Y'])
 
         # This gives these values in degrees
-        xmin = rel_tbl['X'].min()
-        xmax = rel_tbl['X'].max()
-        ymin = rel_tbl['Y'].min()
-        ymax = rel_tbl['Y'].max()
+        xmin = rel_df['X'].min()
+        xmax = rel_df['X'].max()
+        ymin = rel_df['Y'].min()
+        ymax = rel_df['Y'].max()
 
         # deleting this to save memory
-        del rel_tbl
+        del rel_df
 
         xsep = abs(xmin - xmax)
         ysep = abs(ymin - ymax)
