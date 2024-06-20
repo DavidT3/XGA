@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/05/2024, 15:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/06/2024, 09:55. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1179,6 +1179,7 @@ class BaseSource:
                 final_obj = None
 
             return final_obj
+
         # Just figure out where we are in the filesystem, we'll make sure to return to this location after all
         #  the changing directory we're about to do
         og_dir = os.getcwd()
