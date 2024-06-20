@@ -84,7 +84,7 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
         # be associated so I would need to check this
         # Checking if the combined product already exists
         # TODO existing combined event lists arent loaded into a source 
-        exists = source.get_products("combined_evts", just_obj=False, telescope='erosita')
+        exists = source.get_products("combined_events", just_obj=False, telescope='erosita')
 
         if len(exists) == 1 and exists[0][-1].usable:
             sources_cmds.append(np.array([]))
