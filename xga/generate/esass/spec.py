@@ -76,11 +76,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
         if combine_tm:
             inst_names = ['combined']
-            inst_nums = ['"' + ' '.join([tm[-1] for tm in source.instruments["erosita"][obs_id]]) + '"']
+            inst_nums = ['"' + ' '.join([tm[-1] for tm in list(source.num_inst_obs['erosita'].keys())]) + '"']
             inst_srctool_id = ['0']
         else:
-            inst_names = deepcopy(source.instruments["erosita"][obs_id])
-            inst_nums = [tm[-1] for tm in source.instruments["erosita"][obs_id]]
+            inst_names = deepcopy(list(source.num_inst_obs['erosita'].keys()))
+            inst_nums = [tm[-1] for tm in list(source.num_inst_obs['erosita'].keys())]
             inst_srctool_id = inst_nums
 
         for inst_ind, inst in enumerate(inst_names):
