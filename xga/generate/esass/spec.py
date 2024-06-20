@@ -126,12 +126,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     rand_ident = randint(0, 1e+8)
 
                 dest_dir = os.path.join(final_dest_dir, "temp_srctool_{}".format(rand_ident))
-                
-                # If something got interrupted and the temp directory still exists, this will remove it
-                if os.path.exists(dest_dir):
-                    rmtree(dest_dir)
-
-                os.mkdir(dest_dir)
 
             else: 
                 # Sets up the file names of the output files, adding a random number so that the
@@ -141,7 +135,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 rand_ident = randint(0, 1e+8)
                 dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
                                                                                 r=rand_ident)
+            # If something got interrupted and the temp directory still exists, this will remove it
+            if os.path.exists(dest_dir):
+                rmtree(dest_dir)
 
+            os.mkdir(dest_dir)
+                                                                            
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
             # TODO ASSUMPTION6 source.source_back_regions will have a telescope parameter
@@ -181,38 +180,51 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # the XGA formatting of the spectra, so that they can be renamed 
             # TODO put issue, renaming spectra
             # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
-            spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
-            rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.rmf"
-            arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
-            b_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.fits"
-            b_rmf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.rmf"
-            b_arf_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.arf"
+            # The names of spectra will be different depending on if it is from a combined eventlist
+            if combine_obs:
+                prefix = str(rand_ident) + '_'
+            else:
+                prefix = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=source_name)
+
+            spec_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
+            spec_str = prefix + spec_str
+            rmf_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.rmf"
+            rmf_str = prefix + rmf_str
+            arf_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}.arf"
+            arf_str = prefix + arf_str 
+            b_spec_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.fits"
+            b_spec_str = prefix + b_spec_str
+            b_rmf_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.rmf"
+            b_rmf_str = prefix + b_rmf_str
+            b_arf_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_backspec.arf"
+            b_arf_str = prefix + b_arf_str
 
             # Naming the non-grouped spectra
-            no_grp_spec_str = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec_not_grouped.fits"
-            no_grp_spec = no_grp_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            no_grp_spec_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}{ex}_spec_not_grouped.fits"
+            no_grp_spec_str = prefix + no_grp_spec_str
+            no_grp_spec = no_grp_spec_str.format(ra=source.default_coord[0].value,
                                                 dec=source.default_coord[1].value, ri=src_inn_rad_str,
                                                 ro=src_out_rad_str, ex=extra_file_name)
 
             # Making the strings of the XGA formatted names that we will rename the outputs of srctool to
-            spec = spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            spec = spec_str.format(ra=source.default_coord[0].value,
                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                 ex=extra_file_name, gr=group_spec)
 
-            rmf = rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            rmf = rmf_str.format(ra=source.default_coord[0].value,
                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                 ex=extra_file_name, gr=group_spec)
-            arf = arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            arf = arf_str.format(ra=source.default_coord[0].value,
                                 dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                 ex=extra_file_name, gr=group_spec)
 
-            b_spec = b_spec_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            b_spec = b_spec_str.format(ra=source.default_coord[0].value,
                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                     ex=extra_file_name, gr=group_spec)
-            b_rmf = b_rmf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            b_rmf = b_rmf_str.format(ra=source.default_coord[0].value,
                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                     ex=extra_file_name, gr=group_spec)
-            b_arf = b_arf_str.format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+            b_arf = b_arf_str.format(ra=source.default_coord[0].value,
                                     dec=source.default_coord[1].value, ri=src_inn_rad_str, ro=src_out_rad_str,
                                     ex=extra_file_name, gr=group_spec)
             
@@ -318,8 +330,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
             
             cmds.append(cmd_str)  # Adds the full command to the set
-            # Makes sure the whole path to the temporary directory is created
-            os.makedirs(dest_dir)
             
             final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
