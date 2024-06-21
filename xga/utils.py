@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/06/2024, 12:11. Copyright (c) The Contributors
 
 import json
 import os
@@ -761,8 +761,8 @@ for tel in TELESCOPES:
     for entry in cur_sec:
         if "/this/is/required/" in cur_sec[entry]:
             any_req_defaults = False
-        elif entry not in no_check and cur_sec['root_{t}_dir'.format(t=tel)] not in cur_sec[entry] and \
-                cur_sec[entry][0] != '/':
+        elif (entry not in no_check and cur_sec['root_{t}_dir'.format(t=tel)] not in cur_sec[entry] and
+              cur_sec[entry][0] != '/'):
             # Replace the current definition with an absolute one s
             cur_sec[entry] = os.path.join(os.path.abspath(cur_sec['root_{t}_dir'.format(t=tel)]), cur_sec[entry])
 
