@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/06/2024, 13:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/06/2024, 13:22. Copyright (c) The Contributors
 
 import json
 import os
@@ -182,7 +182,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                                 # THIS is a failure mode of some processed eRASS event lists (no idea why it happens)
                                 #  where the central coordinate info gets split across the *_CEN, which is where it
                                 #  should be for survey mode, and the *_OBJ header entries. See issue #1158
-                                info['RA_PNT'] = evts_header['RA_PNT']
+                                info['RA_PNT'] = evts_header['RA_OBJ']
                             else:
                                 info['RA_PNT'] = evts_header["RA_CEN"]
 
@@ -190,7 +190,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                                 # THIS is a failure mode of some processed eRASS event lists (no idea why it happens)
                                 #  where the central coordinate info gets split across the *_CEN, which is where it
                                 #  should be for survey mode, and the *_OBJ header entries. See issue #1158
-                                info['DEC_PNT'] = evts_header['DEC_PNT']
+                                info['DEC_PNT'] = evts_header['DEC_OBJ']
                             else:
                                 info['DEC_PNT'] = evts_header["DEC_CEN"]
 
