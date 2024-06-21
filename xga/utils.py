@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/06/2024, 13:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/06/2024, 13:19. Copyright (c) The Contributors
 
 import json
 import os
@@ -178,18 +178,18 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                         #  the data is located on the sky. Non-survey modes however should use the RA_PNT and DEC_PNT
                         #  headers, as RA_CEN etc. are 0 (conversely RA_PNT etc. are 0 for eRASS).
                         if tel == 'erosita' and evts_header['OBS_MODE'] == 'SURVEY':
-                            if evts_header['RA_CEN'] == 0.0 and evts_header['RA_PNT'] != 0.0:
+                            if evts_header['RA_CEN'] == 0.0 and evts_header['RA_OBJ'] != 0.0:
                                 # THIS is a failure mode of some processed eRASS event lists (no idea why it happens)
                                 #  where the central coordinate info gets split across the *_CEN, which is where it
-                                #  should be for survey mode, and the *_PNT header entries. See issue #1158
+                                #  should be for survey mode, and the *_OBJ header entries. See issue #1158
                                 info['RA_PNT'] = evts_header['RA_PNT']
                             else:
                                 info['RA_PNT'] = evts_header["RA_CEN"]
 
-                            if evts_header['DEC_CEN'] == 0.0 and evts_header['DEC_PNT'] != 0.0:
+                            if evts_header['DEC_CEN'] == 0.0 and evts_header['DEC_OBJ'] != 0.0:
                                 # THIS is a failure mode of some processed eRASS event lists (no idea why it happens)
                                 #  where the central coordinate info gets split across the *_CEN, which is where it
-                                #  should be for survey mode, and the *_PNT header entries. See issue #1158
+                                #  should be for survey mode, and the *_OBJ header entries. See issue #1158
                                 info['DEC_PNT'] = evts_header['DEC_PNT']
                             else:
                                 info['DEC_PNT'] = evts_header["DEC_CEN"]
