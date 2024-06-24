@@ -140,10 +140,23 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_extras = []
     sources_types = []
     for s_ind, source in enumerate(sources):
+        cmds = []
+        final_paths = []
+        extra_info = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), so we're just skipping all the individual sources that don't have XMM data
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
+        #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            # This contains any other information that will be needed to instantiate the class
+            # once the SAS cmd has run
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+            
+            # then we can continue with the rest of the sources
             continue
 
         # rmfgen and arfgen both take arguments that describe if something is an extended source or not,
@@ -156,9 +169,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         else:
             ex_src = "no"
             dt = 'flat'
-        cmds = []
-        final_paths = []
-        extra_info = []
 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
@@ -601,6 +611,27 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     all_extras = []
     # Iterating through the sources
     for s_ind, source in enumerate(sources):
+        # This is where the commands/extra information get concatenated from the different annuli
+        src_cmds = np.array([])
+        src_paths = np.array([])
+        src_out_types = []
+        src_extras = np.array([])
+
+        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
+        #  bugs occuring in the sas_call wrapper
+        if 'xmm' not in source.telescopes:
+            all_cmds.append(np.array(src_cmds))
+            all_paths.append(np.array(src_paths))
+            # This contains any other information that will be needed to instantiate the class
+            # once the SAS cmd has run
+            all_extras.append(np.array(src_extras))
+            all_out_types.append(src_out_types)
+
+            # then we can continue with the rest of the sources
+            continue
+
         # This generates a random integer ID for this set of spectra
         set_id = randint(0, 1e+8)
 
@@ -632,11 +663,6 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             # If it already exists though we don't need to bother
             generate_spec = False
 
-        # This is where the commands/extra information get concatenated from the different annuli
-        src_cmds = np.array([])
-        src_paths = np.array([])
-        src_out_types = []
-        src_extras = np.array([])
         if generate_spec or force_regen:
             # Here we run through all the requested annuli for the current source
             for r_ind in range(len(radii[s_ind])-1):
@@ -816,8 +842,24 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
         src_out_types = []
         src_extras = np.array([])
 
+        # By this point we know that at least one of the sources has XMM data associated (we checked that at the
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
+        #  bugs occuring in the sas_call wrapper
+        if 'xmm' not in src.telescopes:
+            all_cmds.append(np.array(src_cmds))
+            all_paths.append(np.array(src_paths))
+            # This contains any other information that will be needed to instantiate the class
+            # once the SAS cmd has run
+            all_extras.append(np.array(src_extras))
+            all_out_types.append(src_out_types)
+
+            # then we can continue with the rest of the sources
+            continue
+
         try:
-            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, set_id[src_ind])
+            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, 
+                                               set_id[src_ind], telescope='xmm')
         except NoProductAvailableError:
             # We make our own version of this error
             raise NoProductAvailableError("The requested AnnularSpectra cannot be located for {sn}, and this function "
