@@ -469,3 +469,39 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     # I only return num_cores here, so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
+
+def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str, 
+                      lo_en: Quantity = Quantity(0.2, 'keV'), hi_en: Quantity = Quantity(10, 'keV'),
+                      num_cores: int = NUM_CORES,
+                      disable_progress: bool = False):
+
+    if isinstance(sources, (BaseSource, NullSource, BaseSample)):
+        raise TypeError("Please pass a source, NullSource, or sample object.")
+
+    # We check to see whether there is an eROSITA entry in the 'telescopes' property. 
+    # If sources is a Source object, then that property contains the telescopes associated with 
+    # that source, and if it is a Sample object then 'telescopes' contains the list of unique 
+    # telescopes that are associated with at least one member source.
+    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
+    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
+            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the "
+                                          "source/sample, as such eROSITA"
+                                          "images or exposure maps cannot be generated.")
+    
+    if to_combine not in ["image", "expmap"]:
+        raise ValueError("The only valid choices for to_combine are image and expmap.")
+    # Don't do much value checking in this module, but this one is so fundamental that I will do it
+    elif lo_en > hi_en:
+        raise ValueError("lo_en cannot be greater than hi_en")
+
+    # To make a mosaic we need to have the individual products in the first place
+    if to_combine == "image":
+        sources = evtool_image(sources, lo_en, hi_en, combine_obs=True, 
+                               disable_progress=disable_progress, num_cores=num_cores)
+    elif to_combine == "expmap":
+        sources = expmap(sources, lo_en, hi_en, combine_obs=True, 
+                         disable_progress=disable_progress, num_cores=num_cores)
+
+    
