@@ -475,10 +475,6 @@ def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str,
                       lo_en: Quantity = Quantity(0.2, 'keV'), hi_en: Quantity = Quantity(10, 'keV'),
                       num_cores: int = NUM_CORES,
                       disable_progress: bool = False):
-
-    if isinstance(sources, (BaseSource, NullSource, BaseSample)):
-        raise TypeError("Please pass a source, NullSource, or sample object.")
-
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. 
     # If sources is a Source object, then that property contains the telescopes associated with 
     # that source, and if it is a Sample object then 'telescopes' contains the list of unique 
