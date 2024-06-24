@@ -11,7 +11,7 @@ from ...exceptions import NotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource, GalaxyCluster
 from ...sources.base import NullSource
-from ...utils import RAD_LABELS, NUM_CORES
+from ...utils import RAD_LABELS, NUM_CORES, OUTPUT
 
 
 def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
