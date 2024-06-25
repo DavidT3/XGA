@@ -874,7 +874,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 inst = sp_comb[0].instrument
                 evt_list = src.get_products('events', obs_id, inst, telescope='xmm')[0]
 
-                dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
+                dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
 
                 if not os.path.exists(dest_dir):
                     os.makedirs(dest_dir)
@@ -902,7 +902,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                               'cross_ann_id': sp_comb[1].annulus_ident,
                               "telescope": 'xmm'}
 
-                src_paths = np.concatenate([src_paths, [OUTPUT + "{o}/".format(o=obs_id) + c_arf_name]])
+                src_paths = np.concatenate([src_paths, [OUTPUT + "xmm/" +"{o}/".format(o=obs_id) + c_arf_name]])
                 # Go through and concatenate things to the source lists defined above
                 src_cmds = np.concatenate([src_cmds, [cmd]])
                 src_out_types += ['cross arfs'] * len(src_cmds)

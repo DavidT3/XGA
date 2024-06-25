@@ -195,7 +195,7 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
         raise ValueError("You somehow have an illegal value for the instrument name...")
 
     det_map = "{o}_{i}_bin{bs}_detmap.fits".format(o=detmap_evts.obs_id, i=detmap_evts.instrument, bs=bin_size)
-    det_map_path = os.path.join(OUTPUT, obs_id, 'xmm', det_map)
+    det_map_path = os.path.join(OUTPUT, 'xmm', obs_id, det_map)
 
     # If the detmap that we've decided we need already exists, then we don't need to generate it again
     if os.path.exists(det_map_path):
