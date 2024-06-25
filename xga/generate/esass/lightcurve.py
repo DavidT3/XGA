@@ -336,7 +336,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="light curve"))
 
-        return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
 @esass_call
