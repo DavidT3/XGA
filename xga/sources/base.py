@@ -2979,7 +2979,7 @@ class BaseSource:
 
         return matched_prods
 
-    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+    def _get_spec_prod(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                     min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                     telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
@@ -3056,12 +3056,98 @@ class BaseSource:
 
         # Adds on the extra information about grouping to the storage key
         spec_storage_name += extra_name
-        matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
+
+        if obs_id == 'combined':
+            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
                                           telescope=telescope)
+        else:
+            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
+                                          telescope=telescope)
+
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
+
+        return matched_prods   
+
+
+    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+        """
+        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
+        spectra(um) will be provided to you. If no match is found then a NoProductAvailableError will be raised.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+            default this is zero arcseconds, resulting in a circular spectrum.
+        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
+        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
+            the minimum signal to noise.
+        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
+            were multiple matching products).
+        :rtype: Union[Spectrum, List[Spectrum]]
+        """
+        
+        matched_prods = self._get_spec_prod(outer_radius, obs_id, inst, inner_radius, group_spec,
+                                               min_counts, min_sn, over_sample, telescope)
+
+        return matched_prods
+
+    def get_combined_spectra(self, outer_radius: Union[str, Quantity], inst: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+        """
+        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
+        spectra(um) will be provided to you. If no match is found then a NoProductAvailableError will be raised.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+            default this is zero arcseconds, resulting in a circular spectrum.
+        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
+        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
+            the minimum signal to noise.
+        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
+            were multiple matching products).
+        :rtype: Union[Spectrum, List[Spectrum]]
+        """
+
+        if telescope == 'xmm':
+            raise NotImplementedError("Combined spectra are not implemented for XMM observations.")
+        
+        matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
+                                               min_counts, min_sn, over_sample, telescope)
 
         return matched_prods
 
