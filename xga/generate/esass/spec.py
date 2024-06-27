@@ -366,6 +366,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
+    
+    if combine_obs:
+        # This requires combined event lists - this function will generate them
+        evtool_combine_evts(sources)
 
     if outer_radius != 'region':
         from_region = False
@@ -514,9 +518,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             
         else:
-            # This requires combined event lists - this function will generate them
-            evtool_combine_evts(source)
-
             # getting Eventlist product
             evt_list = source.get_products("combined_events", just_obj=True, telescope="erosita")[0]
 
