@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/07/2024, 09:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/07/2024, 11:47. Copyright (c) The Contributors
 
 import os
 import sys
@@ -45,8 +45,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
 
-    # # TODO REMOVE THIS
-    # print(out, '\n\n', err, '\n\n\n\n')
+    # TODO REMOVE THIS
+    print(out, '\n\n', err, '\n\n\n\n')
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
