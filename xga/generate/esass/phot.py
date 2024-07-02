@@ -78,8 +78,8 @@ def _img_params_from_evtlist(evt_list: EventList):
         xsep = abs(xmin - xmax)
         ysep = abs(ymin - ymax)
         
-        xcen = int(xsep/2)
-        ycen = int(ysep/2)
+        xcen = int(xmin + (xsep/2))
+        ycen = int(ymin + (ysep/2))
 
         centre_pos = f"{xcen} {ycen}"
     
