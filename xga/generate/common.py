@@ -1,7 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/07/2024, 08:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/07/2024, 09:25. Copyright (c) The Contributors
 
 import os
+import sys
 from subprocess import Popen, PIPE
 from typing import Tuple, Union
 
@@ -29,12 +30,23 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     :return: The product object, and the string representation of the associated source object.
     :rtype: Tuple[BaseProduct, str]
     """
+
+    # TODO TEMPORARY TEST TO SEE IF THIS WORKS
+
+    sys_env = os.environ.copy()
+
+    if sys.platform == 'darwin':
+        if "LD_LIBRARY_PATH" in sys_env:
+            cmd = f"export LD_LIBRARY_PATH={sys_env['LD_LIBRARY_PATH']} && {cmd}"
+        if "DYLD_LIBRARY_PATH" in sys_env:
+            cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {cmd}"
+
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
 
-    # TODO REMOVE THIS
-    print(out, '\n\n', err, '\n\n\n\n')
+    # # TODO REMOVE THIS
+    # print(out, '\n\n', err, '\n\n\n\n')
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
