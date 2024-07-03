@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/06/2024, 09:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:43. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3902,31 +3902,31 @@ class BaseSource:
             central_coord = self._default_coord
 
         if obs_id is None:
-            # Doesn't matter which combined ratemap, just need the size and coord conversion powers
-            rt = self.get_combined_ratemaps(telescope=telescope)
+            # Doesn't matter which combined images, just need the size and coord conversion powers
+            im = self.get_combined_images(telescope=telescope)
         else:
             # Again so long as the image matches the ObsID passed in by the user I don't care what instrument
             #  its from
-            rt = self.get_ratemaps(obs_id=obs_id, telescope=telescope)
+            im = self.get_images(obs_id=obs_id, telescope=telescope)
 
-        # If it's not an instance of RateMap that means a list of RateMaps has been returned, and as I only want
+        # If it's not an instance of Image that means a list of Images has been returned, and as I only want
         #  the WCS information and the shape of the image I don't care which one we use
-        if not isinstance(rt, RateMap):
-            rt = rt[0]
+        if not isinstance(im, RateMap):
+            im = im[0]
 
-        # Convert the inner and outer radii to degrees so they can be easily converted to pixels
+        # Convert the inner and outer radii to degrees, so they can be easily converted to pixels
         outer_rad = self.convert_radius(outer_rad, 'deg')
         inner_rad = self.convert_radius(inner_rad, 'deg')
-        pix_to_deg = pix_deg_scale(central_coord, rt.radec_wcs)
+        pix_to_deg = pix_deg_scale(central_coord, im.radec_wcs)
 
         # Making sure the inner and outer radii are whole integer numbers, as they are now in pixel units
         outer_rad = np.array([int(np.ceil(outer_rad / pix_to_deg).value)])
         inner_rad = np.array([int(np.floor(inner_rad / pix_to_deg).value)])
         # Convert the chosen central coordinates to pixels
-        pix_centre = rt.coord_conv(central_coord, 'pix')
+        pix_centre = im.coord_conv(central_coord, 'pix')
 
         # Generate our custom mask
-        custom_mask = annular_mask(pix_centre, inner_rad, outer_rad, rt.shape)
+        custom_mask = annular_mask(pix_centre, inner_rad, outer_rad, im.shape)
 
         # And applying an interloper mask if the user wants that.
         if remove_interlopers:
