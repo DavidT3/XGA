@@ -1180,6 +1180,108 @@ class BaseSource:
 
             return final_obj
 
+        def parse_spectrum(row: pd.Series, combined_obs: bool):
+            """
+            Takes information from a row of the inventory csv and sets up a Spectrum product that can be added
+            to the product storage structure of the source. If the Spectrum is an annular spectrum
+            then relevant information such as the set id and the annulus id is returned.
+
+            :param pd.Series row: The inventory dataframe object:
+            :param bool combined_obs: 
+            """
+            if combined_obs:
+                obs_id = 'combined'
+            else:
+                obs_id = row['obs_id']
+            if tel == 'erosita' and not combined_obs:
+                obs_id = str(obs_id).zfill(6)
+            if combined_obs:
+                inst = 'combined'
+            else:
+                inst = row['inst']
+
+            src_name = row['src_name']
+            info_key = str(row['info_key'])
+    
+            info_key_parts = info_key.split("_")
+
+            central_coord = Quantity([float(info_key_parts[0].strip('ra')), float(info_key_parts[1].strip('dec'))], 'deg')
+            r_inner = Quantity(np.array(info_key_parts[2].strip('ri').split('and')).astype(float), 'deg')
+            r_outer = Quantity(np.array(info_key_parts[3].strip('ro').split('and')).astype(float), 'deg')
+            # Check if there is only one r_inner and r_outer value each, if so its a circle
+            #  (otherwise it's an ellipse)
+            if len(r_inner) == 1:
+                r_inner = r_inner[0]
+                r_outer = r_outer[0]
+
+            if 'grpTrue' in info_key_parts:
+                grp_ind = info_key_parts.index('grpTrue')
+                grouped = True
+            else:
+                grouped = False
+            # mincnt or minsn information will only be in the filename if the spectrum is grouped
+            if grouped and 'mincnt' in info_key:
+                min_counts = int(info_key_parts[grp_ind+1].split('mincnt')[-1])
+                min_sn = None
+            elif grouped and 'minsn' in info_key:
+                min_sn = float(info_key_parts[grp_ind+1].split('minsn')[-1])
+                min_counts = None
+            else:
+                # We still need to pass the variables to the spectrum definition, even if it isn't
+                #  grouped
+                min_sn = None
+                min_counts = None
+
+            # Only if oversampling was applied will it appear in the filename
+            if 'ovsamp' in info_key:
+                over_sample = int(info_key_parts[-2].split('ovsamp')[-1])
+            else:
+                over_sample = None
+
+            if "region" in info_key:
+                region = True
+            else:
+                region = False
+            
+            # defining a standard product path that I can just suffixes to 
+            if combined_obs:
+                indent_no = row['file_name'].split('_')[0]
+                prod_gen_path = cur_d + indent_no + '_' + str(src_name) + '_' + info_key
+            else:
+                prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
+            
+            spec = prod_gen_path + '_spec.fits'
+            arf = prod_gen_path + '.arf'
+            back = prod_gen_path + '_backspec.fits'
+
+            if tel == 'erosita':
+                back_rmf = prod_gen_path + '_backspec.rmf'
+                back_arf = prod_gen_path + '_backspec.arf'
+                rmf = prod_gen_path + '.rmf'
+
+            else:
+                if os.path.exists(prod_gen_path + '.rmf'):
+                    rmf = prod_gen_path + '.rmf'
+                else:
+                    rmf = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_universal.rmf'
+                back_rmf = ''
+                back_arf = ''
+
+            # Defining our XGA spectrum instance
+            obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst,
+                                grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf,
+                                back_arf, telescope=tel)
+            
+            if "ident" in info_key:
+                set_id = int(info_key.split('ident')[-1].split('_')[0])
+                ann_id = int(info_key.split('ident')[-1].split('_')[1])
+            
+            else:
+                set_id = None
+                ann_id = None
+                
+            return obj, set_id, ann_id
+
         # Just figure out where we are in the filesystem, we'll make sure to return to this location after all
         #  the changing directory we're about to do
         og_dir = os.getcwd()
@@ -1227,78 +1329,10 @@ class BaseSource:
                     if load_spectra:
                         
                         spec_lines = inven[inven['type'] == 'spectrum']
-
                         for row_ind, row in spec_lines.iterrows():
-                            obs_id = row['obs_id']
-                            if tel == 'erosita':
-                                obs_id = str(obs_id).zfill(6)
-                            inst = row['inst']
-                            src_name = row['src_name']
-                            info_key = row['info_key']
-
-                            info_key_parts = info_key.split("_")
-                            central_coord = Quantity([float(info_key_parts[0].strip('ra')), float(info_key_parts[1].strip('dec'))], 'deg')
-                            r_inner = Quantity(np.array(info_key_parts[2].strip('ri').split('and')).astype(float), 'deg')
-                            r_outer = Quantity(np.array(info_key_parts[3].strip('ro').split('and')).astype(float), 'deg')
-                            # Check if there is only one r_inner and r_outer value each, if so its a circle
-                            #  (otherwise it's an ellipse)
-                            if len(r_inner) == 1:
-                                r_inner = r_inner[0]
-                                r_outer = r_outer[0]
-    
-                            if 'grpTrue' in info_key_parts:
-                                grp_ind = info_key_parts.index('grpTrue')
-                                grouped = True
-                            else:
-                                grouped = False
-                            # mincnt or minsn information will only be in the filename if the spectrum is grouped
-                            if grouped and 'mincnt' in info_key:
-                                min_counts = int(info_key_parts[grp_ind+1].split('mincnt')[-1])
-                                min_sn = None
-                            elif grouped and 'minsn' in info_key:
-                                min_sn = float(info_key_parts[grp_ind+1].split('minsn')[-1])
-                                min_counts = None
-                            else:
-                                # We still need to pass the variables to the spectrum definition, even if it isn't
-                                #  grouped
-                                min_sn = None
-                                min_counts = None
-
-                            # Only if oversampling was applied will it appear in the filename
-                            if 'ovsamp' in info_key:
-                                over_sample = int(info_key_parts[-2].split('ovsamp')[-1])
-                            else:
-                                over_sample = None
-
-                            if "region" in info_key:
-                                region = True
-                            else:
-                                region = False
+                            obj, set_id, ann_id = parse_spectrum(row, False)
                             
-                            # defining a standard product path that I can just suffixes to 
-                            prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
-                            spec = prod_gen_path + '_spec.fits'
-                            arf = prod_gen_path + '.arf'
-                            back = prod_gen_path + '_backspec.fits'
-
-                            if tel == 'erosita':
-                                back_rmf = prod_gen_path + '_backspec.rmf'
-                                back_arf = prod_gen_path + '_backspec.arf'
-                                rmf = prod_gen_path + '.rmf'
-
-                            else:
-                                rmf = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_universal.rmf'
-                                back_rmf = ''
-                                back_arf = ''
-
-                            # Defining our XGA spectrum instance
-                            obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst,
-                                               grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf,
-                                               back_arf, telescope=tel)
-                            
-                            if "ident" in info_key:
-                                set_id = int(info_key.split('ident')[-1].split('_')[0])
-                                ann_id = int(info_key.split('ident')[-1].split('_')[1])
+                            if set_id != None:
                                 obj.annulus_ident = ann_id
                                 obj.set_ident = set_id
                                 if set_id not in ann_spec_constituents:
@@ -1312,151 +1346,6 @@ class BaseSource:
                                     self.update_products(obj, update_inv=False)
                                 except NotAssociatedError:
                                     pass
-
-                        '''
-                        # For spectra, we search for products that have the name of this object in, as they are for
-                        #  specific parts of the observation.
-                        # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
-                        #  having some issues with the + character in file names
-                        named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
-                                 self._name.replace("+", "x") in f and obs in f
-                                 and any([ai in f for ai in all_inst])]
-                        specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
-
-                        for sp in specs:
-                            # Filename contains a lot of useful information, so splitting it out to get it
-                            sp_info = sp.split("/")[-1].split("_")
-                            # Reading these out into variables mostly for my own sanity while writing this
-                            obs_id = sp_info[0]
-                            inst = sp_info[1]
-                            # I now store the central coordinate in the file name, and read it out into astropy quantity
-                            #  for when I need to define the spectrum object
-                            central_coord = Quantity([float(sp_info[3].strip('ra')), float(sp_info[4].strip('dec'))], 'deg')
-                            # Also read out the inner and outer radii into astropy quantities (I know that
-                            #  they will be in degree units).
-                            r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
-                            r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
-                            # Check if there is only one r_inner and r_outer value each, if so its a circle
-                            #  (otherwise it's an ellipse)
-                            if len(r_inner) == 1:
-                                r_inner = r_inner[0]
-                                r_outer = r_outer[0]
-
-                            # Only check the actual filename, as I have no knowledge of what strings might be in the
-                            #  user's path to xga output
-                            if 'grpTrue' in sp.split('/')[-1]:
-                                grp_ind = sp_info.index('grpTrue')
-                                grouped = True
-                            else:
-                                grouped = False
-
-                            # mincnt or minsn information will only be in the filename if the spectrum is grouped
-                            if grouped and 'mincnt' in sp.split('/')[-1]:
-                                min_counts = int(sp_info[grp_ind+1].split('mincnt')[-1])
-                                min_sn = None
-                            elif grouped and 'minsn' in sp.split('/')[-1]:
-                                min_sn = float(sp_info[grp_ind+1].split('minsn')[-1])
-                                min_counts = None
-                            else:
-                                # We still need to pass the variables to the spectrum definition, even if it isn't
-                                #  grouped
-                                min_sn = None
-                                min_counts = None
-
-                            # Only if oversampling was applied will it appear in the filename
-                            if 'ovsamp' in sp.split('/')[-1]:
-                                over_sample = int(sp_info[-2].split('ovsamp')[-1])
-                            else:
-                                over_sample = None
-
-                            if "region" in sp.split('/')[-1]:
-                                region = True
-                            else:
-                                region = False
-
-                            # I split the 'spec' part of the end of the name of the spectrum, and can use the parts of the
-                            #  file name preceding it to search for matching arf/rmf files
-                            sp_info_str = cur_d + sp.split('/')[-1].split('_spec')[0]
-
-                            # Fairly self-explanatory, need to find all the separate products needed to define an XGA
-                            #  spectrum
-                            arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
-                            rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
-                            # As RMFs can be generated for source and background spectra separately, or one for both,
-                            #  we need to check for matching RMFs to the spectrum we found
-                            if len(rmf) == 0:
-                                rmf = [f for f in named if "rmf" in f and "back" not in f and inst in f
-                                       and "universal" in f]
-
-                            # Exact same checks for the background spectrum
-                            back = [f for f in named if "backspec" in f and inst in f
-                                    and sp_info_str == f.split('_backspec')[0] and "rmf" not in f and "arf" not in f]
-                            back_arf = [f for f in named if "arf" in f and inst in f
-                                        and sp_info_str == f.split('_backspec.arf')[0] and "back" in f]
-                            back_rmf = [f for f in named if "rmf" in f and "back" in f and inst in f
-                                        and sp_info_str == f.split('_backspec.rmf')[0] and "back" in f]
-                            if len(back_rmf) == 0:
-                                back_rmf = rmf
-
-                            # If exactly one match has been found for all the products, we define an XGA spectrum and
-                            #  add it the source object.
-                            if len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 1 \
-                                    and len(back_rmf) == 1:
-                                # Defining our XGA spectrum instance
-                                obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
-                                               grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf[0],
-                                               back_arf[0], telescope=tel)
-
-                                if "ident" in sp.split('/')[-1]:
-                                    set_id = int(sp.split('ident')[-1].split('_')[0])
-                                    ann_id = int(sp.split('ident')[-1].split('_')[1])
-                                    obj.annulus_ident = ann_id
-                                    obj.set_ident = set_id
-                                    if set_id not in ann_spec_constituents:
-                                        ann_spec_constituents[set_id] = []
-                                        ann_spec_usable[set_id] = True
-                                    ann_spec_constituents[set_id].append(obj)
-                                else:
-                                    # And adding it to the source storage structure, but only if its not a member
-                                    #  of an AnnularSpectra
-                                    try:
-                                        self.update_products(obj, update_inv=False)
-                                    except NotAssociatedError:
-                                        pass
-
-                            elif len(arf) == 1 and len(rmf) == 1 and len(back) == 1 and len(back_arf) == 0:
-                                # Defining our XGA spectrum instance
-                                obj = Spectrum(sp, rmf[0], arf[0], back[0], central_coord, r_inner, r_outer, obs_id, inst,
-                                               grouped, min_counts, min_sn, over_sample, "", "", "", region,
-                                               telescope=tel)
-
-                                if "ident" in sp.split('/')[-1]:
-                                    set_id = int(sp.split('ident')[-1].split('_')[0])
-                                    ann_id = int(sp.split('ident')[-1].split('_')[1])
-                                    obj.annulus_ident = ann_id
-                                    obj.set_ident = set_id
-                                    if set_id not in ann_spec_constituents:
-                                        ann_spec_constituents[set_id] = []
-                                        ann_spec_usable[set_id] = True
-                                    ann_spec_constituents[set_id].append(obj)
-                                else:
-                                    # And adding it to the source storage structure, but only if its not a member
-                                    #  of an AnnularSpectra
-                                    try:
-                                        self.update_products(obj, update_inv=False)
-                                    except NotAssociatedError:
-                                        pass
-                            else:
-                                warn_text = "{src} spectrum {sp} cannot be loaded in due to a mismatch in available" \
-                                            " ancillary files".format(src=self.name, sp=sp)
-                                if not self._samp_member:
-                                    warn(warn_text, stacklevel=2)
-                                else:
-                                    self._supp_warn.append(warn_text)
-                                if "ident" in sp.split("/")[-1]:
-                                    set_id = int(sp.split('ident')[-1].split('_')[0])
-                                    ann_spec_usable[set_id] = False
-                            '''
                             
 
             os.chdir(og_dir)
@@ -1538,8 +1427,18 @@ class BaseSource:
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
                     self.update_products(evt_list, update_inv=False)
+            
+            if load_spectra:
+                rel_inven = inven[inven['type'] == 'spectrum']
+                for row_ind, row in rel_inven.iterrows():
+                    obj, set_id, ann_id = parse_spectrum(row, True)
+                                
+                    try:
+                        self.update_products(obj, update_inv=False)
+                    except NotAssociatedError:
+                        pass
 
-            os.chdir(og_dir)
+            os.chdir(og_dir)s
 
             # Now loading in previous fits
             if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits and load_spectra:
