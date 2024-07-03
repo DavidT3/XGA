@@ -1438,7 +1438,7 @@ class BaseSource:
                     except NotAssociatedError:
                         pass
 
-            os.chdir(og_dir)s
+            os.chdir(og_dir)
 
             # Now loading in previous fits
             if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits and load_spectra:
