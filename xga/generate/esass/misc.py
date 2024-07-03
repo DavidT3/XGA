@@ -1,6 +1,9 @@
-from typing import Union
-from random import randint
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:35. Copyright (c) The Contributors
+
 import os
+from random import randint
+from typing import Union
 
 import numpy as np
 
@@ -10,6 +13,7 @@ from xga.samples import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
 from .run import esass_call
+
 
 @esass_call
 def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int = NUM_CORES,
@@ -26,9 +30,9 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     """
 
-    # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source object, then
-    #  that property contains the telescopes associated with that source, and if it is a Sample object then
-    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
+    #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
+    #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
     if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
             (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
@@ -69,10 +73,10 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
             continue
 
         evt_list_paths = [match[-1].path for match in source.get_products("events", just_obj=False, telescope='erosita')]
-        # this gets passed onto the extra_info dict
+        # This gets passed onto the extra_info dict
         obs_ids = [match[1] for match in source.get_products("events", just_obj=False, telescope='erosita')]
 
-        # If only one event list is associated, then there is nothing to combine
+        # If only one event list is associated, then there is nothing to combine
         if len(evt_list_paths) == 1:
             sources_cmds.append(np.array([]))
             sources_paths.append(np.array([]))
@@ -83,7 +87,7 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
         # TODO if the user runs different samples with different search distances then more obs can
         # be associated so I would need to check this
         # Checking if the combined product already exists
-        # TODO existing combined event lists arent loaded into a source 
+        # TODO existing combined event lists arent loaded into a source
         exists = source.get_products("combined_events", just_obj=False, telescope='erosita')
 
         if len(exists) == 1 and exists[0][-1].usable:
@@ -123,7 +127,7 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
                                          "instrument": "combined", 
                                          "telescope": 'erosita',
                                          "obs_ids": obs_ids}]))  
-        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="events"))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately

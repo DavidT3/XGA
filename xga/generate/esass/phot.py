@@ -1,23 +1,24 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/02/2024, 15:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:35. Copyright (c) The Contributors
 
 import os
+from random import randint
 from shutil import rmtree
 from typing import Union
-from random import randint
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
+from .misc import evtool_combine_evts
 from .run import esass_call
 from ... import OUTPUT, NUM_CORES
 from ...exceptions import TelescopeNotAssociatedError, NoProductAvailableError
+from ...products import BaseProduct
+from ...products.misc import EventList
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sources.base import NullSource
-from ...products.misc import EventList
-from ...products import BaseProduct
-from .misc import evtool_combine_evts
+
 
 def _img_params_from_evtlist(evt_list: EventList):
     """
@@ -88,7 +89,8 @@ def _img_params_from_evtlist(evt_list: EventList):
 
 @esass_call
 def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
-                 hi_en: Quantity = Quantity(10, 'keV'), combine_obs: bool = False, num_cores: int = NUM_CORES, disable_progress: bool = False):
+                 hi_en: Quantity = Quantity(10, 'keV'), combine_obs: bool = False, num_cores: int = NUM_CORES,
+                 disable_progress: bool = False):
     """
     A convenient Python wrapper for a configuration of the eSASS evtool command that makes images.
     Images will be generated for every observation associated with every source passed to this function.
@@ -112,7 +114,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
                                           "eROSITA images cannot be generated.")
 
-    stack = False # This tells the esass_call routine that this command won't be part of a stack
+    stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
 
     # This function supports passing both individual sources and sets of sources
@@ -184,8 +186,9 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
                 en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
                 # ASSUMPTION5 source.get_products has a telescope parameter
-                exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
-                        if en_id in match]
+                exists = [match for match in
+                          source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
+                          if en_id in match]
                 if len(exists) == 1 and exists[0][-1].usable:
                     continue
 
@@ -214,7 +217,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                                 "telescope": "erosita"})
             
         else:
-            # Checking if a combined event list has be made already
+            # Checking if a combined event list has be made already
             try:
                 exists = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
             except NoProductAvailableError:
@@ -270,7 +273,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
 @esass_call
 def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity = Quantity(0.2, 'keV'),
-           hi_en: Quantity = Quantity(10, 'keV'), combine_obs: bool = False, num_cores: int = NUM_CORES, disable_progress: bool = False):
+           hi_en: Quantity = Quantity(10, 'keV'), combine_obs: bool = False, num_cores: int = NUM_CORES,
+           disable_progress: bool = False):
     """
     A convenient Python wrapper for the eSASS expmap command.
     Expmaps will be generated for every observation associated with every source passed to this function.
