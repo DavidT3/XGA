@@ -1225,6 +1225,95 @@ class BaseSource:
                         self.update_products(parse_lightcurve(row, tel), update_inv=False)
 
                     if load_spectra:
+                        
+                        spec_lines = inven[inven['type'] == 'spectrum']
+
+                        for row_ind, row in spec_lines.iterrows():
+                            obs_id = row['obs_id']
+                            if tel == 'erosita':
+                                obs_id = str(obs_id).zfill(6)
+                            inst = row['inst']
+                            src_name = row['src_name']
+                            info_key = row['info_key']
+
+                            info_key_parts = info_key.split("_")
+                            central_coord = Quantity([float(info_key_parts[0].strip('ra')), float(info_key_parts[1].strip('dec'))], 'deg')
+                            r_inner = Quantity(np.array(info_key_parts[2].strip('ri').split('and')).astype(float), 'deg')
+                            r_outer = Quantity(np.array(info_key_parts[3].strip('ro').split('and')).astype(float), 'deg')
+                            # Check if there is only one r_inner and r_outer value each, if so its a circle
+                            #  (otherwise it's an ellipse)
+                            if len(r_inner) == 1:
+                                r_inner = r_inner[0]
+                                r_outer = r_outer[0]
+    
+                            if 'grpTrue' in info_key_parts:
+                                grp_ind = info_key_parts.index('grpTrue')
+                                grouped = True
+                            else:
+                                grouped = False
+                            # mincnt or minsn information will only be in the filename if the spectrum is grouped
+                            if grouped and 'mincnt' in info_key:
+                                min_counts = int(info_key_parts[grp_ind+1].split('mincnt')[-1])
+                                min_sn = None
+                            elif grouped and 'minsn' in info_key:
+                                min_sn = float(info_key_parts[grp_ind+1].split('minsn')[-1])
+                                min_counts = None
+                            else:
+                                # We still need to pass the variables to the spectrum definition, even if it isn't
+                                #  grouped
+                                min_sn = None
+                                min_counts = None
+
+                            # Only if oversampling was applied will it appear in the filename
+                            if 'ovsamp' in info_key:
+                                over_sample = int(info_key_parts[-2].split('ovsamp')[-1])
+                            else:
+                                over_sample = None
+
+                            if "region" in info_key:
+                                region = True
+                            else:
+                                region = False
+                            
+                            # defining a standard product path that I can just suffixes to 
+                            prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
+                            spec = prod_gen_path + '_spec.fits'
+                            arf = prod_gen_path + '.arf'
+                            back = prod_gen_path + '_backspec.fits'
+
+                            if tel == 'erosita':
+                                back_rmf = prod_gen_path + '_backspec.rmf'
+                                back_arf = prod_gen_path + '_backspec.arf'
+                                rmf = prod_gen_path + '.rmf'
+
+                            else:
+                                rmf = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_universal.rmf'
+                                back_rmf = ''
+                                back_arf = ''
+
+                            # Defining our XGA spectrum instance
+                            obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst,
+                                               grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf,
+                                               back_arf, telescope=tel)
+                            
+                            if "ident" in info_key:
+                                set_id = int(info_key.split('ident')[-1].split('_')[0])
+                                ann_id = int(info_key.split('ident')[-1].split('_')[1])
+                                obj.annulus_ident = ann_id
+                                obj.set_ident = set_id
+                                if set_id not in ann_spec_constituents:
+                                    ann_spec_constituents[set_id] = []
+                                    ann_spec_usable[set_id] = True
+                                ann_spec_constituents[set_id].append(obj)
+                            else:
+                                # And adding it to the source storage structure, but only if its not a member
+                                #  of an AnnularSpectra
+                                try:
+                                    self.update_products(obj, update_inv=False)
+                                except NotAssociatedError:
+                                    pass
+
+                        '''
                         # For spectra, we search for products that have the name of this object in, as they are for
                         #  specific parts of the observation.
                         # Have to replace any + characters with x, as that's what we did in evselect_spectrum due to SAS
@@ -1367,6 +1456,8 @@ class BaseSource:
                                 if "ident" in sp.split("/")[-1]:
                                     set_id = int(sp.split('ident')[-1].split('_')[0])
                                     ann_spec_usable[set_id] = False
+                            '''
+                            
 
             os.chdir(og_dir)
 
