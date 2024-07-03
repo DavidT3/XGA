@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/07/2024, 11:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 09:15. Copyright (c) The Contributors
 
 import os
 import sys
@@ -40,6 +40,8 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
             cmd = f"export LD_LIBRARY_PATH={sys_env['LD_LIBRARY_PATH']} && {cmd}"
         if "DYLD_LIBRARY_PATH" in sys_env:
             cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {cmd}"
+
+    print('\n', cmd, '\n')
 
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
@@ -86,7 +88,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     elif p_type == "cross arfs":
         prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
                            telescope=extra_info["telescope"])
-    elif p_type == 'events':
+    elif p_type == 'events' or p_type == 'combined events':
         prod = EventList(p_path[0], extra_info['obs_id'], extra_info['instrument'], out, err, cmd, 
                          telescope=extra_info['telescope'], obs_ids=extra_info['obs_ids'])
     else:
