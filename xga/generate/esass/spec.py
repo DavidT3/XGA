@@ -89,10 +89,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             inst_no = inst_nums[inst_ind]
 
             try:
-                # Got to check if this spectrum already exists
-                check_sp = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
+                if combine_obs:
+                    check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
+                                            min_counts, min_sn, telescope='erosita')
+                else:
+                    # Got to check if this spectrum already exists
+                    check_sp = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
                                             min_counts, min_sn, telescope='erosita')
                 exists = True
+                
             except NoProductAvailableError:
                 exists = False
 
