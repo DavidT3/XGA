@@ -118,7 +118,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
         #  least in this current setup
         for tel in source.telescopes:
-
+            # retrieving the spectrum objects needed for each source/ tel combo
             specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
                                     inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
 
@@ -283,28 +283,9 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
-            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-            if stacked_spectra and tel == 'erosita':
-                search_inst = 'combined'
-            else:
-                search_inst = None
-
-            # Find matching spectrum objects associated with the current source
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel, inst=search_inst)
-            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-            #  a cluster with only a single valid instrument for a single valid observation this may not be the case
-            if isinstance(spec_objs, Spectrum):
-                spec_objs = [spec_objs]
-
-            # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
-            if len(spec_objs) == 0:
-                raise NoProductAvailableError("There are no matching spectra for {s} object, you "
-                                              "need to generate them first!".format(s=source.name))
-
-            # Turn spectra paths into TCL style list for substitution into template
-            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # retrieving the spectrum objects needed for each source/ tel combo
+            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
+                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift to this model.")
@@ -345,7 +326,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             #  setup, so zeroing one will zero them all.
             nh_to_zero = "{2}"
 
-            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+            out_file, script_file = _write_xspec_script(source, storage_key, model, abund_table,
                                                         fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                         linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
                                                         lum_conf, source.redshift, spectrum_checking, check_list,
@@ -449,28 +430,9 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
-            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-            if stacked_spectra and tel == 'erosita':
-                search_inst = 'combined'
-            else:
-                search_inst = None
-
-            # Find matching spectrum objects associated with the current source
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel, inst=search_inst)
-            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-            #  a cluster with only a single valid instrument for a single valid observation this may not be the case
-            if isinstance(spec_objs, Spectrum):
-                spec_objs = [spec_objs]
-
-            # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
-            if len(spec_objs) == 0:
-                raise NoProductAvailableError("There are no matching spectra for {s} object, you "
-                                              "need to generate them first!".format(s=source.name))
-
-            # Turn spectra paths into TCL style list for substitution into template
-            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # retrieving the spectrum objects needed for each source/ tel combo
+            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
+                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift to this model.")
@@ -513,7 +475,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
             # This internal function writes out the XSPEC script with all the information we've assembled in this
             #  function - filling out the XSPEC template and writing to disk
-            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+            out_file, script_file = _write_xspec_script(source, storage_key, model, abund_table,
                                                         fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                         linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
                                                         lum_conf, source.redshift, spectrum_checking, check_list,
@@ -608,27 +570,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     src_inds = []
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
-            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-            if stacked_spectra and tel == 'erosita':
-                search_inst = 'combined'
-            else:
-                search_inst = None
-
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel, inst=search_inst)
-
-            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-            #  a source with only a single valid instrument for a single valid observation this may not be the case
-            if isinstance(spec_objs, Spectrum):
-                spec_objs = [spec_objs]
-
-            if len(spec_objs) == 0:
-                raise NoProductAvailableError("There are no matching spectra for {s}, you "
-                                              "need to generate them first!".format(s=source.name))
-
-            # Turn spectra paths into TCL style list for substitution into template
-            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # retrieving the spectrum objects needed for each source/ tel combo
+            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
+                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
             # For this model, we have to know the redshift of the source.
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zpowerlw.")
@@ -670,7 +614,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             #  zeroing one will zero them all.
             nh_to_zero = "{2}"
 
-            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+            out_file, script_file = _write_xspec_script(source, storage_key, model, abund_table,
                                                         fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                         linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
                                                         lum_conf, z, False, "{}", "{}", "{}", "{}", True,
@@ -764,27 +708,9 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     src_inds = []
     for src_ind, source in enumerate(sources):
         for tel in source.telescopes:
-            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-            if stacked_spectra and tel == 'erosita':
-                search_inst = 'combined'
-            else:
-                search_inst = None
-
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel, inst=search_inst)
-
-            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-            #  a source with only a single valid instrument for a single valid observation this may not be the case
-            if isinstance(spec_objs, Spectrum):
-                spec_objs = [spec_objs]
-
-            if len(spec_objs) == 0:
-                raise NoProductAvailableError("There are no matching spectra for {s}, you "
-                                              "need to generate them first!".format(s=source.name))
-
-            # Turn spectra paths into TCL style list for substitution into template
-            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+            # retrieving the spectrum objects needed for each source/ tel combo
+            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
+                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
@@ -829,7 +755,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             #  because there are likely multiple spectra) because I know that nH of tbabs is linked in this setup, so
             #  zeroing one will zero them all.
             nh_to_zero = "{2}"
-            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+            out_file, script_file = _write_xspec_script(source, storage_key, model, abund_table,
                                                         fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                         linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
                                                         lum_conf, z, False, "{}", "{}", "{}", "{}", True,
