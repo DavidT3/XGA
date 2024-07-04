@@ -7,7 +7,7 @@ from typing import List, Union
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _check_inputs, _write_xspec_script, _pregen_spectra
+from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _spec_obj_setup
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
@@ -118,28 +118,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
         #  least in this current setup
         for tel in source.telescopes:
-            # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-            if stacked_spectra and tel == 'erosita':
-                search_inst = 'combined'
-            else:
-                search_inst = None
 
-            # Find matching spectrum objects associated with the current source
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                           group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                           over_sample=over_sample, telescope=tel, inst=search_inst)
-            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-            #  a cluster with only a single valid instrument for a single valid observation this may not be the case
-            if isinstance(spec_objs, Spectrum):
-                spec_objs = [spec_objs]
+            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
+                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
 
-            # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
-            if len(spec_objs) == 0:
-                raise NoProductAvailableError("There are no matching spectra for {s} object, you "
-                                              "need to generate them first!".format(s=source.name))
-
-            # Turn spectra paths into TCL style list for substitution into template
-            specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift to this model.")
@@ -181,7 +163,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             #  setup, so zeroing one will zero them all.
             nh_to_zero = "{2}"
 
-            out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+            out_file, script_file = _write_xspec_script(source, storage_key, model, abund_table,
                                                         fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                         linking, freezing, par_fit_stat, lum_low_lims, lum_upp_lims,
                                                         lum_conf, source.redshift, spectrum_checking, check_list,

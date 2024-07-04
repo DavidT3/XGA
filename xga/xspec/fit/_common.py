@@ -12,6 +12,8 @@ from ...generate.esass import srctool_spectrum
 from ...generate.sas import evselect_spectrum, region_setup
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, PointSource
+from ...exceptions import NoProductAvailableError
+from ...products import Spectrum
 
 
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -214,3 +216,54 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         xcm.write(script)
 
     return out_file, script_file
+
+def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
+                    src_ind: float, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: float,
+                    min_sn: float, over_sample: float) -> str: 
+    """
+    Internal function that collects relevant spectrum objects per telescope. This is used in 
+    each XGA xspec fitting function eg. single_temp_apec etc. 
+
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
+    :param str tel: The telescope to collect Spectrum objects for.
+    :param source BaseSource: The source object to collect Spectrum objects for.
+    :param List[Quantity] out_rad_vals: A list of outer radius quantities.
+    :param int src_ind: The index of the lists of radii to be used for the source.
+    :param List[Quantity] inn_rad_vals: A list of inner radius quantities.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+
+    """
+    # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
+    if stacked_spectra and tel == 'erosita':
+        search_inst = 'combined'
+    else:
+        search_inst = None
+
+    # Find matching spectrum objects associated with the current source
+    spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
+                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                    over_sample=over_sample, telescope=tel, inst=search_inst)
+    # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+    #  a cluster with only a single valid instrument for a single valid observation this may not be the case
+    if isinstance(spec_objs, Spectrum):
+        spec_objs = [spec_objs]
+
+    # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
+    if len(spec_objs) == 0:
+        raise NoProductAvailableError("There are no matching spectra for {s} object, you "
+                                        "need to generate them first!".format(s=source.name))
+
+    # Turn spectra paths into TCL style list for substitution into template
+    specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
+
+    storage_key = spec_objs[0].storage_key
+
+    return specs, storage_key
