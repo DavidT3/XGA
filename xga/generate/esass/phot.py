@@ -120,7 +120,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
-
+    
     # Checking user's choice of energy limit parameters
     if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
         raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
@@ -145,6 +145,10 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     if ((lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or
             (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV'))):
         raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
+    
+    # Checking user's choice of combine_obs
+    if not isinstance(combine_obs, bool):
+        raise TypeError("The combine_obs argument must be a bool.")
     
     if combine_obs:
         # This requires combined event lists - this function will generate them
