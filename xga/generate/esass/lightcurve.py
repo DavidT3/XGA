@@ -292,7 +292,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
 
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and len(source.obs_ids) == 1:
+        if combine_obs and len(source.obs_ids['erosita']) == 1:
             combine_obs = False
 
         # Finding interloper regions within the radii we have specified has been put here because it all works in

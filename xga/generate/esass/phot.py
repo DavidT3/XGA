@@ -181,7 +181,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             continue
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and len(source.obs_ids) == 1:
+        if combine_obs and len(source.obs_ids['telescope']) == 1:
             combine_obs = False
     
         if not combine_obs:
@@ -377,7 +377,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and len(source.obs_ids) == 1:
+        if combine_obs and len(source.obs_ids['erosita']) == 1:
             combine_obs = False
         
         if not combine_obs:

@@ -247,7 +247,7 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
     else:
         search_inst = None
 
-    if (tel == 'erosita') and (len(source.obs_ids) > 1):
+    if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
         # For erosita we need to use the spectrum generated from combined observations, so that there
         # are no duplicated events
         spec_objs = source.get_combined_spectra(out_rad_vals[src_ind], inst=search_inst, 
