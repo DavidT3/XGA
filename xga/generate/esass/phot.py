@@ -179,7 +179,11 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             
             # then we can continue with the rest of the sources
             continue
-        
+        # if the user has set combine_obs to True and there is only one observation, then we 
+        # use the combine_obs = False functionality instead
+        if combine_obs and len(source.obs_ids) == 1:
+            combine_obs = False
+    
         if not combine_obs:
             # Check which event lists are associated with each individual source
             for pack in source.get_products("events", telescope='erosita', just_obj=False):
