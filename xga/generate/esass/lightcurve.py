@@ -290,6 +290,11 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             # then we can continue with the rest of the sources
             continue
 
+        # if the user has set combine_obs to True and there is only one observation, then we 
+        # use the combine_obs = False functionality instead
+        if combine_obs and len(source.obs_ids) == 1:
+            combine_obs = False
+
         # Finding interloper regions within the radii we have specified has been put here because it all works in
         #  degrees and as such only needs to be run once for all the different observations.
         interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], "erosita",
