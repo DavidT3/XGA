@@ -23,7 +23,7 @@ ALLOWED_ANN_METHODS = ['min_snr', 'min_cnt']
 
 def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity, lo_en: Quantity, hi_en: Quantity,
                     obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, tel: str = None):
+                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, telescope: str = None):
     """
     This method just sets up radii, masks, etc. for annular binning functions in this file. The operations in
     this function are shared by multiple other binning functions, hence they have been put in a function of their
@@ -45,7 +45,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         side in the PSF grid.
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
-    :param str tel: The telescope to set up annular bins for.
+    :param str telescope: The telescope to set up annular bins for.
     :return: The various variables that this function sets up
     :rtype:
     """
@@ -118,11 +118,11 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 
         return tel_rt, tel_cur_rads, tel_max_ann, tel_ann_masks, tel_back_mask, tel_pix_centre, tel_corr_mask, tel_pix_to_deg
     
-    if tel is None:
+    if telescope is None:
         # This returns a list of telescopes associated with the source
-        tel = source.telescopes
+        telelescope = source.telescopes
     else:
-        tel = [tel]
+        telescope = [telescope]
     
     # Making dictionaries that will be appended to with telescope keys
     rt = {}
@@ -134,9 +134,9 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     corr_mask = {}
     pix_to_deg = {}
 
-    for t in tel:
+    for tel in telescope:
         # This retrieves all of the parameters needed for annular bins
-        tel_params = get_tel_specific_params(t)
+        tel_params = get_tel_specific_params(tel)
         rt[tel] = tel_params[0]
         cur_rads[tel] = tel_params[1]
         max_ann[tel] = tel_params[2]
@@ -179,7 +179,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
-    :param str tel: The telescope to find radii to create annuli for.
+    :param str telescope: The telescope to find radii to create annuli for.
     :return: The radii of the requested annuli, the final snr values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, np.ndarray, int]
@@ -254,16 +254,16 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
                                      psf_bins, psf_algo, psf_iter)
     
-    if tel is None:
+    if telescope is None:
         # This returns a list of telescopes associated with the source
-        tel = source.telescopes
+        telescope = source.telescopes
     else:
-        tel = [tel]
+        telescope = [telescope]
     
     final_rads = {}
     snrs = {}
     
-    for t in tel:
+    for tel in telescope:
         t_final_rads, t_snrs = _get_tel_specific_params(tel)
         final_rads[tel] = t_final_rads
         snrs[tel] = t_snrs
@@ -299,7 +299,7 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         side in the PSF grid.
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
-    :param str tel: The telescope to find radii to create annuli for.
+    :param str telescope: The telescope to find radii to create annuli for.
     :return: The radii of the requested annuli, the final count values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, Quantity, int]
@@ -382,19 +382,19 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
                                      psf_bins, psf_algo, psf_iter)
     
-    if tel is None:
+    if telescope is None:
         # This returns a list of telescopes associated with the source
-        tel = source.telescopes
+        telescope = source.telescopes
     else:
-        tel = [tel]
+        telescope = [telescope]
     
     final_rads = {}
     cnts = {}
 
-    for t in tel:
-        t_final_rads, t_cnts = _get_tel_specific_params(t)
-        final_rads[t] = t_final_rads
-        cnts[t] = t_cnts
+    for tel in telescope:
+        t_final_rads, t_cnts = _get_tel_specific_params(tel)
+        final_rads[tel] = t_final_rads
+        cnts[tel] = t_cnts
         
 
     return final_rads, cnts, max_ann
@@ -408,7 +408,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES) -> List[Quantity]:
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES, telescope: str = None) -> List[Quantity]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -457,6 +457,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param str tel: The telescope to find radii to create annuli for.
     :return: A list of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
         to a source.
@@ -491,7 +492,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             # This is the simplest option, we just use the combined ratemap to decide on the annuli with minimum SNR
             rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, psf_corr=psf_corr,
                                        psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
-                                       allow_negative=allow_negative, exp_corr=exp_corr)
+                                       allow_negative=allow_negative, exp_corr=exp_corr, telescope=telescope)
         else:
             # This way is slightly more complicated, but here we use the worst observation (ranked by global
             #  signal to noise).
