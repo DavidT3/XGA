@@ -312,72 +312,90 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
     elif (type(min_cnt) == Quantity and not min_cnt.unit.is_equivalent('ct')) or not type(min_cnt) == Quantity:
         raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
 
+    def _get_tel_specific_params(tel):
+        if max_ann[tel] > 4:
+            # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+            acceptable = False
+        else:
+            # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+            #  as they are, while also issuing a warning
+            acceptable = True
+            warn("The min_width combined with the outer radius of the source creates only {} initial"
+                " annuli, so no re-binning will take place.".format(max_ann[tel]), stacklevel=2)
+            cur_num_ann = ann_masks[tel].shape[2]
+            tel_cnts = []
+            for i in range(cur_num_ann):
+                # We're calling the background subtracted counts calculation method of the ratemap for all of our annuli
+                tel_cnts.append(rt[tel].background_subtracted_counts(ann_masks[tel][:, :, i], back_mask[tel]))
+            # Becomes an astropy quantity (and so behaves like a numpy array) because they're nicer to work with
+            tel_cnts = Quantity(tel_cnts)
+
+        while not acceptable:
+            # How many annuli are there at this point in the loop?
+            cur_num_ann = ann_masks[tel].shape[2]
+
+            # Just a list for the counts to live in
+            tel_cnts = []
+            for i in range(cur_num_ann):
+                # We're calling the background subtracted count calculation method of the ratemap
+                #  for all of our annuli
+                tel_cnts.append(rt[tel].background_subtracted_counts(ann_masks[tel][:, :, i], back_mask[tel]))
+            # Becomes an astropy Quantity (behaves like a numpy array) because they're nicer to work with
+            tel_cnts = Quantity(tel_cnts)
+            # We find any indices of the array (== annuli) where the counts are not above our minimum
+            bad_cnts = np.where(tel_cnts < min_cnt)[0]
+
+            # If there are no annuli below our count threshold then all is good and joyous, and we
+            #  accept the current radii
+            if len(bad_cnts) == 0:
+                acceptable = True
+            # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
+            #  end of the count profile, then we merge that leftwards into the N-1th annuli
+            elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
+                cur_rads[tel] = np.delete(cur_rads[tel], -2)
+                ann_masks[tel] = annular_mask(pix_centre[tel], cur_rads[tel][:-1], cur_rads[tel][1:], rt[tel].shape) * corr_mask[tel][..., None]
+            # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+            #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+            #  which we do require - in this case it means we deleted the 1st annulus
+            elif len(bad_cnts) != 0 and bad_cnts[-1] == 0:
+                # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+                #  annular boundaries
+                cur_rads[tel] = np.delete(cur_rads[tel], 1)
+                ann_masks[tel] = annular_mask(pix_centre[tel], cur_rads[tel][:-1], cur_rads[tel][1:], rt[tel].shape) * corr_mask[tel][..., None]
+            # Otherwise if the outermost bad annulus is NOT right at the end (either end) of the profile, we merge
+            #  to the right
+            else:
+                cur_rads[tel] = np.delete(cur_rads[tel], bad_cnts[-1])
+                ann_masks[tel] = annular_mask(pix_centre[tel], cur_rads[tel][:-1], cur_rads[tel][1:], rt[tel].shape) * corr_mask[tel][..., None]
+
+            if ann_masks[tel].shape[2] == 4 and not acceptable:
+                warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
+                    "of four annuli will be returned".format(s=source.name), stacklevel=2)
+                break
+        # Now of course, pixels must become a more useful unit again
+        tel_final_rads = (Quantity(cur_rads[tel], 'pix') * pix_to_deg[tel]).to("arcsec")
+
+        return tel_final_rads, tel_cnts
+
     # Run the setup function for these functions that create different annular bins
     rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
         pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
                                      psf_bins, psf_algo, psf_iter)
-
-    if max_ann > 4:
-        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
-        acceptable = False
+    
+    if tel is None:
+        # This returns a list of telescopes associated with the source
+        tel = source.telescopes
     else:
-        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
-        #  as they are, while also issuing a warning
-        acceptable = True
-        warn("The min_width combined with the outer radius of the source creates only {} initial"
-             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
-        cur_num_ann = ann_masks.shape[2]
-        cnts = []
-        for i in range(cur_num_ann):
-            # We're calling the background subtracted counts calculation method of the ratemap for all of our annuli
-            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
-        # Becomes an astropy quantity (and so behaves like a numpy array) because they're nicer to work with
-        cnts = Quantity(cnts)
+        tel = [tel]
+    
+    final_rads = {}
+    cnts = {}
 
-    while not acceptable:
-        # How many annuli are there at this point in the loop?
-        cur_num_ann = ann_masks.shape[2]
-
-        # Just a list for the counts to live in
-        cnts = []
-        for i in range(cur_num_ann):
-            # We're calling the background subtracted count calculation method of the ratemap
-            #  for all of our annuli
-            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
-        # Becomes an astropy Quantity (behaves like a numpy array) because they're nicer to work with
-        cnts = Quantity(cnts)
-        # We find any indices of the array (== annuli) where the counts are not above our minimum
-        bad_cnts = np.where(cnts < min_cnt)[0]
-
-        # If there are no annuli below our count threshold then all is good and joyous, and we
-        #  accept the current radii
-        if len(bad_cnts) == 0:
-            acceptable = True
-        # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
-        #  end of the count profile, then we merge that leftwards into the N-1th annuli
-        elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
-            cur_rads = np.delete(cur_rads, -2)
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
-        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
-        #  which we do require - in this case it means we deleted the 1st annulus
-        elif len(bad_cnts) != 0 and bad_cnts[-1] == 0:
-            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
-            #  annular boundaries
-            cur_rads = np.delete(cur_rads, 1)
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-        # Otherwise if the outermost bad annulus is NOT right at the end (either end) of the profile, we merge
-        #  to the right
-        else:
-            cur_rads = np.delete(cur_rads, bad_cnts[-1])
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-
-        if ann_masks.shape[2] == 4 and not acceptable:
-            warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
-                 "of four annuli will be returned".format(s=source.name), stacklevel=2)
-            break
-    # Now of course, pixels must become a more useful unit again
-    final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
+    for t in tel:
+        t_final_rads, t_cnts = _get_tel_specific_params(t)
+        final_rads[t] = t_final_rads
+        cnts[t] = t_cnts
+        
 
     return final_rads, cnts, max_ann
 
