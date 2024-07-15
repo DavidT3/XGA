@@ -52,6 +52,8 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     def get_tel_specific_params(tel):
         """
         Internal method to get all of the telescope specific parameters needed for annular bins.
+
+        :param str tel: The telescope to set up annular bins for.
         """
         # deciding whether to retrieve combined ratemaps or not
         if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
@@ -150,7 +152,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, lo_en: Quantity,
               hi_en: Quantity, obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-              allow_negative: bool = False, exp_corr: bool = True) -> Tuple[Quantity, np.ndarray, int]:
+              allow_negative: bool = False, exp_corr: bool = True, telescope: str = None) -> Tuple[Quantity, np.ndarray, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum signal to noise
     and minimum annulus width.
@@ -177,76 +179,94 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
+    :param str tel: The telescope to find radii to create annuli for.
     :return: The radii of the requested annuli, the final snr values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, np.ndarray, int]
     """
 
+    def _get_tel_specific_params(tel):
+        if max_ann[tel] > 4:
+            # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+            acceptable = False
+        else:
+            # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+            #  as they are, while also issuing a warning
+            acceptable = True
+            warn("The min_width combined with the outer radius of the source creates only {} initial"
+                " annuli, so no re-binning will take place.".format(max_ann[tel]), stacklevel=2)
+            cur_num_ann = ann_masks[tel].shape[2]
+            snrs = []
+            for i in range(cur_num_ann):
+                # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+                snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel], exp_corr, allow_negative))
+            # Becomes a numpy array because they're nicer to work with
+            snrs = np.array(snrs)
+
+        while not acceptable:
+            # How many annuli are there at this point in the loop?
+            cur_num_ann = ann_masks[tel].shape[2]
+
+            # Just a list for the snrs to live in
+            snrs = []
+            for i in range(cur_num_ann):
+                # We're calling the signal to noise calculation method of the ratemap for all of our annuli
+                snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel], exp_corr, allow_negative))
+            # Becomes a numpy array because they're nicer to work with
+            snrs = np.array(snrs)
+            # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
+            bad_snrs = np.where(snrs < min_snr)[0]
+
+            # If there are no annuli below our signal to noise threshold then all is good and joyous and we accept
+            #  the current radii
+            if len(bad_snrs) == 0:
+                acceptable = True
+            # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
+            #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
+            elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
+                cur_rads[tel] = np.delete(cur_rads[tel], -2)
+                ann_masks[tel] = annular_mask(pix_centre[tel], cur_rads[tel][:-1], cur_rads[tel][1:], rt[tel].shape) * corr_mask[tel][..., None]
+            # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+            #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+            #  which we do require - in this case it means we deleted the 1st annulus
+            elif len(bad_snrs) != 0 and bad_snrs[-1] == 0:
+                # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+                #  annular boundaries
+                cur_rads[tel] = np.delete(cur_rads[tel], 1)
+                ann_masks[tel] = annular_mask(pix_centre[tel], cur_rads[tel][:-1], cur_rads[tel][1:], rt[tel].shape) * corr_mask[tel][..., None]
+            # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
+            else:
+                cur_rads[tel] = np.delete(cur_rads[tel], bad_snrs[-1])
+                ann_masks[tel] = annular_mask(pix_centre[tel], cur_rads[tel][:-1], cur_rads[tel][1:], rt[tel].shape) * corr_mask[tel][..., None]
+
+            if ann_masks[tel].shape[2] == 4 and not acceptable:
+                warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
+                    "of four annuli will be returned".format(s=source.name))
+                break
+        
+        # Now of course, pixels must become a more useful unit again
+        final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg[tel]).to("arcsec")
+    
     # This calls a function that just sets things up for this (and other annular binning) function
     rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
         pix_to_deg = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
                                      psf_bins, psf_algo, psf_iter)
-
-    if max_ann > 4:
-        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
-        acceptable = False
+    
+    if tel is None:
+        # This returns a list of telescopes associated with the source
+        tel = source.telescopes
     else:
-        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
-        #  as they are, while also issuing a warning
-        acceptable = True
-        warn("The min_width combined with the outer radius of the source creates only {} initial"
-             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
-        cur_num_ann = ann_masks.shape[2]
-        snrs = []
-        for i in range(cur_num_ann):
-            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
-        # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
-
-    while not acceptable:
-        # How many annuli are there at this point in the loop?
-        cur_num_ann = ann_masks.shape[2]
-
-        # Just a list for the snrs to live in
-        snrs = []
-        for i in range(cur_num_ann):
-            # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative))
-        # Becomes a numpy array because they're nicer to work with
-        snrs = np.array(snrs)
-        # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
-        bad_snrs = np.where(snrs < min_snr)[0]
-
-        # If there are no annuli below our signal to noise threshold then all is good and joyous and we accept
-        #  the current radii
-        if len(bad_snrs) == 0:
-            acceptable = True
-        # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
-        #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
-        elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
-            cur_rads = np.delete(cur_rads, -2)
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
-        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
-        #  which we do require - in this case it means we deleted the 1st annulus
-        elif len(bad_snrs) != 0 and bad_snrs[-1] == 0:
-            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
-            #  annular boundaries
-            cur_rads = np.delete(cur_rads, 1)
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-        # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
-        else:
-            cur_rads = np.delete(cur_rads, bad_snrs[-1])
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
-
-        if ann_masks.shape[2] == 4 and not acceptable:
-            warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
-                 "of four annuli will be returned".format(s=source.name))
-            break
-
-    # Now of course, pixels must become a more useful unit again
-    final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
+        tel = [tel]
+    
+    final_rads = {}
+    snrs = {}
+    max_ann = {}
+    
+    for t in tel:
+        t_final_rads, t_snrs, t_max_ann = _get_tel_specific_params(tel)
+        final_rads[tel] = t_final_rads
+        snrs[tel] = t_snrs
+        max_ann[tel] = t_max_ann
 
     return final_rads, snrs, max_ann
 
