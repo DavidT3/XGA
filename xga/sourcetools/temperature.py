@@ -49,7 +49,8 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     :return: The various variables that this function sets up
     :rtype:
     """
-    def get_tel_specific_params(tel):
+    def get_tel_specific_params(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, 
+                                psf_model, psf_bins, psf_algo, psf_iter, tel):
         """
         Internal method to get all of the telescope specific parameters needed for annular bins.
 
@@ -58,8 +59,18 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         # deciding whether to retrieve combined ratemaps or not
         if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
             get_combined = True
+            psf_corr = None
+            psf_model = None
+            psf_bins = None
+            psf_algo = None
+            psf_iter = None
         elif (tel == 'erosita') and (len(source.obs_ids['erosita']) == 1):
             get_combined = False
+            psf_corr = None
+            psf_model = None
+            psf_bins = None
+            psf_algo = None
+            psf_iter = None
         elif (tel == 'xmm') and (all([obs_id is None, inst is None])):
             get_combined = True
         else:
@@ -67,11 +78,27 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 
         # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
         if get_combined:
+            print(lo_en)
+            print(hi_en)
+            print(psf_corr)
+            print(psf_model)
+            print(psf_bins)
+            print(psf_algo)
+            print(psf_iter)
+            print(tel)
             # Here the user hasn't set ObsID or instrument, so we use the combined data
             tel_rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, 
                                                 psf_algo, psf_iter, telescope=tel)
             interloper_mask = source.get_interloper_mask(tel)
         else:
+            print(lo_en)
+            print(hi_en)
+            print(psf_corr)
+            print(psf_model)
+            print(psf_bins)
+            print(psf_algo)
+            print(psf_iter)
+            print(tel)
             # Both ObsID and instrument have been set by the user
             tel_rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
                                         psf_algo, psf_iter, telescope=tel)
@@ -83,7 +110,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 
         # Using the ratemap to get a conversion factor from pixels to degrees, though we will use it
         #  the other way around
-        tel_pix_to_deg = pix_deg_scale(source.default_coord, rt.radec_wcs)
+        tel_pix_to_deg = pix_deg_scale(source.default_coord, tel_rt.radec_wcs)
 
         # Making sure to go up to the whole number, pixels have to be integer of course, and I think it's
         #  better to err on the side of caution here and make things slightly wider than requested
@@ -99,7 +126,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         #  total number of values to generate, and while there are max_ann annuli, there are max_ann+1 radial boundaries
         init_rads = np.linspace(0, outer_rad, tel_max_ann + 1).astype(int)
         # Converts the source's default analysis coordinates to pixels
-        tel_pix_centre = rt.coord_conv(source.default_coord, 'pix')
+        tel_pix_centre = tel_rt.coord_conv(source.default_coord, 'pix')
         # Sets up a mask to correct for interlopers and weird edge effects
         tel_corr_mask = interloper_mask * tel_rt.edge_mask
 
@@ -120,7 +147,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     
     if telescope is None:
         # This returns a list of telescopes associated with the source
-        telelescope = source.telescopes
+        telescope = source.telescopes
     else:
         telescope = [telescope]
     
@@ -136,7 +163,9 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 
     for tel in telescope:
         # This retrieves all of the parameters needed for annular bins
-        tel_params = get_tel_specific_params(tel)
+        tel_params = get_tel_specific_params(source, outer_rad, min_width, lo_en, hi_en, obs_id, 
+                                             inst, psf_corr, psf_model, psf_bins, psf_algo, 
+                                             psf_iter, tel)
         rt[tel] = tel_params[0]
         cur_rads[tel] = tel_params[1]
         max_ann[tel] = tel_params[2]
