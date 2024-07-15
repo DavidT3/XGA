@@ -196,26 +196,26 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
             warn("The min_width combined with the outer radius of the source creates only {} initial"
                 " annuli, so no re-binning will take place.".format(max_ann[tel]), stacklevel=2)
             cur_num_ann = ann_masks[tel].shape[2]
-            snrs = []
+            tel_snrs = []
             for i in range(cur_num_ann):
                 # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-                snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel], exp_corr, allow_negative))
+                tel_snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel], exp_corr, allow_negative))
             # Becomes a numpy array because they're nicer to work with
-            snrs = np.array(snrs)
+            tel_snrs = np.array(tel_snrs)
 
         while not acceptable:
             # How many annuli are there at this point in the loop?
             cur_num_ann = ann_masks[tel].shape[2]
 
             # Just a list for the snrs to live in
-            snrs = []
+            tel_snrs = []
             for i in range(cur_num_ann):
                 # We're calling the signal to noise calculation method of the ratemap for all of our annuli
-                snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel], exp_corr, allow_negative))
+                tel_snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel], exp_corr, allow_negative))
             # Becomes a numpy array because they're nicer to work with
-            snrs = np.array(snrs)
+            tel_snrs = np.array(tel_snrs)
             # We find any indices of the array (== annuli) where the signal to noise is not above our minimum
-            bad_snrs = np.where(snrs < min_snr)[0]
+            bad_snrs = np.where(tel_snrs < min_snr)[0]
 
             # If there are no annuli below our signal to noise threshold then all is good and joyous and we accept
             #  the current radii
@@ -245,7 +245,9 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
                 break
         
         # Now of course, pixels must become a more useful unit again
-        final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg[tel]).to("arcsec")
+        tel_final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg[tel]).to("arcsec")
+
+        return tel_final_rads, tel_snrs, 
     
     # This calls a function that just sets things up for this (and other annular binning) function
     rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
@@ -260,13 +262,11 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     
     final_rads = {}
     snrs = {}
-    max_ann = {}
     
     for t in tel:
-        t_final_rads, t_snrs, t_max_ann = _get_tel_specific_params(tel)
+        t_final_rads, t_snrs = _get_tel_specific_params(tel)
         final_rads[tel] = t_final_rads
         snrs[tel] = t_snrs
-        max_ann[tel] = t_max_ann
 
     return final_rads, snrs, max_ann
 
@@ -274,7 +274,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
 def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
               min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None,
               psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-              psf_iter: int = 15) -> Tuple[Quantity, Quantity, int]:
+              psf_iter: int = 15, telescope: str = None) -> Tuple[Quantity, Quantity, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum number of counts
     and minimum annulus width.
@@ -299,6 +299,7 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         side in the PSF grid.
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param str tel: The telescope to find radii to create annuli for.
     :return: The radii of the requested annuli, the final count values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, Quantity, int]
