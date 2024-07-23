@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 09:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/07/2024, 10:55. Copyright (c) The Contributors
 
 import os
 import sys
@@ -31,24 +31,18 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     :rtype: Tuple[BaseProduct, str]
     """
 
-    # TODO TEMPORARY TEST TO SEE IF THIS WORKS
-
+    # This chunk is a fix for problems with eSASS (eROSITA package) finding the correct libraries on Apple ARM based
+    #  systems, and just creates a new environment variable so it can locate them, if necessary
     sys_env = os.environ.copy()
-
     if sys.platform == 'darwin':
         if "LD_LIBRARY_PATH" in sys_env:
             cmd = f"export LD_LIBRARY_PATH={sys_env['LD_LIBRARY_PATH']} && {cmd}"
         if "DYLD_LIBRARY_PATH" in sys_env:
             cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {cmd}"
 
-    print('\n', cmd, '\n')
-
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
-
-    # TODO REMOVE THIS
-    print(out, '\n\n', err, '\n\n\n\n')
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
