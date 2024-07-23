@@ -9,3 +9,6 @@ from .utils import xga_conf, CENSUS, OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_
     SAS_VERSION, XSPEC_VERSION, SAS_AVAIL, DEFAULT_COSMO
 
 del get_versions
+
+from . import _version
+__version__ = _version.get_versions()['version']
