@@ -1,4 +1,4 @@
-name: xga_dev
+name: xga
 channels:
   - anaconda
   - conda-forge
@@ -158,4 +158,3 @@ dependencies:
       - urllib3==2.2.2
       - userpath==1.9.2
       - versioneer==0.29
-prefix: /mnt/home/turne540/software/anaconda3/envs/xga_dev
