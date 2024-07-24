@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 15:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:06. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2418,13 +2418,15 @@ class Image(BaseProduct):
                         # Creating the equivalent region object from the artist
                         new_reg = EllipsePixelRegion(cen, artist.width, artist.height, Quantity(artist.angle, 'deg'))
                         # Fetches and sets the colour of the region, converting from matplotlib colour
-                        new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['edgecolor'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['facecolor'] = self._colour_convert[artist.get_edgecolor()]
                     elif altered and type(artist) == Circle:
                         cen = PixCoord(x=artist.center[0], y=artist.center[1])
                         # Creating the equivalent region object from the artist
                         new_reg = CirclePixelRegion(cen, artist.radius)
                         # Fetches and sets the colour of the region, converting from matplotlib colour
-                        new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['edgecolor'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['facecolor'] = self._colour_convert[artist.get_edgecolor()]
                     else:
                         # Looking up the region because if we get to this point we know its an original region that
                         #  hasn't been altered

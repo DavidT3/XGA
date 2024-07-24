@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1370,6 +1370,7 @@ class BaseSource:
                     #  that I've noticed previously
                     new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
                     new_reg.visual['edgecolor'] = reg.visual['edgecolor']
+                    new_reg.visual['facecolor'] = reg.visual['facecolor']
                     reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
