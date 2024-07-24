@@ -12,10 +12,10 @@ dependencies:
   - conda-forge::fitsio
   - matplotlib
   - scipy
-  - conda-forge::pyabel
   - conda-forge::corner
   - conda-forge::emcee
   - conda-forge::tabulate
   - conda-forge::getdist
   - anaconda::pytest
   - anaconda::exceptiongroup
+  - conda-forge::pyabel
