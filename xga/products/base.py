@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/12/2023, 17:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1995,9 +1995,9 @@ class BaseProfile1D:
         """
         if self._save_path is None and self._prof_type != "base":
             temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
-            rand_prof_id = randint(0, 1e+8)
+            rand_prof_id = randint(0, int(1e+8))
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
-                rand_prof_id = randint(0, 1e+8)
+                rand_prof_id = randint(0, int(1e+8))
             self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
 
         return self._save_path
