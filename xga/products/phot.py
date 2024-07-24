@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/03/2024, 13:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 15:50. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
 from matplotlib.widgets import Button, RangeSlider, Slider
-from regions import read_ds9, PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord, write_ds9
+from regions import PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord, Regions
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -250,7 +250,7 @@ class Image(BaseProduct):
 
         # The behaviour here depends on whether regions or a path have been passed
         if path is not None:
-            ds9_regs = read_ds9(path)
+            ds9_regs = Regions.read(path, format='ds9').regions
         else:
             ds9_regs = deepcopy(reg_objs)
 
@@ -2471,7 +2471,7 @@ class Image(BaseProduct):
                     # write_ds9(rel_regs, rel_save_path, 'image', radunit='')
                     # This function is a part of the regions module, and will write out a region file.
                     #  Specifically RA-Dec coordinate system in units of degrees.
-                    write_ds9(rel_regs, rel_save_path)
+                    Regions(rel_regs).write(rel_save_path, format='ds9')
 
             else:
                 raise ValueError('No save path was passed, so region files cannot be output.')
