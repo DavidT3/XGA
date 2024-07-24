@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 15:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:03. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -294,7 +294,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
                 else:
                     match_within = np.array([])
 
-                match_within = [r for r in match_within if r.visual['color'] in allowed_colours]
+                match_within = [r for r in match_within if r.visual['edgecolor'] in allowed_colours]
                 if len(match_within) != 0:
                     matched[cur_repr] = match_within
 
