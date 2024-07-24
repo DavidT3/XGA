@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/05/2024, 10:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 15:53. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -17,8 +17,8 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
-from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
-from regions import read_ds9, PixelRegion
+from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion, PixelRegion,
+                     Regions)
 
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
@@ -1297,7 +1297,7 @@ class BaseSource:
 
         # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
         #  source list for every ObsID?
-        custom_regs = read_ds9(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name))
+        custom_regs = Regions.read(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name), format='ds9').regions
         for reg in custom_regs:
             if not isinstance(reg, SkyRegion):
                 raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
@@ -1309,7 +1309,7 @@ class BaseSource:
 
         for obs_id in reg_paths:
             if reg_paths[obs_id] is not None:
-                ds9_regs = read_ds9(reg_paths[obs_id])
+                ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
                 # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
                 #  where they were generated with different resolutions).
                 #  TODO see issue #908, figure out how to support different resolutions of image
