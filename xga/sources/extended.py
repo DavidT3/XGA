@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/04/2023, 10:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:07. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -295,13 +295,13 @@ class GalaxyCluster(ExtendedSource):
                     #  as radius, centred on the centre of the current chosen region
                     within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
                     # Make sure to only select extended (green) sources
-                    within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
+                    within_width = [reg for reg in within_width if reg.visual['edgecolor'] == 'green']
 
                     # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
                     #  then it would intersect with the ellipse of the current chosen region.
                     rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
                     within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
-                    within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
+                    within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
 
                     # This finds which regions are present in both lists and makes sure if they are in both
                     #  then they are NOT removed from the analysis
