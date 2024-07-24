@@ -1,0 +1,21 @@
+name: xga
+channels:
+  - conda-forge
+  - defaults
+  - anaconda
+dependencies:
+  - python=3.12
+  - conda-forge::astropy
+  - tqdm
+  - pandas
+  - conda-forge::regions
+  - conda-forge::fitsio
+  - matplotlib
+  - scipy
+  - conda-forge::corner
+  - conda-forge::emcee
+  - conda-forge::tabulate
+  - conda-forge::getdist
+  - anaconda::pytest
+  - anaconda::exceptiongroup
+#  - conda-forge::pyabel
