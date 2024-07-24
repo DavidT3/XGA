@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -257,7 +257,7 @@ class GalaxyCluster(ExtendedSource):
                 # If the current interloper source is a point source/a PSF sized extended source and is within the
                 #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
                 #  cool core and allow it to stay in the analysis
-                if reg_obj.visual["color"] == 'red' and dist < check_rad:
+                if reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
                     warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
                                 "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
                                 "of a mis-identified cool core".format(s=self.name, o=obs)
@@ -267,7 +267,7 @@ class GalaxyCluster(ExtendedSource):
                     else:
                         self._supp_warn.append(warn_text)
 
-                elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
+                elif reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
                     warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
                                 "user supplied coordinates of {s}. It will not be excluded from analysis due " \
                                 "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)

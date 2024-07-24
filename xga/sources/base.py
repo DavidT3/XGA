@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1569,7 +1569,7 @@ class BaseSource:
                     #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
                     # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
                     for entry in init_region_matches:
-                        if entry.visual["color"] in allowed_colours:
+                        if entry.visual["edgecolor"] in allowed_colours:
                             interim_reg.append(entry)
 
                     # Different matching possibilities

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1576,7 +1576,7 @@ class Image(BaseProduct):
             #  dictionary for reference
             for region in [r for o, rl in self._regions.items() for r in rl]:
                 art_reg = region.as_artist()
-                self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
+                self._colour_convert[art_reg.get_edgecolor()] = region.visual["edgecolor"]
 
             # This just provides a conversion between name and colour tuple, the inverse of colour_convert
             self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
