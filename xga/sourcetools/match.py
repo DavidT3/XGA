@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/11/2023, 13:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 15:54. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -12,7 +12,7 @@ from astropy.coordinates import SkyCoord
 from astropy.units.quantity import Quantity
 from exceptiongroup import ExceptionGroup
 from pandas import DataFrame
-from regions import read_ds9, PixelRegion
+from regions import PixelRegion, Regions
 from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
@@ -248,7 +248,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
         #               "search.".format(obs_id))
 
         # Reading in the region file using the Regions module
-        og_ds9_regs = read_ds9(reg_path)
+        og_ds9_regs = Regions.read(reg_path, format='ds9').regions
 
         # Bodged declaration, the instrument and energy bounds don't matter - all I need this for is the
         #  nice way it extracts the WCS information that I need
