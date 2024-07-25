@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 13:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 14:27. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -77,23 +77,22 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     y_not_nans = np.where(~np.isnan(y_values))[0]
     all_not_nans = np.intersect1d(x_not_nans, y_not_nans)
 
-    # We'll warn the user if some entries are being excluded because they're NaNs
-    thrown_away = len(x_values) - len(all_not_nans)
-    if thrown_away != 0:
-        warn("{} sources have NaN values and have been excluded".format(thrown_away), stacklevel=2)
+    # We also check for negative uncertainties, which are obviously bogus and cause plotting/fit issues later on - we
+    #  take the opposite approach (in terms of boolean logic) to identifying the bad entries, because its easier
+    x_err_are_neg = np.where(x_errs < 0)[0]
+    y_err_are_neg = np.where(y_errs < 0)[0]
 
-    # We also check for negative uncertainties, which are obviously bogus and cause plotting/fit issues later on
-    x_err_not_neg = np.where(x_errs >= 0)[0]
-    y_err_not_neg = np.where(y_errs >= 0)[0]
-    all_err_not_neg = np.intersect1d(x_err_not_neg, y_err_not_neg)
+    all_err_not_neg = np.intersect1d(np.setdiff1d(np.arange(0, len(x_errs)), x_err_are_neg),
+                                     np.setdiff1d(np.arange(0, len(y_errs)), y_err_are_neg))
 
     # Intersect the two selection criteria
     all_acc = np.intersect1d(all_not_nans, all_err_not_neg)
 
     # And we'll repeat the warning exercise if any were excluded because they have negative uncertainties
-    thrown_away = len(x_values) - len(all_err_not_neg)
+    thrown_away = len(x_values) - len(all_acc)
     if thrown_away != 0:
-        warn("{} sources have negative uncertainties and have been excluded".format(thrown_away), stacklevel=2)
+        warn("{} sources have NaN values or negative uncertainties and have been excluded".format(thrown_away),
+             stacklevel=2)
 
     # Only values that aren't NaN and don't have negative errors will be permitted
     x_values = x_values[all_acc]
