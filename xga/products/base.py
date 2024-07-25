@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 11:04. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1015,6 +1015,8 @@ class BaseProfile1D:
 
         # Curve fit is a simple non-linear least squares implementation, its alright but fragile
         try:
+            print(y_errs)
+            print(lower_bounds, upper_bounds)
             fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
                                          absolute_sigma=True, bounds=(lower_bounds, upper_bounds))
 
@@ -1031,8 +1033,14 @@ class BaseProfile1D:
                     warning_str = "Very large parameter uncertainties"
                     success = False
         except RuntimeError as r_err:
-            warn("{}, curve_fit has failed.".format(str(r_err)))
+            warn("{}, curve_fit has failed.".format(str(r_err)), stacklevel=2)
             warning_str = str(r_err)
+            success = False
+            fit_par = np.full(len(model.model_pars), np.nan)
+            fit_par_err = np.full(len(model.model_pars), np.nan)
+        except ValueError as v_err:
+            warn("{}, curve_fit has failed.".format(str(v_err)), stacklevel=2)
+            warning_str = str(v_err)
             success = False
             fit_par = np.full(len(model.model_pars), np.nan)
             fit_par_err = np.full(len(model.model_pars), np.nan)
@@ -2852,8 +2860,8 @@ class BaseAggregateProfile1D:
             else:
                 main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
+            # for leg_key in main_leg.legendHandles:
+            #     leg_key.set_visible(True)
 
         # We specify which axes object needs formatters applied, depends on whether the residual ax is being
         #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
@@ -2892,17 +2900,3 @@ class BaseAggregateProfile1D:
             raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
                             " to this object.")
         return BaseAggregateProfile1D(to_combine)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
