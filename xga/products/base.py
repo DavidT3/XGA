@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 11:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 12:41. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1786,7 +1786,7 @@ class BaseProfile1D:
             else:
                 main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
-            for leg_line in main_leg.get_lines():
+            for leg_line in main_leg.legend_handles:
                 leg_line.set_visible(True)
 
         # If this variable is not None it means that the user has specified their own formatters, and these will
@@ -2859,8 +2859,9 @@ class BaseAggregateProfile1D:
                 main_leg = main_ax.legend(loc="best", ncol=1)
             else:
                 main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-            # This makes sure legend keys are shown, even if the data is hidden
-            for leg_line in main_leg.get_lines():
+            # This makes sure legend keys are shown, even if the data is hidden - not we use legend_handles here
+            #  rather than get_lines() because errorbars are not Line2D instances, but collections
+            for leg_line in main_leg.legend_handles:
                 leg_line.set_visible(True)
 
         # We specify which axes object needs formatters applied, depends on whether the residual ax is being
