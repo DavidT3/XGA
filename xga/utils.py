@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:00. Copyright (c) The Contributors
 
 import json
 import os
@@ -17,7 +17,7 @@ from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
-from numpy import nan, floor
+from numpy import floor
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
@@ -199,13 +199,15 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
             census.writelines(obs_lookup)
 
     # I do the stripping and splitting to make it a 3 column array, needed to be lines to write to file
-    obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
-                              columns=obs_lookup[0].strip("\n").split(','), dtype=str)
-    obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
-    obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
-    obs_lookup["USE_PN"] = obs_lookup["USE_PN"].replace('T', True).replace('F', False)
-    obs_lookup["USE_MOS1"] = obs_lookup["USE_MOS1"].replace('T', True).replace('F', False)
-    obs_lookup["USE_MOS2"] = obs_lookup["USE_MOS2"].replace('T', True).replace('F', False)
+    # obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
+    #                           columns=obs_lookup[0].strip("\n").split(','), dtype=str)
+    obs_lookup = pd.read_csv(CENSUS_FILE, dtype={"RA_PNT": float, "DEC_PNT": float, "USE_PN": str, "USE_MOS1": str,
+                                                 "USE_MOS2": str})
+
+    obs_lookup["USE_PN"] = obs_lookup['USE_PN'].astype(bool)
+    obs_lookup["USE_MOS1"] = obs_lookup['USE_MOS1'].astype(bool)
+    obs_lookup["USE_MOS2"] = obs_lookup['USE_MOS2'].astype(bool)
+
     return obs_lookup, blacklist
 
 

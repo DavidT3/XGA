@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 12:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:00. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1015,8 +1015,6 @@ class BaseProfile1D:
 
         # Curve fit is a simple non-linear least squares implementation, its alright but fragile
         try:
-            print(y_errs)
-            print(lower_bounds, upper_bounds)
             fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
                                          absolute_sigma=True, bounds=(lower_bounds, upper_bounds))
 
