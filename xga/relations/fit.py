@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/11/2023, 18:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 13:46. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -72,19 +72,29 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
         no_x_errs = False
 
     # Need to do a cleaning stage, to remove any NaN values from the data
-    # First have to identify which entries in both the x and y arrays are NaN
+    #  First have to identify which entries in both the x and y arrays are NaN
     x_not_nans = np.where(~np.isnan(x_values))[0]
     y_not_nans = np.where(~np.isnan(y_values))[0]
     all_not_nans = np.intersect1d(x_not_nans, y_not_nans)
 
-    # We'll warn the user if some entries are being excluded
+    # We'll warn the user if some entries are being excluded because they're NaNs
     thrown_away = len(x_values) - len(all_not_nans)
     if thrown_away != 0:
-        warn("{} sources have NaN values and have been excluded".format(thrown_away))
+        warn("{} sources have NaN values and have been excluded".format(thrown_away), stacklevel=2)
 
-    # Only values that aren't NaN will be permitted
-    x_values = x_values[all_not_nans]
-    y_values = y_values[all_not_nans]
+    # We also check for negative uncertainties, which are obviously bogus and cause plotting/fit issues later on
+    x_err_not_neg = np.where(x_errs >= 0)[0]
+    y_err_not_neg = np.where(y_errs >= 0)[0]
+    all_err_not_neg = np.intersect1d(x_err_not_neg, y_err_not_neg)
+
+    # And we'll repeat the warning exercise if any were excluded because they have negative uncertainties
+    thrown_away = len(x_values) - len(all_err_not_neg)
+    if thrown_away != 0:
+        warn("{} sources have negative uncertainties and have been excluded".format(thrown_away), stacklevel=2)
+
+    # Only values that aren't NaN and don't have negative errors will be permitted
+    x_values = x_values[all_not_nans*all_err_not_neg]
+    y_values = y_values[all_not_nans*all_err_not_neg]
     # We're not changing the error arrays here because I'll do that in the place where I ensure the error arrays
     #  are 1D
 
@@ -114,8 +124,10 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
         av_ax = x_errs.shape.index(2)
         x_errs = np.mean(x_errs, axis=av_ax)
 
-    y_errs = y_errs[all_not_nans]
-    x_errs = x_errs[all_not_nans]
+    # Doing what we did to the value arrays further up, removing any entries that haven't passed our criteria of not
+    #  having a NaN and not having negative errors
+    y_errs = y_errs[all_not_nans*all_err_not_neg]
+    x_errs = x_errs[all_not_nans*all_err_not_neg]
 
     # We divide through by the normalisation parameter, which makes the data unitless
     x_fit_data = x_values / x_norm
