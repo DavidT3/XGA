@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
 
 import json
 import os
@@ -201,8 +201,8 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     # I do the stripping and splitting to make it a 3 column array, needed to be lines to write to file
     # obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
     #                           columns=obs_lookup[0].strip("\n").split(','), dtype=str)
-    obs_lookup = pd.read_csv(CENSUS_FILE, dtype={"RA_PNT": float, "DEC_PNT": float, "USE_PN": str, "USE_MOS1": str,
-                                                 "USE_MOS2": str})
+    obs_lookup = pd.read_csv(CENSUS_FILE, dtype={"ObsID": str, "RA_PNT": float, "DEC_PNT": float, "USE_PN": str,
+                                                 "USE_MOS1": str, "USE_MOS2": str})
 
     obs_lookup["USE_PN"] = obs_lookup['USE_PN'].astype(bool)
     obs_lookup["USE_MOS1"] = obs_lookup['USE_MOS1'].astype(bool)
