@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2024, 10:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 09:37. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -708,7 +708,7 @@ class ScalingRelation:
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
                     colour: str = None, save_path: str = None):
-        """
+        r"""
         A convenient view method to examine the corner plot of the parameter posterior distributions.
 
         :param tuple figsize: The size of the figure.
@@ -1259,7 +1259,7 @@ class AggregateScalingRelation:
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
                     contour_colours: List[str] = None, save_path: str = None):
-        """
+        r"""
         A corner plot viewing method that will combine chains from all the relations that make up this
         aggregate scaling relation and display them using getdist.
 
