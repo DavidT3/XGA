@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/11/2023, 13:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:56. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -12,7 +12,7 @@ from astropy.coordinates import SkyCoord
 from astropy.units.quantity import Quantity
 from exceptiongroup import ExceptionGroup
 from pandas import DataFrame
-from regions import read_ds9, PixelRegion
+from regions import PixelRegion, Regions, SkyRegion
 from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, OUTPUT, xga_conf
@@ -20,17 +20,27 @@ from ..exceptions import NoMatchFoundError, NoValidObservationsError, NoRegionsE
 from ..utils import SRC_REGION_COLOURS
 
 
-def _dist_from_source(search_ra: float, search_dec: float, cur_reg):
+def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
     """
-    Calculates the euclidean distance between the centre of a supplied region, and the
-    position of the source.
+    Calculates the distance between the centre of a supplied region, and the position of the source. We use the
+    Haversine formula to determine the separation on the surface of a sphere.
 
-    :param reg: A region object.
-    :return: Distance between region centre and source position.
+    :param SkyRegion cur_reg: A region object.
+    :rtype: float
+    :return: Distance between region centre and source position, in degrees.
     """
-    r_ra = cur_reg.center.ra.value
-    r_dec = cur_reg.center.dec.value
-    return np.sqrt(abs(r_ra - search_ra) ** 2 + abs(r_dec - search_dec) ** 2)
+    r_ra = cur_reg.center.ra.to('radian').value
+    r_dec = cur_reg.center.dec.to('radian').value
+
+    # The numpy trig functions want everything in radians, so we make sure that is the case
+    search_ra = search_ra * (np.pi / 180)
+    search_dec = search_dec * (np.pi / 180)
+
+    # Then just use the Haversine formula to calculate the separation
+    hav_sep = 2 * np.arcsin(np.sqrt((np.sin((search_dec - r_dec) / 2) ** 2)
+                                    + np.cos(r_dec) * np.cos(search_dec) * np.sin((search_ra - r_ra) / 2) ** 2))
+    # Converted from radians to degrees - not using quantities in this internal function
+    return hav_sep / (np.pi / 180)
 
 
 def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
@@ -113,8 +123,15 @@ def _simple_search(ra: float, dec: float, search_rad: float) -> Tuple[float, flo
     #  original census especially when this is being multi-threaded
     local_census = CENSUS.copy()
     local_blacklist = BLACKLIST.copy()
-    local_census["dist"] = np.sqrt((local_census["RA_PNT"] - ra) ** 2
-                                   + (local_census["DEC_PNT"] - dec) ** 2)
+    # Calculate Haversine distance from specified RA and DEC to the observation centers
+    hav_sep = 2 * np.arcsin(np.sqrt((np.sin(((local_census["DEC_PNT"]*(np.pi / 180))-(dec*(np.pi / 180))) / 2) ** 2)
+                                    + np.cos((dec * (np.pi / 180))) * np.cos(local_census["DEC_PNT"] * (np.pi / 180))
+                                    * np.sin(((local_census["RA_PNT"]*(np.pi / 180)) - (ra*(np.pi / 180))) / 2) ** 2))
+    # Converting back to degrees from radians
+    hav_sep /= (np.pi / 180)
+    # Storing the separations in the local copy of the census
+    local_census["dist"] = hav_sep
+
     # Select any ObsIDs within (or at) the search radius input to the function
     matches = local_census[local_census["dist"] <= search_rad]
     # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
@@ -248,7 +265,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
         #               "search.".format(obs_id))
 
         # Reading in the region file using the Regions module
-        og_ds9_regs = read_ds9(reg_path)
+        og_ds9_regs = Regions.read(reg_path, format='ds9').regions
 
         # Bodged declaration, the instrument and energy bounds don't matter - all I need this for is the
         #  nice way it extracts the WCS information that I need
@@ -294,7 +311,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
                 else:
                     match_within = np.array([])
 
-                match_within = [r for r in match_within if r.visual['color'] in allowed_colours]
+                match_within = [r for r in match_within if r.visual['edgecolor'] in allowed_colours]
                 if len(match_within) != 0:
                     matched[cur_repr] = match_within
 

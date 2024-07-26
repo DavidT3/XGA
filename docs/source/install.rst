@@ -19,21 +19,36 @@ wish to use existing region files, then they must be in a DS9 compatible format,
 
 The Module
 ----------
+We **strongly recommend** that you make use of Python virtual environments, or (even better) Conda/Mamba virtual environments when installing XGA.
 
-XGA is available on PyPi, so you can simply run:
+XGA is available on the popular Python Package Index (PyPI), and can be installed like this:
 
 .. code-block::
 
     pip install xga
 
-Alternatively you can fetch the current working version from the git repository, which (as XGA is still in a fairly
-early stage of development) may have more up-to-date features than the PyPi release:
+You can also fetch the current working version from the git repository, and install it (this method has replaced 'python setup.py install'):
 
 .. code-block::
 
     git clone https://github.com/DavidT3/XGA
     cd XGA
-    python setup.py install
+    python -m pip install .
+
+Alternatively you could use the 'editable' option (this has replaced running setup.py and passing 'develop') so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
+
+.. code-block::
+
+    git clone https://github.com/DavidT3/XGA
+    cd XGA
+    python -m pip install --editable .
+
+We also provide a Conda lock file in the conda_envs directory (see `conda-lock GitHub README <https://github.com/conda/conda-lock/README.md>`_ on how to install conda-lock), which can be used to create an Anaconda environment with the required dependencies (excepting PyAbel, which has to be installed through pip at this time):
+
+.. code-block::
+    conda-lock install -n <YOUR ENVIRONMENT NAME GOES HERE>
+    conda activate <YOUR ENVIRONMENT NAME GOES HERE>
+    pip install pyabel==0.9
 
 Required Dependencies
 ---------------------
@@ -47,7 +62,7 @@ All required Python modules can be found in requirements.txt, and should be adde
 
 Excellent installation guides for `SAS <https://www.cosmos.esa.int/web/xmm-newton/sas-installation>`_ and
 `HEASoft <https://heasarc.gsfc.nasa.gov/lheasoft/install.html>`_ already exist, so I won't go into that here.
-XGA will not run without detecting these pieces of software installed on your system.
+XGA will not generate XMM products without detecting SAS, and will not fit spectra without detecting XSPEC.
 
 Optional Dependencies
 ---------------------

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:07. Copyright (c) The Contributors
 
 from typing import Tuple, Dict
 
@@ -156,7 +156,7 @@ class Star(PointSource):
         #  different ObsIDs in the directory.
         for k, v in anti_results_dict.items():
             # We only want to check regions that are point sources, so in this instance we select red ones
-            recheck = [r for r in v if r.visual['color'] == 'red']
+            recheck = [r for r in v if r.visual['edgecolor'] == 'red']
             # Then we use the handy function I wrote ages ago to find if any of those regions lie within
             #  match_radius of the ra_dec of the source. This will return regions that have ANY PART of
             #  themselves within our search radius.

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/05/2024, 10:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:57. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -17,8 +17,8 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
-from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
-from regions import read_ds9, PixelRegion
+from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion, PixelRegion,
+                     Regions)
 
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
@@ -1297,7 +1297,7 @@ class BaseSource:
 
         # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
         #  source list for every ObsID?
-        custom_regs = read_ds9(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name))
+        custom_regs = Regions.read(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name), format='ds9').regions
         for reg in custom_regs:
             if not isinstance(reg, SkyRegion):
                 raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
@@ -1309,7 +1309,7 @@ class BaseSource:
 
         for obs_id in reg_paths:
             if reg_paths[obs_id] is not None:
-                ds9_regs = read_ds9(reg_paths[obs_id])
+                ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
                 # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
                 #  where they were generated with different resolutions).
                 #  TODO see issue #908, figure out how to support different resolutions of image
@@ -1369,7 +1369,8 @@ class BaseSource:
                     # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
                     #  that I've noticed previously
                     new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
-                    new_reg.visual['color'] = reg.visual['color']
+                    new_reg.visual['edgecolor'] = reg.visual['edgecolor']
+                    new_reg.visual['facecolor'] = reg.visual['facecolor']
                     reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
@@ -1568,7 +1569,7 @@ class BaseSource:
                     #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
                     # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
                     for entry in init_region_matches:
-                        if entry.visual["color"] in allowed_colours:
+                        if entry.visual["edgecolor"] in allowed_colours:
                             interim_reg.append(entry)
 
                     # Different matching possibilities
@@ -3828,7 +3829,7 @@ class BaseSource:
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
-        This method calculates the separation between the user supplied ra_dec coordinates, and the peak
+        This method calculates the Haversine separation between the user supplied ra_dec coordinates, and the peak
         coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
         peak has been calculated then the result will be 0.
 
@@ -3840,10 +3841,13 @@ class BaseSource:
         if not hasattr(self, 'peak'):
             raise AttributeError("This source does not have a peak attribute, and so an offset cannot be calculated.")
 
-        # Calculate the euclidean distance between ra_dec and peak
-        sep = np.sqrt(abs(self.ra_dec[0] - self.peak[0]) ** 2 + abs(self.ra_dec[1] - self.peak[1]) ** 2)
+        # Calculate the Haversine distance between ra_dec and peak
+        hav_sep = 2 * np.arcsin(np.sqrt((np.sin((self.peak[1] - self.ra_dec[1]) / 2) ** 2) +
+                                        np.cos(self.ra_dec[1]) * np.cos(self.peak[1]) *
+                                        np.sin((self.peak[0] - self.ra_dec[0]) / 2) ** 2))
+
         # Convert the separation to the requested unit - this will throw an error if the unit is stupid
-        conv_sep = self.convert_radius(sep, off_unit)
+        conv_sep = self.convert_radius(hav_sep, off_unit)
 
         # Return the converted separation
         return conv_sep

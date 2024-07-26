@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 09:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 15:01. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -475,11 +475,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             rel_src = samp[row['name']]
             rel_rad = rel_src.get_radius(o_dens, 'kpc')
             rel_rad_err = cur_rad_errs[np.where(samp.names == rel_src.name)[0]]
+            if isinstance(rel_rad_err, np.ndarray):
+                rel_rad_err = rel_rad_err[0]
 
-            # These will be to store the read-out temperature and luminosity values, and their corresponding
-            #  column names for the dataframe - we make sure that the measure radius is present in the data
-            vals = [rel_rad.value, rel_rad_err.value]
-            cols = [o_dens, o_dens + '+-']
+            # These will eventually be to store the read-out temperature and luminosity values, and their corresponding
+            #  column names for the dataframe. Firstly though, we make sure that the measured radius is present in the
+            #  data, as well as including the nH value used (a pet hate of mine when that isn't in a paper table).
+            vals = [rel_src.nH.value, rel_rad.value, rel_rad_err.value]
+            cols = ['nH', o_dens, o_dens + '+-']
 
             # If the user let XGA determine a peak coordinate for the cluster, we will need to add it to the results
             #  as all the spectra for the cluster were generated with that as the central point
@@ -531,7 +534,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     nh = rel_src.get_results(rel_rad, par='nH', group_spec=group_spec, min_counts=min_counts,
                                              min_sn=min_sn, over_sample=over_sample)
                     vals += list(nh)
-                    cols += ['nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+                    cols += ['fit_nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
             except ModelNotAssociatedError:
                 pass
@@ -571,14 +574,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         nhce = rel_src.get_results(rel_rad, par='nH', inner_radius=0.15*rel_rad, group_spec=group_spec,
                                                    min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
                         vals += list(nhce)
-                        cols += ['nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+                        cols += ['fit_nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                 except ModelNotAssociatedError:
                     pass
 
             # We know that at least the radius will always be there to be added to the dataframe, so we add the
             #  information in vals and cols
-            loaded_samp_data.loc[row_ind, cols] = vals
+            loaded_samp_data.loc[row_ind, cols] = np.array(vals)
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:

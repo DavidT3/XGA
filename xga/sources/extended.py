@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/04/2023, 10:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -257,7 +257,7 @@ class GalaxyCluster(ExtendedSource):
                 # If the current interloper source is a point source/a PSF sized extended source and is within the
                 #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
                 #  cool core and allow it to stay in the analysis
-                if reg_obj.visual["color"] == 'red' and dist < check_rad:
+                if reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
                     warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
                                 "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
                                 "of a mis-identified cool core".format(s=self.name, o=obs)
@@ -267,7 +267,7 @@ class GalaxyCluster(ExtendedSource):
                     else:
                         self._supp_warn.append(warn_text)
 
-                elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
+                elif reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
                     warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
                                 "user supplied coordinates of {s}. It will not be excluded from analysis due " \
                                 "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
@@ -295,17 +295,21 @@ class GalaxyCluster(ExtendedSource):
                     #  as radius, centred on the centre of the current chosen region
                     within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
                     # Make sure to only select extended (green) sources
-                    within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
+                    within_width = [reg for reg in within_width if reg.visual['edgecolor'] == 'green']
 
                     # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
                     #  then it would intersect with the ellipse of the current chosen region.
                     rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
                     within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
-                    within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
-
+                    within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
+                    
                     # This finds which regions are present in both lists and makes sure if they are in both
-                    #  then they are NOT removed from the analysis
-                    intersect_regions = list(set(within_width) & set(within_height))
+                    #  then they are NOT removed from the analysis - AS OF regions v0.9 THIS NO LONGER WORKS AS
+                    #  REGIONS ARE NOT HASHABLE - THE LIST COMPREHENSION BELOW IS A QUICK FIX BUT LESS EFFICIENT
+                    # intersect_regions = list(set(within_width) & set(within_height))
+                    
+                    # This should do what the above set intersection did, but slower
+                    intersect_regions = [r for r in within_height if r in within_width]
                     for inter_reg in intersect_regions:
                         inter_reg_ind = new_anti_results[obs].index(inter_reg)
                         new_anti_results[obs].pop(inter_reg_ind)

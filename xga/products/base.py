@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/12/2023, 17:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 20:34. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1031,8 +1031,14 @@ class BaseProfile1D:
                     warning_str = "Very large parameter uncertainties"
                     success = False
         except RuntimeError as r_err:
-            warn("{}, curve_fit has failed.".format(str(r_err)))
+            warn("{}, curve_fit has failed.".format(str(r_err)), stacklevel=2)
             warning_str = str(r_err)
+            success = False
+            fit_par = np.full(len(model.model_pars), np.nan)
+            fit_par_err = np.full(len(model.model_pars), np.nan)
+        except ValueError as v_err:
+            warn("{}, curve_fit has failed.".format(str(v_err)), stacklevel=2)
+            warning_str = str(v_err)
             success = False
             fit_par = np.full(len(model.model_pars), np.nan)
             fit_par_err = np.full(len(model.model_pars), np.nan)
@@ -1616,7 +1622,7 @@ class BaseProfile1D:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label, color=data_colour)
             if self.values_err is not None:
                 y_errs = (self.values_err.copy() / y_norm).value
-                main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
                                      color=data_colour,  linestyle='dashdot', alpha=0.7)
         else:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
@@ -1778,8 +1784,8 @@ class BaseProfile1D:
             else:
                 main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
             # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
+            for leg_line in main_leg.legend_handles:
+                leg_line.set_visible(True)
 
         # If this variable is not None it means that the user has specified their own formatters, and these will
         #  now override the automatic formatting
@@ -1995,9 +2001,9 @@ class BaseProfile1D:
         """
         if self._save_path is None and self._prof_type != "base":
             temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
-            rand_prof_id = randint(0, 1e+8)
+            rand_prof_id = randint(0, int(1e+8))
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
-                rand_prof_id = randint(0, 1e+8)
+                rand_prof_id = randint(0, int(1e+8))
             self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
 
         return self._save_path
@@ -2851,9 +2857,10 @@ class BaseAggregateProfile1D:
                 main_leg = main_ax.legend(loc="best", ncol=1)
             else:
                 main_leg = main_ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), ncol=1, borderaxespad=0)
-            # This makes sure legend keys are shown, even if the data is hidden
-            for leg_key in main_leg.legendHandles:
-                leg_key.set_visible(True)
+            # This makes sure legend keys are shown, even if the data is hidden - not we use legend_handles here
+            #  rather than get_lines() because errorbars are not Line2D instances, but collections
+            for leg_line in main_leg.legend_handles:
+                leg_line.set_visible(True)
 
         # We specify which axes object needs formatters applied, depends on whether the residual ax is being
         #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
@@ -2892,17 +2899,3 @@ class BaseAggregateProfile1D:
             raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
                             " to this object.")
         return BaseAggregateProfile1D(to_combine)
-
-
-
-
-
-
-
-
-
-
-
-
-
-

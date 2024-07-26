@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/11/2023, 23:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:59. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -178,7 +178,7 @@ class BaseSample:
         :return: List of nH values.
         :rtype: Quantity
         """
-        return np.Quantity([s.nH for s in self._sources.values()])
+        return Quantity([s.nH for s in self._sources.values()])
 
     @property
     def cosmo(self):
