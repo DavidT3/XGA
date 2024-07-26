@@ -33,33 +33,31 @@ We **strongly recommend** that you make use of Python virtual environments, or (
 XGA is available on the popular Python Package Index (PyPI), and can be installed like this:
 
 ```shell script
-    pip install xga
+pip install xga
 ```
 
 You can also fetch the current working version from the git repository, and install it (this method has replaced 'python setup.py install'):
 
 ```shell script
-
-    git clone https://github.com/DavidT3/XGA
-    cd XGA
-    python -m pip install .
+git clone https://github.com/DavidT3/XGA
+cd XGA
+python -m pip install .
 ```
 
 Alternatively you could use the 'editable' option (this has replaced running setup.py and passing 'develop') so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
 
 ```shell script
-
-    git clone https://github.com/DavidT3/XGA
-    cd XGA
-    python -m pip install --editable .
+git clone https://github.com/DavidT3/XGA
+cd XGA
+python -m pip install --editable .
 ```
 
 We also provide a Conda lock file in the conda_envs directory (see `conda-lock GitHub README <https://github.com/conda/conda-lock/README.md>`_ on how to install conda-lock), which can be used to create an Anaconda environment with the required dependencies (excepting PyAbel, which has to be installed through pip at this time):
 
 ```shell script
-    conda-lock install -n <YOUR ENVIRONMENT NAME GOES HERE>
-    conda activate <YOUR ENVIRONMENT NAME GOES HERE>
-    pip install pyabel==0.9
+conda-lock install -n <YOUR ENVIRONMENT NAME GOES HERE>
+conda activate <YOUR ENVIRONMENT NAME GOES HERE>
+pip install pyabel==0.9
 ```
 
 ## Required Dependencies
