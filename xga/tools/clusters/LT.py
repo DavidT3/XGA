@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:14. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -476,10 +476,11 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             rel_rad = rel_src.get_radius(o_dens, 'kpc')
             rel_rad_err = cur_rad_errs[np.where(samp.names == rel_src.name)[0]]
 
-            # These will be to store the read-out temperature and luminosity values, and their corresponding
-            #  column names for the dataframe - we make sure that the measured radius is present in the data
-            vals = [rel_rad.value, rel_rad_err.value]
-            cols = [o_dens, o_dens + '+-']
+            # These will eventually be to store the read-out temperature and luminosity values, and their corresponding
+            #  column names for the dataframe. Firstly though, we make sure that the measured radius is present in the
+            #  data, as well as including the nH value used (a pet hate of mine when that isn't in a paper table).
+            vals = [rel_src.nH.value, rel_rad.value, rel_rad_err.value]
+            cols = ['nH', o_dens, o_dens + '+-']
 
             # If the user let XGA determine a peak coordinate for the cluster, we will need to add it to the results
             #  as all the spectra for the cluster were generated with that as the central point
