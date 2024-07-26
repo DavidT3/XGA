@@ -52,7 +52,7 @@ cd XGA
 python -m pip install --editable .
 ```
 
-We also provide a Conda lock file in the conda_envs directory (see `conda-lock GitHub README <https://github.com/conda/conda-lock/README.md>`_ on how to install conda-lock), which can be used to create an Anaconda environment with the required dependencies (excepting PyAbel, which has to be installed through pip at this time):
+We also provide a Conda lock file in the conda_envs directory (see [conda-lock GitHub README](https://github.com/conda/conda-lock/README.md) on how to install conda-lock), which can be used to create an Anaconda environment with the required dependencies (excepting PyAbel, which has to be installed through pip at this time):
 
 ```shell script
 conda-lock install -n <YOUR ENVIRONMENT NAME GOES HERE>
