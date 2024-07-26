@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 13:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 13:47. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -425,6 +425,9 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     _view_stack(results, scale_radius, radii, figsize)
 
     if show_images:
+        raise NotImplementedError("The ability to show images alongside the stacked brightness profiles is not "
+                                  "currently functional.")
+
         for name_ind, name in enumerate(results[5]):
             cur_src = sources[name]
             if not psf_corr:
@@ -443,9 +446,8 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
             inter_mask = cur_src.get_interloper_mask()
             rad = cur_src.get_radius(scale_radius, kpc)
 
-            prof_prods = cur_src.get_products("combined_brightness_profile")
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step,
-                                                                                       min_snr, rad)]
+            prof_prods = cur_src.get_products("combined_brightness_profile", )
+            matching_profs = [p for p in prof_prods if p.check_match(rt, pix_peak, pix_step, min_snr, rad)]
             pr = matching_profs[0]
             fig, ax_arr = plt.subplots(ncols=2, figsize=(figsize[0], figsize[0] * 0.5))
 
@@ -475,13 +477,12 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
 
 
 def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "r200", fit_method: str = 'mcmc',
-                       use_peak: bool = True, model_priors: list = None, model_start_pars: list = None,
-                       pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
-                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                       custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
-                       psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                       psf_iter: int = 15, num_cores: int = NUM_CORES, model_realisations: int = 500,
-                       conf_level: int = 90, num_walkers: int = 20, num_steps: int = 20000) \
+                       use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
+                       min_snr: float = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
+                       hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
+                       sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
+                       psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                       num_cores: int = NUM_CORES, num_walkers: int = 20, num_steps: int = 20000) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -572,8 +573,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         # This fetches any profiles that might have already been generated to our required specifications
         prof_prods = src_obj.get_products("combined_brightness_profile")
         if len(prof_prods) == 1:
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, central_coord, pix_step,
-                                                                                       min_snr, rad)]
+            matching_profs = [p for p in prof_prods if p.check_match(rt, central_coord, pix_step, min_snr, rad)]
         else:
             matching_profs = []
 
@@ -595,9 +595,8 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             #  radii to values I can pass into the model
             model_radii = radii * src_obj.get_radius(scale_radius, kpc)
 
-            sb_prof.fit(model, progress_bar=False, show_errors=False, method=fit_method, priors=model_priors,
-                        start_pars=model_start_pars, conf_level=conf_level, num_walkers=num_walkers,
-                        num_steps=num_steps, model_real=model_realisations)
+            sb_prof.fit(model, progress_bar=False, show_warn=False, method=fit_method, num_walkers=num_walkers,
+                        num_steps=num_steps)
             try:
                 fitted_model = sb_prof.get_model_fit(model)
                 model_brightness = fitted_model['model_func'](model_radii.value, *fitted_model['par'])
@@ -703,10 +702,9 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param tuple figsize: The desired figure size for the plot.
     """
     # Calls the stacking function
-    results = radial_model_stack(sources, model, scale_radius, fit_method, use_peak, model_priors, model_start_pars,
-                                 pix_step, radii, min_snr, lo_en, hi_en, custom_temps, sim_met, abund_table, psf_corr,
-                                 psf_model, psf_bins, psf_algo, psf_iter, num_cores, model_realisations, conf_level,
-                                 ml_mcmc_start, ml_rand_dev, num_walkers, num_steps)
+    results = radial_model_stack(sources, model, scale_radius, fit_method, use_peak, pix_step, radii, min_snr,
+                                 lo_en, hi_en, custom_temps, sim_met, abund_table, psf_corr, psf_model, psf_bins,
+                                 psf_algo, psf_iter, num_cores, num_walkers, num_steps)
 
     # Gets the individual scaled profiles from results
     all_prof = results[1]
