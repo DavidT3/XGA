@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 20:34. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1622,7 +1622,7 @@ class BaseProfile1D:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label, color=data_colour)
             if self.values_err is not None:
                 y_errs = (self.values_err.copy() / y_norm).value
-                main_ax.fill_between(rad_vals, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
+                main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
                                      color=data_colour,  linestyle='dashdot', alpha=0.7)
         else:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
