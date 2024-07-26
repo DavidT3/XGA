@@ -19,21 +19,29 @@ wish to use existing region files, then they must be in a DS9 compatible format,
 
 The Module
 ----------
+We **strongly recommend** that you make use of Python virtual environments, or (even better) Conda/Mamba virtual environments when installing XGA.
 
-XGA is available on PyPi, so you can simply run:
+XGA is available on the popular Python Package Index (PyPI), and can be installed like this:
 
 .. code-block::
 
     pip install xga
 
-Alternatively you can fetch the current working version from the git repository, which (as XGA is still in a fairly
-early stage of development) may have more up-to-date features than the PyPi release:
+You can also fetch the current working version from the git repository, and install it (this method has replaced 'python setup.py install'):
 
 .. code-block::
 
     git clone https://github.com/DavidT3/XGA
     cd XGA
-    python setup.py install
+    python -m pip install .
+
+Alternatively you could use the 'editable' option (this has replaced running setup.py and passing 'develop') so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
+
+.. code-block::
+
+    git clone https://github.com/DavidT3/XGA
+    cd XGA
+    python -m pip install --editable .
 
 Required Dependencies
 ---------------------
