@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 12:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 13:24. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -110,8 +110,8 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
                 # A temporary temperature variable
                 temp_temp = src.get_temperature(scale_radius, "constant*tbabs*apec")[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
-                     "3keV".format(s=src.name), stacklevel=2)
+                warn("{s}'s temperature fit is not valid, defaulting to a temperature of 3 keV".format(s=src.name),
+                     stacklevel=2)
                 temp_temp = Quantity(3, 'keV')
 
             temp_temps.append(temp_temp.value)
@@ -299,11 +299,21 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         rad = src_obj.get_radius(scale_radius, kpc)
 
         # This fetches any profiles that might have already been generated to our required specifications
-        prof_prods = src_obj.get_products("combined_brightness_profile")
-        if len(prof_prods) == 1:
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, central_coord, pix_step,
-                                                                                       min_snr, rad)]
-        else:
+        # prof_prods = src_obj.get_products("combined_brightness_profile")
+        # if len(prof_prods) == 1:
+        #     matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, central_coord, pix_step,
+        #                                                                                min_snr, rad)]
+        # else:
+        #     matching_profs = []
+
+        try:
+            matching_profs = src_obj.get_1d_brightness_profile(rad, central_coord=central_coord, pix_step=pix_step,
+                                                               min_snr=min_snr, psf_corr=psf_corr, psf_algo=psf_algo,
+                                                               psf_model=psf_model, psf_iter=psf_iter,
+                                                               psf_bins=psf_bins)
+            if not isinstance(matching_profs, list):
+                matching_profs = [matching_profs]
+        except NoProductAvailableError:
             matching_profs = []
 
         # This is because a ValueError can be raised by radial_brightness when there is a problem with the
