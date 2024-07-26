@@ -55,7 +55,7 @@ All required Python modules can be found in requirements.txt, and should be adde
 
 Excellent installation guides for `SAS <https://www.cosmos.esa.int/web/xmm-newton/sas-installation>`_ and
 `HEASoft <https://heasarc.gsfc.nasa.gov/lheasoft/install.html>`_ already exist, so I won't go into that here.
-XGA will not run without detecting these pieces of software installed on your system.
+XGA will not generate XMM products without detecting SAS, and will not fit spectra without detecting XSPEC.
 
 Optional Dependencies
 ---------------------
