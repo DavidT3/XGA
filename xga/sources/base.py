@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:57. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3829,7 +3829,7 @@ class BaseSource:
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
-        This method calculates the separation between the user supplied ra_dec coordinates, and the peak
+        This method calculates the Haversine separation between the user supplied ra_dec coordinates, and the peak
         coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
         peak has been calculated then the result will be 0.
 
@@ -3841,10 +3841,13 @@ class BaseSource:
         if not hasattr(self, 'peak'):
             raise AttributeError("This source does not have a peak attribute, and so an offset cannot be calculated.")
 
-        # Calculate the euclidean distance between ra_dec and peak
-        sep = np.sqrt(abs(self.ra_dec[0] - self.peak[0]) ** 2 + abs(self.ra_dec[1] - self.peak[1]) ** 2)
+        # Calculate the Haversine distance between ra_dec and peak
+        hav_sep = 2 * np.arcsin(np.sqrt((np.sin((self.peak[1] - self.ra_dec[1]) / 2) ** 2) +
+                                        np.cos(self.ra_dec[1]) * np.cos(self.peak[1]) *
+                                        np.sin((self.peak[0] - self.ra_dec[0]) / 2) ** 2))
+
         # Convert the separation to the requested unit - this will throw an error if the unit is stupid
-        conv_sep = self.convert_radius(sep, off_unit)
+        conv_sep = self.convert_radius(hav_sep, off_unit)
 
         # Return the converted separation
         return conv_sep
