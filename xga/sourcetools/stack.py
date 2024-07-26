@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:21. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -618,7 +618,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             nonlocal sb
             nonlocal onwards
             b, s_id = results
-            sb[s_id, :] = b
+            sb[s_id, :] = b.reshape(len(b),)
             onwards.update(1)
 
         def err_callback(err):
