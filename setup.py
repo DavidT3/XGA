@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 16:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 16:54. Copyright (c) The Contributors
 
 from os import path
 
@@ -30,6 +30,6 @@ setup(name='xga',
                         "fitsio>=1.2.1", "matplotlib>=3.9.1", "scipy>=1.14.0", "pyabel>=0.9", "corner>=2.2.2",
                         "emcee>=3.1.6", "tabulate>=0.9.0", "getdist>=1.4.7", "exceptiongroup>=1.0.4"],
       include_package_data=True,
-      python_requires='>3.10')
+      python_requires='>=3.10')
 
 
