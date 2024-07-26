@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:40. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -532,7 +532,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     nh = rel_src.get_results(rel_rad, par='nH', group_spec=group_spec, min_counts=min_counts,
                                              min_sn=min_sn, over_sample=over_sample)
                     vals += list(nh)
-                    cols += ['nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
+                    cols += ['fit_nH' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
             except ModelNotAssociatedError:
                 pass
@@ -572,14 +572,15 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         nhce = rel_src.get_results(rel_rad, par='nH', inner_radius=0.15*rel_rad, group_spec=group_spec,
                                                    min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
                         vals += list(nhce)
-                        cols += ['nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
+                        cols += ['fit_nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                 except ModelNotAssociatedError:
                     pass
 
             # We know that at least the radius will always be there to be added to the dataframe, so we add the
             #  information in vals and cols
-            loaded_samp_data.loc[row_ind, cols] = np.array(vals)
+            print(vals)
+            loaded_samp_data.loc[row_ind, cols] = np.array(vals).reshape(len(vals),)
 
     # If the user wants to save the resulting dataframe to disk then we do so
     if save_samp_results_path is not None:
