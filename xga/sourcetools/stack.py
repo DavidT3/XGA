@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 12:41. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -111,7 +111,7 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
                 temp_temp = src.get_temperature(scale_radius, "constant*tbabs*apec")[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
-                     "3keV".format(s=src.name))
+                     "3keV".format(s=src.name), stacklevel=2)
                 temp_temp = Quantity(3, 'keV')
 
             temp_temps.append(temp_temp.value)
@@ -148,7 +148,7 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     for src_ind, src in enumerate(sources):
         if src_ind not in no_nan:
             warn("A NaN value was detected in {}'s brightness profile, and as such it has been excluded from the "
-                 "stack.".format(src.name))
+                 "stack.".format(src.name), stacklevel=2)
         else:
             stack_names.append(src.name)
 
@@ -327,7 +327,7 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
             interp_brightness = np.full(radii.shape, np.NaN)
             # But will also raise a warning so the user knows
             warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
-                 + " - profile set to NaNs.")
+                 + " - profile set to NaNs.", stacklevel=2)
 
         return interp_brightness, src_id
 
@@ -594,14 +594,14 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
 
             except XGAFitError:
                 model_brightness = np.full(radii.shape, np.NaN)
-                warn('Model fit for {s} failed - profile set to NaNs'.format(s=src_obj.name))
+                warn('Model fit for {s} failed - profile set to NaNs'.format(s=src_obj.name), stacklevel=2)
 
         except ValueError as ve:
             # This will mean that the profile is thrown away in a later step
             model_brightness = np.full(radii.shape, np.NaN)
             # But will also raise a warning so the user knows
             warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
-                 + " - profile set to NaNs.")
+                 + " - profile set to NaNs.", stacklevel=2)
 
         return model_brightness, src_id
 
