@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 13:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:06. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -497,10 +497,6 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     :param str fit_method: The method to use when fitting the model to the profile.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
         for each GalaxyCluster object.
-    :param list model_priors: A list of priors to use when fitting the model with MCMC, default is None in which
-        case the default priors for the selected model are used.
-    :param list model_start_pars: A list of start parameters to use when fitting with methods like curve_fit, default
-        is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
@@ -520,8 +516,6 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
         of available cores.
-    :param int model_realisations: The number of random realisations of a model to generate.
-    :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :return: This function returns the average profile, the scaled brightness profiles with the cluster
@@ -598,8 +592,8 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             sb_prof.fit(model, progress_bar=False, show_warn=False, method=fit_method, num_walkers=num_walkers,
                         num_steps=num_steps)
             try:
-                fitted_model = sb_prof.get_model_fit(model)
-                model_brightness = fitted_model['model_func'](model_radii.value, *fitted_model['par'])
+                fitted_model = sb_prof.get_model_fit(model, fit_method)
+                model_brightness = fitted_model(model_radii)
 
             except XGAFitError:
                 model_brightness = np.full(radii.shape, np.NaN)
@@ -646,14 +640,12 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
 
 
 def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "r200", fit_method: str = 'mcmc',
-                            use_peak: bool = True, model_priors: List = None, model_start_pars: list = None,
-                            pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
-                            lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                            custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3,
-                            abund_table: str = 'angr', psf_corr: bool = False, psf_model: str = "ELLBETA",
-                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
-                            model_realisations: int = 500, conf_level: int = 90, ml_mcmc_start: bool = True,
-                            ml_rand_dev: float = 1e-4, num_walkers: int = 30, num_steps: int = 20000,
+                            use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
+                            min_snr: float = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
+                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
+                            sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
+                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                            num_cores: int = NUM_CORES, num_walkers: int = 30, num_steps: int = 20000,
                             show_images: bool = False, figsize: tuple = (14, 14)):
     """
     A convenience function that calls radial_model_stack and makes plots of the average profile, individual profiles,
@@ -666,10 +658,6 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param str fit_method: The method to use when fitting the model to the profile.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
         for each GalaxyCluster object.
-    :param list model_priors: A list of priors to use when fitting the model with MCMC, default is None in which
-        case the default priors for the selected model are used.
-    :param list model_start_pars: A list of start parameters to use when fitting with methods like curve_fit, default
-        is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
@@ -689,12 +677,6 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
         of available cores.
-    :param int model_realisations: The number of random realisations of a model to generate.
-    :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
-    :param bool ml_mcmc_start: If True then maximum likelihood estimation will be used to generate start parameters for
-        MCMC fitting, otherwise they will be randomly drawn from parameter priors
-    :param float ml_rand_dev: The scale of the random deviation around start parameters used for starting the
-        different walkers in the MCMC ensemble sampler.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :param bool show_images: If true then for each source in the stack an image and profile will be displayed
