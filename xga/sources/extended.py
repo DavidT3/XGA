@@ -302,10 +302,14 @@ class GalaxyCluster(ExtendedSource):
                     rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
                     within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
                     within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
-
+                    
                     # This finds which regions are present in both lists and makes sure if they are in both
-                    #  then they are NOT removed from the analysis
-                    intersect_regions = list(set(within_width) & set(within_height))
+                    #  then they are NOT removed from the analysis - AS OF regions v0.9 THIS NO LONGER WORKS AS
+                    #  REGIONS ARE NOT HASHABLE - THE LIST COMPREHENSION BELOW IS A QUICK FIX BUT LESS EFFICIENT
+                    # intersect_regions = list(set(within_width) & set(within_height))
+                    
+                    # This should do what the above set intersection did, but slower
+                    intersect_regions = [r for r in within_height if r in within_width]
                     for inter_reg in intersect_regions:
                         inter_reg_ind = new_anti_results[obs].index(inter_reg)
                         new_anti_results[obs].pop(inter_reg_ind)
