@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 23:16. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -16,6 +16,7 @@ from .. import DEFAULT_COSMO
 from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoValidObservationsError, \
     NoProductAvailableError
 from ..products import RateMap
+from ..sas import evselect_image
 from ..sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -140,6 +141,9 @@ class ExtendedSource(BaseSource):
                     warn(warn_text, stacklevel=2)
                 else:
                     self._supp_warn.append(warn_text)
+
+        # We make sure there are some images in existence, using the peak finding energy bounds
+        evselect_image(self, self.peak_lo_en, self.peak_hi_en)
 
         self._interloper_masks = {}
         for obs_id in self.obs_ids:
@@ -550,6 +554,9 @@ class PointSource(BaseSource):
         else:
             raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
+
+        # We make sure there are some images in existence, using the peak finding energy bounds
+        evselect_image(self, self.peak_lo_en, self.peak_hi_en)
 
         # This generates masks to remove interloper regions
         self._interloper_masks = {}
