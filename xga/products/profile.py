@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:41. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2180,20 +2180,30 @@ class SpecificEntropy(BaseProfile1D):
         #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
         #  one model and not another, using a combination of model and datapoints to calculate entropy
         if temperature_model is not None:
+            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
             temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                         num_walkers, progress, show_warn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
                 raise XGAFitError("The fit to the temperature was unsuccessful, cannot define entropy profile.")
+        elif interp_data:
+            key_temp_mod_part = "tmdatainterp"
+        else:
+            key_temp_mod_part = "tmdata"
 
         if density_model is not None:
+            key_dens_mod_part = "dm{d}".format(d=density_model.name)
             density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers,
                                                 progress, show_warn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
                 raise XGAFitError("The fit to the density was unsuccessful, cannot define entropy profile.")
+        elif interp_data:
+            key_dens_mod_part = "dmdatainterp"
+        else:
+            key_dens_mod_part = "dmdata"
 
         self._temp_model = temperature_model
         self._dens_model = density_model
@@ -2216,8 +2226,9 @@ class SpecificEntropy(BaseProfile1D):
         dens_part = "dprof_{}".format(self._dens_prof.storage_key)
         temp_part = "tprof_{}".format(self._temp_prof.storage_key)
         cur_part = self.storage_key
-        new_part = "tm{t}_dm{d}".format(t=self._temp_model.name, d=self._dens_model.name)
-        whole_new = "{n}_{c}_{t}_{d}".format(n=new_part, c=cur_part, t=temp_part, d=dens_part)
+
+        whole_new = "{ntm}_{ndm}_{c}_{t}_{d}".format(ntm=key_temp_mod_part, ndm=key_dens_mod_part, c=cur_part,
+                                                     t=temp_part, d=dens_part)
         self._storage_key = whole_new
 
         # Setting the type
