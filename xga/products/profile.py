@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:55. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2311,7 +2311,7 @@ class SpecificEntropy(BaseProfile1D):
                                   "using a smooth temperature model.")
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            dens = self._temp_model.get_realisations(radius)
+            temp = self._temp_model.get_realisations(radius)
 
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
