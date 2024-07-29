@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:13. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2269,9 +2269,10 @@ class SpecificEntropy(BaseProfile1D):
 
         elif not already_run and self._interp_data:
             # TODO This is a placeholder number of realisations
-            dens_data_real = self.density_profile.generate_data_realisations(1000).T
-            dens = interp1d(self.radii, self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
-                            fill_value='extrapolate', bounds_error=False)
+            dens_data_real = self.density_profile.generate_data_realisations(1000)
+            dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
+                                   fill_value='extrapolate', bounds_error=False)
+            dens = dens_interp(self.radii).T
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent('1/cm^3'):
