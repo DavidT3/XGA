@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 17:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 18:02. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2304,8 +2304,13 @@ class SpecificEntropy(BaseProfile1D):
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
         else:
-            raise NotImplementedError("Starting with the temperature profile not the density, though the solution "
-                                      "should be essentially identical.")
+            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
+                                self.density_profile.annulus_bounds[1:]]).T
+
+            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+
+            dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
+            dens = dens_data_real[:, d_inds].T
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent('1/cm^3'):
@@ -2333,7 +2338,7 @@ class SpecificEntropy(BaseProfile1D):
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
         elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            temp = self.temperature_profile.generate_data_realisations(self._num_samples)
+            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
         # And here, the final option, we're doing a data-point based profile without interpolation, and we need
         #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
         #  temperature value - in practise this means that each density will be paired with the temperature
