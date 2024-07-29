@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 16:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 17:36. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2298,6 +2298,15 @@ class SpecificEntropy(BaseProfile1D):
             # Restore the interpolated density profile realisations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
 
+        # This particular combination means that we are doing a data-point based profile, but without interpolation,
+        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
+        #  just read out the density data points (and make N realisations of them) with no funny business required
+        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
+            dens = self.density_profile.generate_data_realisations(self._num_samples)
+        else:
+            raise NotImplementedError("Starting with the temperature profile not the density, though the solution "
+                                      "should be essentially identical.")
+
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent('1/cm^3'):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
@@ -2320,6 +2329,23 @@ class SpecificEntropy(BaseProfile1D):
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+
+        # This particular combination means that we are doing a data-point based profile, but without interpolation,
+        #  and that the temperature profile has more bins than the density (not going to happen often)
+        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
+            temp = self.temperature_profile.generate_data_realisations(self._num_samples)
+        # And here, the final option, we're doing a data-point based profile without interpolation, and we need
+        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
+        #  temperature value - in practise this means that each density will be paired with the temperature
+        #  realisations whose radial coverage they fall within.
+        else:
+            t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
+                                self.temperature_profile.annulus_bounds[1:]]).T
+
+            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+
+            temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
+            temp = temp_data_real[:, t_inds]
 
         # We ensure the temperatures are in the right unit
         if not already_run and not temp.unit.is_equivalent('keV'):
