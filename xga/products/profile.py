@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 09:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 10:32. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1970,9 +1970,20 @@ class HydrostaticMass(BaseProfile1D):
 
 class SpecificEntropy(BaseProfile1D):
     """
-    A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a specific entropy
-    profile. Functionally this is extremely similar to the HydrostaticMass profile class, as it calculates the y
-    values itself, rather than them being part of the declaration.
+    A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
+    the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
+    for instance). Somewhat similar in function to the HydrostaticMass profile class, in that entropy values are
+    calculated during the declaration of this class, rather than being passed in.
+
+    The entropy profile can be used with several different kinds of input profiles, reflecting some of the different
+    ways that they are calculated in the literature, and the practical limitations of generating 'de-projected'
+    profiles. In short, this profile can be used in the following different ways:
+
+    * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
+      density profiles also do not need to both be projected or both be deprojected. Clearly, from a purely physical
+      point of view, it would be better to pass 3D profiles, but practically deprojection processes often cause a lot
+      of problems, so the choice is left to the user.
+    * Testing testing
 
     :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
         information from.
@@ -1992,21 +2003,30 @@ class SpecificEntropy(BaseProfile1D):
         take. If a single number is passed then that number of steps is used for both profiles, otherwise if a list
         is passed the first entry is used for the temperature fit, and the second for the density fit.
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
-    :param bool show_warn: Should warnings thrown during the fitting processes be shown.
-    :param bool progress: Should fit progress bars be shown.
+    :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
+    :param bool progress:  Controls whether fit progress bars are displayed.
     """
+
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True):
         """
-        The init method for the SpecificEntropy profile class, uses temperature and density profiles, along with
-        models, to set up the entropy profile.
+        A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
+        the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
+        for instance). Somewhat similar in function to the HydrostaticMass profile class, in that entropy values are
+        calculated during the declaration of this class, rather than being passed in.
 
-        A profile product which uses input GasTemperature3D and GasDensity3D profiles to generate a specific
-        entropy profile. Functionally this is extremely similar to the HydrostaticMass profile class, as it
-        calculates the y values itself, rather than them being part of the declaration.
+        The entropy profile can be used with several different kinds of input profiles, reflecting some of the different
+        ways that they are calculated in the literature, and the practical limitations of generating 'de-projected'
+        profiles. In short, this profile can be used in the following different ways:
+
+        * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
+          density profiles also do not need to both be projected or both be deprojected. Clearly, from a purely physical
+          point of view, it would be better to pass 3D profiles, but practically deprojection processes often cause a lot
+          of problems, so the choice is left to the user.
+        * Testing testing
 
         :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
             information from.
@@ -2027,8 +2047,8 @@ class SpecificEntropy(BaseProfile1D):
             if a list is passed the first entry is used for the temperature fit, and the second for the
             density fit.
         :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
-        :param bool show_warn: Should warnings thrown during the fitting processes be shown.
-        :param bool progress: Should fit progress bars be shown.
+        :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
+        :param bool progress:  Controls whether fit progress bars are displayed.
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
