@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 13:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 13:12. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1990,23 +1990,28 @@ class SpecificEntropy(BaseProfile1D):
       and density profiles, then the data points on the profile with wider bins can either be interpolated, or matched
       to the data points of the other profile that they cover.
 
-    :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
-        information from.
-    :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
-        instance of an XGA temperature model class.
+    :param Union[GasTemperature3D,ProjectedGasTemperature1D] temperature_profile: The XGA 3D or projected
+        temperature profile to take temperature information from.
+    :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
+        be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
+        Default is None, in which case this class will use profile data points to calculate entropy.
     :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
-    :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
-        instance of an XGA density model class.
-    :param Quantity radii: The radii at which to measure the entropy for the declaration of the profile.
-    :param Quantity radii_err: The uncertainties on the radii.
-    :param Quantity deg_radii: The radii values, but in units of degrees. This is required to set up a storage key
-        for the profile to be filed in an XGA source.
+    :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
+        be used to calculate the entropy profile), either a name or an instance of an XGA density model class.
+        Default is None, in which case this class will use profile data points to calculate entropy.
+    :param Quantity radii: The radii at which to measure the entropy - this is only necessary if model fits are
+        being used to calculate entropy, otherwise profile radii will be used.
+    :param Quantity radii_err: The uncertainties on the radii - this is only necessary if model fits are
+        being used to calculate entropy, otherwise profile radii will be used.
+    :param Quantity deg_radii: The radii values, but in units of degrees  - this is only necessary if model
+        fits are  being used to calculate entropy, otherwise profile radii will be used.
     :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
     :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
         sampler to set up.
-    :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler to
-        take. If a single number is passed then that number of steps is used for both profiles, otherwise if a list
-        is passed the first entry is used for the temperature fit, and the second for the density fit.
+    :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler
+        to take. If a single number is passed then that number of steps is used for both profiles, otherwise
+        if a list is passed the first entry is used for the temperature fit, and the second for the
+        density fit.
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
     :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
     :param bool progress:  Controls whether fit progress bars are displayed.
