@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 16:04. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -14,7 +14,7 @@ from ..utils import r500, r200, r2500
 class SimpleVikhlininTemperature1D(BaseModel1D):
     """
     An XGA model implementation of the simplified version of Vikhlinin's temperature model. This is for the
-    description of 3D temperature profiles of galaxy clusters.
+    description of 3D temperature profiles (also can be fit to projected temperature) of galaxy clusters.
 
     :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
         representation or an astropy unit object.
@@ -158,7 +158,7 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
 class VikhlininTemperature1D(BaseModel1D):
     """
     An XGA model implementation of the full version of Vikhlinin's temperature model. This is for the
-    description of 3D temperature profiles of galaxy clusters.
+    description of 3D temperature profiles (also can be fit to projected temperature) of galaxy clusters.
 
     :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
         representation or an astropy unit object.
