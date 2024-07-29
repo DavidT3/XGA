@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 13:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 14:23. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1990,7 +1990,7 @@ class SpecificEntropy(BaseProfile1D):
       and density profiles, then the data points on the profile with wider bins can either be interpolated, or matched
       to the data points of the other profile that they cover.
 
-    :param Union[GasTemperature3D,ProjectedGasTemperature1D] temperature_profile: The XGA 3D or projected
+    :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
@@ -2015,14 +2015,18 @@ class SpecificEntropy(BaseProfile1D):
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
     :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
     :param bool progress:  Controls whether fit progress bars are displayed.
+    :param bool interp_data: If the entropy profile is to be derived from data points rather than fitted models,
+        this controls whether the data profile with the coarser bins is interpolated, or whether the other
+        profile's data points are matched with the value that was measured for the radial region they
+        are in (the default).
     """
 
     def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
-                 density_model: Union[str, BaseModel1D] = None,
-                 radii: Quantity = None, radii_err: Quantity = None, deg_radii: Quantity = None,
-                 fit_method: str = "mcmc", num_walkers: int = 20, num_steps: [int, List[int]] = 20000,
-                 num_samples: int = 10000, show_warn: bool = True, progress: bool = True):
+                 density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
+                 deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 progress: bool = True, interp_data: bool = False):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2045,7 +2049,7 @@ class SpecificEntropy(BaseProfile1D):
           and density profiles, then the data points on the profile with wider bins can either be interpolated, or
           matched to the data points of the other profile that they cover.
 
-        :param Union[GasTemperature3D,ProjectedGasTemperature1D] temperature_profile: The XGA 3D or projected
+        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
@@ -2070,6 +2074,10 @@ class SpecificEntropy(BaseProfile1D):
         :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
         :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
         :param bool progress:  Controls whether fit progress bars are displayed.
+        :param bool interp_data: If the entropy profile is to be derived from data points rather than fitted models,
+            this controls whether the data profile with the coarser bins is interpolated, or whether the other
+            profile's data points are matched with the value that was measured for the radial region they
+            are in (the default).
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
@@ -2107,6 +2115,19 @@ class SpecificEntropy(BaseProfile1D):
                 (radii is None or radii_err is None or deg_radii is None)):
             raise ValueError("Radii at which to calculate entropy (the 'radii', 'radii_err', and 'deg_radii' "
                              "arguments) must be passed if 'temperature_model' or 'density_model' is set.")
+        else:
+            if len(temperature_profile) > len(density_profile):
+                radii = temperature_profile.radii
+                radii_err = temperature_profile.radii_err
+                deg_radii = temperature_profile.deg_radii
+            else:
+                radii = density_profile.radii
+                radii_err = density_profile.radii_err
+                deg_radii = density_profile.deg_radii
+
+        # Set the attribute which lets the entropy calculation method know whether to interpolate any data points
+        #  or not, if smooth fitted models are not going to be used
+        self._interp_data = interp_data
 
         # We see if either of the profiles have an associated spectrum
         if temperature_profile.set_ident is None and density_profile.set_ident is None:
@@ -2154,18 +2175,24 @@ class SpecificEntropy(BaseProfile1D):
             raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
                              "temperature profile fit and the second for the density profile fit")
 
-        # Make sure the model fits have been run, and retrieve the model objects
-        temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps, num_walkers,
-                                                    progress, show_warn)
-        density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers, progress,
-                                            show_warn)
+        # If models are passed then we're going to make sure that they're fit here - starting with temperature. We'll
+        #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
+        #  one model and not another, using a combination of model and datapoints to calculate entropy
+        if temperature_model is not None:
+            temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
+                                                        num_walkers, progress, show_warn)
+            # Have to check whether the fits were actually successful, as the fit method will return a model instance
+            #  either way
+            if not temperature_model.success:
+                raise XGAFitError("The fit to the temperature was unsuccessful, cannot define entropy profile.")
 
-        # Have to check whether the fits were actually successful, as the fit method will return a model instance
-        #  either way
-        if not temperature_model.success:
-            raise XGAFitError("The fit to the temperature was unsuccessful, cannot define entropy profile.")
-        if not density_model.success:
-            raise XGAFitError("The fit to the density was unsuccessful, cannot define entropy profile.")
+        if density_model is not None:
+            density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers,
+                                                progress, show_warn)
+            # Have to check whether the fits were actually successful, as the fit method will return a model instance
+            #  either way
+            if not density_model.success:
+                raise XGAFitError("The fit to the density was unsuccessful, cannot define entropy profile.")
 
         self._temp_model = temperature_model
         self._dens_model = density_model
@@ -2212,17 +2239,44 @@ class SpecificEntropy(BaseProfile1D):
             containing the mass realisation distribution.
         :rtype: Union[Quantity, Quantity]
         """
+        # Setting the upper and lower confidence limits
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
         # Prints a warning if the radius at which to calculate the entropy is outside the range of the data
         self.rad_check(radius)
 
+        # If a particular radius already has a result in the profiles storage structure then we'll just grab that
+        #  rather than redoing a calculation unnecessarily.
         if radius.isscalar and radius in self._entropies:
             already_run = True
             ent_dist = self._entropies[radius]
         else:
             already_run = False
+
+        # Here, if we haven't already identified a previously calculated entropy for the radius, we start to
+        #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
+        #  ways of calculating entropy we support (using smooth models, using data points, using interpolated data
+        #  points). First of all we deal with the case of there being a density model to draw from
+        if not already_run and self.density_model is not None:
+            # If the density model fit didn't work then we give up and throw an error
+            if not self.density_model.success:
+                raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
+                                  "using a smooth density model.")
+
+            dens = self._dens_model.get_realisations(radius)
+
+        elif not already_run and self._interp_data:
+            # TODO This is a placeholder number of realisations
+            dens_data_real = self.density_profile.generate_data_realisations(10000)
+            dens = np.interp(self.radii, self.density_profile.radii, dens_data_real)
+            print(dens)
+
+        # Finally, whatever way we got the densities, we make sure they are in the right unit
+        if not already_run and not dens.unit.is_equivalent('1/cm^3'):
+            dens = dens / (MEAN_MOL_WEIGHT * m_p)
+
+        stop
 
         if not already_run and self._dens_model.success and self._temp_model.success:
             # This grabs gas density values from the density model, need to check whether the model is in units
