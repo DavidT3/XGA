@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 18:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 18:26. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2118,13 +2118,36 @@ class SpecificEntropy(BaseProfile1D):
                              "arguments) must be passed if 'temperature_model' or 'density_model' is set.")
         else:
             if len(temperature_profile) > len(density_profile):
-                radii = temperature_profile.radii
-                radii_err = temperature_profile.radii_err
-                deg_radii = temperature_profile.deg_radii
+                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
+                if not interp_data:
+                    within_bnds = np.where((temperature_profile.radii >= density_profile.annulus_bounds.min()) &
+                                           (temperature_profile.radii <= density_profile.annulus_bounds.max()))[0]
+                else:
+                    within_bnds = np.arange(0, len(temperature_profile.radii))
+
+                if len(within_bnds) != len(temperature_profile.radii):
+                    warn("The radii extracted from the temperature profile for the creation of the specific entropy "
+                         "profile have been truncated to match the radius range of the density "
+                         "profile.", stacklevel=2)
+                radii = temperature_profile.radii[within_bnds]
+                radii_err = temperature_profile.radii_err[within_bnds]
+                deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
-                radii = density_profile.radii
-                radii_err = density_profile.radii_err
-                deg_radii = density_profile.deg_radii
+                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
+                if not interp_data:
+                    within_bnds = np.where((density_profile.radii >= temperature_profile.annulus_bounds.min()) &
+                                           (density_profile.radii <= temperature_profile.annulus_bounds.max()))[0]
+                else:
+                    within_bnds = np.arange(0, len(density_profile.radii))
+
+                if len(within_bnds) != len(density_profile.radii):
+                    warn("The radii extracted from the density profile for the creation of the specific entropy "
+                         "profile have been truncated to match the radius range of the temperature "
+                         "profile.", stacklevel=2)
+
+                radii = density_profile.radii[within_bnds]
+                radii_err = density_profile.radii_err[within_bnds]
+                deg_radii = density_profile.deg_radii[within_bnds]
 
         # Set the attribute which lets the entropy calculation method know whether to interpolate any data points
         #  or not, if smooth fitted models are not going to be used
@@ -2364,7 +2387,7 @@ class SpecificEntropy(BaseProfile1D):
                 self._entropies[radius] = ent_dist
 
         # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
-        #  call, we use the distribuion to calculate median and confidence limit values
+        #  call, we use the distribution to calculate median and confidence limit values
         ent_med = np.percentile(ent_dist, 50, axis=0)
         ent_lower = ent_med - np.percentile(ent_dist, lower, axis=0)
         ent_upper = np.percentile(ent_dist, upper, axis=0) - ent_med
