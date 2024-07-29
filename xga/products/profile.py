@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 16:07. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1991,7 +1991,7 @@ class SpecificEntropy(BaseProfile1D):
       and density profiles, then the data points on the profile with wider bins can either be interpolated, or matched
       to the data points of the other profile that they cover.
 
-    :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+    :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
@@ -2050,7 +2050,7 @@ class SpecificEntropy(BaseProfile1D):
           and density profiles, then the data points on the profile with wider bins can either be interpolated, or
           matched to the data points of the other profile that they cover.
 
-        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+        :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
