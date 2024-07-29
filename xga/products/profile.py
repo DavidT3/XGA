@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:34. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2026,7 +2026,7 @@ class SpecificEntropy(BaseProfile1D):
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
@@ -2198,6 +2198,11 @@ class SpecificEntropy(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
+        # We set an attribute with the 'num_samples' paramater - it has been passed into the model fits already but
+        #  we also use that value for the number of data realisations if the user has opted for a data point derived
+        #  entropy profile rather than model derived.
+        self._num_samples = num_samples
+
         ent, ent_dist = self.entropy(radii, conf_level=68)
         ent_vals = ent[0, :]
         ent_errs = np.mean(ent[1:, :], axis=0)
@@ -2264,51 +2269,65 @@ class SpecificEntropy(BaseProfile1D):
             if not self.density_model.success:
                 raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
                                   "using a smooth density model.")
-
+            # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
+            #  the definition of this source of the model.
             dens = self._dens_model.get_realisations(radius)
 
         elif not already_run and self._interp_data:
-            # TODO This is a placeholder number of realisations
-            dens_data_real = self.density_profile.generate_data_realisations(1000)
+            # This uses the density profile y-axis values (and their uncertainties) to draw N realisations of the
+            #  data points - we'll use this to create N realisations of the interpolations as well
+            dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
+            # TODO This unfortunately may be removed from scipy soon, but the np.interp linear interpolation method
+            #  doesn't currently support interpolating along a particular axis. Also considering more sophisticated
+            #  scipy interpolation methods (see issue #1168) but cubic splines don't seem to behave amazingly well
+            #  for temperature profiles with larger uncertainties on then outskirts, so we're doing this for now
+            # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
             dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
+            # Restore the interpolated density profile realisations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent('1/cm^3'):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
 
-        print(dens)
-        print(dens.shape)
-        stop
+        # We now essentially repeat the process we just did with the density profiles, constructing the temperature
+        #  values that we are going to use in our entropy measurements; from models, data points, or interpolating
+        #  from data points
+        if not already_run and self.temperature_model is not None:
+            if not self.temperature_model.success:
+                raise XGAFitError("The temperature model fit was not successful, as such we cannot calculate entropy "
+                                  "using a smooth temperature model.")
+            # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
+            #  the definition of this source of the model.
+            dens = self._temp_model.get_realisations(radius)
 
-        if not already_run and self._dens_model.success and self._temp_model.success:
-            # This grabs gas density values from the density model, need to check whether the model is in units
-            #  of mass or number density
-            if self._dens_model.y_unit.is_equivalent('1/cm^3'):
-                dens = self._dens_model.get_realisations(radius)
-            else:
-                dens = self._dens_model.get_realisations(radius) / (MEAN_MOL_WEIGHT*m_p)
+        elif not already_run and self._interp_data:
+            # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
+            #  data points - we'll use this to create N realisations of the interpolations as well
+            temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
+            temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
+                                   fill_value='extrapolate', bounds_error=False)
+            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
-            # We do the same for the temperature vals, again need to check the units
-            if self._temp_model.y_unit.is_equivalent("keV"):
-                temp = self._temp_model.get_realisations(radius)
-            else:
-                temp = (self._temp_model.get_realisations(radius)*k_B).to('keV')
+        # We ensure the temperatures are in the right unit
+        if not already_run and not temp.unit.is_equivalent('keV'):
+            temp = (temp * k_B).to('keV')
 
+        # And now we do the actual entropy calculation
+        if not already_run:
             ent_dist = (temp / dens**(2/3)).T
-
+            # Storing the result if it is for a single radius
             if radius.isscalar:
                 self._entropies[radius] = ent_dist
 
-        elif not self._temp_model.success or not self._dens_model.success:
-            raise XGAFitError("One or both of the fits to the temperature model and density profiles were "
-                              "not successful")
-
+        # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
+        #  call, we use the distribuion to calculate median and confidence limit values
         ent_med = np.percentile(ent_dist, 50, axis=0)
         ent_lower = ent_med - np.percentile(ent_dist, lower, axis=0)
         ent_upper = np.percentile(ent_dist, upper, axis=0) - ent_med
 
+        # Set up the result to return as an astropy quantity.
         ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
 
         if np.any(ent_res[0] < 0):
