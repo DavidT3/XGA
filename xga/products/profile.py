@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 17:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 17:47. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2302,7 +2302,7 @@ class SpecificEntropy(BaseProfile1D):
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
         #  just read out the density data points (and make N realisations of them) with no funny business required
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            dens = self.density_profile.generate_data_realisations(self._num_samples)
+            dens = self.density_profile.generate_data_realisations(self._num_samples).T
         else:
             raise NotImplementedError("Starting with the temperature profile not the density, though the solution "
                                       "should be essentially identical.")
