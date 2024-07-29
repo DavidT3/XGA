@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 12:41. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -154,7 +154,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                     rads = t_prof.radii.copy()[1:]
                     rad_errs = t_prof.radii_err.copy()[1:]
                     deg_rads = src.convert_radius(rads, 'deg')
-                    entropy = SpecificEntropy(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
+                    entropy = SpecificEntropy(t_prof, d_prof, t_model, d_model, rads, rad_errs, deg_rads, fit_method,
                                               num_walkers, num_steps, show_warn=show_warn, progress=False)
                     # Add the profile to the source storage structure
                     src.update_products(entropy)

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 11:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 12:41. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2012,11 +2012,12 @@ class SpecificEntropy(BaseProfile1D):
     :param bool progress:  Controls whether fit progress bars are displayed.
     """
 
-    def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
-                 density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
-                 radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True):
+    def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
+                 density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
+                 density_model: Union[str, BaseModel1D] = None,
+                 radii: Quantity = None, radii_err: Quantity = None, deg_radii: Quantity = None,
+                 fit_method: str = "mcmc", num_walkers: int = 20, num_steps: [int, List[int]] = 20000,
+                 num_samples: int = 10000, show_warn: bool = True, progress: bool = True):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2039,10 +2040,11 @@ class SpecificEntropy(BaseProfile1D):
           and density profiles, then the data points on the profile with wider bins can either be interpolated, or
           matched to the data points of the other profile that they cover.
 
-        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected temperature
-            profile to take temperature information from.
-        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
-            instance of an XGA temperature model class.
+        :param Union[GasTemperature3D,ProjectedGasTemperature1D] temperature_profile: The XGA 3D or projected
+            temperature profile to take temperature information from.
+        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
+            be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
+            Default is None, in which case this class will use profile data points to calculate entropy.
         :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
             instance of an XGA density model class.
