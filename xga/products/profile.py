@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 14:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 15:10. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -11,6 +11,7 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError, Unit
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
+from scipy.interpolate import interp1d
 
 from .. import NHC, ABUND_TABLES, MEAN_MOL_WEIGHT
 from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
@@ -2268,14 +2269,16 @@ class SpecificEntropy(BaseProfile1D):
 
         elif not already_run and self._interp_data:
             # TODO This is a placeholder number of realisations
-            dens_data_real = self.density_profile.generate_data_realisations(10000)
-            dens = np.interp(self.radii, self.density_profile.radii, dens_data_real)
-            print(dens)
+            dens_data_real = self.density_profile.generate_data_realisations(1000).T
+            dens = interp1d(self.radii, self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
+                            fill_value='extrapolate', bounds_error=False)
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent('1/cm^3'):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
 
+        print(dens)
+        print(dens.shape)
         stop
 
         if not already_run and self._dens_model.success and self._temp_model.success:
