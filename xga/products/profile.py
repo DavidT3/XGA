@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 10:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 11:12. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2028,18 +2028,19 @@ class SpecificEntropy(BaseProfile1D):
         profiles. In short, this profile can be used in the following different ways:
 
         * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
-          density profiles also do not need to both be projected or both be de-projected. Clearly, from a purely physical
-          point of view, it would be better to pass 3D profiles, but practically de-projection processes often cause a lot
-          of problems, so the choice is left to the user.
-        * The entropy values can be calculated either from models fit to the input profiles, or from the data points of the
-          input profiles. This means that the user can choose between a 'cleaner' profile from generated from smooth
-          models, or a data-driven profile that might better represent the intricacies of the particular galaxy cluster.
+          density profiles also do not need to both be projected or both be de-projected. Clearly, from a purely
+          physical point of view, it would be better to pass 3D profiles, but practically de-projection processes
+          often cause a lot of problems, so the choice is left to the user.
+        * The entropy values can be calculated either from models fit to the input profiles, or from the data points
+          of the input profiles. This means that the user can choose between a 'cleaner' profile from generated from
+          smooth models, or a data-driven profile that might better represent the intricacies of the particular
+          galaxy cluster.
         * If data points are being used rather than models, and the radial binning is different between the temperature
-          and density profiles, then the data points on the profile with wider bins can either be interpolated, or matched
-          to the data points of the other profile that they cover.
+          and density profiles, then the data points on the profile with wider bins can either be interpolated, or
+          matched to the data points of the other profile that they cover.
 
-        :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
-            information from.
+        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected temperature
+            profile to take temperature information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
             instance of an XGA temperature model class.
         :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
@@ -2063,14 +2064,16 @@ class SpecificEntropy(BaseProfile1D):
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
         # We check whether the temperature profile passed is actually the type of profile we need
-        if type(temperature_profile) != GasTemperature3D:
-            raise TypeError("Only a GasTemperature3D instance may be passed for temperature_profile, check "
-                            "you haven't accidentally passed a ProjectedGasTemperature1D.")
+        if not isinstance(temperature_profile, (GasTemperature3D, ProjectedGasTemperature1D)):
+            raise TypeError("The {} class is not an accepted input for 'temperature_profile'; only a GasTemperature3D "
+                            "or ProjectedGasTemperature1D instance may be "
+                            "passed.".format(str(type(temperature_profile))))
 
-        # We repeat this process with the density profile and model
-        if type(density_profile) != GasDensity3D:
-            raise TypeError("Only a GasDensity3D instance may be passed for density_profile, check you haven't "
-                            "accidentally passed a GasDensity1D.")
+        # We repeat this process with the density profile
+        # TODO Add a check for projected density, if I ever implement such a thing
+        if not isinstance(density_profile, GasDensity3D):
+            raise TypeError("The {} class is not an accepted input for 'density_profile'; only a GasDensity3D "
+                            "instance may be passed.".format(str(type(density_profile))))
 
         # We also need to check that someone hasn't done something dumb like pass profiles from two different
         #  clusters, so we'll compare source names.
