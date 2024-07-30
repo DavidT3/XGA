@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
 
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Dict
 from warnings import warn
 
 import numpy as np
@@ -497,7 +497,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES, telescope: str = None) -> List[Quantity]:
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES, telescope: str = None) -> Dict[str, List[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -547,10 +547,10 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param str tel: The telescope to find radii to create annuli for.
-    :return: A list of non-scalar astropy quantities containing the annular radii used to generate the
+    :return: A dictionary of lists of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
-        to a source.
-    :rtype: List[Quantity]
+        to a source. Each key corresponds to a telescope.
+    :rtype: Dict[str, List[Quantity]]
     """
 
     if outer_radii != 'region':
@@ -571,11 +571,19 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         avail_abund = ", ".join(ABUND_TABLES)
         raise ValueError("{a} is not a valid abundance table choice, please use one of the "
                          "following; {av}".format(a=abund_table, av=avail_abund))
+    
+    # collecting the associated telescopes for later use
+    if telescope is None:
+        src_telescopes = sources.telescopes
+    else:
+        src_telescopes = telescope
 
     if isinstance(sources, BaseSource):
         sources = [sources]
 
-    all_rads = []
+    # _snr_bins will output a dict of the format: {tel : Quantity}, these are stored in this list
+    # for each source
+    all_rads_source_dicts = []
     for src_ind, src in enumerate(sources):
         if use_combined:
             # This is the simplest option, we just use the combined ratemap to decide on the annuli with minimum SNR
@@ -593,7 +601,22 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                        allow_negative, exp_corr)
 
         # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
-        all_rads.append(rads)
+        all_rads_source_dicts.append(rads)
+    
+    # Making a dictionary to contain all the radii quantities for all the sources
+    all_rads = {tel : [] for tel in src_telescopes}
+
+    # for each dictionary for a single source, I append to the all_rads dictionary
+    for rads_dict in all_rads_source_dicts:
+        for tel in src_telescopes:
+            # Some sources wont have an entry for all telescopes
+            if tel in rads_dict:
+                all_rads[tel].append(rads_dict[tel])
+            else:
+                # for sources without an entry for this telescope, we add in this negative number
+                # to make it obvious that this is not a genuine entry
+                # the way single_temp_apec_profile works, this -999 should never even be used
+                all_rads[tel].append(Quantity(-999, 'kpc'))
 
     if len(sources) == 1:
         sources = sources[0]
@@ -613,7 +636,8 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            psf_iter: int = 15, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES) -> List[Quantity]:
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
+                           telescope: str = None) -> Dict[str, List[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using X-ray count measurements
@@ -656,10 +680,11 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
-    :return: A list of non-scalar astropy quantities containing the annular radii used to generate the
+    :param str tel: The telescope to find radii to create annuli for.
+    :return: A dictionary of lists of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
-        to a source.
-    :rtype: List[Quantity]
+        to a source. Each key corresponds to a telescope.
+    :rtype: Dict[str, List[Quantity]]
     """
 
     if outer_radii != 'region':
@@ -672,18 +697,27 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         raise ValueError("{a} is not a valid abundance table choice, please use one of the "
                          "following; {av}".format(a=abund_table, av=avail_abund))
 
+    # collecting the associated telescopes for later use
+    if telescope is None:
+        src_telescopes = sources.telescopes
+    else:
+        src_telescopes = telescope
+    
     # Makes sure that sources is iterable, even if its just a single source - makes writing the rest of this
     #  function a bit neater.
     if isinstance(sources, BaseSource):
         sources = [sources]
 
-    all_rads = []
+    # _snr_bins will output a dict of the format: {tel : Quantity}, these are stored in this list
+    # for each source
+    all_rads_source_dicts = []
     for src_ind, src in enumerate(sources):
         if use_combined:
             # This is the simplest option, we just use the combined ratemap to decide on the annuli with minimum counts
             rads, cnts, ma = _cnt_bins(src, out_rad_vals[src_ind], min_cnt, min_width, lo_en, hi_en, psf_corr=psf_corr,
                                        psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter)
         else:
+            # TODO the count_ranking will need to have a telescope argument
             # Use the source's built in count ranking method (which in turn uses some RateMap class methods) to rank
             #  the individual observations (cnt_rnk is ObsID, Instrument combinations in order of ascending counts).
             # We then use the counts measured for each ObsID-Instrument combo (which are returned and stored in cnts)
@@ -703,7 +737,23 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                        med_obs_inst, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
 
         # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
-        all_rads.append(rads)
+        all_rads_source_dicts.append(rads)
+    
+    # Making a dictionary to contain all the radii quantities for all the sources
+    all_rads = {tel : [] for tel in src_telescopes}
+
+    # for each dictionary for a single source, I append to the all_rads dictionary
+    for rads_dict in all_rads_source_dicts:
+        for tel in src_telescopes:
+            # Some sources wont have an entry for all telescopes
+            if tel in rads_dict:
+                all_rads[tel].append(rads_dict[tel])
+            else:
+                # for sources without an entry for this telescope, we add in this negative number
+                # to make it obvious that this is not a genuine entry
+                # the way single_temp_apec_profile works, this -999 should never even be used
+                all_rads[tel].append(Quantity(-999, 'kpc'))
+
 
     # Reverses a bodge employed at the beginning of this function
     if len(sources) == 1:
