@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 12:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 12:25. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -356,9 +356,6 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
 
     cen_rads = (final_inn_rads + final_out_rads) / 2
     deg_cen_rads = (deg_inn_rads + deg_out_rads) / 2
-    # if final_inn_rads[0].value == 0:
-    #     cen_rads[0] = Quantity(0, cen_rads.unit)
-    #     deg_cen_rads[0] = Quantity(0, 'deg')
     rad_err = (final_out_rads-final_inn_rads) / 2
 
     if not outer_rad.unit.is_equivalent('deg'):
