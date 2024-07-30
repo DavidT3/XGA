@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 22:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 22:28. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -52,7 +52,7 @@ class CoreConstPowerEntropy(BaseModel1D):
 
         k_zero_starts = [Quantity(75, 'keV cm^2')]
         k_100kpc = [Quantity(100, 'keV cm^2')]
-        alpha = [Quantity(1)]
+        alpha = Quantity(1)
 
         start_pars = [k_zero_starts[yu_ind], k_100kpc[yu_ind], alpha]
 
