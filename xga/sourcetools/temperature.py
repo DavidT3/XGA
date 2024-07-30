@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/08/2023, 15:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:10. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List
 from warnings import warn
@@ -791,7 +791,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             # And finally actually set up a 3D temperature profile
             temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
                                             proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
-                                            proj_temp.associated_set_storage_key, proj_temp.deg_radii)
+                                            proj_temp.associated_set_storage_key, proj_temp.deg_radii,
+                                            auto_save=True)
             src.update_products(temp_3d_prof)
             all_3d_temp_profs.append(temp_3d_prof)
 

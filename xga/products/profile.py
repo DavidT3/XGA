@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:10. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1206,12 +1206,12 @@ class GasTemperature3D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
