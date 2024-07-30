@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 16:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:02. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -411,15 +411,39 @@ class GasDensity3D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
+                 auto_save: bool = False):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
         and generation of gas mass radial profiles. Values of density should either be in a unit of mass/volume,
         or a particle number density unit of 1/cm^3.
+
+        :param Quantity radii: The radii at which gas density has been measured.
+        :param Quantity values: The gas densities that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param str dens_method: A keyword describing the method used to generate this density profile.
+        :param SurfaceBrightness1D/APECNormalisation1D associated_prof: The profile that this gas density profile
+            was measured from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. It is
+            possible for a Gas Density profile to be generated from spectral or photometric information.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -446,7 +470,7 @@ class GasDensity3D(BaseProfile1D):
             values_err = values_err.to(chosen_unit)
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         # Setting the type
         self._prof_type = "gas_density"
@@ -969,7 +993,7 @@ class APECNormalisation1D(BaseProfile1D):
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
                                  'spec', self, self.radii_err, dens_sigma, self.set_ident,
-                                 self.associated_set_storage_key, self.deg_radii)
+                                 self.associated_set_storage_key, self.deg_radii, auto_save=self.auto_save)
         return dens_prof
 
     def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',

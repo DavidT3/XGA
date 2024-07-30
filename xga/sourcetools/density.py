@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/11/2023, 20:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:02. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -322,14 +322,14 @@ def _onion_peel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius:
                 if num_dens:
                     dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
                                              cur_inst, 'onion', sb_prof, dens_rads_errs, num_dens_err,
-                                             deg_radii=dens_deg_rads)
+                                             deg_radii=dens_deg_rads, auto_save=True)
                 else:
                     # The mean molecular weight multiplied by the proton mass
                     conv_mass = MEAN_MOL_WEIGHT * m_p
                     dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens * conv_mass).to('Msun/Mpc^3'),
                                              sb_prof.centre, src.name, cur_obs, cur_inst, 'onion', sb_prof,
                                              dens_rads_errs, (num_dens_err * conv_mass).to('Msun/Mpc^3'),
-                                             deg_radii=dens_deg_rads)
+                                             deg_radii=dens_deg_rads, auto_save=True)
 
                 src.update_products(dens_prof)
                 final_dens_profs.append(dens_prof)
@@ -510,7 +510,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                     if num_dens:
                         dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
                                                  cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
-                                                 deg_radii=dens_deg_rads)
+                                                 deg_radii=dens_deg_rads, auto_save=True)
                     else:
                         # TODO Check the origin of the mean molecular weight, see if there are different values for
                         #  different abundance tables
@@ -519,7 +519,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                         dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
                                                  sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
                                                  dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
-                                                 deg_radii=dens_deg_rads)
+                                                 deg_radii=dens_deg_rads, auto_save=True)
 
                     src.update_products(dens_prof)
                     final_dens_profs.append(dens_prof)
