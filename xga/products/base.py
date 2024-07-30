@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 14:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 16:54. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -550,14 +550,38 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
     :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str,
-                 inst: str, radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
+    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
+                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, '')):
+                 y_norm: Quantity = Quantity(1, ''), auto_save=False):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
+
+        :param Quantity radii: The radii at which the y values of this profile have been measured.
+        :param Quantity values: The y values of this profile.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. If this
+            value is supplied a set_storage_key value must also be supplied.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's storage structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param Quantity x_norm: An astropy quantity to use to normalise the x-axis values, this is only used when
+            plotting if the user tells the view method that they wish for the plot to use normalised x-axis data.
+        :param Quantity y_norm: An astropy quantity to use to normalise the y-axis values, this is only used when
+            plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
+            is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -728,6 +752,11 @@ class BaseProfile1D:
             self._outer_rad = radii[-1]
 
         self._save_path = None
+        # We store the input for the 'auto_save' argument - this exists so that the auto-saving after successful
+        #  model fits etc. can be turned off, as it isn't necessarily going to work for profiles that were defined
+        #  outside of an XGA source analysis. All profiles created by XGA processes running through XGA sources will
+        #  autosave, but the default behaviour of the class will be not to autosave.
+        self._auto_save = auto_save
 
     def _model_allegiance(self, model: BaseModel1D):
         """
@@ -1192,8 +1221,9 @@ class BaseProfile1D:
         elif not already_done and not success:
             self._bad_model_fits[method][model.name] = model
 
-        # This method means that a change has happened to the model, so it should be re-saved
-        self.save()
+        if self.auto_save:
+            # This method means that a change has happened to the model, so it should be re-saved
+            self.save()
         return model
 
     def allowed_models(self, table_format: str = 'fancy_grid'):
@@ -1305,8 +1335,9 @@ class BaseProfile1D:
         else:
             self._good_model_fits[method][model.name] = model
 
-        # This method means that a change has happened to the model, so it should be re-saved
-        self.save()
+        if self.auto_save:
+            # This method means that a change has happened to the model, so it should be re-saved
+            self.save()
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
@@ -2009,6 +2040,28 @@ class BaseProfile1D:
         return self._save_path
 
     @property
+    def auto_save(self) -> bool:
+        """
+        Whether the profile will automatically save itself at any point (such as after successful model fits).
+
+        :return: Boolean flag describing whether auto-save is turned on.
+        :rtype: bool
+        """
+        return self._auto_save
+
+    @auto_save.setter
+    def auto_save(self, new_val: bool):
+        """
+        Whether the profile will automatically save itself at any point (such as after successful model fits).
+
+        :param bool new_val: Boolean flag describing whether auto-save is turned on.
+        """
+        if isinstance(new_val, bool):
+            self._auto_save = new_val
+        else:
+            raise TypeError("The 'auto_save' property must be set with a boolean variable.")
+
+    @property
     def good_model_fits(self) -> List:
         """
         A list of the names of models that have been successfully fitted to the profile.
@@ -2170,8 +2223,9 @@ class BaseProfile1D:
         Setter for the name attribute of this profile, what source object it was derived from.
         """
         self._src_name = new_name
-        # This method means that a change has happened to the model, so it should be re-saved
-        self.save()
+        if self.auto_save:
+            # This method means that a change has happened to the model, so it should be re-saved
+            self.save()
 
     @property
     def obs_id(self) -> str:
@@ -2240,8 +2294,9 @@ class BaseProfile1D:
         if not isinstance(new_name, str):
             raise TypeError("Axis labels must be strings!")
         self._y_axis_name = new_name
-        # This method means that a change has happened to the model, so it should be re-saved
-        self.save()
+        if self.auto_save:
+            # This method means that a change has happened to the model, so it should be re-saved
+            self.save()
 
     @property
     def associated_set_storage_key(self) -> str:
@@ -2304,8 +2359,9 @@ class BaseProfile1D:
         :param Quantity new_val: The new value for the normalisation of x-axis data.
         """
         self._x_norm = new_val
-        # This method means that a change has happened to the model, so it should be re-saved
-        self.save()
+        if self.auto_save:
+            # This method means that a change has happened to the model, so it should be re-saved
+            self.save()
 
     @property
     def y_norm(self) -> Quantity:
@@ -2324,8 +2380,9 @@ class BaseProfile1D:
         :param Quantity new_val: The new value for the normalisation of y-axis data.
         """
         self._y_norm = new_val
-        # This method means that a change has happened to the model, so it should be re-saved
-        self.save()
+        if self.auto_save:
+            # This method means that a change has happened to the model, so it should be re-saved
+            self.save()
 
     @property
     def fit_options(self) -> List[str]:

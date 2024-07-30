@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 15:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 16:54. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -44,17 +44,41 @@ class SurfaceBrightness1D(BaseProfile1D):
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
-    def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
-                 min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
+    def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int, min_snr: float,
+                 outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True):
+                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True,
+                 auto_save: bool = False):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
+
+        :param RateMap rt: The RateMap from which this SB profile was generated.
+        :param Quantity radii: The radii at which surface brightness has been measured.
+        :param Quantity values: The surface brightnesses that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param int pix_step: The width of each annulus in pixels used to generate this profile.
+        :param float min_snr: The minimum signal to noise imposed upon this profile.
+        :param Quantity outer_rad: The outer radius of this profile.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param Quantity background: The background brightness value.
+        :param np.ndarray pixel_bins: An optional argument that provides the pixel bins used to create the profile.
+        :param np.ndarray back_pixel_bin: An optional argument that provides the pixel bin used for the background
+            calculation of this profile.
+        :param Quantity ann_areas: The area of the annuli.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
-                         deg_radii=deg_radii)
+                         deg_radii=deg_radii, auto_save=auto_save)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
