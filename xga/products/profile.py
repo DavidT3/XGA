@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:12. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1296,15 +1296,40 @@ class HydrostaticMass(BaseProfile1D):
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
     :param bool show_warn: Should warnings thrown during the fitting processes be shown.
     :param bool progress: Should fit progress bars be shown.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True):
+                 progress: bool = True, auto_save: bool = False):
         """
         The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
         set up the hydrostatic mass profile.
+
+        :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
+            information from.
+        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
+            instance of an XGA temperature model class.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+        :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
+            instance of an XGA density model class.
+        :param Quantity radii: The radii at which to measure the hydrostatic mass for the declaration of the profile.
+        :param Quantity radii_err: The uncertainties on the radii.
+        :param Quantity deg_radii: The radii values, but in units of degrees. This is required to set up a storage key
+            for the profile to be filed in an XGA source.
+        :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+        :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+            sampler to set up.
+        :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler to
+            take. If a single number is passed then that number of steps is used for both profiles, otherwise if a list
+            is passed the first entry is used for the temperature fit, and the second for the density fit.
+        :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+        :param bool show_warn: Should warnings thrown during the fitting processes be shown.
+        :param bool progress: Should fit progress bars be shown.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
@@ -1399,7 +1424,8 @@ class HydrostaticMass(BaseProfile1D):
         mass_errs = np.mean(mass[1:, :], axis=0)
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii)
+                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
+                         auto_save=auto_save)
 
         # Need a custom storage key for this mass profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models.
