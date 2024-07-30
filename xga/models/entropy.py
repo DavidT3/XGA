@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 21:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 22:17. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -20,7 +20,7 @@ class CoreConstPowerEntropy(BaseModel1D):
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
     """
-    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV'),
+    def __init__(self, x_unit: Union[str, Unit] = 'kpc', y_unit: Union[str, Unit] = Unit('keV cm^2'),
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing a model of how entropy changes with radius -
