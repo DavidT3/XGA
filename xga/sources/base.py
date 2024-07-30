@@ -4805,7 +4805,7 @@ class BaseSource:
         return reject_dict
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
-                    allow_negative: bool = False, telescope: str = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+                    allow_negative: bool = False, telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
@@ -4818,6 +4818,8 @@ class BaseSource:
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+        :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
+            associated to the source.
         :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
             of ascending signal-to-noise, then an array containing the order SNR ratios.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
