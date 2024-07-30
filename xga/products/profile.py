@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 18:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 15:25. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2231,7 +2231,7 @@ class SpecificEntropy(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
-        # We set an attribute with the 'num_samples' paramater - it has been passed into the model fits already but
+        # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already but
         #  we also use that value for the number of data realisations if the user has opted for a data point derived
         #  entropy profile rather than model derived.
         self._num_samples = num_samples
@@ -2307,6 +2307,11 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self._dens_model.get_realisations(radius)
 
+        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
+        #  temperature and density profiles are identical, and so we just get some realisations
+        elif not already_run and (self.density_profile.radii == self.temperature_profile.radii).all():
+            dens = self.density_profile.generate_data_realisations(self._num_samples).T
+
         elif not already_run and self._interp_data:
             # This uses the density profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
@@ -2350,6 +2355,11 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self._temp_model.get_realisations(radius)
 
+        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
+        #  temperature and density profiles are identical, and so we just get some realisations
+        elif not already_run and (self.density_profile.radii == self.temperature_profile.radii).all():
+            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
+
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
@@ -2388,9 +2398,9 @@ class SpecificEntropy(BaseProfile1D):
 
         # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
         #  call, we use the distribution to calculate median and confidence limit values
-        ent_med = np.percentile(ent_dist, 50, axis=0)
-        ent_lower = ent_med - np.percentile(ent_dist, lower, axis=0)
-        ent_upper = np.percentile(ent_dist, upper, axis=0) - ent_med
+        ent_med = np.nanpercentile(ent_dist, 50, axis=0)
+        ent_lower = ent_med - np.nanpercentile(ent_dist, lower, axis=0)
+        ent_upper = np.nanpercentile(ent_dist, upper, axis=0) - ent_med
 
         # Set up the result to return as an astropy quantity.
         ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
