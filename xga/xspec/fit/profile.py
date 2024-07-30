@@ -1,12 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:50. Copyright (c) The Contributors
 
-from typing import List, Union
+from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _write_xspec_script, _check_inputs
+from ._common import _write_xspec_script, _check_inputs, _parse_radii_input
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
@@ -18,7 +18,8 @@ from ...sources import BaseSource
 
 
 @xspec_call
-def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, List[Quantity]],
+def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, 
+                             List[Quantity], Dict[str, Quantity], Dict[str, List[Quantity]]],
                              start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
                              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
                              freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
@@ -80,26 +81,30 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     if stacked_spectra:
         raise NotImplementedError("Stacking spectra is not yet supported for annular spectra generation and fitting.")
 
+    radii = _parse_radii_input(sources.telescopes, radii)
     # TODO This will probably be replaced by a centralised function that generates annular spectra for many
     #  different telescopes at some point
     if 'xmm' in sources.telescopes:
         # We make sure the requested sets of annular spectra have actually been generated (for XMM)
-        spectrum_set(sources, radii, group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
+        spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
 
     if 'erosita' in sources.telescopes:
-        esass_spectrum_set(sources, radii, group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
+        esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Want to make sure that the radii are a list of sets of annular bounds (even if that list only has one set
     #  because there is only one source, or multiple sources with one set of annular bounds).
-    if isinstance(radii, Quantity):
-        radii = [radii]
+    if all(isinstance(val, Quantity) for val in radii.values()):
+        for key in radii:
+            quan = radii[key]
+            radii[key] = [quan]
 
-    # If there are multiple sources, but only one set of radii, we add more entries to the radii list to make
-    #  that easier to deal with for the rest of the function
-    if len(sources) != 1 and len(radii) == 1:
-        radii *= len(sources)
+    for key in radii:
+        # If there are multiple sources, but only one set of radii, we add more entries to the 
+        # radii list to make that easier to deal with for the rest of the function
+        if len(sources) != 1 and len(radii[key]) == 1:
+            radii[key] *= len(sources)
 
     # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
     model = "constant*tbabs*apec"
@@ -116,8 +121,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
     deg_rad = []
     for src_ind, source in enumerate(sources):
-        # Gets the set of radii for this particular source into a variable
-        cur_radii = radii[src_ind]
         source: BaseSource
 
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
@@ -128,6 +131,9 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             #     search_inst = 'combined'
             # else:
             #     search_inst = None
+
+            # Gets the set of radii for this particular source into a variable
+            cur_radii = radii[tel][src_ind]
 
             # This will fetch the annular_spec, get_annular_spectra will throw an error if no matches
             #  are found, though as we have run spectrum_set that shouldn't happen
