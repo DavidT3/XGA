@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:15. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2697,17 +2697,39 @@ class Generic1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
+                 auto_save: bool = False):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
+
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param str y_axis_label: The label to apply to the y-axis of any plots generated from this profile.
+        :param str prof_type: This is a string description of the profile, used to store it in an XGA source (with
+            _profile appended). For instance the prof_type of a ProjectedGasTemperature1D instance is
+            1d_proj_temperature, and it would be stored under 1d_proj_temperature_profile.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
 
