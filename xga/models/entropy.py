@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 22:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 22:26. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -63,7 +63,7 @@ class CoreConstPowerEntropy(BaseModel1D):
 
         kz_priors = [{'prior': Quantity([1, 300], 'keV cm^2'), 'type': 'uniform'}]
         k100_priors = [{'prior': Quantity([1, 500], 'keV cm^2'), 'type': 'uniform'}]
-        alpha_priors = [{'prior': Quantity([-4, 4]), 'type': 'uniform'}]
+        alpha_priors = {'prior': Quantity([-4, 4]), 'type': 'uniform'}
 
         priors = [kz_priors[yu_ind], k100_priors[yu_ind], alpha_priors]
 
@@ -73,8 +73,6 @@ class CoreConstPowerEntropy(BaseModel1D):
                      'general': "A model to fit galaxy cluster radial entropy profiles, made up of a constant core "
                                 "combined with a power law that dominates in the outskirts."
                      }
-
-        print(x_unit, y_unit, start_pars, priors, nice_pars)
 
         super().__init__(x_unit, y_unit, start_pars, priors, 'coreconst_power_entropy',
                          'Constant Core and Power-Law Profile', nice_pars, 'Gas Entropy', info_dict)
