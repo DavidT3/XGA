@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 09:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 09:49. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -11,7 +11,9 @@ from ..utils import r500, r200, r2500
 
 class CoreConstPowerEntropy(BaseModel1D):
     """
-
+    A model to fit galaxy cluster radial entropy profiles, made up of a constant core combined with a power
+    law that dominates in the outskirts. The functional form is simple, but was found to be the best model
+    for fitting many different entropy profiles by Cavagnolo et al. (https://doi.org/10.1088/0067-0049/182/1/12).
 
     :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
         representation or an astropy unit object.
@@ -90,12 +92,10 @@ class CoreConstPowerEntropy(BaseModel1D):
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """
-        # if type(x) is Quantity:
-        #     result = k_zero + (k_100kpc * (x / Quantity(100, 'kpc'))**alpha)
-        # else:
-        #     result = k_zero + (k_100kpc * (x / 100)**alpha)
-
-        result = k_zero + (k_100kpc * (x / 100) ** alpha)
+        if type(x) is Quantity:
+            result = k_zero + (k_100kpc * (x / Quantity(100, 'kpc'))**alpha)
+        else:
+            result = k_zero + (k_100kpc * (x / 100)**alpha)
 
         return result
 
