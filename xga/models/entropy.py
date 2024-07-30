@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 23:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 23:16. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -67,7 +67,7 @@ class CoreConstPowerEntropy(BaseModel1D):
 
         priors = [kz_priors[yu_ind], k100_priors[yu_ind], alpha_priors]
 
-        nice_pars = [r"K$_{0}$", r"K$_{100\rm{kpc}}$", r"\alpha"]
+        nice_pars = [r"K$_{0}$", r"K$_{100\rm{kpc}}$", r"$\alpha$"]
         info_dict = {'author': 'Cavagnolo et al.', 'year': 2009,
                      'reference': 'https://doi.org/10.1088/0067-0049/182/1/12',
                      'general': "A model to fit galaxy cluster radial entropy profiles, made up of a constant core "
