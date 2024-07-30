@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:14. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -148,7 +148,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                     rad_errs = t_prof.radii_err.copy()[1:]
                     deg_rads = src.convert_radius(rads, 'deg')
                     hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
-                                              num_walkers, num_steps, show_warn=show_warn, progress=False)
+                                              num_walkers, num_steps, show_warn=show_warn, progress=False,
+                                              auto_save=True)
                     # Add the profile to the source storage structure
                     src.update_products(hy_mass)
                     # Also put it into a list for returning

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:14. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2178,6 +2178,8 @@ class SpecificEntropy(BaseProfile1D):
         this controls whether the data profile with the coarser bins is interpolated, or whether the other
         profile's data points are matched with the value that was measured for the radial region they
         are in (the default).
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
 
     def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
@@ -2185,7 +2187,7 @@ class SpecificEntropy(BaseProfile1D):
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False):
+                 progress: bool = True, interp_data: bool = False, auto_save: bool = False):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2237,6 +2239,8 @@ class SpecificEntropy(BaseProfile1D):
             this controls whether the data profile with the coarser bins is interpolated, or whether the other
             profile's data points are matched with the value that was measured for the radial region they
             are in (the default).
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
@@ -2399,7 +2403,8 @@ class SpecificEntropy(BaseProfile1D):
         ent_errs = np.mean(ent[1:, :], axis=0)
 
         super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii)
+                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
+                         auto_save=auto_save)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
