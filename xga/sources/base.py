@@ -4820,8 +4820,8 @@ class BaseSource:
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
         :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
             associated to the source.
-        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending signal-to-noise, then an array containing the order SNR ratios.
+        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending signal-to-noise, then a dictionary containing an array containing the order SNR ratios.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
         if telescope is None:
