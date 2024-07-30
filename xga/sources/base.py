@@ -4805,7 +4805,7 @@ class BaseSource:
         return reject_dict
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
-                    allow_negative: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+                    allow_negative: bool = False, telescope: str = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
@@ -4820,33 +4820,43 @@ class BaseSource:
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
         :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
             of ascending signal-to-noise, then an array containing the order SNR ratios.
-        :rtype: Tuple[np.ndarray, np.ndarray]
+        :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
-        # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
-        obs_inst = []
-        snrs = []
-        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-        for obs_id in self.instruments:
-            for inst in self.instruments[obs_id]:
-                # Use our handy get_snr method to calculate the SNRs we want, then add that and the
-                #  ObsID-inst combo into their respective lists
-                snrs.append(
-                    self.get_snr(outer_radius, 'xmm', self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
-                obs_inst.append([obs_id, inst])
+        if telescope is None:
+            telescope = self.telescopes
+        
+        obs_inst_dict = {}
+        snrs_dict = {}
 
-        # Make our storage lists into arrays, easier to work with that way
-        obs_inst = np.array(obs_inst)
-        snrs = np.array(snrs)
+        for tel in telescope:
+            # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+            obs_inst = []
+            snrs = []
+            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+            for obs_id in self.instruments[tel]:
+                for inst in self.instruments[tel][obs_id]:
+                    # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                    #  ObsID-inst combo into their respective lists
+                    snrs.append(
+                        self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
+                    obs_inst.append([obs_id, inst])
 
-        # We want to order the output by SNR, with the lowest being first and the highest being last, so we
-        #  use a numpy function to output the index order needed to re-order our two arrays
-        reorder_snrs = np.argsort(snrs)
-        # Then we use that to re-order them
-        snrs = snrs[reorder_snrs]
-        obs_inst = obs_inst[reorder_snrs]
+            # Make our storage lists into arrays, easier to work with that way
+            obs_inst = np.array(obs_inst)
+            snrs = np.array(snrs)
+
+            # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+            #  use a numpy function to output the index order needed to re-order our two arrays
+            reorder_snrs = np.argsort(snrs)
+            # Then we use that to re-order them
+            snrs = snrs[reorder_snrs]
+            obs_inst = obs_inst[reorder_snrs]
+
+            obs_inst_dict[tel] = obs_inst
+            snrs_dict[tel] = snrs
 
         # And return our ordered dictionaries
-        return obs_inst, snrs
+        return obs_inst_dict, snrs_dict
 
     def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
                       hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
