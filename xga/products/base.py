@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 20:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 11:00. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1563,7 +1563,7 @@ class BaseProfile1D:
         if isinstance(x_norm, bool) and x_norm:
             x_norm = self.x_norm
             if self.x_norm == Quantity(1, ''):
-                warn("No normalisation value is stored for the x-axis")
+                warn("No normalisation value is stored for the x-axis", stacklevel=2)
         elif isinstance(x_norm, Quantity):
             x_norm = x_norm
         elif isinstance(x_norm, bool) and not x_norm:
@@ -1573,7 +1573,7 @@ class BaseProfile1D:
         if isinstance(y_norm, bool) and y_norm:
             y_norm = self.y_norm
             if self.y_norm == Quantity(1, ''):
-                warn("No normalisation value is stored for the y-axis")
+                warn("No normalisation value is stored for the y-axis", stacklevel=2)
         elif isinstance(y_norm, Quantity):
             y_norm = y_norm
         elif isinstance(y_norm, bool) and not y_norm:
