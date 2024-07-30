@@ -2,7 +2,7 @@
 #  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 20:52. Copyright (c) The Contributors
 
 import os
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Dict
 from warnings import warn
 
 from astropy.units import Quantity, UnitConversionError
@@ -275,3 +275,82 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
     storage_key = spec_objs[0].storage_key
 
     return specs, storage_key
+
+def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quantity], Dict[str, Quantity], 
+                       Dict[str, List[Quantity]]]):
+    """
+    Internal function to parse the user input of the 'radii' argument of spectral fitting methods
+    into spectrum generation functions.
+
+    :param List[str] telescopes: A list of telescopes associated to the sources.
+    :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
+        annuli for the sources. A single quantity containing at least three radii may be passed if one source
+        is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
+        source.    
+
+    :return: A dictionary of telescope keys with values that can but input into annuluar spectrum functions.
+    :rtype: Union[Dict[str, Quantity], Dict[str, List[Quantity]]]
+    """
+    output_dict = {}
+    # If the radii is input as a Quantity, that means the user wants the same radii for all 
+    # telescopes and all sources
+    if isinstance(radii, Quantity):
+        for telescope in telescopes:
+            output_dict[telescope] = radii
+    
+    # If the radii is input as a List, that means the user wants the same radii for each telescope, 
+    # but different radii for different sources.
+    elif isinstance(radii, List):
+        for telescope in telescopes:
+            # checking every element in the list is a Quantity
+            if not all(isinstance(elem, Quantity) for elem in radii):
+                raise ValueError("If 'radii' is input as a List, then every element of the List " 
+                                 "must be an astropy Quantity.")
+            else:
+                output_dict[telescope] = radii    
+    
+    elif isinstance(radii, dict):
+        if not all(tel in radii.keys() for tel in telescopes):
+            raise KeyError("If 'radii' is input as a dictionary, this dictionary must contain a key"
+                           " for each telescope associated to the source.")
+        # If the radii is input as a Dictionary of lists, the user wants different radii for each 
+        # source and each telescope
+        if all(isinstance(value, List) for value in radii.values()):
+            for list_ in radii.values():
+                # checking every element in the list is a Quantity
+                if not all(isinstance(elem, Quantity) for elem in list_):
+                    raise ValueError("If 'radii' is input as a Dictionary of Lists, then every "
+                                     "element of each List must be an astropy Quantity.")
+    
+            output_dict = radii
+
+        # If the radii is input as a Dictionary of lists, the user wants the different radii for 
+        # each telescope, but the same radii for each source ie. all erosita spectra have one raddi
+        # all XMM spectra have another
+        elif all(isinstance(value, Quantity) for value in radii.values()):
+            output_dict = radii
+        
+        else:
+            raise ValueError("The 'radii' argument must be input as either; a Quantity - which is"
+                             " applied to every source in every telescope; a List of Quantities - "
+                             "where every entry is applied to each source for each telescope; a "
+                             "dictionary with telescope keys and Quantity keys - this is to specify"
+                             " a different radii to be applied to each telescope; or a dictionary "
+                             "of Lists of Quantities - which specifies radii for each source for "
+                             "each telescope. In this case the radii argument has been given as a "
+                             "dictionary but with the incorrect format. Please change the radii "
+                             " input so that it matches one of the given options.")
+    
+    else:
+        raise ValueError("The 'radii' argument must be input as either; a Quantity - which is"
+                    " applied to every source in every telescope; a List of Quantities - "
+                    "where every entry is applied to each source for each telescope; a "
+                    "dictionary with telescope keys and Quantity keys - this is to specify"
+                    " a different radii to be applied to each telescope; or a dictionary "
+                    "of Lists of Quantities - which specifies radii for each source for "
+                    "each telescope. In this case the radii argument has been given as a "
+                    "dictionary but with the incorrect format. Please change the radii "
+                    " input so that it matches one of the given options.")
+        
+    
+    return output_dict
