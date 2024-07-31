@@ -4825,13 +4825,12 @@ class BaseSource:
 
         return reject_dict
 
-    def snr_ranking(self, outer_radius: Union[Quantity, str], telescope: str, lo_en: Quantity = None, hi_en: Quantity = None,
-                    allow_negative: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                    allow_negative: bool = False, telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
 
-        :param str telescope: The telescope from which the ratemap is from that calculates the SNR.
         :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
             named radius such as r500, or an astropy Quantity.
         :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the SNR. Default is None,
@@ -4840,36 +4839,47 @@ class BaseSource:
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending signal-to-noise, the second array contains the order SNR ratios.
-        :rtype: Tuple[np.ndarray, np.ndarray]
+        :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
+            associated to the source.
+        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending signal-to-noise, then a dictionary containing an array containing the order SNR ratios.
+        :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
+        if telescope is None:
+            telescope = self.telescopes
+        
+        obs_inst_dict = {}
+        snrs_dict = {}
 
-        # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
-        obs_inst = []
-        snrs = []
-        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-        for obs_id in self.instruments[telescope]:
-            for inst in self.instruments[telescope][obs_id]:
-                # Use our handy get_snr method to calculate the SNRs we want, then add that and the
-                #  ObsID-inst combo into their respective lists
-                snrs.append(
-                    self.get_snr(outer_radius, telescope, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
-                obs_inst.append([obs_id, inst])
+        for tel in telescope:
+            # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+            obs_inst = []
+            snrs = []
+            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+            for obs_id in self.instruments[tel]:
+                for inst in self.instruments[tel][obs_id]:
+                    # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                    #  ObsID-inst combo into their respective lists
+                    snrs.append(
+                        self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
+                    obs_inst.append([obs_id, inst])
 
-        # Make our storage lists into arrays, easier to work with that way
-        obs_inst = np.array(obs_inst)
-        snrs = np.array(snrs)
+            # Make our storage lists into arrays, easier to work with that way
+            obs_inst = np.array(obs_inst)
+            snrs = np.array(snrs)
 
-        # We want to order the output by SNR, with the lowest being first and the highest being last, so we
-        #  use a numpy function to output the index order needed to re-order our two arrays
-        reorder_snrs = np.argsort(snrs)
-        # Then we use that to re-order them
-        snrs = snrs[reorder_snrs]
-        obs_inst = obs_inst[reorder_snrs]
+            # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+            #  use a numpy function to output the index order needed to re-order our two arrays
+            reorder_snrs = np.argsort(snrs)
+            # Then we use that to re-order them
+            snrs = snrs[reorder_snrs]
+            obs_inst = obs_inst[reorder_snrs]
+
+            obs_inst_dict[tel] = obs_inst
+            snrs_dict[tel] = snrs
 
         # And return our ordered dictionaries
-        return obs_inst, snrs
+        return obs_inst_dict, snrs_dict
 
     def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
                       hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
