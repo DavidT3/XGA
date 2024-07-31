@@ -75,6 +75,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         count-rate/volume to a number density of hydrogen, the parsed obs_id variable, and the parsed inst variable.
     :rtype: Tuple[Union[ClusterSample, List], List[Quantity], list, list]
     """
+    # storing all the telescopes in a list for later use
+    all_tels = sources.telescopes
     # If its a single source I shove it in a list so I can just iterate over the sources parameter
     #  like I do when its a Sample object
     if isinstance(sources, BaseSource):
@@ -132,18 +134,22 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         # Then we need to grab the temperatures and pass them through to the cluster conversion factor
         #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
         #  itself at some point
-        temp_temps = []
+        temp_temps = {key : [] for key in all_tels}
         for src in sources:
-            try:
-                # A temporary temperature variable
-                temp_temp = src.get_temperature(conv_outer_radius, "constant*tbabs*apec", inner_radius, group_spec,
-                                                min_counts, min_sn, over_sample)[0]
-            except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
-                     "3keV".format(s=src.name))
-                temp_temp = Quantity(3, 'keV')
-            temp_temps.append(temp_temp.value)
-        temps = Quantity(temp_temps, 'keV')
+            for tel in src.telescopes:
+                try:
+                    # A temporary temperature variable
+                    temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec", 
+                                                    inner_radius, group_spec, min_counts, min_sn, 
+                                                    over_sample)[0]
+                except (ModelNotAssociatedError, ParameterNotAssociatedError):
+                    warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
+                        "3keV".format(s=src.name))
+                    temp_temp = Quantity(3, 'keV')
+                temp_temps[tel].append(temp_temp.value)
+
+        for key in temp_temps:
+            temp_temps[key] = Quantity(temp_temps[key], 'keV')
 
     # This call actually does the fakeit calculation of the conversion factors, then stores them in the
     #  XGA Spectrum objects
