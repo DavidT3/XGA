@@ -9,7 +9,7 @@ import astropy.units as u
 from astropy.units import Quantity
 
 from .run import xspec_call
-from .fit._common import _pregen_spectra
+from .fit._common import _pregen_spectra, _spec_obj_setup
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..generate.sas import evselect_spectrum
@@ -103,86 +103,107 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for s_ind, source in enumerate(sources):
-        #for tel in source.telescopes:
-        # This function can take a single temperature to simulate at, or a list of them (one for each source).
-        if sim_temp.isscalar:
-            the_temp = sim_temp
-        else:
-            the_temp = sim_temp[s_ind]
-        # Equivalent of above but for metallicities
-        if isinstance(sim_met, float):
-            the_met = sim_met
-        else:
-            the_met = sim_met[s_ind]
+        for tel in source.telescopes:
+            # This function can take a single temperature to simulate at, or a list of them (one for each source).
+            if sim_temp.isscalar:
+                the_temp = sim_temp
+            else:
+                the_temp = sim_temp[s_ind]
+            # Equivalent of above but for metallicities
+            if isinstance(sim_met, float):
+                the_met = sim_met
+            else:
+                the_met = sim_met[s_ind]
 
-        total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
-        # Find matching spectrum objects associated with the current source, and checking if they are valid
-        spec_objs = source.get_spectra(out_rad_vals[s_ind], inner_radius=inn_rad_vals[s_ind],
-                                       group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                       over_sample=over_sample)
+            total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
 
-        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-        #  a source with only a single valid instrument for a single valid observation this may not be the case
-        if isinstance(spec_objs, Spectrum):
-            spec_objs = [spec_objs]
+            # Find matching spectrum objects associated with the current source, 
+            # and checking if they are valid
+            if stacked_spectra and tel == 'erosita':
+                search_inst = 'combined'
+            else:
+                search_inst = None
 
-        # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
-        if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for {} object, you "
-                                          "need to generate them first!".format(source.name))
-        elif len(spec_objs) != total_obs_inst:
-            raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
-                                          "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
-                                                                                                      total_obs_inst,
-                                                                                                      source.name))
+            if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
+                # For erosita we need to use the spectrum generated from combined observations, so that there
+                # are no duplicated events
+                spec_objs = source.get_combined_spectra(out_rad_vals[s_ind], inst=search_inst, 
+                                                        inner_radius=inn_rad_vals[s_ind],
+                                                        group_spec=group_spec, min_counts=min_counts,
+                                                        min_sn=min_sn, telescope=tel)
+            else:
+                # Find matching spectrum objects associated with the current source
+                spec_objs = source.get_spectra(out_rad_vals[s_ind], inner_radius=inn_rad_vals[s_ind],
+                                                group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                                over_sample=over_sample, telescope=tel, inst=search_inst)
+            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+            #  a cluster with only a single valid instrument for a single valid observation this may not be the case
+            if isinstance(spec_objs, Spectrum):
+                spec_objs = [spec_objs]
 
-        # Turn RMF and ARF paths into TCL style list for substitution into template
-        rmf_paths = "{" + " ".join([spec.rmf for spec in spec_objs]) + "}"
-        arf_paths = "{" + " ".join([spec.arf for spec in spec_objs]) + "}"
-        # Put in the ObsIDs and Instruments, to help name columns easily
-        obs = "{" + " ".join([spec.obs_id for spec in spec_objs]) + "}"
-        inst = "{" + " ".join([spec.instrument for spec in spec_objs]) + "}"
+            # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
+            if len(spec_objs) == 0:
+                raise NoProductAvailableError("There are no matching spectra for {s} object, you "
+                                                "need to generate them first!".format(s=source.name))
 
-        # For this model, we have to know the redshift of the source.
-        if source.redshift is None:
-            raise ValueError("You cannot supply a source without a redshift to this model.")
+            # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
+            #  a source with only a single valid instrument for a single valid observation this may not be the case
+            if isinstance(spec_objs, Spectrum):
+                spec_objs = [spec_objs]
 
-        t = the_temp.to("keV", equivalencies=u.temperature_energy()).value
-        # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4}}}".format(source.nH.to("10^22 cm^-2").value, t,
-                                                      sim_met, source.redshift, 1.)
+            elif len(spec_objs) != total_obs_inst:
+                raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
+                                            "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
+                                                                                                        total_obs_inst,
+                                                                                                        source.name))
 
-        with open(COUNTRATE_CONV_SCRIPT, 'r') as c_script:
-            script = c_script.read()
+            # Turn RMF and ARF paths into TCL style list for substitution into template
+            rmf_paths = "{" + " ".join([spec.rmf for spec in spec_objs]) + "}"
+            arf_paths = "{" + " ".join([spec.arf for spec in spec_objs]) + "}"
+            # Put in the ObsIDs and Instruments, to help name columns easily
+            obs = "{" + " ".join([spec.obs_id for spec in spec_objs]) + "}"
+            inst = "{" + " ".join([spec.instrument for spec in spec_objs]) + "}"
 
-        dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
-        if not os.path.exists(dest_dir):
-            os.makedirs(dest_dir)
-        out_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_conv_factors.csv"
-        script_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_conv_factors" + ".xcm"
+            # For this model, we have to know the redshift of the source.
+            if source.redshift is None:
+                raise ValueError("You cannot supply a source without a redshift to this model.")
 
-        # Random ident to make sure no temporary spec files clash
-        rid = randint(0, 1e+8)
+            t = the_temp.to("keV", equivalencies=u.temperature_energy()).value
+            # Another TCL list, this time of the parameter start values for this model.
+            par_values = "{{{0} {1} {2} {3} {4}}}".format(source.nH.to("10^22 cm^-2").value, t,
+                                                        sim_met, source.redshift, 1.)
 
-        # Populates the fakeit conversion factor template script
-        script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,
-                               rmf=rmf_paths, arf=arf_paths, obs=obs, inst=inst, m=model, pn=par_names,
-                               pv=par_values, lll=convert_low_lims, lul=convert_upp_lims,
-                               redshift=source.redshift, of=out_file, rid=rid)
+            with open(COUNTRATE_CONV_SCRIPT, 'r') as c_script:
+                script = c_script.read()
 
-        # Write out the filled-in template to its destination
-        with open(script_file, 'w') as xcm:
-            xcm.write(script)
+            dest_dir = OUTPUT + tel + "XSPEC/" + source.name + "/"
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
+            out_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_" + tel + "_conv_factors.csv"
+            script_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_" + tel + "_conv_factors" + ".xcm"
 
-        try:
-            # Checks through the spectrum objects we retrieved earlier, and the energy limits,
-            #  to look for conversion factor results, if they exist they aren't run again, otherwise an error
-            #  is triggered and the scripts get added to the pile to run.
-            res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec") for e_pair in conv_en for s in spec_objs]
-        except (ModelNotAssociatedError, ParameterNotAssociatedError):
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(s_ind)
+            # Random ident to make sure no temporary spec files clash
+            rid = randint(0, 1e+8)
+
+            # Populates the fakeit conversion factor template script
+            script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,
+                                rmf=rmf_paths, arf=arf_paths, obs=obs, inst=inst, m=model, pn=par_names,
+                                pv=par_values, lll=convert_low_lims, lul=convert_upp_lims,
+                                redshift=source.redshift, of=out_file, rid=rid)
+
+            # Write out the filled-in template to its destination
+            with open(script_file, 'w') as xcm:
+                xcm.write(script)
+
+            try:
+                # Checks through the spectrum objects we retrieved earlier, and the energy limits,
+                #  to look for conversion factor results, if they exist they aren't run again, otherwise an error
+                #  is triggered and the scripts get added to the pile to run.
+                res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec") for e_pair in conv_en for s in spec_objs]
+            except (ModelNotAssociatedError, ParameterNotAssociatedError):
+                script_paths.append(script_file)
+                outfile_paths.append(out_file)
+                src_inds.append(s_ind)
 
     # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
     #  to expect
