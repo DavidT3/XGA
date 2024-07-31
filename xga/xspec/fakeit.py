@@ -9,6 +9,7 @@ import astropy.units as u
 from astropy.units import Quantity
 
 from .run import xspec_call
+from .fit._common import _pregen_spectra
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..generate.sas import evselect_spectrum
@@ -24,7 +25,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), sim_temp: Quantity = Quantity(3, 'keV'),
                     sim_met: Union[float, List] = 0.3, conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
                     abund_table: str = "angr", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                    over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES):
+                    over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES, 
+                    stacked_spectra: bool = False):
     """
     This function uses the xspec fakeit tool to calculate conversion factors between count rate and
     luminosity for ARFs and RMFs associated with spectra in the given sources. Once complete the conversion
@@ -58,6 +60,9 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be generated. If a
+        stacking procedure for a particular telescope is not supported, this function will instead use individual
+        spectra for an ObsID. The default is False.
     """
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
@@ -67,13 +72,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         ab_list = ", ".join(ABUND_TABLES)
         raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(abund_table, ab_list))
 
-    # This just makes sure that spectra matching what has been requested have actually been generated
-    evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
-                      num_cores)
-
-    # And use the evselect region preparation function to parse the radii properly, and generate
-    #  some more predictable radii quantities
-    inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, '')[1:]
+    sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
+                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
 
     # Checks that the luminosity energy bands are pairs of values
     if conv_en.shape[1] != 2:
@@ -103,6 +103,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for s_ind, source in enumerate(sources):
+        #for tel in source.telescopes:
         # This function can take a single temperature to simulate at, or a list of them (one for each source).
         if sim_temp.isscalar:
             the_temp = sim_temp
