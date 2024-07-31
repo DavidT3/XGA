@@ -22,9 +22,9 @@ ALLOWED_ANN_METHODS = ['min_snr', 'min_cnt']
 
 
 def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity, lo_en: Quantity, 
-                    hi_en: Quantity, obs_id: str = None, inst: str = None, psf_corr: bool = False, 
-                    psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", 
-                    psf_iter: int = 15, telescope: str = None):
+                    hi_en: Quantity, obs_id: Dict[str, str] = None, inst: Dict[str, str] = None, 
+                    psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, 
+                    psf_algo: str = "rl", psf_iter: int = 15, telescope: str = None):
     """
     This method just sets up radii, masks, etc. for annular binning functions in this file. 
     The operations in this function are shared by multiple other binning functions, hence they have
@@ -39,11 +39,13 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         calculations.
     :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise 
         calculations.
-    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is 
-        None, which means the combined ratemap will be used. Please note that inst must also be set
-        to use this option.
-    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default 
-        is None, which means the combined ratemap will be used.
+    :param Dict[str, str] obs_id: A dictionary containing the ObsID of a specific ratemap to use for
+        the SNR calculations for a specific telescope, the telescopes are the keys, and ObsIDs are 
+        the values. Default is None, which means the combined ratemap will be used. Please note that
+        inst must also be set to use this option.
+    :param Dict[str, str] inst: A dictionary containing the instrument of a specific ratemap to use
+        for the SNR calculations for a specific telescope, the telescopes are the keys, and ObsIDs
+        are the values. Default is None, which means the combined ratemap will be used.
     :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
     :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model 
         used.
@@ -164,6 +166,10 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     pix_to_deg = {}
 
     for tel in telescope:
+        if obs_id is not None:
+            obs_id = obs_id[tel]
+        if inst is not None:
+            inst = inst[tel]
         # This retrieves all of the parameters needed for annular bins
         tel_params = get_tel_specific_params(source, outer_rad, min_width, lo_en, hi_en, obs_id, 
                                              inst, psf_corr, psf_model, psf_bins, psf_algo, 
@@ -181,7 +187,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 
 
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, 
-              lo_en: Quantity, hi_en: Quantity, obs_id: str = None, inst: str = None, 
+              lo_en: Quantity, hi_en: Quantity, obs_id: Dict[str, str] = None, inst: Dict[str, str] = None, 
               psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, 
               psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False, 
               exp_corr: bool = True, telescope: str = None) -> Tuple[Quantity, np.ndarray, int]:
@@ -598,7 +604,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative)[0][0, :]
             rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, lowest_ranked[0],
                                        lowest_ranked[1], psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                                       allow_negative, exp_corr)
+                                       allow_negative, exp_corr, telescope=telescope)
 
         # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
         all_rads_source_dicts.append(rads)
