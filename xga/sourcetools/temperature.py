@@ -982,13 +982,13 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                          "these; {}".format(a_meth))
 
     if annulus_method == 'min_snr':
-        # This returns the boundary radii for the annuli
+        # This returns the boundary radii for the annuli in a telescope dictionary
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
                                           exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
                                           abund_table, temp_lo_en, temp_hi_en, num_cores)
     elif annulus_method == 'min_cnt':
-        # This returns the boundary radii for the annuli, based on a minimum number of counts per annulus
+        # This returns the boundary radii for the annuli, based on a minimum number of counts per annulus in a telescope dictionary
         ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined, lo_en, hi_en,
                                           psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
                                           min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
@@ -996,90 +996,98 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
+    # getting all the associated telescopes for later use
+    all_tels = sources.telescopes
+
     # So we can iterate through sources without worrying if there's more than one cluster
     if not isinstance(sources, (BaseSample, list)):
         sources = [sources]
 
-    all_3d_temp_profs = []
+    all_3d_temp_profs = {key : [] for key in all_tels}
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
-        cur_rads = ann_rads[src_ind]
+        for tel in src.telescopes:
+            cur_rads = ann_rads[tel][src_ind]
 
-        try:
-            # The projected temperature profile we're going to use
-            proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
-            # The normalisation profile(s) from the fit that produced the projected temperature profile.
-            apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
-        except NoProductAvailableError:
-            warn("{s} doesn't have a matching projected temperature profile, skipping.")
-            all_3d_temp_profs.append(None)
-            continue
+            try:
+                # The projected temperature profile we're going to use
+                proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn, 
+                                                       over_sample, telescope=tel)
+                # The normalisation profile(s) from the fit that produced the projected temperature profile.
+                apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, 
+                                                            min_sn, over_sample, telescope=tel)
+            except NoProductAvailableError:
+                warn("{s} doesn't have a matching projected temperature profile, skipping.")
+                all_3d_temp_profs[tel].append(None)
+                continue
 
-        # We need to check if a matching 3D temperature profile has already been generated, as then we
-        #  just use that one rather than making another (which would be silly and also eat up more storage
-        #  because they are automatically saved to disk).
-        try:
-            existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident)
-            all_3d_temp_profs.append(existing_3d_temp_prof)
-            continue
-        except NoProductAvailableError:
-            pass
+            # We need to check if a matching 3D temperature profile has already been generated, as then we
+            #  just use that one rather than making another (which would be silly and also eat up more storage
+            #  because they are automatically saved to disk).
+            try:
+                existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident, 
+                                                                 telescope=tel)
+                all_3d_temp_profs[tel].append(existing_3d_temp_prof)
+                continue
+            except NoProductAvailableError:
+                pass
 
-        obs_id = 'combined'
-        inst = 'combined'
-        # There are reasons that a projected temperature profile can be considered unusable, so we must check. Also
-        #  make sure to only use those profiles that have a minimum of 4 annuli. The len operator retrieves the number
-        #  of radial data points a profile has
-        if proj_temp.usable and len(proj_temp) > 3:
-            # Also make an Emission Measure profile, used for weighting the contributions from different
-            #  shells to annuli
-            em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,
-                                                              num_data_real, conf_level)
-            src.update_products(em_prof)
+            obs_id = 'combined'
+            inst = 'combined'
+            # There are reasons that a projected temperature profile can be considered unusable, so we must check. Also
+            #  make sure to only use those profiles that have a minimum of 4 annuli. The len operator retrieves the number
+            #  of radial data points a profile has
+            if proj_temp.usable and len(proj_temp) > 3:
+                # Also make an Emission Measure profile, used for weighting the contributions from different
+                #  shells to annuli
+                em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,
+                                                                num_data_real, conf_level)
+                src.update_products(em_prof)
 
-            # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
-            #  in units of centimeters
-            cur_rads = src.convert_radius(cur_rads, 'cm')
-            # Use a handy function I wrote to calculate the volume intersections of spherical shells and
-            #  projected annuli
-            vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
+                # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
+                #  in units of centimeters
+                cur_rads = src.convert_radius(cur_rads, 'cm')
+                # Use a handy function I wrote to calculate the volume intersections of spherical shells and
+                #  projected annuli
+                vol_intersects = shell_ann_vol_intersect(cur_rads, cur_rads)
 
-            # Then it's an inverse matrix problem to recover the 3D temperatures
-            temp_3d = (np.linalg.inv(vol_intersects.T) @ (proj_temp.values * em_prof.values)) / (np.linalg.inv(
-                vol_intersects.T) @ em_prof.values)
+                # Then it's an inverse matrix problem to recover the 3D temperatures
+                temp_3d = (np.linalg.inv(vol_intersects.T) @ (proj_temp.values * em_prof.values)) / (np.linalg.inv(
+                    vol_intersects.T) @ em_prof.values)
 
-            # I generate random realisations of the projected temperature profile and the emission measure profile
-            #  to help me with error propagation
-            proj_temp_reals = proj_temp.generate_data_realisations(num_data_real, truncate_zero=True)
-            em_reals = em_prof.generate_data_realisations(num_data_real, truncate_zero=True)
+                # I generate random realisations of the projected temperature profile and the emission measure profile
+                #  to help me with error propagation
+                proj_temp_reals = proj_temp.generate_data_realisations(num_data_real, truncate_zero=True)
+                em_reals = em_prof.generate_data_realisations(num_data_real, truncate_zero=True)
 
-            # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
-            #  of realisations and R is the number of radius data points
-            temp_3d_reals = Quantity(np.zeros(proj_temp_reals.shape), proj_temp_reals.unit)
-            for i in range(0, num_data_real):
-                # Calculate and store the 3D temperature profile realisations
-                interim = (np.linalg.inv(vol_intersects.T) @ (proj_temp_reals[i, :] * em_reals[i, :])) / (np.linalg.inv(
-                    vol_intersects.T) @ em_reals[i, :])
-                temp_3d_reals[i, :] = interim
+                # Set up an N x R array for the random realisations of the 3D temperature, where N is the number
+                #  of realisations and R is the number of radius data points
+                temp_3d_reals = Quantity(np.zeros(proj_temp_reals.shape), proj_temp_reals.unit)
+                for i in range(0, num_data_real):
+                    # Calculate and store the 3D temperature profile realisations
+                    interim = (np.linalg.inv(vol_intersects.T) @ (proj_temp_reals[i, :] * em_reals[i, :])) / (np.linalg.inv(
+                        vol_intersects.T) @ em_reals[i, :])
+                    temp_3d_reals[i, :] = interim
 
-            # Calculate the upper and lower confidence level values as specified by the user
-            med = np.percentile(temp_3d_reals, 50, axis=0)
-            upper = np.percentile(temp_3d_reals, 50 + (conf_level / 2), axis=0)
-            lower = np.percentile(temp_3d_reals, 50 - (conf_level / 2), axis=0)
+                # Calculate the upper and lower confidence level values as specified by the user
+                med = np.percentile(temp_3d_reals, 50, axis=0)
+                upper = np.percentile(temp_3d_reals, 50 + (conf_level / 2), axis=0)
+                lower = np.percentile(temp_3d_reals, 50 - (conf_level / 2), axis=0)
 
-            # Bit dodgy to do this but oh well
-            temp_3d_sigma = Quantity(np.average([med - lower, upper - med], axis=0), 'keV')
+                # Bit dodgy to do this but oh well
+                temp_3d_sigma = Quantity(np.average([med - lower, upper - med], axis=0), 'keV')
 
-            # And finally actually set up a 3D temperature profile
-            temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
-                                            proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
-                                            proj_temp.associated_set_storage_key, proj_temp.deg_radii)
-            src.update_products(temp_3d_prof)
-            all_3d_temp_profs.append(temp_3d_prof)
+                # And finally actually set up a 3D temperature profile
+                temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
+                                                proj_temp.radii_err, temp_3d_sigma, proj_temp.set_ident,
+                                                proj_temp.associated_set_storage_key, proj_temp.deg_radii,
+                                                telescope=tel)
+                src.update_products(temp_3d_prof)
+                all_3d_temp_profs[tel].append(temp_3d_prof)
 
-        else:
-            warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name),
-                 stacklevel=2)
-            all_3d_temp_profs.append(None)
+            else:
+                warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name),
+                    stacklevel=2)
+                all_3d_temp_profs[tel].append(None)
 
     return all_3d_temp_profs
