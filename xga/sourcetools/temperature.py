@@ -339,12 +339,20 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     snrs = {}
     
     for tel in telescope:
+        # If there is an obs_id provided, it will be a dict with telescope keys
+        # need to provide the correct obs_id for the corresponding telescope
         if obs_id is not None:
-            obs_id = obs_id[tel]
+            obs_id_use = obs_id[tel]
+        else:
+            obs_id_use = obs_id
+        # If there is an inst provided, it will be a dict with telescope keys
+        # need to provide the correct inst for the corresponding telescope
         if inst is not None:
-            inst = inst[tel]
+            inst_use = inst[tel]
+        else:
+            inst_use = inst
         t_final_rads, t_snrs = _get_tel_specific_params(source, outer_rad, min_snr, min_width, 
-                                                        lo_en, hi_en, obs_id, inst, psf_corr, 
+                                                        lo_en, hi_en, obs_id_use, inst_use, psf_corr, 
                                                         psf_model, psf_bins, psf_algo, psf_iter,
                                                         allow_negative, exp_corr, tel)
         final_rads[tel] = t_final_rads
@@ -354,8 +362,8 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
 
 
 def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
-              min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: str = None, 
-              inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA", 
+              min_width: Quantity, lo_en: Quantity, hi_en: Quantity, obs_id: Dict[str, str] = None, 
+              inst: Dict[str, str] = None, psf_corr: bool = False, psf_model: str = "ELLBETA", 
               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, 
               telescope: str = None) -> Tuple[Quantity, Quantity, int]:
     """
@@ -372,11 +380,13 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
         subtracted count calculations.
     :param Quantity hi_en: The upper energy bound of the ratemap to use for the background 
         subtracted count calculations.
-    :param str obs_id: An ObsID of a specific ratemap to use for the background subtracted count
-        calculations. Default is None, which means the combined ratemap will be used. Please note 
-        that inst must also be set to use this option.
-    :param str inst: The instrument of a specific ratemap to use for the background subtracted count
-        calculations. Default is None, which means the combined ratemap will be used.
+    :param Dict[str, str] obs_id: A dictionary containing the ObsID of a specific ratemap to use for
+        the count rate calculations for a specific telescope, the telescopes are the keys, and 
+        ObsIDs are the values. Default is None, which means the combined ratemap will be used. 
+        Please note that inst must also be set to use this option.
+    :param Dict[str, str] inst: A dictionary containing the instrument of a specific ratemap to use
+        for the count rate calculations for a specific telescope, the telescopes are the keys, and 
+        ObsIDs are the values. Default is None, which means the combined ratemap will be used.
     :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
     :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model 
         used.
@@ -500,8 +510,20 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
     cnts = {}
 
     for tel in telescope:
+        # If there is an obs_id provided, it will be a dict with telescope keys
+        # need to provide the correct obs_id for the corresponding telescope
+        if obs_id is not None:
+            obs_id_use = obs_id[tel]
+        else:
+            obs_id_use = obs_id
+        # If there is an inst provided, it will be a dict with telescope keys
+        # need to provide the correct inst for the corresponding telescope
+        if inst is not None:
+            inst_use = inst[tel]
+        else:
+            inst_use = inst
         t_final_rads, t_cnts = _get_tel_specific_params(source, outer_rad, min_cnt, min_width, 
-                                                        lo_en, hi_en, obs_id, inst, psf_corr,
+                                                        lo_en, hi_en, obs_id_use, inst_use, psf_corr,
                                                         psf_model, psf_bins, psf_algo, psf_iter,
                                                         tel)
         final_rads[tel] = t_final_rads
