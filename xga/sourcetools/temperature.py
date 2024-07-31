@@ -634,14 +634,27 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                        psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
                                        allow_negative=allow_negative, exp_corr=exp_corr, telescope=telescope)
         else:
-            # This way is slightly more complicated, but here we use the worst observation (ranked by global
-            #  signal to noise).
-            # The return for this function is ranked worst to best, so we grab the first row (which is an ObsID and
-            #  instrument), then call _snr_bins with that one
-            lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative)[0][0, :]
-            rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, lowest_ranked[0],
-                                       lowest_ranked[1], psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
-                                       allow_negative, exp_corr, telescope=telescope)
+            # The return for this function is two dictionaries of arrays ranked worst to best, so we
+            #  grab the first dictionary which contains arrays of lists of ObsIDs and instruments
+            # combos in ranked order
+            lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative)[0]
+
+            # we then need to parse this dictionary into the _snr_bins function, so we will have to 
+            # have a dictionary for the obs and inst we want to use for each telescope
+            chosen_obs = {}
+            chosen_inst = {}
+            for key in lowest_ranked:
+                # This grabs the first row, which is the worst observation ranked by global snr
+                chosen_combo = lowest_ranked[key][0, :]
+                # Then just selecting the obs id of this worst observation
+                chosen_obs[key] = chosen_combo[0]
+                # same but for the instrument
+                chosen_inst[key] = chosen_combo[1]
+
+            rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en,
+                                       chosen_obs, chosen_inst, psf_corr, psf_model, psf_bins, 
+                                       psf_algo, psf_iter, allow_negative, exp_corr, 
+                                       telescope=telescope)
 
         # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
         all_rads_source_dicts.append(rads)
