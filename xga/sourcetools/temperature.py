@@ -166,13 +166,21 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     pix_to_deg = {}
 
     for tel in telescope:
+        # If there is an obs_id provided, it will be a dict with telescope keys
+        # need to provide the correct obs_id for the corresponding telescope
         if obs_id is not None:
-            obs_id = obs_id[tel]
+            obs_id_use = obs_id[tel]
+        else:
+            obs_id_use = obs_id
+        # If there is an inst provided, it will be a dict with telescope keys
+        # need to provide the correct inst for the corresponding telescope
         if inst is not None:
-            inst = inst[tel]
+            inst_use = inst[tel]
+        else:
+            inst_use = inst
         # This retrieves all of the parameters needed for annular bins
-        tel_params = get_tel_specific_params(source, outer_rad, min_width, lo_en, hi_en, obs_id, 
-                                             inst, psf_corr, psf_model, psf_bins, psf_algo, 
+        tel_params = get_tel_specific_params(source, outer_rad, min_width, lo_en, hi_en, obs_id_use, 
+                                             inst_use, psf_corr, psf_model, psf_bins, psf_algo, 
                                              psf_iter, tel)
         rt[tel] = tel_params[0]
         cur_rads[tel] = tel_params[1]
@@ -187,10 +195,11 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
 
 
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, 
-              lo_en: Quantity, hi_en: Quantity, obs_id: Dict[str, str] = None, inst: Dict[str, str] = None, 
-              psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, 
-              psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False, 
-              exp_corr: bool = True, telescope: str = None) -> Tuple[Quantity, np.ndarray, int]:
+              lo_en: Quantity, hi_en: Quantity, obs_id: Dict[str, str] = None, 
+              inst: Dict[str, str] = None, psf_corr: bool = False, psf_model: str = "ELLBETA", 
+              psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, 
+              allow_negative: bool = False, exp_corr: bool = True, 
+              telescope: str = None) -> Tuple[Quantity, np.ndarray, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum 
     signal to noise and minimum annulus width.
@@ -205,11 +214,13 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         calculations.
     :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise
         calculations.
-    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is
-        None, which means the combined ratemap will be used. Please note that inst must also be set 
-        to use this option.
-    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default 
-        is None, which means the combined ratemap will be used.
+    :param Dict[str, str] obs_id: A dictionary containing the ObsID of a specific ratemap to use for
+        the SNR calculations for a specific telescope, the telescopes are the keys, and ObsIDs are 
+        the values. Default is None, which means the combined ratemap will be used. Please note that
+        inst must also be set to use this option.
+    :param Dict[str, str] inst: A dictionary containing the instrument of a specific ratemap to use
+        for the SNR calculations for a specific telescope, the telescopes are the keys, and ObsIDs
+        are the values. Default is None, which means the combined ratemap will be used.
     :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
     :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model
         used.
@@ -328,6 +339,10 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     snrs = {}
     
     for tel in telescope:
+        if obs_id is not None:
+            obs_id = obs_id[tel]
+        if inst is not None:
+            inst = inst[tel]
         t_final_rads, t_snrs = _get_tel_specific_params(source, outer_rad, min_snr, min_width, 
                                                         lo_en, hi_en, obs_id, inst, psf_corr, 
                                                         psf_model, psf_bins, psf_algo, psf_iter,
