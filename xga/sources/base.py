@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 16:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 16:49. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -224,8 +224,9 @@ class BaseSource:
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
-        print('OG')
-        print(self._instruments['0105262401'])
+        if self.name == 'ACCEPT-120':
+            print('OG')
+            print(self._instruments['0105262401'])
 
         self._cosmo = cosmology
         if redshift is not None:
