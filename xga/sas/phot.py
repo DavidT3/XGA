@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 12:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 13:19. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -289,8 +289,8 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             sources_types.append(np.array([]))
             continue
 
-
         print(en_id)
+        print(source.get_images())
         # This fetches all image objects with the passed energy bounds
         matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
                    if en_id in match]
