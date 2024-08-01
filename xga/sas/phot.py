@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 14:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 15:26. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -300,6 +300,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         if len(matches) == 0:
             assoc = ", ".join([cur_oi + cur_i for cur_oi in source.instruments
                                for cur_i in source.instruments[cur_oi]])
+            print(source.instruments)
             raise NoProductAvailableError("The images required for emosaic are not available for {p} - this is not a"
                                           " usual behaviour as XGA should have generated them; the relevant "
                                           "observations are {d}.".format(p=source.name, d=assoc))
