@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 16:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 16:46. Copyright (c) The Contributors
 
 from typing import List
 
@@ -230,6 +230,7 @@ class ClusterSample(BaseSample):
 
         self._names = final_names
 
+        print(self['ACCEPT-120']._products)
         print(self['ACCEPT-120'].obs_ids)
         print('')
         print(self['ACCEPT-120'].instruments['0105262401'])
