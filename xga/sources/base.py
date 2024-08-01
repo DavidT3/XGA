@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 13:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 15:20. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -221,9 +221,20 @@ class BaseSource:
         #  other way for them to change is through using the dissociate observation capability
         self._products, region_dict, self._att_files = self._initial_products()
 
+        # TODO REMOVE
+        if self.name == 'ACCEPT-120':
+            print(self._obs)
+            print(self._instruments)
+            print(self._products)
+
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+
+        # TODO REMOVE
+        if self.name == 'ACCEPT-120':
+            print(self._obs)
+            print(self._instruments)
 
         self._cosmo = cosmology
         if redshift is not None:
@@ -717,8 +728,6 @@ class BaseSource:
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
-
-            print(im_info)
 
             if not merged:
                 # I know its hard coded but this will always be the case, these are files I generate with XGA.
