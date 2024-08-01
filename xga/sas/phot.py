@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 13:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 14:09. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -77,6 +77,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
             exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False)
                       if en_id in match]
+            print(obs_id, inst, exists)
             if len(exists) == 1 and exists[0][-1].usable:
                 continue
 
@@ -290,7 +291,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             continue
 
         print(en_id)
-        print(source.get_images())
+        # print(source.get_images())
         # This fetches all image objects with the passed energy bounds
         matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
                    if en_id in match]
