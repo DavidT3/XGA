@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:43. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -457,8 +457,6 @@ class BaseSource:
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
 
-        if self._name == 'ACCEPT-120':
-            print(obs_dict['0105262401'])
         if len(obs_dict) == 0:
             raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
