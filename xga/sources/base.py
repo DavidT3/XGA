@@ -1260,9 +1260,6 @@ class BaseSource:
             arf = prod_gen_path + '.arf'
             back = prod_gen_path + '_backspec.fits'
 
-            print(spec)
-
-
             if tel == 'erosita':
                 back_rmf = prod_gen_path + '_backspec.rmf'
                 back_arf = prod_gen_path + '_backspec.arf'
@@ -2638,77 +2635,68 @@ class BaseSource:
                     inven.to_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), index=False)
                 
                 # Here we make sure to store a record of the added product in the relevant inventory file
-                elif isinstance(po, (BaseAggregateProduct)) and po.obs_id != 'combined' and update_inv:
-                    print("f should not be combined: {po.obs_id}")
-                    inven = pd.read_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=obs_id), dtype=str)
-
-                    # Don't want to store a None value as a string for the info_key
+                # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
+                elif isinstance(po, (AnnularSpectra)) and update_inv:                         # Don't want to store a None value as a string for the info_key
                     if extra_key is None:
                         info_key = ''
                     else:
-                        info_key = extra_key
-                    
+                        info_key = extra_key                    
                     # Adding each component product to the inventory
-                    for comp_po in po:
-                        # I want only the name of the file as it is in the storage directory, I don't want an
-                        #  absolute path, so I remove the leading information about the absolute location in
-                        #  the .path string
-                        f_name = comp_po.path.split(OUTPUT + "{t}/{o}/".format(t=tel, o=obs_id))[-1]
+                    for comp_po in po.all_spectra:
+                        if comp_po.obs_id == "combined":
+                            inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
 
-                        # Images, exposure maps, and other such things are not source specific, so I don't want
-                        #  the inventory file to assign them a specific source
-                        if isinstance(comp_po, Image):
-                            s_name = ''
+                            # TODO AT LEAST SOME COMBINED PRODUCTS NOW DO HAVE THIS INFORMATION STORED IN THEM, IT WOULD
+                            #  PROBABLY BE A GOOD IDEA TO UPDATE HOW THIS WORKS AT SOME POINT
+                            # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
+                            #  are not stored explicitly within the product object. However we are currently within the
+                            #  source object that they were generated from, thus we do have that information available
+                            # Using the _instruments attribute also gives us access to inst information
+                            i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                            o_str = "/".join([o for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                            # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
+                            #  them into strings
+
+                            f_name = comp_po.path.split(OUTPUT + "{t}/combined/".format(t=tel))[-1]
+                            if isinstance(comp_po, Image):
+                                s_name = ''
+                            else:
+                                s_name = comp_po.src_name
+
+                            # Creates new pandas series to be appended to the inventory dataframe
+                            new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, comp_po.type],
+                                                ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
+                            # Concatenates the series with the inventory dataframe
+                            inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                            inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                            inven.to_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), index=False)
+
                         else:
-                            s_name = comp_po.src_name
+                            inven = pd.read_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=comp_po.obs_id), dtype=str)
 
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, obs_id, inst, info_key, s_name, comp_po.type],
-                                            ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+                            # I want only the name of the file as it is in the storage directory, I don't want an
+                            #  absolute path, so I remove the leading information about the absolute location in
+                            #  the .path string
+                            f_name = comp_po.path.split(OUTPUT + "{t}/{o}/".format(t=tel, o=comp_po.obs_id))[-1]
 
-                        # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
-                        #  if it did I think it would cause problems so better to be safe and add this.
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        # Saves the updated inventory file
-                        inven.to_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=obs_id), index=False)
-                
-                elif isinstance(po, (BaseAggregateProduct)) and obs_id == 'combined' and update_inv:
-                    inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
+                            # Images, exposure maps, and other such things are not source specific, so I don't want
+                            #  the inventory file to assign them a specific source
+                            if isinstance(comp_po, Image):
+                                s_name = ''
+                            else:
+                                s_name = comp_po.src_name
 
-                    # Don't want to store a None value as a string for the info_key
-                    if extra_key is None:
-                        info_key = ''
-                    else:
-                        info_key = extra_key
+                            # Creates new pandas series to be appended to the inventory dataframe
+                            new_line = pd.Series([f_name, comp_po.obs_id, comp_po.instrument, info_key, s_name, comp_po.type],
+                                                ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
+                            # Concatenates the series with the inventory dataframe
+                            inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
 
-                    # TODO AT LEAST SOME COMBINED PRODUCTS NOW DO HAVE THIS INFORMATION STORED IN THEM, IT WOULD
-                    #  PROBABLY BE A GOOD IDEA TO UPDATE HOW THIS WORKS AT SOME POINT
-                    # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
-                    #  are not stored explicitly within the product object. However we are currently within the
-                    #  source object that they were generated from, thus we do have that information available
-                    # Using the _instruments attribute also gives us access to inst information
-                    i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
-                    o_str = "/".join([o for o in self.instruments[tel] for i in self.instruments[tel][o]])
-                    # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
-                    #  them into strings
-
-                    # Adding each component product to the inventory
-                    for comp_po in po:
-                        f_name = comp_po.path.split(OUTPUT + "{t}/combined/".format(t=tel))[-1]
-                        if isinstance(comp_po, Image):
-                            s_name = ''
-                        else:
-                            s_name = comp_po.src_name
-
-                        # Creates new pandas series to be appended to the inventory dataframe
-                        new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, comp_po.type],
-                                            ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                        # Concatenates the series with the inventory dataframe
-                        inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-                        inven.drop_duplicates(subset=None, keep='first', inplace=True)
-                        inven.to_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), index=False)
+                            # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
+                            #  if it did I think it would cause problems so better to be safe and add this.
+                            inven.drop_duplicates(subset=None, keep='first', inplace=True)
+                            # Saves the updated inventory file
+                            inven.to_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=comp_po.obs_id), index=False)
                     
 
                 elif isinstance(po, BaseProfile1D) and obs_id != 'combined' and update_inv:
