@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -237,7 +237,7 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
             # warn("Background region for brightness profile is all zeros for {}".format(src.name))
 
         if sb_prof is not None and not success:
-            warn("Minimum SNR rebinning failed for {}".format(src.name))
+            warn("Minimum SNR rebinning failed for {}".format(src.name), stacklevel=2)
 
     return sb_prof
 

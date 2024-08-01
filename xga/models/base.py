@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -325,7 +325,7 @@ class BaseModel1D(metaclass=ABCMeta):
         force_change = False
         if len(set(np.diff(x))) != 1:
             warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                 "the method to 'direct'")
+                 "the method to 'direct'", stacklevel=2)
             method = 'direct'
             force_change = True
         else:
