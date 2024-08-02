@@ -3902,7 +3902,7 @@ class BaseSource:
 
         # If it's not an instance of Image that means a list of Images has been returned, and as I only want
         #  the WCS information and the shape of the image I don't care which one we use
-        if not isinstance(im, RateMap):
+        if not isinstance(im, Image):
             im = im[0]
 
         # Convert the inner and outer radii to degrees, so they can be easily converted to pixels
