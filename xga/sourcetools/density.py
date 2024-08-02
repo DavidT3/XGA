@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:42. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -646,7 +646,6 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
         models which don't have an analytical solution. Default is None.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
-    :param bool show_warn: Should fit warnings be shown on screen.
     :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
@@ -699,6 +698,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
             realisations = sb_prof.generate_data_realisations(num_samples)
             transform_res = np.zeros(realisations.shape)
+
             for t_ind in range(0, realisations.shape[0]):
                 if inv_abel_method == 'direct' and force_change:
                     transform_res[t_ind, :] = direct_transform(realisations[t_ind, :], r=sb_prof.radii.value,
@@ -721,6 +721,9 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                     transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr)
                 elif inv_abel_method == 'daun':
                     transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr)
+
+            print(transform_res.shape)
+            print(t_ind)
 
             # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
             #  orient it properly
