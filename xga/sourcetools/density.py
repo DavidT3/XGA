@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 12:09. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -686,18 +686,17 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
             # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
             force_change = False
-            if len(set(np.diff(sb_prof.radii))) != 1:
-                print(set(np.diff(sb_prof.radii)))
-                print(sb_prof.radii)
-                warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                     "the method to 'direct'", stacklevel=2)
-                inv_abel_method = 'direct'
-                force_change = True
-            else:
-                dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
+            # if len(set(np.diff(sb_prof.radii))) != 1:
+            #     warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
+            #          "the method to 'direct'", stacklevel=2)
+            #     inv_abel_method = 'direct'
+            #     force_change = True
+            # else:
+            #     dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
 
             # TODO REMOVE WHEN DEBUGGING IS COMPLETE
-            # dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
+            dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
+            print(dr)
 
             realisations = sb_prof.generate_data_realisations(num_samples)
             transform_res = np.zeros(realisations.shape)
@@ -728,7 +727,6 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                     transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr)
                 elif inv_abel_method == 'daun':
                     transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr)
-
             print(transform_res.shape)
             print(t_ind)
 
