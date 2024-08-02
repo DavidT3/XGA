@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:20. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -691,7 +691,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                 print(set(np.diff(sb_prof.radii)))
                 warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
                      "the method to 'direct'", stacklevel=2)
-                method = 'direct'
+                inv_abel_method = 'direct'
                 force_change = True
             else:
                 dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
@@ -721,82 +721,71 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                 elif inv_abel_method == 'daun':
                     transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr)
 
-            if isinstance(cur_model, str):
-                model_r = sb_prof.get_model_fit(cur_model, fit_method)
+            # The result is NO LONGER an astropy quantity, so we need to set that up again
+            transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit)
+
+            # Grab the radii that we need for the density profile we're about to set up
+            dens_rads = sb_prof.radii.copy()
+            dens_rads_errs = sb_prof.radii_err.copy()
+            dens_deg_rads = sb_prof.deg_radii.copy()
+
+            # Now need to make sure the units of the transformed model are what we need
+            if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
+                # If the SB profile is in count/s/arcmin^2 then the abel transform will have
+                #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
+                conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
+                                'kpc/arcmin')**2
+                transformed /= conv
+            elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
+                pass
             else:
-                model_r = sb_prof.get_model_fit(cur_model.name, fit_method)
+                raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
+                                          "other units, don't really know how you even got here.")
 
-            if model_r.success:
-                dens_rads = sb_prof.radii.copy()
-                dens_rads_errs = sb_prof.radii_err.copy()
-                dens_deg_rads = sb_prof.deg_radii.copy()
-                # Run the inverse abel transform for the model, to retrieve distributions for the value of the transformed
-                #  model at each r point. If the user hasn't set a method then we use the default method for the current
-                #  model, otherwise we pass the user's choice
-                if inv_abel_method is None:
-                    transformed = model_r.inverse_abel(dens_rads, use_par_dist=True)
+            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
+            transformed = transformed.to('ct/(s*cm^3)')
+
+            # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
+            #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
+            num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
+
+            med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
+            num_dens_err = np.nanstd(num_dens_dist, axis=1)
+
+            # Setting up the instrument and ObsID to pass into the density profile definition
+            if obs_id[src_ind] is None:
+                cur_inst = "combined"
+                cur_obs = "combined"
+            else:
+                cur_inst = inst[src_ind]
+                cur_obs = obs_id[src_ind]
+
+            try:
+                # I now allow the user to decide if they want to generate number or mass density profiles using
+                #  this function, and here is where that distinction is made
+                if num_dens:
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                             cur_inst, inv_abel_method, sb_prof, dens_rads_errs, num_dens_err,
+                                             deg_radii=dens_deg_rads, auto_save=True)
                 else:
-                    transformed = model_r.inverse_abel(dens_rads, use_par_dist=True, method=inv_abel_method)
+                    # TODO Check the origin of the mean molecular weight, see if there are different values for
+                    #  different abundance tables
+                    # The mean molecular weight multiplied by the proton mass
+                    conv_mass = MEAN_MOL_WEIGHT*m_p
+                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
+                                             sb_prof.centre, src.name, cur_obs, cur_inst, inv_abel_method, sb_prof,
+                                             dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
+                                             deg_radii=dens_deg_rads, auto_save=True)
 
-                # Now need to make sure the units of the transformed model are what we need
-                if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
-                    # If the SB profile is in count/s/arcmin^2 then the abel transform will have
-                    #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
-                    conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
-                                    'kpc/arcmin')**2
-                    transformed /= conv
-                elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
-                    pass
-                else:
-                    raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
-                                              "other units, don't really know how you even got here.")
-
-                # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
-                transformed = transformed.to('ct/(s*cm^3)')
-
-                # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
-                #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
-                num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
-
-                med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
-                num_dens_err = np.std(num_dens_dist, axis=1)
-
-                # Setting up the instrument and ObsID to pass into the density profile definition
-                if obs_id[src_ind] is None:
-                    cur_inst = "combined"
-                    cur_obs = "combined"
-                else:
-                    cur_inst = inst[src_ind]
-                    cur_obs = obs_id[src_ind]
-
-                try:
-                    # I now allow the user to decide if they want to generate number or mass density profiles using
-                    #  this function, and here is where that distinction is made
-                    if num_dens:
-                        dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                                 cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
-                                                 deg_radii=dens_deg_rads, auto_save=True)
-                    else:
-                        # TODO Check the origin of the mean molecular weight, see if there are different values for
-                        #  different abundance tables
-                        # The mean molecular weight multiplied by the proton mass
-                        conv_mass = MEAN_MOL_WEIGHT*m_p
-                        dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
-                                                 sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
-                                                 dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
-                                                 deg_radii=dens_deg_rads, auto_save=True)
-
-                    src.update_products(dens_prof)
-                    final_dens_profs.append(dens_prof)
+                src.update_products(dens_prof)
+                final_dens_profs.append(dens_prof)
 
                 # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
                 #  declaration, this is where an error will be thrown
-                except ValueError:
-                    final_dens_profs.append(None)
-                    warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
-                         " in it.".format(src.name))
-            else:
+            except ValueError:
                 final_dens_profs.append(None)
+                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
+                     " in it.".format(src.name))
 
             dens_prog.update(1)
 
