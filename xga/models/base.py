@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 12:37. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -334,21 +334,21 @@ class BaseModel1D(metaclass=ABCMeta):
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
             if method == 'direct' and force_change:
-                transform_res = direct_transform(self(x).value, r=x.value, backend='python')
+                transform_res = direct_transform(self(x).value, r=x.value, backend='python', verbose=False)
             elif method == 'direct' and not force_change:
-                transform_res = direct_transform(self(x).value, dr=dr)
+                transform_res = direct_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'basex':
-                transform_res = basex_transform(self(x).value, dr=dr)
+                transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'hansenlaw':
-                transform_res = hansenlaw_transform(self(x).value, dr=dr)
+                transform_res = hansenlaw_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'onion_bordas':
-                transform_res = onion_bordas_transform(self(x).value, dr=dr)
+                transform_res = onion_bordas_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'onion_peeling':
-                transform_res = onion_peeling_transform(self(x).value, dr=dr)
+                transform_res = onion_peeling_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'two_point':
-                transform_res = two_point_transform(self(x).value, dr=dr)
+                transform_res = two_point_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'three_point':
-                transform_res = three_point_transform(self(x).value, dr=dr)
+                transform_res = three_point_transform(self(x).value, dr=dr, verbose=False)
             else:
                 raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
@@ -358,21 +358,22 @@ class BaseModel1D(metaclass=ABCMeta):
             transform_res = np.zeros(realisations.shape)
             for t_ind in range(0, realisations.shape[1]):
                 if method == 'direct' and force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python')
+                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python',
+                                                               verbose=False)
                 elif method == 'direct' and not force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'basex':
-                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'hansenlaw':
-                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'onion_bordas':
-                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'onion_peeling':
-                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'two_point':
-                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'three_point':
-                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 else:
                     raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
