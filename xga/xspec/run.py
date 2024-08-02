@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/05/2024, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:56. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -56,7 +56,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         out, err = xspec_proc.communicate()
         # Need to infer the name of the source to supply it in the warning
         source_name = x_script.split('/')[-1].split("_")[0]
-        warnings.warn("An XSPEC fit for {} has timed out".format(source_name))
+        warnings.warn("An XSPEC fit for {} has timed out".format(source_name), stacklevel=2)
         usable = False
 
     out = out.decode("UTF-8").split("\n")
@@ -187,7 +187,7 @@ def xspec_call(xspec_func):
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
         elif len(script_list) == 0:
-            warnings.warn("All XSPEC operations had already been run.")
+            warnings.warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
         for src_repr in results:
@@ -327,7 +327,8 @@ def xspec_call(xspec_func):
                         raise NotImplementedError("How have you even managed to fit this model to a profile?! Its not"
                                                   " supported yet.")
                 except ValueError:
-                    warnings.warn("{src} annular spectra profile fit was not successful".format(src=ann_spec.src_name))
+                    warnings.warn("{src} annular spectra profile fit was not "
+                                  "successful".format(src=ann_spec.src_name), stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
