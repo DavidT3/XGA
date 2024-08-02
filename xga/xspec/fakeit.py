@@ -115,8 +115,6 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
             else:
                 the_met = sim_met[s_ind]
 
-            total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
-
             # Find matching spectrum objects associated with the current source, 
             # and checking if they are valid
             if stacked_spectra and tel == 'erosita':
@@ -146,11 +144,15 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 raise NoProductAvailableError("There are no matching spectra for {s} object, you "
                                                 "need to generate them first!".format(s=source.name))
 
+            # DAVID_QUESTION not sure what the purpose of this check is
+            total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
+
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a source with only a single valid instrument for a single valid observation this may not be the case
             if isinstance(spec_objs, Spectrum):
                 spec_objs = [spec_objs]
 
+            # DAVID_QUESTION not sure what the purpose of this check is
             elif len(spec_objs) != total_obs_inst:
                 raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
                                             "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
