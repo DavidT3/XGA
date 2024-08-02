@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:44. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -686,28 +686,27 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
             # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
             force_change = False
-            # TODO RESTORE WHEN DEBUGGING IS COMPLETE
-            # if len(set(np.diff(sb_prof.radii))) != 1:
-            #     warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-            #          "the method to 'direct'", stacklevel=2)
-            #     inv_abel_method = 'direct'
-            #     force_change = True
-            # else:
-            #     dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
-
-            # TODO REMOVE WHEN DEBUGGING IS COMPLETE
-            dr = (sb_prof.radii[-1] - sb_prof.radii[-2]).value
-            print(dr)
+            if len(set(np.diff(sb_prof.radii))) != 1:
+                warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
+                     "the method to 'direct'", stacklevel=2)
+                inv_abel_method = 'direct'
+                force_change = True
+            else:
+                dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
 
             realisations = sb_prof.generate_data_realisations(num_samples)
             transform_res = np.zeros(realisations.shape)
 
             for t_ind in range(0, realisations.shape[0]):
                 if inv_abel_method == 'direct' and force_change:
+                    # TODO IMPLEMENT PADDING
                     transform_res[t_ind, :] = direct_transform(realisations[t_ind, :], r=sb_prof.radii.value,
                                                                backend='python', verbose=False)
                 elif inv_abel_method == 'direct' and not force_change:
-                    transform_res[t_ind, :] = direct_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
+                    #  zero - one of the PyAbel authors suggested padding out the data.
+                    to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
+                    transform_res[t_ind, :] = direct_transform(to_trans, dr=dr, verbose=False)[:-1]
                 elif inv_abel_method == 'basex':
                     transform_res[t_ind, :] = basex_transform(realisations[t_ind, :], dr=dr, verbose=False)
                 elif inv_abel_method == 'hansen_law_ho0':
@@ -725,8 +724,6 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                     transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
                 elif inv_abel_method == 'daun':
                     transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr, verbose=False)
-            print(transform_res.shape)
-            print(t_ind)
 
             # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
             #  orient it properly
@@ -758,11 +755,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
             num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
 
             med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
-            print(med_num_dens.shape)
-            print(med_num_dens)
             num_dens_err = np.nanstd(num_dens_dist, axis=1)
-            print(num_dens_err.shape)
-            print(num_dens_err)
 
             # Setting up the instrument and ObsID to pass into the density profile definition
             if obs_id[src_ind] is None:
