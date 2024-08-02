@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 12:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:59. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -323,7 +323,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Sets up the resolution of the radial spatial sampling
         force_change = False
-        if len(set(np.diff(x))) != 1:
+        if len(set(np.diff(x.value).round(5))) != 1:
             warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
                  "the method to 'direct'", stacklevel=2)
             method = 'direct'
@@ -361,7 +361,10 @@ class BaseModel1D(metaclass=ABCMeta):
                     transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python',
                                                                verbose=False)
                 elif method == 'direct' and not force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], dr=dr, verbose=False)
+                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
+                    #  zero - one of the PyAbel authors suggested padding out the data.
+                    to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
+                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, verbose=False)[:-1]
                 elif method == 'basex':
                     transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'hansenlaw':
