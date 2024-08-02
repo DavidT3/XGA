@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:01. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -750,7 +750,11 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
             num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
 
             med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
+            print(med_num_dens.shape)
+            print(med_num_dens)
             num_dens_err = np.nanstd(num_dens_dist, axis=1)
+            print(num_dens_err.shape)
+            print(num_dens_err)
 
             # Setting up the instrument and ObsID to pass into the density profile definition
             if obs_id[src_ind] is None:
@@ -785,7 +789,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
             except ValueError:
                 final_dens_profs.append(None)
                 warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
-                     " in it.".format(src.name))
+                     " in it.".format(src.name), stacklevel=2)
 
             dens_prog.update(1)
 
