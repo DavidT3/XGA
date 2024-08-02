@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 16:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:07. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -219,8 +219,8 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         :rtype:
         """
         # These are annular masks with interloper sources removed, sensor and edge masks applied
-        corr_ann_masks = annulus_masks * interloper_mask[..., None] * rt.sensor_mask[..., None] \
-                         * rt.edge_mask[..., None]
+        corr_ann_masks = (annulus_masks * interloper_mask[..., None] * rt.sensor_mask[..., None]
+                          * rt.edge_mask[..., None])
 
         # This calculates the area of each annulus mask
         num_pix = np.sum(corr_ann_masks, axis=(0, 1))
@@ -282,6 +282,8 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
     inn_rads, out_rads, cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, rad_units, cosmo,
                                              min_central_pix_rad, start_pix_rad)
+
+    print(inn_rads)
 
     # These calculate the inner and out pixel radii for the background mask - placed in arrays because the
     #  annular mask function expects iterable radii. As pixel radii have to be integer for generating a mask,
