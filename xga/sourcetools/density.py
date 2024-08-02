@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:06. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -689,6 +689,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
             force_change = False
             if len(set(np.diff(sb_prof.radii))) != 1:
                 print(set(np.diff(sb_prof.radii)))
+                print(sb_prof.radii)
                 warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
                      "the method to 'direct'", stacklevel=2)
                 inv_abel_method = 'direct'
@@ -721,8 +722,9 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                 elif inv_abel_method == 'daun':
                     transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr)
 
-            # The result is NO LONGER an astropy quantity, so we need to set that up again
-            transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit)
+            # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
+            #  orient it properly
+            transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit).T
 
             # Grab the radii that we need for the density profile we're about to set up
             dens_rads = sb_prof.radii.copy()
