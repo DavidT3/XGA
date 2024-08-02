@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:55. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -686,7 +686,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
             # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
             force_change = False
-            if len(set(np.diff(sb_prof.radii))) != 1:
+            if len(set(np.diff(sb_prof.radii.value).round(5))) != 1:
                 warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
                      "the method to 'direct'", stacklevel=2)
                 inv_abel_method = 'direct'
