@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:50. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -988,7 +988,7 @@ class BaseSource:
                     temp_prof = pickle.load(reado)
                     try:
                         self.update_products(temp_prof, update_inv=False)
-                    except NotAssociatedError:
+                    except (NotAssociatedError, AttributeError):
                         pass
             except (EOFError, pickle.UnpicklingError):
                 warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
