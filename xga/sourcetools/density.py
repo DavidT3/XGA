@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 11:57. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -695,6 +695,9 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                 force_change = True
             else:
                 dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
+
+            # TODO REMOVE WHEN DEBUGGING IS COMPLETE
+            # dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
 
             realisations = sb_prof.generate_data_realisations(num_samples)
             transform_res = np.zeros(realisations.shape)
