@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:32. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -148,14 +148,19 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
     rad = np.ceil(rad)
 
-    # So I'm adding a safety feature here, and ensuring the the central circle is a minimum radius
-    if pix_step < 3 and start_pix_rad == 0:
-        central_circ = np.array([0, min_central_pix_rad], dtype=int)
-        ann_rads = np.arange(min_central_pix_rad+pix_step, rad.value + 1, pix_step).astype(int)
-        rads = np.concatenate([central_circ, ann_rads])
-    else:
-        # By this point, the rad should be in pixels
-        rads = np.arange(start_pix_rad, rad.value + 1, pix_step).astype(int)
+    # I'M LEAVING THIS HERE IN CASE I DECIDE TO RESTORE IT IN THE FUTURE - it was intended as a sort of
+    #  safety feature, to ensure that the central was big enough that it wasn't going to be zero valued. Unfortunately
+    #  it really screws over inverse abel transforming the data, because many of the techniques implemented in PyAbel
+    #  require uniform radial (in my case) sampling - that can't be true if this feature is in unless the pix_step
+    #  is set to at least 3 - enforcing that as a minimum may well be useful, but for now I'm disabling this
+
+    # if pix_step < 3 and start_pix_rad == 0:
+    #     central_circ = np.array([0, min_central_pix_rad], dtype=int)
+    #     ann_rads = np.arange(min_central_pix_rad+pix_step, rad.value + 1, pix_step).astype(int)
+    #     rads = np.concatenate([central_circ, ann_rads])
+
+    # By this point, the rad should be in pixels
+    rads = np.arange(start_pix_rad, rad.value + 1, pix_step).astype(int)
 
     inn_rads = rads[:len(rads) - 1]
     out_rads = rads[1:len(rads)]
@@ -282,8 +287,6 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     # This sets up the initial annular bin radii, as well as finding the central radii of the bins in the chosen units.
     inn_rads, out_rads, cen_rads = ann_radii(rt, centre, outer_rad, z, pix_step, rad_units, cosmo,
                                              min_central_pix_rad, start_pix_rad)
-
-    print(inn_rads)
 
     # These calculate the inner and out pixel radii for the background mask - placed in arrays because the
     #  annular mask function expects iterable radii. As pixel radii have to be integer for generating a mask,
