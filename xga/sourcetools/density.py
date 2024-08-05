@@ -213,18 +213,19 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
 
     # This where the combined conversion factor that takes a count-rate/volume to a squared number density
     #  of hydrogen
-    to_dens_convs = []
+    to_dens_convs = {key : [] for key in all_tels}
     # These are from the distance and redshift, also the normalising 10^-14 (see my paper for
     #  more of an explanation)
     for src_ind, src in enumerate(sources):
-        src: GalaxyCluster
-        # Both the angular_diameter_distance and redshift are guaranteed to be present here because redshift
-        #  is REQUIRED to define GalaxyCluster objects
-        factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2)
-                  / (e_to_p_ratio * 10 ** -14))
-        total_factor = factor * src.norm_conv_factor(conv_outer_radius, lo_en, hi_en, inner_radius, group_spec,
-                                                     min_counts, min_sn, over_sample, obs_id[src_ind], inst[src_ind])
-        to_dens_convs.append(total_factor)
+        for tel in src.telescopes:
+            src: GalaxyCluster
+            # Both the angular_diameter_distance and redshift are guaranteed to be present here because redshift
+            #  is REQUIRED to define GalaxyCluster objects
+            factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") * (1 + src.redshift)) ** 2)
+                    / (e_to_p_ratio * 10 ** -14))
+            total_factor = factor * src.norm_conv_factor(conv_outer_radius, tel, lo_en, hi_en, inner_radius, group_spec,
+                                                        min_counts, min_sn, over_sample, obs_id[tel][src_ind], inst[tel][src_ind])
+            to_dens_convs[tel].append(total_factor)
 
     return sources, to_dens_convs, obs_id, inst
 
