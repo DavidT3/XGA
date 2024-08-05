@@ -176,7 +176,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         # Then we need to grab the temperatures and pass them through to the cluster conversion factor
         #  calculator - this may well change as I intend to let cluster_cr_conv grab temperatures for
         #  itself at some point
-        temp_temps = {key : [] for key in all_tels}
+        temps = {key : [] for key in all_tels}
         for src in sources:
             for tel in src.telescopes:
                 try:
@@ -188,10 +188,10 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                     warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
                         "3keV".format(s=src.name))
                     temp_temp = Quantity(3, 'keV')
-                temp_temps[tel].append(temp_temp.value)
+                temps[tel].append(temp_temp.value)
 
-        for key in temp_temps:
-            temp_temps[key] = Quantity(temp_temps[key], 'keV')
+        for key in temps:
+            temps[key] = Quantity(temps[key], 'keV')
 
     # This call actually does the fakeit calculation of the conversion factors, then stores them in the
     #  XGA Spectrum objects
