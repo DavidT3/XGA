@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/08/2024, 14:11. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -334,8 +334,10 @@ class BaseModel1D(metaclass=ABCMeta):
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
             if method == 'direct' and force_change:
+                # TODO ADD THE FIX
                 transform_res = direct_transform(self(x).value, r=x.value, backend='python', verbose=False)
             elif method == 'direct' and not force_change:
+                # TODO ADD THE FIX
                 transform_res = direct_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'basex':
                 transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
@@ -358,6 +360,7 @@ class BaseModel1D(metaclass=ABCMeta):
             transform_res = np.zeros(realisations.shape)
             for t_ind in range(0, realisations.shape[1]):
                 if method == 'direct' and force_change:
+                    # TODO ADD THE FIX
                     transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python',
                                                                verbose=False)
                 elif method == 'direct' and not force_change:
