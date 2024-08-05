@@ -201,7 +201,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 # Checks through the spectrum objects we retrieved earlier, and the energy limits,
                 #  to look for conversion factor results, if they exist they aren't run again, otherwise an error
                 #  is triggered and the scripts get added to the pile to run.
-                res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec") for e_pair in conv_en for s in spec_objs]
+                res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec", tel) for e_pair in conv_en for s in spec_objs]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)

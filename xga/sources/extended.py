@@ -1035,9 +1035,9 @@ class GalaxyCluster(ExtendedSource):
         for s in spec:
             # The luminosity is added to the average luminosity variable, will be divided by N
             #  spectra at the end.
-            av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[1]
+            av_lum += s.get_conv_factor(lo_en, hi_en, "tbabs*apec", telescope)[1]
             # Multiplying by 1e+4 because that is the length of the simulated exposure in seconds
-            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2] * 1e+4
+            total_phot += s.get_conv_factor(lo_en, hi_en, "tbabs*apec", telescope)[2] * 1e+4
 
         # Then the total combined rate is the total number of photons / the total summed exposure (which
         #  is just 10000 seconds multiplied by the number of spectra).
@@ -1112,7 +1112,7 @@ class GalaxyCluster(ExtendedSource):
             mean_areas.append(rel_ars.mean().value)
 
             # Then we fetch the count rate for the fakeit run of the current spectrum
-            rates.append(s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2].value)
+            rates.append(s.get_conv_factor(lo_en, hi_en, "tbabs*apec", telescope)[2].value)
 
         # Just putting rates as an array for convenience
         rates = np.array(rates)
