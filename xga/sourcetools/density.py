@@ -175,6 +175,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
             if any(not conv_temp[key].isscalar and len(conv_temp[key]) !=len(sources) for key in conv_temp):
                 raise ValueError("If there are multiple entries in conv_temp, then there must be the same number"
                          " of entries as there are sources being analysed.")
+            temps = conv_temp
         else:
             raise ValueError("If conv_temp argument is set, it must be either a Quantity, or a "
                              "dictionary of Quantities, with key for each telescope associated " 
