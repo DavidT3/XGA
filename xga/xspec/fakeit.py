@@ -3,7 +3,7 @@
 
 import os
 from random import randint
-from typing import List, Union
+from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
@@ -22,7 +22,7 @@ from ..utils import ABUND_TABLES
 
 @xspec_call
 def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), sim_temp: Quantity = Quantity(3, 'keV'),
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), sim_temp: Dict[str, Quantity] = None,
                     sim_met: Union[float, List] = 0.3, conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
                     abund_table: str = "angr", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                     over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES, 
@@ -64,6 +64,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         stacking procedure for a particular telescope is not supported, this function will instead use individual
         spectra for an ObsID. The default is False.
     """
+    # collecting all the telescopes associated here for use later
+    all_telescopes = source.telescopes
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -83,13 +85,18 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     elif not all([conv_en[pair_ind, 0] < conv_en[pair_ind, 1] for pair_ind in range(0, conv_en.shape[0])]):
         raise ValueError("Luminosity energy band first entries must be smaller than second entries.")
 
+    # setting the default temp as 3 kev
+    if sim_temp is None:
+        sim_temp = {key : Quantity(3, 'keV') for key in all_telescopes}
     # Check that the correct number of temperatures are supplied
-    if not sim_temp.isscalar and len(sim_temp) != len(sources):
-        raise ValueError("The sim_temp variable must either be scalar or have the "
-                         "same number of entries as there are sources.")
-    elif not isinstance(sim_met, float) and len(sim_met) != len(sources):
+    for key in sim_temp:
+        if not sim_temp[key].isscalar and len(sim_temp[key]) != len(sources):
+            raise ValueError("The sim_temp variable must either be scalar or have the "
+                            "same number of entries as there are sources.")
+                            
+    if not isinstance(sim_met, float) and len(sim_met) != len(sources):
         raise ValueError("The sim_met variable must either be a float or have the "
-                         "same number of entries as there are sources.")
+                        "same number of entries as there are sources.")
 
     # Hard coding the model currently, tbabs*apec is a good simple descriptor of a cluster
     model = "tbabs*apec"
@@ -105,10 +112,10 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     for s_ind, source in enumerate(sources):
         for tel in source.telescopes:
             # This function can take a single temperature to simulate at, or a list of them (one for each source).
-            if sim_temp.isscalar:
-                the_temp = sim_temp
+            if sim_temp[tel].isscalar:
+                the_temp = sim_temp[tel]
             else:
-                the_temp = sim_temp[s_ind]
+                the_temp = sim_temp[tel][s_ind]
             # Equivalent of above but for metallicities
             if isinstance(sim_met, float):
                 the_met = sim_met
