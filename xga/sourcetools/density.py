@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
 
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Dict
 from warnings import warn
 
 import matplotlib.pyplot as plt
@@ -29,7 +29,8 @@ from ..xspec.fit import single_temp_apec
 def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
                 inner_radius: Union[str, Quantity], abund_table: str, lo_en: Quantity,
                 hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                over_sample: float = None, obs_id: Union[str, list] = None, inst: Union[str, list] = None,
+                over_sample: float = None, obs_id: Union[Dict[str, str], Dict[str, list]] = None, 
+                inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Quantity = None, conv_outer_radius: Quantity = "r500",
                 num_cores: int = NUM_CORES) -> Tuple[Union[ClusterSample, List], List[Quantity], list, list]:
     """
@@ -57,13 +58,19 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
         desired result were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-    :param str/list obs_id: A specific ObsID(s) to measure the density from. This should be a string if a single
-        source is being analysed, and a list of ObsIDs the same length as the number of sources otherwise. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param str/list inst: A specific instrument(s) to measure the density from. This can either be passed as a
-        single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
-        every source in a sample, or a list of strings if different instruments are required for each source. The
-        default is None, in which case the combined data will be used to measure the density profile.
+    :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from. 
+        This should be a dictonary of strings if a single source is being analysed, or a dictionary 
+        of lists of ObsIDs the same length as the number of sources otherwise. The dictionary should
+        have keys for every telescope associated to the Source/Sample. If a source in a sample 
+        doesn't have data associated to one of the telescopes, use an empty string for its place in 
+        the list. The default is None, in which case the combined data will be used to measure the 
+        density profile.
+    :param Dict[str, str]/Dict[str, list] inst: A specific instruments(s) to measure the density from. 
+        This should be a dictonary of strings if a single source is being analysed, or if the same 
+        instrument should be used for every source in the sample, or a dictionary of lists of 
+        instruments the same length as the number of sources otherwise. The dictionary should have 
+        keys for every telescope associated to the Source/Sample. The default is None, in which case
+        the combined data will be used to measure the density profile.
     :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
         the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
          should have an entry for each cluster being analysed. Default is None.
@@ -86,20 +93,55 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     #  format if they have been set. We don't need to check that the ObsIDs are associated with the sources
     #  here, because that will happen when the ratemaps are retrieved from the source objects.
     if all([obs_id is not None, inst is not None]):
-        if isinstance(obs_id, str):
-            obs_id = [obs_id]
-        if isinstance(inst, str):
-            inst = [inst]
+        if isinstance(obs_id, dict):
+            # checking that there is a key for every telescope associated with the sample/source
+            if not set(all_tels) == set(obs_id.keys()):
+                raise KeyError("If setting the obs_id argument, there must be a key for each " 
+                               "telescope associated with the Sample/Source.")
 
-        if len(obs_id) != len(sources):
-            raise ValueError("If you set the obs_id argument there must be one entry per source being analysed.")
+            # if the dict has str values, making them into a list for use later
+            if all(isinstance(obs_id[key], str) for key in obs_id):
+                if len(sources) > 1:
+                    raise ValueError("If multiple sources are being analysed, then the obs_id argument "
+                                    "must be input as a dictionary of lists, with one entry per source.")
+                for key in obs_id:
+                    obs_id[key] = [obs_id[key]]
 
-        if len(inst) != len(sources) and len(inst) != 1:
-            raise ValueError("The value passed for inst must either be a single instrument name, or a list "
-                             "of instruments the same length as the number of sources being analysed.")
+            elif all(isinstance(obs_id[key], list) for key in obs_id):
+                if not all(len(obs_id[key]) != len(sources) for key in obs_id):
+                    raise ValueError("If you set the obs_id argument as a dictionary of lists, there"
+                                     " must be one entry per source being analysed in each list.")
+            else:
+                raise ValueError("If the obs_id argument is set, it must be a dictionary with telescope"
+                                 " keys and values that are either a string of one ObsID if one source is"
+                                 " being analysed, or a list with an ObsID for each"
+                                 " source. If the telescope is not associated to a source put in an empty string.") 
+    
+        if isinstance(inst, dict):
+            # checking that there is a key for every telescope associated with the sample/source
+            if not set(all_tels) == set(inst.keys()):
+                raise KeyError("If setting the inst argument, there must be a key for each " 
+                               "telescope associated with the Sample/Source.")
+        
+            # if the dict has str values, making them into a list for use later
+            if all(isinstance(inst[key], str) for key in inst):
+                for key in inst:
+                    inst[key] = [inst[key]]
+        
+            elif all(isinstance(inst[key], list) for key in inst):
+                if len(inst[key]) != len(sources):
+                    raise ValueError("If you set the inst argument as a dictionary of lists, there"
+                                     " must be one entry per source being analysed in each list.")
+            
+            else:
+                raise ValueError("If the inst argument is set, it must be a dictionary with telescope"
+                                 " keys and values that are either a string of one instrument, or a " 
+                                 "list with an instrument for each source. If the telescope is not "
+                                 " associated to a source put in an empty string.")
+
     elif all([obs_id is None, inst is None]):
-        obs_id = [None]*len(sources)
-        inst = [None]*len(sources)
+        obs_id = {key : [None]*len(sources) for key in all_tels}
+        inst = {key : [None]*len(sources) for key in all_tels}
     else:
         raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                          "vice versa.")
