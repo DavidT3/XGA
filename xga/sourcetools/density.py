@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 15:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/08/2024, 13:31. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -699,10 +699,13 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
             for t_ind in range(0, realisations.shape[0]):
                 if inv_abel_method == 'direct' and force_change:
-                    # TODO IMPLEMENT PADDING
-
-                    transform_res[t_ind, :] = direct_transform(realisations[t_ind, :], r=sb_prof.radii.value,
-                                                               backend='python', verbose=False)
+                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
+                    #  zero - one of the PyAbel authors suggested padding out the data.
+                    to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
+                    temp_dr = (sb_prof.radii[-2] - sb_prof.radii[-1]).value
+                    mod_rad = np.concatenate([sb_prof.radii.value], sb_prof.radii.value[-1] + temp_dr)
+                    transform_res[t_ind, :] = direct_transform(to_trans, r=mod_rad, backend='python',
+                                                               verbose=False)[:-1]
                 elif inv_abel_method == 'direct' and not force_change:
                     # This is necessary (see issue #1164) for the direct method because the last value is by definition
                     #  zero - one of the PyAbel authors suggested padding out the data.
