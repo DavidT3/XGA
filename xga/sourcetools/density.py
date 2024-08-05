@@ -258,48 +258,52 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     :return: The requested surface brightness profile.
     :rtype: SurfaceBrightness1D
     """
-    try:
-        if all([obs_id is None, inst is None]):
-            rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-            # Grabs the mask which will remove interloper sources
-            int_mask = src.get_interloper_mask('xmm')
-            comb = True
-        elif all([obs_id is not None, inst is not None]):
-            rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-            # Grabs the mask which will remove interloper sources
-            int_mask = src.get_interloper_mask('xmm', obs_id=obs_id)
-            comb = False
-        else:
-            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
-    except NoProductAvailableError:
-        raise NoProductAvailableError("The RateMap required to measure the density profile has not been generated "
-                                      "yet, possibly because you haven't generated PSF corrected image yet.")
+    telescopes = src.telescopes
 
-    if use_peak:
-        centre = src.peak
-    else:
-        centre = src.ra_dec
-
-    rad = src.convert_radius(outer_radius, 'kpc')
-
-    try:
-        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
-                                                pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
-                                                psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
-                                                psf_iter=psf_iter, telescope='xmm')
-    except NoProductAvailableError:
+    sb_prof = {}
+    for tel in telescopes:
         try:
-            sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
-                                                 src.background_radius_factors[1], int_mask, src.redshift, pix_step,
-                                                 kpc, src.cosmo, min_snr)
-        except ValueError:
-            sb_prof = None
-            success = False
-            # No longer just background region failure that can set this off
-            # warn("Background region for brightness profile is all zeros for {}".format(src.name))
+            if all([obs_id is None, inst is None]):
+                rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+                # Grabs the mask which will remove interloper sources
+                int_mask = src.get_interloper_mask(telescope=tel)
+                comb = True
+            elif all([obs_id is not None, inst is not None]):
+                rt = src.get_ratemaps(obs_id[tel], inst[tel], lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=tel)
+                # Grabs the mask which will remove interloper sources
+                int_mask = src.get_interloper_mask(telescope=tel, obs_id=obs_id[tel])
+                comb = False
+            else:
+                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
+        except NoProductAvailableError:
+            raise NoProductAvailableError("The RateMap required to measure the density profile has not been generated "
+                                        "yet, possibly because you haven't generated PSF corrected image yet.")
 
-        if sb_prof is not None and not success:
-            warn("Minimum SNR rebinning failed for {}".format(src.name))
+        if use_peak:
+            centre = src.peak
+        else:
+            centre = src.ra_dec
+
+        rad = src.convert_radius(outer_radius, 'kpc')
+
+        try:
+            sb_prof[tel] = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
+                                                    pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
+                                                    psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                                    psf_iter=psf_iter, telescope=tel)
+        except NoProductAvailableError:
+            try:
+                sb_prof[tel], success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
+                                                    src.background_radius_factors[1], int_mask, src.redshift, pix_step,
+                                                    kpc, src.cosmo, min_snr)
+            except ValueError:
+                sb_prof[tel] = None
+                success = False
+                # No longer just background region failure that can set this off
+                # warn("Background region for brightness profile is all zeros for {}".format(src.name))
+
+            if sb_prof[tel] is not None and not success:
+                warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
 
