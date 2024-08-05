@@ -31,7 +31,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                 hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                 over_sample: float = None, obs_id: Union[Dict[str, str], Dict[str, list]] = None, 
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
-                conv_temp: Quantity = None, conv_outer_radius: Quantity = "r500",
+                conv_temp: Union[Quantity, Dict[str, Quantity]] = None, conv_outer_radius: Quantity = "r500",
                 num_cores: int = NUM_CORES) -> Tuple[Union[ClusterSample, List], List[Quantity], list, list]:
     """
     An internal function which exists because all the density profile methods that I have planned
@@ -71,8 +71,9 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         instruments the same length as the number of sources otherwise. The dictionary should have 
         keys for every telescope associated to the Source/Sample. The default is None, in which case
         the combined data will be used to measure the density profile.
-    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
-        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
+    :param Quantity/Dict[str, Quantity] conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
+        the fakeit run to calculate the normalisation conversion factor will use these temperatures. This can be set as a quantity,
+        or a dictionary of quantites with telescope keys to specifiy telescope specific temperatures. The quantity
          should have an entry for each cluster being analysed. Default is None.
     :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
@@ -162,11 +163,22 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         raise NotImplementedError("That is an acceptable abundance table, but I haven't added the conversion factor "
                                   "to the dictionary yet")
 
-    if conv_temp is not None and not conv_temp.isscalar and len(conv_temp) != len(sources):
-        raise ValueError("If multiple there are multiple entries in conv_temp, then there must be the same number"
+    if conv_temp is not None:
+        if isinstance(conv_temp, Quantity):
+            if not conv_temp.isscalar and len(conv_temp) != len(sources):
+                raise ValueError("If there are multiple entries in conv_temp, then there must be the same number"
                          " of entries as there are sources being analysed.")
-    elif conv_temp is not None:
-        temps = conv_temp
+            # if conv_temp is input as a quantity, we will convert it to the correct format 
+            temps = {key : conv_temp for key in all_tels}
+        
+        elif isinstance(conv_temp, dict):
+            if any(not conv_temp[key].isscalar and len(conv_temp[key]) !=len(sources) for key in conv_temp):
+                raise ValueError("If there are multiple entries in conv_temp, then there must be the same number"
+                         " of entries as there are sources being analysed.")
+        else:
+            raise ValueError("If conv_temp argument is set, it must be either a Quantity, or a "
+                             "dictionary of Quantities, with key for each telescope associated " 
+                             "to the Source/Sample.")
     else:
         # Check that the spectra we will be relying on for conversion calculation have been fitted, calling
         #  this function will also make sure that they are generated
