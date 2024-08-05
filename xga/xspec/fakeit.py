@@ -65,7 +65,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         spectra for an ObsID. The default is False.
     """
     # collecting all the telescopes associated here for use later
-    all_telescopes = source.telescopes
+    all_telescopes = sources.telescopes
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
