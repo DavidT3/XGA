@@ -1193,7 +1193,7 @@ class Spectrum(BaseProduct):
 
     # TODO Should this take parameter values as arguments too? - It definitely should
     def add_conv_factors(self, lo_ens: np.ndarray, hi_ens: np.ndarray, rates: np.ndarray,
-                         lums: np.ndarray, model: str):
+                         lums: np.ndarray, model: str, tel: str):
         """
         Method used to store countrate to luminosity conversion factors derived from fakeit spectra, as well as
         the actual countrate and luminosity measured in case the user wants to create a combined factor for multiple
@@ -1208,7 +1208,8 @@ class Spectrum(BaseProduct):
         :param np.ndarray lums: A numpy array of the luminosities measured for this arf/rmf combination
             for the energy ranges specified in lo_ens and hi_end.
         :param str model: The name of the model used to calculate this factor.
-        """
+        :param str tel: The name of the telescope from which the rates were measured.
+         """
         for row_ind, lo_en in enumerate(lo_ens):
             # Define the key with energy information under which to store this information
             hi_en = hi_ens[row_ind]
@@ -1221,10 +1222,12 @@ class Spectrum(BaseProduct):
             # Will be storing the individual components, but will also store the factor for this spectrum
             factor = lum / rate
 
+            if tel not in self._conv_factors:
+                self._conv_factors[tel] = {}
             if model not in self._conv_factors:
-                self._conv_factors[model] = {}
+                self._conv_factors[tel][model] = {}
 
-            self._conv_factors[model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
+            self._conv_factors[tel][model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
 
     def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str) -> Tuple[Quantity, Quantity, Quantity]:
         """

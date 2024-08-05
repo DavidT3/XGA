@@ -309,7 +309,7 @@ def xspec_call(xspec_func):
                                               telescope=tel)[0]
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
-                                              res_table["Lx_{}".format(comb)].values, model)
+                                              res_table["Lx_{}".format(comb)].values, model, tel)
 
                 elif len(res_set) != 0 and not res_set[1]:
                     for err in res_set[2]:

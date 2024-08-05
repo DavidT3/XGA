@@ -1609,7 +1609,7 @@ class BaseSource:
                         for comb_ind, comb in enumerate(combos):
                             rel_spec[comb_ind].add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                                                 res_table["rate_{}".format(comb)].values,
-                                                                res_table["Lx_{}".format(comb)].values, model)
+                                                                res_table["Lx_{}".format(comb)].values, model, tel)
 
                     # This triggers in the case of something like issue #738, where a previous fit used data that is
                     #  not loaded into this source (either because it was manually removed, or because the central
