@@ -1229,7 +1229,7 @@ class Spectrum(BaseProduct):
 
             self._conv_factors[tel][model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
 
-    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str) -> Tuple[Quantity, Quantity, Quantity]:
+    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str, tel: str) -> Tuple[Quantity, Quantity, Quantity]:
         """
         Retrieves a conversion factor between count rate and luminosity for a given energy range, if one
         has been calculated.
@@ -1237,20 +1237,21 @@ class Spectrum(BaseProduct):
         :param Quantity lo_en: The lower energy bound for the desired conversion factor.
         :param Quantity hi_en: The upper energy bound for the desired conversion factor.
         :param str model: The model used to generate the desired conversion factor.
+        :param str tel: The telescope used to generate the desired conversion factor.
         :return: The conversion factor, luminosity, and rate for the supplied model-energy combination.
         :rtype: Tuple[Quantity, Quantity, Quantity]
         """
         en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
-        if model not in self._conv_factors:
-            mods = ", ".join(list(self._conv_factors.keys()))
+        if model not in self._conv_factors[tel]:
+            mods = ", ".join(list(self._conv_factors[tel].keys()))
             raise ModelNotAssociatedError("{0} is not associated with this spectrum, only {1} "
                                           "are available.".format(model, mods))
-        elif en_key not in self._conv_factors[model]:
+        elif en_key not in self._conv_factors[tel][model]:
             raise ParameterNotAssociatedError("The conversion factor for {m} in {l}-{u}keV has not been "
                                               "calculated".format(m=model, l=lo_en.to("keV").value,
                                                                   u=hi_en.to("keV").value))
 
-        rel_vals = self._conv_factors[model][en_key]
+        rel_vals = self._conv_factors[tel][model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
     def get_plot_data(self, model: str) -> dict:
