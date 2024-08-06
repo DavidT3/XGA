@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 18:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:15. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -44,17 +44,41 @@ class SurfaceBrightness1D(BaseProfile1D):
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
-    def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int,
-                 min_snr: float, outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
+    def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int, min_snr: float,
+                 outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True):
+                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True,
+                 auto_save: bool = False):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
+
+        :param RateMap rt: The RateMap from which this SB profile was generated.
+        :param Quantity radii: The radii at which surface brightness has been measured.
+        :param Quantity values: The surface brightnesses that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param int pix_step: The width of each annulus in pixels used to generate this profile.
+        :param float min_snr: The minimum signal to noise imposed upon this profile.
+        :param Quantity outer_rad: The outer radius of this profile.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param Quantity background: The background brightness value.
+        :param np.ndarray pixel_bins: An optional argument that provides the pixel bins used to create the profile.
+        :param np.ndarray back_pixel_bin: An optional argument that provides the pixel bin used for the background
+            calculation of this profile.
+        :param Quantity ann_areas: The area of the annuli.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
-                         deg_radii=deg_radii)
+                         deg_radii=deg_radii, auto_save=auto_save)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
@@ -291,15 +315,36 @@ class GasMass1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 deg_radii: Quantity = None):
+                 deg_radii: Quantity = None, auto_save: bool = False):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
+
+        :param Quantity radii: The radii at which gas mass has been measured.
+        :param Quantity values: The gas mass that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param str dens_method: A keyword describing the method used to generate the density profile that was
+            used to measure this gas mass profile.
+        :param SurfaceBrightness1D/APECNormalisation1D associated_prof: The profile that the gas density profile
+            was measured from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii)
+        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii,
+                         auto_save=auto_save)
         self._prof_type = "gas_mass"
 
         # This is what the y-axis is labelled as during plotting
@@ -366,15 +411,39 @@ class GasDensity3D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
+                 auto_save: bool = False):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
         and generation of gas mass radial profiles. Values of density should either be in a unit of mass/volume,
         or a particle number density unit of 1/cm^3.
+
+        :param Quantity radii: The radii at which gas density has been measured.
+        :param Quantity values: The gas densities that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param str dens_method: A keyword describing the method used to generate this density profile.
+        :param SurfaceBrightness1D/APECNormalisation1D associated_prof: The profile that this gas density profile
+            was measured from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable. It is
+            possible for a Gas Density profile to be generated from spectral or photometric information.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -401,7 +470,7 @@ class GasDensity3D(BaseProfile1D):
             values_err = values_err.to(chosen_unit)
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         # Setting the type
         self._prof_type = "gas_density"
@@ -712,7 +781,8 @@ class GasDensity3D(BaseProfile1D):
         mass_vals = Quantity(mass_vals, 'Msun')
         mass_errs = Quantity(mass_errs, 'Msun')
         gm_prof = GasMass1D(radii, mass_vals, self.centre, self.src_name, self.obs_id, self.instrument,
-                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=deg_radii)
+                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=deg_radii,
+                            auto_save=self.auto_save)
 
         return gm_prof
 
@@ -737,17 +807,37 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile. This profile
         will be considered unusable if a temperature value of greater than 30keV is present in the profile, or if a
         negative error value is detected (XSPEC can produce those).
+
+        :param Quantity radii: The radii at which the projected gas temperatures have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The projected gas temperatures that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -793,15 +883,35 @@ class APECNormalisation1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D APEC normalisation profile.
+
+        :param Quantity radii: The radii at which the APEC normalisations have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The APEC normalisations that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -923,7 +1033,7 @@ class APECNormalisation1D(BaseProfile1D):
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
                                  'spec', self, self.radii_err, dens_sigma, self.set_ident,
-                                 self.associated_set_storage_key, self.deg_radii)
+                                 self.associated_set_storage_key, self.deg_radii, auto_save=self.auto_save)
         return dens_prof
 
     def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',
@@ -958,7 +1068,7 @@ class APECNormalisation1D(BaseProfile1D):
         # Set up the actual profile object and return it
         em_meas_prof = EmissionMeasure1D(self.radii, em_meas, self.centre, self.src_name, self.obs_id, self.instrument,
                                          self.radii_err, em_meas_sigma, self.set_ident, self.associated_set_storage_key,
-                                         self.deg_radii)
+                                         self.deg_radii, auto_save=True)
         return em_meas_prof
 
 
@@ -981,16 +1091,18 @@ class EmissionMeasure1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
@@ -1024,16 +1136,36 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
+
+        :param Quantity radii: The radii at which the projected gas metallicity have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The projected gas metallicity that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -1074,12 +1206,12 @@ class GasTemperature3D(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1118,12 +1250,12 @@ class BaryonFraction(BaseProfile1D):
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
         """
         The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1164,15 +1296,40 @@ class HydrostaticMass(BaseProfile1D):
     :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
     :param bool show_warn: Should warnings thrown during the fitting processes be shown.
     :param bool progress: Should fit progress bars be shown.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True):
+                 progress: bool = True, auto_save: bool = False):
         """
         The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
         set up the hydrostatic mass profile.
+
+        :param GasTemperature3D temperature_profile: The XGA 3D temperature profile to take temperature
+            information from.
+        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile, either a name or an
+            instance of an XGA temperature model class.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+        :param str/BaseModel1D density_model: The model to fit to the density profile, either a name or an
+            instance of an XGA density model class.
+        :param Quantity radii: The radii at which to measure the hydrostatic mass for the declaration of the profile.
+        :param Quantity radii_err: The uncertainties on the radii.
+        :param Quantity deg_radii: The radii values, but in units of degrees. This is required to set up a storage key
+            for the profile to be filed in an XGA source.
+        :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+        :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+            sampler to set up.
+        :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler to
+            take. If a single number is passed then that number of steps is used for both profiles, otherwise if a list
+            is passed the first entry is used for the temperature fit, and the second for the density fit.
+        :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+        :param bool show_warn: Should warnings thrown during the fitting processes be shown.
+        :param bool progress: Should fit progress bars be shown.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
@@ -1267,7 +1424,8 @@ class HydrostaticMass(BaseProfile1D):
         mass_errs = np.mean(mass[1:, :], axis=0)
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii)
+                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
+                         auto_save=auto_save)
 
         # Need a custom storage key for this mass profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models.
@@ -1622,7 +1780,7 @@ class HydrostaticMass(BaseProfile1D):
 
         return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
                               self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
-                              self.deg_radii)
+                              self.deg_radii, auto_save=self.auto_save)
 
     def overdensity_radius(self, delta: int, redshift: float, cosmo, init_lo_rad: Quantity = Quantity(100, 'kpc'),
                            init_hi_rad: Quantity = Quantity(3500, 'kpc'), init_step: Quantity = Quantity(100, 'kpc'),
@@ -2020,6 +2178,8 @@ class SpecificEntropy(BaseProfile1D):
         this controls whether the data profile with the coarser bins is interpolated, or whether the other
         profile's data points are matched with the value that was measured for the radial region they
         are in (the default).
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
 
     def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
@@ -2027,7 +2187,7 @@ class SpecificEntropy(BaseProfile1D):
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False):
+                 progress: bool = True, interp_data: bool = False, auto_save: bool = False):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2079,6 +2239,8 @@ class SpecificEntropy(BaseProfile1D):
             this controls whether the data profile with the coarser bins is interpolated, or whether the other
             profile's data points are matched with the value that was measured for the radial region they
             are in (the default).
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
@@ -2231,7 +2393,7 @@ class SpecificEntropy(BaseProfile1D):
         self._temp_model = temperature_model
         self._dens_model = density_model
 
-        # We set an attribute with the 'num_samples' paramater - it has been passed into the model fits already but
+        # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already but
         #  we also use that value for the number of data realisations if the user has opted for a data point derived
         #  entropy profile rather than model derived.
         self._num_samples = num_samples
@@ -2241,7 +2403,8 @@ class SpecificEntropy(BaseProfile1D):
         ent_errs = np.mean(ent[1:, :], axis=0)
 
         super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii)
+                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
+                         auto_save=auto_save)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
@@ -2307,6 +2470,11 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self._dens_model.get_realisations(radius)
 
+        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
+        #  temperature and density profiles are identical, and so we just get some realisations
+        elif not already_run and (self.density_profile.radii == self.temperature_profile.radii).all():
+            dens = self.density_profile.generate_data_realisations(self._num_samples).T
+
         elif not already_run and self._interp_data:
             # This uses the density profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
@@ -2350,6 +2518,11 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self._temp_model.get_realisations(radius)
 
+        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
+        #  temperature and density profiles are identical, and so we just get some realisations
+        elif not already_run and (self.density_profile.radii == self.temperature_profile.radii).all():
+            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
+
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
@@ -2388,9 +2561,9 @@ class SpecificEntropy(BaseProfile1D):
 
         # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
         #  call, we use the distribution to calculate median and confidence limit values
-        ent_med = np.percentile(ent_dist, 50, axis=0)
-        ent_lower = ent_med - np.percentile(ent_dist, lower, axis=0)
-        ent_upper = np.percentile(ent_dist, upper, axis=0) - ent_med
+        ent_med = np.nanpercentile(ent_dist, 50, axis=0)
+        ent_lower = ent_med - np.nanpercentile(ent_dist, lower, axis=0)
+        ent_upper = np.nanpercentile(ent_dist, upper, axis=0) - ent_med
 
         # Set up the result to return as an astropy quantity.
         ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
@@ -2524,17 +2697,39 @@ class Generic1D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None):
+                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
+                 auto_save: bool = False):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
+
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param str y_axis_label: The label to apply to the y-axis of any plots generated from this profile.
+        :param str prof_type: This is a string description of the profile, used to store it in an XGA source (with
+            _profile appended). For instance the prof_type of a ProjectedGasTemperature1D instance is
+            1d_proj_temperature, and it would be stored under 1d_proj_temperature_profile.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii)
+                         set_storage_key, deg_radii, auto_save=auto_save)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
 
