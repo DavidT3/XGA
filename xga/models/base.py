@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/08/2024, 14:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/08/2024, 16:41. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -360,9 +360,11 @@ class BaseModel1D(metaclass=ABCMeta):
             transform_res = np.zeros(realisations.shape)
             for t_ind in range(0, realisations.shape[1]):
                 if method == 'direct' and force_change:
-                    # TODO ADD THE FIX
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python',
-                                                               verbose=False)
+                    to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
+                    temp_dr = (x[-1] - x[-2]).value
+                    mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
+                    transform_res[:, t_ind] = direct_transform(to_trans, r=mod_rad, backend='python',
+                                                               verbose=False)[:-1]
                 elif method == 'direct' and not force_change:
                     # This is necessary (see issue #1164) for the direct method because the last value is by definition
                     #  zero - one of the PyAbel authors suggested padding out the data.
