@@ -866,3 +866,4 @@ UnexpectedEOF,cifbuild
 UnknownAlgoId,rmfgen
 invalidOption,psfgen
 NoSummaryFile,cifbuild
+projectionNotYetSupported,emosaic

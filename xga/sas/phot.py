@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:36. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -292,6 +292,17 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         # This fetches all image objects with the passed energy bounds
         matches = [[match[0], match[-1]] for match in source.get_products(to_mosaic, just_obj=False)
                    if en_id in match]
+
+        # In theory this should never be triggered, because we already ran evselect_image so the images should be
+        #  there - but I am now somehow having an error where we get to this point with no errors and no images, so
+        #  we're going to add this in to be absolutely sure (as otherwise emosaic fails with a very unhelpful error).
+        if len(matches) == 0:
+            assoc = ", ".join([cur_oi + cur_i for cur_oi in source.instruments
+                               for cur_i in source.instruments[cur_oi]])
+            raise NoProductAvailableError("The images required for emosaic are not available for {p} - this is not a"
+                                          " usual behaviour as XGA should have generated them; the relevant "
+                                          "observations are {d}.".format(p=source.name, d=assoc))
+
         paths = [product[1].path for product in matches if product[1].usable]
         obs_ids = [product[0] for product in matches if product[1].usable]
         obs_ids_set = []
