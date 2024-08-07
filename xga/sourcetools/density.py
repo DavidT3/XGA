@@ -79,9 +79,9 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
         a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
-    :return: The source object(s)/sample that was passed in, an array of the calculated conversion factors to take the
-        count-rate/volume to a number density of hydrogen, the parsed obs_id variable, and the parsed inst variable.
-    :rtype: Tuple[Union[ClusterSample, List], List[Quantity], list, list]
+    :return: The source object(s)/sample that was passed in, a dictionary of an array of the calculated conversion factors to take the
+        count-rate/volume to a number density of hydrogen for each telescope, the parsed obs_id variable, and the parsed inst variable.
+    :rtype: Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]], Union[Dict[str, str], Dict[str, list]]]
     """
     # storing all the telescopes in a list for later use
     all_tels = sources.telescopes
