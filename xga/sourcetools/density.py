@@ -110,7 +110,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                     obs_id[key] = [obs_id[key]]
 
             elif all(isinstance(obs_id[key], list) for key in obs_id):
-                if not all(len(obs_id[key]) != len(sources) for key in obs_id):
+                if any(len(obs_id[key]) != len(sources) for key in obs_id):
                     raise ValueError("If you set the obs_id argument as a dictionary of lists, there"
                                      " must be one entry per source being analysed in each list.")
             else:
@@ -131,7 +131,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                     inst[key] = [inst[key]]
         
             elif all(isinstance(inst[key], list) for key in inst):
-                if len(inst[key]) != len(sources):
+                if any(len(inst[key]) != len(sources) for key in inst):
                     raise ValueError("If you set the inst argument as a dictionary of lists, there"
                                      " must be one entry per source being analysed in each list.")
             
@@ -419,7 +419,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, num_walkers: int = 20, num_steps: int = 20000, num_samples: int = 10000,
                           group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                          obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
+                          obs_id: Union[Dict[str, str], Dict[str, list]] = None, inst:Union[Dict[str, str], Dict[str, list]] = None, conv_temp: Quantity = None,
                           conv_outer_radius: Quantity = "r500", inv_abel_method: str = None, num_cores: int = NUM_CORES,
                           show_warn: bool = True) -> List[GasDensity3D]:
     """
@@ -464,15 +464,22 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param float min_sn: The minimum signal to noise per channel, if the spectra that were used for fakeit
         were grouped by minimum signal to noise.
     :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
-    :param str/list obs_id: A specific ObsID(s) to measure the density from. This should be a string if a single
-        source is being analysed, and a list of ObsIDs the same length as the number of sources otherwise. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param str/list inst: A specific instrument(s) to measure the density from. This can either be passed as a
-        single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
-        every source in a sample, or a list of strings if different instruments are required for each source. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
-        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
+    :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from. 
+        This should be a dictonary of strings if a single source is being analysed, or a dictionary 
+        of lists of ObsIDs the same length as the number of sources otherwise. The dictionary should
+        have keys for every telescope associated to the Source/Sample. If a source in a sample 
+        doesn't have data associated to one of the telescopes, use an empty string for its place in 
+        the list. The default is None, in which case the combined data will be used to measure the 
+        density profile.
+    :param Dict[str, str]/Dict[str, list] inst: A specific instruments(s) to measure the density from. 
+        This should be a dictonary of strings if a single source is being analysed, or if the same 
+        instrument should be used for every source in the sample, or a dictionary of lists of 
+        instruments the same length as the number of sources otherwise. The dictionary should have 
+        keys for every telescope associated to the Source/Sample. The default is None, in which case
+        the combined data will be used to measure the density profile.
+    :param Quantity/Dict[str, Quantity] conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
+        the fakeit run to calculate the normalisation conversion factor will use these temperatures. This can be set as a quantity,
+        or a dictionary of quantites with telescope keys to specifiy telescope specific temperatures. The quantity
          should have an entry for each cluster being analysed. Default is None.
     :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
