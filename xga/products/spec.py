@@ -1242,6 +1242,10 @@ class Spectrum(BaseProduct):
         :rtype: Tuple[Quantity, Quantity, Quantity]
         """
         en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+
+        if tel not in self._conv_factors.keys():
+            raise ModelNotAssociatedError("{0} is not associated with this spectrum".format(tel))
+
         if model not in self._conv_factors[tel]:
             mods = ", ".join(list(self._conv_factors[tel].keys()))
             raise ModelNotAssociatedError("{0} is not associated with this spectrum, only {1} "
