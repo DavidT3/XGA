@@ -152,7 +152,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                                                 "need to generate them first!".format(s=source.name))
 
             # DAVID_QUESTION not sure what the purpose of this check is
-            total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
+            #total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
 
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a source with only a single valid instrument for a single valid observation this may not be the case
@@ -160,11 +160,11 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 spec_objs = [spec_objs]
 
             # DAVID_QUESTION not sure what the purpose of this check is
-            elif len(spec_objs) != total_obs_inst:
-                raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
-                                            "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
-                                                                                                        total_obs_inst,
-                                                                                                        source.name))
+            #elif len(spec_objs) != total_obs_inst:
+            #    raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
+            #                                "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
+            #                                                                                            total_obs_inst,
+            #                                                                                            source.name))
 
             # Turn RMF and ARF paths into TCL style list for substitution into template
             rmf_paths = "{" + " ".join([spec.rmf for spec in spec_objs]) + "}"
@@ -185,7 +185,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
             with open(COUNTRATE_CONV_SCRIPT, 'r') as c_script:
                 script = c_script.read()
 
-            dest_dir = OUTPUT + tel + "XSPEC/" + source.name + "/"
+            dest_dir = OUTPUT + tel + "/XSPEC/" + source.name + "/"
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir)
             out_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_" + tel + "_conv_factors.csv"
