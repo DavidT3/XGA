@@ -232,7 +232,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
 
 def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Quantity, hi_en: Quantity,
             psf_corr: bool, psf_model: str, psf_bins: int, psf_algo: str, psf_iter: int, pix_step: int,
-            min_snr: float, obs_id: str = None, inst: str = None) -> SurfaceBrightness1D:
+            min_snr: float, obs_id: Dict[str, str] = None, inst: Dict[str, str] = None) -> SurfaceBrightness1D:
     """
     An internal function for the Surface Brightness based density functions, which just quickly assembles the
     requested surface brightness profile.
@@ -251,10 +251,10 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
     :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
         profiles. Default is 0, which disables automatic re-binning.
-    :param str obs_id: The ObsID of the ratemap that should be used to generate the brightness profile, default
-        is None in which case the combined ratemap will be used.
-    :param str inst: The instrument of the ratemap that should be used to generate the brightness profile, default
-        is None in which case the combined ratemap will be used.
+    :param Dict[str, str] obs_id: The ObsID of the ratemap that should be used to generate the brightness profile, default
+        is None in which case the combined ratemap will be used. This is input as a dictionary with telescope keys.
+    :param Dict[str, str] inst: The instrument of the ratemap that should be used to generate the brightness profile, default
+        is None in which case the combined ratemap will be used. This is input as a dictionary with telescope keys.
     :return: The requested surface brightness profile.
     :rtype: SurfaceBrightness1D
     """
