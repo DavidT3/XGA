@@ -704,41 +704,46 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample], outer_ra
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
+    # collecting all the associated telescopes here for later use
+    all_tels = sources.telescopes
+
     # So we can iterate through sources without worrying if there's more than one cluster
     if not isinstance(sources, ClusterSample):
         sources = [sources]
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and the
     #  gas_density_profile method of APECNormalisation1D
-    final_dens_profs = []
+    final_dens_profs = {key : [] for key in all_tels}
     with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
         for src_ind, src in enumerate(sources):
-            cur_rads = ann_rads[src_ind]
+            for tel in src.telescopes:
+                cur_rads = ann_rads[tel][src_ind]
 
-            try:
-                # The normalisation profile(s) from the fit that produced the projected temperature profile.
-                apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample)
+                try:
+                    # The normalisation profile(s) from the fit that produced the projected temperature profile.
+                    apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, 
+                                                                over_sample, telescope=tel)
 
-                obs_id = 'combined'
-                inst = 'combined'
-                # Seeing as we're here, I might as well make a density profile from the apec normalisation profile
-                dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real,
-                                                               sigma, num_dens)
-                # Then I store it in the source
-                src.update_products(dens_prof)
-                final_dens_profs.append(dens_prof)
+                    obs_id = 'combined'
+                    inst = 'combined'
+                    # Seeing as we're here, I might as well make a density profile from the apec normalisation profile
+                    dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo, abund_table, num_data_real,
+                                                                sigma, num_dens)
+                    # Then I store it in the source
+                    src.update_products(dens_prof)
+                    final_dens_profs[tel].append(dens_prof)
 
-            # It is possible that no normalisation profile exists because the spectral fitting failed, we account
-            #  for that here
-            except NoProductAvailableError:
-                warn("{s} doesn't have a matching apec normalisation profile, skipping.")
-                final_dens_profs.append(None)
+                # It is possible that no normalisation profile exists because the spectral fitting failed, we account
+                #  for that here
+                except NoProductAvailableError:
+                    warn("{s} doesn't have a matching apec normalisation profile, skipping.")
+                    final_dens_profs[tel].append(None)
 
-            # It's also possible that the gas_density_profile method of our normalisation profile is going to
-            #  throw a ValueError because some values are infinite or NaNs - we have to catch that too
-            except ValueError:
-                warn("{s}'s density profile has NaN values in it, skipping.", stacklevel=2)
-                final_dens_profs.append(None)
+                # It's also possible that the gas_density_profile method of our normalisation profile is going to
+                #  throw a ValueError because some values are infinite or NaNs - we have to catch that too
+                except ValueError:
+                    warn("{s}'s density profile has NaN values in it, skipping.", stacklevel=2)
+                    final_dens_profs[tel].append(None)
 
             dens_prog.update(1)
 
