@@ -510,8 +510,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
             for tel in src.telescopes:
-                sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                psf_iter, pix_step, min_snr, obs_id[tel][src_ind], inst[tel][src_ind], telescope=tel)
+                sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                psf_iter, pix_step, min_snr, obs_id[tel][src_ind], inst[tel][src_ind])
 
                 if sb_prof is None:
                     final_dens_profs[tel].append(None)
