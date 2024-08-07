@@ -119,7 +119,10 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # This uses outfile name (which has a structure set by XGA, so this is reliable) to figure out which telescope
     #  this script was run for - this isn't necessarily how I would have designed it from the beginning, but is a
     #  good solution to get the telescope which doesn't require adding stuff to all the user-facing XSPEC functions
-    tel = out_file.split('_')[-1].split('.')[0]
+    if run_type ==  "conv_factors":
+        tel = out_file.split('_')[-3]
+    else:
+        tel = out_file.split('_')[-1].split('.')[0]
 
     return res_tables, src, usable, error, warn, tel
 
