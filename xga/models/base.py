@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/08/2024, 18:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 10:14. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -340,7 +340,7 @@ class BaseModel1D(metaclass=ABCMeta):
                 transform_res = direct_transform(to_trans, r=mod_rad, backend='python', verbose=False)[:-1]
             elif method == 'direct' and not force_change:
                 to_trans = np.concatenate([self(x).value, np.array([0.0])])
-                transform_res = direct_transform(to_trans, dr=dr, verbose=False)
+                transform_res = direct_transform(to_trans, dr=dr, backend='python', verbose=False)
             elif method == 'basex':
                 transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'hansenlaw':
@@ -370,10 +370,8 @@ class BaseModel1D(metaclass=ABCMeta):
                 elif method == 'direct' and not force_change:
                     # This is necessary (see issue #1164) for the direct method because the last value is by definition
                     #  zero - one of the PyAbel authors suggested padding out the data.
-                    print(dr)
-                    print('WHAT??')
                     to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
-                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, verbose=False)[:-1]
+                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, backend='python', verbose=False)[:-1]
                 elif method == 'basex':
                     transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'hansenlaw':
