@@ -231,14 +231,15 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     return sources, to_dens_convs, obs_id, inst
 
 
-def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Quantity, hi_en: Quantity,
+def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak: bool, lo_en: Quantity, hi_en: Quantity,
             psf_corr: bool, psf_model: str, psf_bins: int, psf_algo: str, psf_iter: int, pix_step: int,
-            min_snr: float, obs_id: Dict[str, str] = None, inst: Dict[str, str] = None) -> Dict[str, SurfaceBrightness1D]:
+            min_snr: float, obs_id: str = None, inst: str = None) -> SurfaceBrightness1D:
     """
     An internal function for the Surface Brightness based density functions, which just quickly assembles the
     requested surface brightness profile.
 
     :param GalaxyCluster src: A GalaxyCluster object to generate a brightness profile for.
+    :param str telescope: The telescope from which to calculate a surface brightness profile from.
     :param Quantity outer_radius: The desired outer radius of the brightness profile.
     :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
@@ -252,59 +253,56 @@ def _run_sb(src: GalaxyCluster, outer_radius: Quantity, use_peak: bool, lo_en: Q
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
     :param int/float min_snr: The minimum allowed signal to noise for the surface brightness
         profiles. Default is 0, which disables automatic re-binning.
-    :param Dict[str, str] obs_id: The ObsID of the ratemap that should be used to generate the brightness profile, default
-        is None in which case the combined ratemap will be used. This is input as a dictionary with telescope keys.
-    :param Dict[str, str] inst: The instrument of the ratemap that should be used to generate the brightness profile, default
-        is None in which case the combined ratemap will be used. This is input as a dictionary with telescope keys.
+    :param str obs_id: The ObsID of the ratemap that should be used to generate the brightness profile, default
+        is None in which case the combined ratemap will be used.
+    :param str inst: The instrument of the ratemap that should be used to generate the brightness profile, default
+        is None in which case the combined ratemap will be used.
     :return: The requested surface brightness profile stored in a dictionary for each telescope.
-    :rtype: Dict[str, SurfaceBrightness1D]
+    :rtype: SurfaceBrightness1D
     """
-    telescopes = src.telescopes
 
-    sb_prof = {}
-    for tel in telescopes:
-        try:
-            if all([obs_id is None, inst is None]):
-                rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=tel)
-                # Grabs the mask which will remove interloper sources
-                int_mask = src.get_interloper_mask(telescope=tel)
-                comb = True
-            elif all([obs_id is not None, inst is not None]):
-                rt = src.get_ratemaps(obs_id[tel], inst[tel], lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=tel)
-                # Grabs the mask which will remove interloper sources
-                int_mask = src.get_interloper_mask(telescope=tel, obs_id=obs_id[tel])
-                comb = False
-            else:
-                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
-        except NoProductAvailableError:
-            raise NoProductAvailableError("The RateMap required to measure the density profile has not been generated "
-                                        "yet, possibly because you haven't generated PSF corrected image yet.")
-
-        if use_peak:
-            centre = src.peak
+    try:
+        if all([obs_id is None, inst is None]):
+            rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope)
+            # Grabs the mask which will remove interloper sources
+            int_mask = src.get_interloper_mask(telescope=tel)
+            comb = True
+        elif all([obs_id is not None, inst is not None]):
+            rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope)
+            # Grabs the mask which will remove interloper sources
+            int_mask = src.get_interloper_mask(telescope=telescope, obs_id=obs_id)
+            comb = False
         else:
-            centre = src.ra_dec
+            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and vice versa.")
+    except NoProductAvailableError:
+        raise NoProductAvailableError("The RateMap required to measure the density profile has not been generated "
+                                    "yet, possibly because you haven't generated PSF corrected image yet.")
 
-        rad = src.convert_radius(outer_radius, 'kpc')
+    if use_peak:
+        centre = src.peak
+    else:
+        centre = src.ra_dec
 
+    rad = src.convert_radius(outer_radius, 'kpc')
+
+    try:
+        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
+                                                pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
+                                                psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                                psf_iter=psf_iter, telescope=telescope)
+    except NoProductAvailableError:
         try:
-            sb_prof[tel] = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
-                                                    pix_step=pix_step, min_snr=min_snr, psf_corr=psf_corr,
-                                                    psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
-                                                    psf_iter=psf_iter, telescope=tel)
-        except NoProductAvailableError:
-            try:
-                sb_prof[tel], success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
-                                                    src.background_radius_factors[1], int_mask, src.redshift, pix_step,
-                                                    kpc, src.cosmo, min_snr)
-            except ValueError:
-                sb_prof[tel] = None
-                success = False
-                # No longer just background region failure that can set this off
-                # warn("Background region for brightness profile is all zeros for {}".format(src.name))
+            sb_prof, success = radial_brightness(rt, centre, rad, src.background_radius_factors[0],
+                                                src.background_radius_factors[1], int_mask, src.redshift, pix_step,
+                                                kpc, src.cosmo, min_snr)
+        except ValueError:
+            sb_prof = None
+            success = False
+            # No longer just background region failure that can set this off
+            # warn("Background region for brightness profile is all zeros for {}".format(src.name))
 
-            if sb_prof[tel] is not None and not success:
-                warn("Minimum SNR rebinning failed for {}".format(src.name))
+        if sb_prof is not None and not success:
+            warn("Minimum SNR rebinning failed for {}".format(src.name))
 
     return sb_prof
 
@@ -511,29 +509,30 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
-            sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                            psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
             for tel in src.telescopes:
-                if sb_prof[tel] is None:
+                sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                psf_iter, pix_step, min_snr, obs_id[tel][src_ind], inst[tel][src_ind], telescope=tel)
+
+                if sb_prof is None:
                     final_dens_profs[tel].append(None)
                     continue
                 else:
-                    src.update_products(sb_prof[tel])
+                    src.update_products(sb_prof)
 
                 # Fit the user chosen model to sb_prof
                 cur_model = model[src_ind]
-                sb_prof[tel].fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn,
+                sb_prof.fit(cur_model, fit_method, num_samples, num_steps, num_walkers, show_warn=show_warn,
                             progress_bar=False)
 
                 if isinstance(cur_model, str):
-                    model_r = sb_prof[tel].get_model_fit(cur_model, fit_method)
+                    model_r = sb_prof.get_model_fit(cur_model, fit_method)
                 else:
-                    model_r = sb_prof[tel].get_model_fit(cur_model.name, fit_method)
+                    model_r = sb_prof.get_model_fit(cur_model.name, fit_method)
 
                 if model_r.success:
-                    dens_rads = sb_prof[tel].radii.copy()
-                    dens_rads_errs = sb_prof[tel].radii_err.copy()
-                    dens_deg_rads = sb_prof[tel].deg_radii.copy()
+                    dens_rads = sb_prof.radii.copy()
+                    dens_rads_errs = sb_prof.radii_err.copy()
+                    dens_deg_rads = sb_prof.deg_radii.copy()
                     # Run the inverse abel transform for the model, to retrieve distributions for the value of the transformed
                     #  model at each r point. If the user hasn't set a method then we use the default method for the current
                     #  model, otherwise we pass the user's choice
@@ -543,13 +542,13 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                         transformed = model_r.inverse_abel(dens_rads, use_par_dist=True, method=inv_abel_method)
 
                     # Now need to make sure the units of the transformed model are what we need
-                    if sb_prof[tel].values_unit.is_equivalent('ct/(s*arcmin**2)'):
+                    if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
                         # If the SB profile is in count/s/arcmin^2 then the abel transform will have
                         #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
                         conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
                                         'kpc/arcmin')**2
                         transformed /= conv
-                    elif sb_prof[tel].values_unit.is_equivalent('ct/(s*kpc**2)'):
+                    elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
                         pass
                     else:
                         raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
@@ -577,8 +576,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                         # I now allow the user to decide if they want to generate number or mass density profiles using
                         #  this function, and here is where that distinction is made
                         if num_dens:
-                            dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof[tel].centre, src.name, cur_obs,
-                                                    cur_inst, model_r.name, sb_prof[tel], dens_rads_errs, num_dens_err,
+                            dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                                    cur_inst, model_r.name, sb_prof, dens_rads_errs, num_dens_err,
                                                     deg_radii=dens_deg_rads, telescope=tel)
                         else:
                             # TODO Check the origin of the mean molecular weight, see if there are different values for
@@ -586,7 +585,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                             # The mean molecular weight multiplied by the proton mass
                             conv_mass = MEAN_MOL_WEIGHT*m_p
                             dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
-                                                    sb_prof[tel].centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof[tel],
+                                                    sb_prof.centre, src.name, cur_obs, cur_inst, model_r.name, sb_prof,
                                                     dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
                                                     deg_radii=dens_deg_rads, telescope=tel)
 
