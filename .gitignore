@@ -4,4 +4,5 @@
 .pytest_cache
 xga_output
 .ipynb_checkpoints
+/docs/build
 *__pycache__
