@@ -930,7 +930,7 @@ class APECNormalisation1D(BaseProfile1D):
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
                                  'spec', self, self.radii_err, dens_sigma, self.set_ident,
-                                 self.associated_set_storage_key, self.deg_radii)
+                                 self.associated_set_storage_key, self.deg_radii, telescope=self.telescope)
         return dens_prof
 
     def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',
