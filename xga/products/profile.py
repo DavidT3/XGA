@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 14:48. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2472,7 +2472,8 @@ class SpecificEntropy(BaseProfile1D):
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
-        elif not already_run and (self.density_profile.radii == self.temperature_profile.radii).all():
+        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
+              (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
@@ -2520,7 +2521,8 @@ class SpecificEntropy(BaseProfile1D):
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
-        elif not already_run and (self.density_profile.radii == self.temperature_profile.radii).all():
+        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
+              (self.density_profile.radii == self.temperature_profile.radii).all()):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
