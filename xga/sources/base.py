@@ -1586,8 +1586,7 @@ class BaseSource:
                 for conv_path in conv_factors:
                     res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
-                    model = conv_path.split("_")[-3]
-
+                    model = conv_path.split("_")[-4]
                     # We can infer the storage key from the name of the results table, just makes it easier to
                     #  grab the correct spectra
                     storage_key = conv_path.split('/')[-1].split(self.name)[-1][1:].split(model)[0][:-1]
@@ -1596,6 +1595,7 @@ class BaseSource:
                     #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+
                     # Getting the spectra for each column, then assigning rates and luminosities.
                     # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
                     #  associated with the source, we first fetch the spectra, then in a second loop we assign the
