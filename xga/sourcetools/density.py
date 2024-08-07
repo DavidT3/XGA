@@ -265,7 +265,7 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
         if all([obs_id is None, inst is None]):
             rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
-            int_mask = src.get_interloper_mask(telescope=tel)
+            int_mask = src.get_interloper_mask(telescope=telescope)
             comb = True
         elif all([obs_id is not None, inst is not None]):
             rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope=telescope)
