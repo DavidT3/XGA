@@ -419,7 +419,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, num_walkers: int = 20, num_steps: int = 20000, num_samples: int = 10000,
                           group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                          obs_id: Union[Dict[str, str], Dict[str, list]] = None, inst:Union[Dict[str, str], Dict[str, list]] = None, conv_temp: Quantity = None,
+                          obs_id: Union[Dict[str, str], Dict[str, list]] = None, inst:Union[Dict[str, str], Dict[str, list]] = None, conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                           conv_outer_radius: Quantity = "r500", inv_abel_method: str = None, num_cores: int = NUM_CORES,
                           show_warn: bool = True) -> List[GasDensity3D]:
     """
