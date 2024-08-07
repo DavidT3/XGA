@@ -240,8 +240,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
             src: GalaxyCluster
             # Both the angular_diameter_distance and redshift are guaranteed to be present here
             #  because redshift is REQUIRED to define GalaxyCluster objects
-            factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm") \
-                     * (1 + src.redshift)) ** 2)(e_to_p_ratio * 10 ** -14))
+            factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm")*(1 + src.redshift)) ** 2)
+                     / (e_to_p_ratio * 10 ** -14))
             total_factor = factor * src.norm_conv_factor(conv_outer_radius, tel, lo_en, hi_en, 
                                                          inner_radius, group_spec, min_counts, 
                                                          min_sn, over_sample, obs_id[tel][src_ind], 
