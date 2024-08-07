@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:57. Copyright (c) The Contributors
 
 
 class HeasoftError(Exception):
@@ -436,8 +436,8 @@ class IncompatibleProductError(Exception):
     def __init__(self, *args):
         """
         Raised when products are used together that do not have matching ObsID and instrument
-        values. For instance when you try to re-sample a PSF with an Image object from a different
-        observation and instrument.
+        values, or when they were not generated at the same coordinates. For instance when you try to
+        re-sample a PSF with an Image object from a different observation and instrument.
 
         :param expression:
         :param message:
@@ -592,4 +592,24 @@ class InvalidProductError(Exception):
             return '{}'.format(self.message)
         else:
             return 'InvalidProductError has been raised'
+
+
+class NotSampleMemberError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a feature reserved for sources that belong to samples is used, and the source is independent
+        of a sample.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NotSampleMemberError has been raised'
 

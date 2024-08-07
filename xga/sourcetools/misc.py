@@ -1,15 +1,16 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 09:06. Copyright (c) The Contributors
 import warnings
 from copy import deepcopy
 from subprocess import Popen, PIPE
 from typing import Union, List
 
 from astropy.coordinates import SkyCoord
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity
 from numpy import array, ndarray, pi
 
+from .. import DEFAULT_COSMO
 from ..exceptions import HeasoftError
 from ..models import BaseModel1D
 
@@ -66,12 +67,12 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
     return nh_vals
 
 
-def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
+def rad_to_ang(rad: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Quantity:
     """
     Converts radius in length units to radius on sky in degrees.
 
     :param Quantity rad: Radius for conversion.
-    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is a flat LambdaCDM concordance model.
     :param float z: The _redshift of the source.
     :return: The radius in degrees.
     :rtype: Quantity
@@ -81,12 +82,12 @@ def rad_to_ang(rad: Quantity, z: float, cosmo=Planck15) -> Quantity:
     return Quantity(ang_rad, 'deg')
 
 
-def ang_to_rad(ang: Quantity, z: float, cosmo=Planck15) -> Quantity:
+def ang_to_rad(ang: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Quantity:
     """
     The counterpart to rad_to_ang, this converts from an angle to a radius in kpc.
 
     :param Quantity ang: Angle to be converted to radius.
-    :param Cosmology cosmo: An instance of an astropy cosmology, the default is Planck15.
+    :param Cosmology cosmo: An instance of an astropy cosmology, the default is a flat LambdaCDM concordance model.
     :param float z: The _redshift of the source.
     :return: The radius in kpc.
     :rtype: Quantity

@@ -1,12 +1,14 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:13. Copyright (c) The Contributors
+from warnings import warn
 
 import numpy as np
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 from tqdm import tqdm
 
 from .base import BaseSample
+from .. import DEFAULT_COSMO
 from ..exceptions import NoValidObservationsError
 from ..sources.point import Star
 
@@ -40,7 +42,7 @@ class StarSample(BaseSample):
         radius for the background region. Default is 1.05.
     :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
         radius for the background region. Default is 1.5.
-    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
@@ -49,8 +51,9 @@ class StarSample(BaseSample):
                  proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
                  match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
-                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
-                 load_fits: bool = False, no_prog_bar: bool = False, psf_corr: bool = False):
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
+                 psf_corr: bool = False):
         """
          The init of the StarSample XGA class.
         """
@@ -103,6 +106,8 @@ class StarSample(BaseSample):
         self._point_radii = []
         self._distances = []
         self._proper_motions = []
+        # This records which sources had a failed peak finding attempt, for a warning at the end of the declaration
+        failed_peak_find = []
         with tqdm(desc="Setting up Stars", total=len(self._accepted_inds), disable=no_prog_bar) as dec_lb:
             for ind in range(len(self._accepted_inds)):
                 r, d = ra[self._accepted_inds[ind]], dec[self._accepted_inds[ind]]
@@ -123,7 +128,8 @@ class StarSample(BaseSample):
                 #  thrown I have to catch it and not add that source to this sample.
                 try:
                     self._sources[n] = Star(r, d, di, n, pm, pr, match_radius, use_peak, peak_lo_en, peak_hi_en,
-                                            back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits, False)
+                                            back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
+                                            False, True)
                     self._point_radii.append(pr.value)
                     self._distances.append(di)
                     self._proper_motions.append(pm)
@@ -149,6 +155,30 @@ class StarSample(BaseSample):
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
+
+        # It is possible (especially if someone is using the Sample classes as a way to check whether things have
+        #  XMM data) that no sources will have been declared by this point, in which case it should fail now
+        if len(self._sources) == 0:
+            raise NoValidObservationsError(
+                "No Stars have been declared, none of the sample passed the cleaning steps.")
+
+        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        #  to make sure that are some sources because in that case this warning is redundant.
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
+                   self._failed_sources[name] == 'Failed ObsClean']
+        # If there are names in that list, then we do the warning
+        if len(no_data) != 0:
+            warn("The following do not appear to have any XMM data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+
+        # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
+        if len(failed_peak_find) != 0:
+            warn("Peak finding did not converge for the following; {n}, using user "
+                 "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
+
+        # This shows a warning that tells the user how to see any suppressed warnings that occurred during source
+        #  declarations, but only if there actually were any.
+        self._check_source_warnings()
 
     @property
     def point_radii(self) -> Quantity:

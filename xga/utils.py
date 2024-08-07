@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 30/05/2022, 13:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
 
 import json
 import os
@@ -12,11 +12,12 @@ from warnings import warn
 import pandas as pd
 import pkg_resources
 from astropy.constants import m_p, m_e
+from astropy.cosmology import LambdaCDM
 from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
-from numpy import nan, floor
+from numpy import floor
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
@@ -93,6 +94,9 @@ MEAN_MOL_WEIGHT = 0.61
 # A centralised constant to define what radius labels are allowed
 RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
 
+# Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
+DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
+
 
 def xmm_obs_id_test(test_string: str) -> bool:
     """
@@ -139,8 +143,17 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
     # Creates black list file if one doesn't exist, then reads it in
     if not os.path.exists(BLACKLIST_FILE):
         with open(BLACKLIST_FILE, 'w') as bl:
-            bl.write("ObsID")
+            bl.write("ObsID,EXCLUDE_PN,EXCLUDE_MOS1,EXCLUDE_MOS2")
     blacklist = pd.read_csv(BLACKLIST_FILE, header="infer", dtype=str)
+
+    # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
+    #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected
+    if len(blacklist.columns) == 1:
+        # Adds the three new columns, all with a default value of True. So any ObsID already in the blacklist
+        #  will have the same behaviour as before, all instruments for the ObsID are excluded
+        blacklist[["EXCLUDE_PN", "EXCLUDE_MOS1", "EXCLUDE_MOS2"]] = 'T'
+        # If we have even gotten to this stage then the actual blacklist file needs re-writing, so I do
+        blacklist.to_csv(BLACKLIST_FILE, index=False)
 
     # Need to find out which observations are available, crude way of making sure they are ObsID directories
     # This also checks that I haven't run them before
@@ -186,13 +199,15 @@ def observation_census(config: ConfigParser) -> Tuple[pd.DataFrame, pd.DataFrame
             census.writelines(obs_lookup)
 
     # I do the stripping and splitting to make it a 3 column array, needed to be lines to write to file
-    obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
-                              columns=obs_lookup[0].strip("\n").split(','), dtype=str)
-    obs_lookup["RA_PNT"] = obs_lookup["RA_PNT"].replace('', nan).astype(float)
-    obs_lookup["DEC_PNT"] = obs_lookup["DEC_PNT"].replace('', nan).astype(float)
-    obs_lookup["USE_PN"] = obs_lookup["USE_PN"].replace('T', True).replace('F', False)
-    obs_lookup["USE_MOS1"] = obs_lookup["USE_MOS1"].replace('T', True).replace('F', False)
-    obs_lookup["USE_MOS2"] = obs_lookup["USE_MOS2"].replace('T', True).replace('F', False)
+    # obs_lookup = pd.DataFrame(data=[entry.strip('\n').split(',') for entry in obs_lookup[1:]],
+    #                           columns=obs_lookup[0].strip("\n").split(','), dtype=str)
+    obs_lookup = pd.read_csv(CENSUS_FILE, dtype={"ObsID": str, "RA_PNT": float, "DEC_PNT": float, "USE_PN": str,
+                                                 "USE_MOS1": str, "USE_MOS2": str})
+
+    obs_lookup["USE_PN"] = obs_lookup['USE_PN'].astype(bool)
+    obs_lookup["USE_MOS1"] = obs_lookup['USE_MOS1'].astype(bool)
+    obs_lookup["USE_MOS2"] = obs_lookup['USE_MOS2'].astype(bool)
+
     return obs_lookup, blacklist
 
 
@@ -426,6 +441,16 @@ else:
         except:
             XSPEC_VERSION = None
 
-
+    # This defines the meaning of different colours of region - this will eventually be user configurable in the
+    #  configuration file, but putting it here means that the user can still change the definitions programmatically
+    # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
+    #  University of Edinburgh - 2005.
+    # Red - Point source
+    # Green - Extended source
+    # Magenta - PSF-sized extended source
+    # Blue - Extended source with significant point source contribution
+    # Cyan - Extended source with significant Run1 contribution
+    # Yellow - Extended source with less than 10 counts
+    SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 

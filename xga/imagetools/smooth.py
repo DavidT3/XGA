@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -144,10 +144,10 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
         # If the file didn't already exist, we need to actually save the smoothed array, otherwise we'll just read
         #  the file in later
         if not existing:
-            rand_ident = str(randint(0, 1e+8))
+            rand_ident = str(randint(0, int(1e+8)))
             # Makes absolutely sure that the random integer hasn't already been used
             while any([str(rand_ident) in f for f in os.listdir(final_dest)]):
-                rand_ident = str(randint(0, 1e+8))
+                rand_ident = str(randint(0, int(1e+8)))
 
             # The final name of the new image file
             final_name = final_name.format(ri=rand_ident)
@@ -173,7 +173,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
     new_line = sm_prod.inventory_entry
 
     # Add the new product to the inventory, even if it already existed
-    inven = inven.append(new_line, ignore_index=True)
+    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
     # Drop any duplicates in the inventory, which corrects the extra added in the last step if the file
     #  already existed
     inven = inven.drop_duplicates(subset='file_name', keep='first', ignore_index=True)

@@ -49,3 +49,10 @@ products.spec module
    :undoc-members:
    :show-inheritance:
 
+products.lightcurve module
+--------------------
+
+.. automodule:: xga.products.lightcurve
+   :members:
+   :undoc-members:
+   :show-inheritance:

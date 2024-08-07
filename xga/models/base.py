@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 03/05/2022, 14:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 10:14. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -35,7 +35,7 @@ class BaseModel1D(metaclass=ABCMeta):
         representation or an astropy unit object.
     :param List[Quantity] start_pars: The start values of the model parameters for any fitting function that
         used start values.
-    :param List[Dict[str, Union[Quantity, str]]] par_priors: The priors on the model parameters, for any
+    :param List[Dict[str, Quantity/str]] par_priors: The priors on the model parameters, for any
         fitting function that uses them.
     :param str model_name: The simple name of the particular model, e.g. 'beta'.
     :param str model_pub_name: A smart name for the model that might be used in a publication
@@ -202,8 +202,13 @@ class BaseModel1D(metaclass=ABCMeta):
         This method uses the parameter distributions added to this model by a fitting process to generate
         random realisations of this model at a given x-position (or positions).
 
-        :param Quantity x: The x-position(s) at which realisations of the model should be generated
-            from the associated parameter distributions.
+        :param Quantity x: The x-position(s) at which realisations of the model should be generated from the
+            associated parameter distributions. If multiple, non-distribution, radii are to be used, make sure
+            to pass them as an (M,), single dimension, astropy quantity, where M is the number of separate radii to
+            generate realisations for. To marginalise over a radius distribution when generating realisations, pass
+            a multi-dimensional astropy quantity; i.e. for a single set of realisations pass a (1, N) quantity, where
+            N is the number of samples in the parameter posteriors, for realisations for M different radii pass a
+            (M, N) quantity.
         :return: The model realisations, in a Quantity with shape (len(x), num_samples) if x has multiple
             radii in it (num_samples is the number of samples in the parameter distributions), and (num_samples,) if
             only a single x value is passed.
@@ -213,13 +218,22 @@ class BaseModel1D(metaclass=ABCMeta):
             raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
                                       "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
         else:
-            # Just to be sure its in exactly the right units
+            # Just to be sure it's in exactly the right units
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
             warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
 
-        realisations = self.model(x[..., None], *self._par_dists)
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            realisations = self.model(x[..., None], *self._par_dists)
+        else:
+            # This case is for marginalising over a radius distribution (or distributions), so in other words we want
+            #  distribution(s) of N values out (where N is the number of values in the model parameter posterior
+            #  distributions).
+            # Note the lack of [..., None] on x here, this is what makes it different to the first part of the if
+            #  statement
+            realisations = self.model(x, *self._par_dists)
+
         return realisations
 
     @staticmethod
@@ -309,9 +323,9 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Sets up the resolution of the radial spatial sampling
         force_change = False
-        if len(set(np.diff(x))) != 1:
+        if len(set(np.diff(x.value).round(5))) != 1:
             warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                 "the method to 'direct'")
+                 "the method to 'direct'", stacklevel=2)
             method = 'direct'
             force_change = True
         else:
@@ -320,21 +334,25 @@ class BaseModel1D(metaclass=ABCMeta):
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
             if method == 'direct' and force_change:
-                transform_res = direct_transform(self(x).value, r=x.value, backend='python')
+                to_trans = np.concatenate([self(x).value, np.array([0.0])])
+                temp_dr = (x[-1] - x[-2]).value
+                mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
+                transform_res = direct_transform(to_trans, r=mod_rad, backend='python', verbose=False)[:-1]
             elif method == 'direct' and not force_change:
-                transform_res = direct_transform(self(x).value, dr=dr)
+                to_trans = np.concatenate([self(x).value, np.array([0.0])])
+                transform_res = direct_transform(to_trans, dr=dr, backend='python', verbose=False)
             elif method == 'basex':
-                transform_res = basex_transform(self(x).value, dr=dr)
+                transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'hansenlaw':
-                transform_res = hansenlaw_transform(self(x).value, dr=dr)
+                transform_res = hansenlaw_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'onion_bordas':
-                transform_res = onion_bordas_transform(self(x).value, dr=dr)
+                transform_res = onion_bordas_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'onion_peeling':
-                transform_res = onion_peeling_transform(self(x).value, dr=dr)
+                transform_res = onion_peeling_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'two_point':
-                transform_res = two_point_transform(self(x).value, dr=dr)
+                transform_res = two_point_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'three_point':
-                transform_res = three_point_transform(self(x).value, dr=dr)
+                transform_res = three_point_transform(self(x).value, dr=dr, verbose=False)
             else:
                 raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
@@ -344,21 +362,28 @@ class BaseModel1D(metaclass=ABCMeta):
             transform_res = np.zeros(realisations.shape)
             for t_ind in range(0, realisations.shape[1]):
                 if method == 'direct' and force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python')
+                    to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
+                    temp_dr = (x[-1] - x[-2]).value
+                    mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
+                    transform_res[:, t_ind] = direct_transform(to_trans, r=mod_rad, backend='python',
+                                                               verbose=False)[:-1]
                 elif method == 'direct' and not force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], dr=dr)
+                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
+                    #  zero - one of the PyAbel authors suggested padding out the data.
+                    to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
+                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, backend='python', verbose=False)[:-1]
                 elif method == 'basex':
-                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'hansenlaw':
-                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'onion_bordas':
-                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'onion_peeling':
-                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'two_point':
-                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'three_point':
-                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 else:
                     raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
@@ -374,10 +399,16 @@ class BaseModel1D(metaclass=ABCMeta):
         calculated using the current model parameters, or a distribution of values using the parameter
         distributions (assuming that this model has had a fit run on it).
 
-        This method will be overridden if there is an analytical solution to a particular model's volume
+        This method may be overridden if there is an analytical solution to a particular model's volume
         integration over a sphere.
 
-        :param Quantity outer_radius: The radius to integrate out to.
+        The results of calculations with single values of outer and inner radius are stored in the model object
+        to reduce processing time if they are needed again, but if a distribution of radii are passed then
+        the results will not be stored and will be re-calculated each time.
+
+        :param Quantity outer_radius: The radius to integrate out to. Either a single value or, if you want to
+            marginalise over a radius distribution when 'use_par_dist=True', a non-scalar quantity of the same
+            length as the number of samples in the parameter posteriors.
         :param Quantity inner_radius: The inner bound of the radius integration. Default is None, which results
             in an inner radius of 0 in the units of outer_radius being used.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a volume
@@ -399,17 +430,35 @@ class BaseModel1D(metaclass=ABCMeta):
 
             return x ** 2 * self.model(x, *pars)
 
+        # This variable just tells the rest of the function whether either the inner or outer radii are actually
+        #  a distribution rather than a single value.
+        if not inner_radius.isscalar or not outer_radius.isscalar:
+            rad_dist = True
+        else:
+            rad_dist = False
+
         # This checks to see if inner radius is None (probably how it will be used most of the time), and if
         #  it is then creates a Quantity with the same units as outer_radius
         if inner_radius is None:
             inner_radius = Quantity(0, outer_radius.unit)
-        elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius):
+        elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius.unit):
             raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
                                       " as the outer_radius Quantity.")
 
+        if (not outer_radius.isscalar or not inner_radius.isscalar) and not use_par_dist:
+            raise ValueError("Radius distributions can only be used with use_par_dist set to True.")
+        elif not outer_radius.isscalar and len(outer_radius) != len(self.par_dists[0]):
+            raise ValueError("The outer_radius distribution must have the same number of entries (currently {rd}) "
+                             "as the model posterior distributions ({md}).".format(rd=len(outer_radius),
+                                                                                   md=len(self.par_dists[0])))
+        elif not inner_radius.isscalar and len(inner_radius) != len(self.par_dists[0]):
+            raise ValueError("The inner_radius distribution must have the same number of entries (currently {rd}) "
+                             "as the model posterior distributions ({md}).".format(rd=len(inner_radius),
+                                                                                   md=len(self.par_dists[0])))
+
         # Do a basic sanity checks on the radii, they can't be below zero because that doesn't make any sense
         #  physically. Also make sure that outer_radius isn't less than inner_radius
-        if inner_radius.value < 0 or outer_radius < inner_radius:
+        if (inner_radius.value < 0).any() or (not rad_dist and outer_radius < inner_radius):
             raise ValueError("Both inner_radius and outer_radius must be greater than zero (though inner_radius "
                              "may be None, which is equivalent to zero). Also, outer_radius must be greater than "
                              "inner_radius.")
@@ -436,13 +485,13 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Equivalent to the above clause but for par distribution results rather than the median single values used
         #  to concisely represent the models
-        elif use_par_dist and (outer_radius in self._vol_ints['par_dists'] and
-                               inner_radius in self._vol_ints['par_dists'][outer_radius]):
+        elif use_par_dist and not rad_dist and (outer_radius in self._vol_ints['par_dists'] and
+                                                inner_radius in self._vol_ints['par_dists'][outer_radius]):
             already_run = True
             integral_res = self._vol_ints['par_dists'][outer_radius][inner_radius]
 
         # Otherwise, this particular integral just hasn't been run
-        else:
+        elif not rad_dist:
             already_run = False
             # In this case I pre-emptively add the outer radius to the dictionary keys, for use later to store
             #  the result. I don't add the inner radius because it will be automatically added
@@ -450,6 +499,10 @@ class BaseModel1D(metaclass=ABCMeta):
                 self._vol_ints['par_dists'][outer_radius] = {}
             else:
                 self._vol_ints['pars'][outer_radius] = {}
+        else:
+            # In the case where we are using a radius distribution, we still need to set this parameter so
+            #  that the calculation is actually run
+            already_run = False
 
         # The user can either request a single value using the current model parameters, or a distribution
         #  using the current parameter distributions (if set)
@@ -464,7 +517,16 @@ class BaseModel1D(metaclass=ABCMeta):
             # An unfortunately unsophisticated way of doing this, but stepping through the parameter distributions
             #  one by one.
             for par_ind in range(len(unitless_dists[0])):
-                integral_res[par_ind] = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
+                if not outer_radius.isscalar:
+                    out_rad = outer_radius[par_ind].value
+                else:
+                    out_rad = outer_radius.value
+
+                if not inner_radius.isscalar:
+                    inn_rad = inner_radius[par_ind].value
+                else:
+                    inn_rad = inner_radius.value
+                integral_res[par_ind] = 4 * np.pi * quad(integrand, inn_rad, out_rad,
                                                          args=[par_d[par_ind] for par_d in unitless_dists])[0]
         elif use_par_dist and len(self._par_dists[0]) == 0 and not already_run:
             raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
@@ -473,12 +535,13 @@ class BaseModel1D(metaclass=ABCMeta):
         # If there wasn't already a result stored, the integration result is saved in a dictionary
         if not already_run:
             integral_res = Quantity(integral_res, self.y_unit * self.x_unit ** 3)
-            if use_par_dist:
+
+            if not rad_dist and use_par_dist:
                 self._vol_ints['par_dists'][outer_radius][inner_radius] = integral_res
-            else:
+            elif not rad_dist:
                 self._vol_ints['pars'][outer_radius][inner_radius] = integral_res
 
-        return integral_res
+        return integral_res.copy()
 
     def allowed_prior_types(self, table_format: str = 'fancy_grid'):
         """

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:21. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -110,8 +110,8 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
                 # A temporary temperature variable
                 temp_temp = src.get_temperature(scale_radius, "constant*tbabs*apec")[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
-                     "3keV".format(s=src.name))
+                warn("{s}'s temperature fit is not valid, defaulting to a temperature of 3 keV".format(s=src.name),
+                     stacklevel=2)
                 temp_temp = Quantity(3, 'keV')
 
             temp_temps.append(temp_temp.value)
@@ -148,7 +148,7 @@ def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_
     for src_ind, src in enumerate(sources):
         if src_ind not in no_nan:
             warn("A NaN value was detected in {}'s brightness profile, and as such it has been excluded from the "
-                 "stack.".format(src.name))
+                 "stack.".format(src.name), stacklevel=2)
         else:
             stack_names.append(src.name)
 
@@ -299,11 +299,21 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
         rad = src_obj.get_radius(scale_radius, kpc)
 
         # This fetches any profiles that might have already been generated to our required specifications
-        prof_prods = src_obj.get_products("combined_brightness_profile")
-        if len(prof_prods) == 1:
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, central_coord, pix_step,
-                                                                                       min_snr, rad)]
-        else:
+        # prof_prods = src_obj.get_products("combined_brightness_profile")
+        # if len(prof_prods) == 1:
+        #     matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, central_coord, pix_step,
+        #                                                                                min_snr, rad)]
+        # else:
+        #     matching_profs = []
+
+        try:
+            matching_profs = src_obj.get_1d_brightness_profile(rad, central_coord=central_coord, pix_step=pix_step,
+                                                               min_snr=min_snr, psf_corr=psf_corr, psf_algo=psf_algo,
+                                                               psf_model=psf_model, psf_iter=psf_iter,
+                                                               psf_bins=psf_bins)
+            if not isinstance(matching_profs, list):
+                matching_profs = [matching_profs]
+        except NoProductAvailableError:
             matching_profs = []
 
         # This is because a ValueError can be raised by radial_brightness when there is a problem with the
@@ -327,7 +337,7 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
             interp_brightness = np.full(radii.shape, np.NaN)
             # But will also raise a warning so the user knows
             warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
-                 + " - profile set to NaNs.")
+                 + " - profile set to NaNs.", stacklevel=2)
 
         return interp_brightness, src_id
 
@@ -415,6 +425,9 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
     _view_stack(results, scale_radius, radii, figsize)
 
     if show_images:
+        raise NotImplementedError("The ability to show images alongside the stacked brightness profiles is not "
+                                  "currently functional.")
+
         for name_ind, name in enumerate(results[5]):
             cur_src = sources[name]
             if not psf_corr:
@@ -433,9 +446,8 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
             inter_mask = cur_src.get_interloper_mask()
             rad = cur_src.get_radius(scale_radius, kpc)
 
-            prof_prods = cur_src.get_products("combined_brightness_profile")
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, pix_peak, pix_step,
-                                                                                       min_snr, rad)]
+            prof_prods = cur_src.get_products("combined_brightness_profile", )
+            matching_profs = [p for p in prof_prods if p.check_match(rt, pix_peak, pix_step, min_snr, rad)]
             pr = matching_profs[0]
             fig, ax_arr = plt.subplots(ncols=2, figsize=(figsize[0], figsize[0] * 0.5))
 
@@ -465,13 +477,12 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
 
 
 def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "r200", fit_method: str = 'mcmc',
-                       use_peak: bool = True, model_priors: list = None, model_start_pars: list = None,
-                       pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
-                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                       custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
-                       psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                       psf_iter: int = 15, num_cores: int = NUM_CORES, model_realisations: int = 500,
-                       conf_level: int = 90, num_walkers: int = 20, num_steps: int = 20000) \
+                       use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
+                       min_snr: float = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
+                       hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
+                       sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
+                       psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                       num_cores: int = NUM_CORES, num_walkers: int = 20, num_steps: int = 20000) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
     Creates, fits, and scales radial brightness profiles for a set of galaxy clusters so that they can be combined
@@ -486,10 +497,6 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     :param str fit_method: The method to use when fitting the model to the profile.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
         for each GalaxyCluster object.
-    :param list model_priors: A list of priors to use when fitting the model with MCMC, default is None in which
-        case the default priors for the selected model are used.
-    :param list model_start_pars: A list of start parameters to use when fitting with methods like curve_fit, default
-        is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
@@ -509,8 +516,6 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
         of available cores.
-    :param int model_realisations: The number of random realisations of a model to generate.
-    :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :return: This function returns the average profile, the scaled brightness profiles with the cluster
@@ -562,8 +567,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         # This fetches any profiles that might have already been generated to our required specifications
         prof_prods = src_obj.get_products("combined_brightness_profile")
         if len(prof_prods) == 1:
-            matching_profs = [p for p in list(prof_prods[0].values()) if p.check_match(rt, central_coord, pix_step,
-                                                                                       min_snr, rad)]
+            matching_profs = [p for p in prof_prods if p.check_match(rt, central_coord, pix_step, min_snr, rad)]
         else:
             matching_profs = []
 
@@ -585,23 +589,22 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             #  radii to values I can pass into the model
             model_radii = radii * src_obj.get_radius(scale_radius, kpc)
 
-            sb_prof.fit(model, progress_bar=False, show_errors=False, method=fit_method, priors=model_priors,
-                        start_pars=model_start_pars, conf_level=conf_level, num_walkers=num_walkers,
-                        num_steps=num_steps, model_real=model_realisations)
+            sb_prof.fit(model, progress_bar=False, show_warn=False, method=fit_method, num_walkers=num_walkers,
+                        num_steps=num_steps)
             try:
-                fitted_model = sb_prof.get_model_fit(model)
-                model_brightness = fitted_model['model_func'](model_radii.value, *fitted_model['par'])
+                fitted_model = sb_prof.get_model_fit(model, fit_method)
+                model_brightness = fitted_model(model_radii)
 
             except XGAFitError:
                 model_brightness = np.full(radii.shape, np.NaN)
-                warn('Model fit for {s} failed - profile set to NaNs'.format(s=src_obj.name))
+                warn('Model fit for {s} failed - profile set to NaNs'.format(s=src_obj.name), stacklevel=2)
 
         except ValueError as ve:
             # This will mean that the profile is thrown away in a later step
             model_brightness = np.full(radii.shape, np.NaN)
             # But will also raise a warning so the user knows
             warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
-                 + " - profile set to NaNs.")
+                 + " - profile set to NaNs.", stacklevel=2)
 
         return model_brightness, src_id
 
@@ -615,7 +618,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
             nonlocal sb
             nonlocal onwards
             b, s_id = results
-            sb[s_id, :] = b
+            sb[s_id, :] = b.reshape(len(b),)
             onwards.update(1)
 
         def err_callback(err):
@@ -637,14 +640,12 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
 
 
 def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "r200", fit_method: str = 'mcmc',
-                            use_peak: bool = True, model_priors: List = None, model_start_pars: list = None,
-                            pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20), min_snr: float = 0.0,
-                            lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
-                            custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3,
-                            abund_table: str = 'angr', psf_corr: bool = False, psf_model: str = "ELLBETA",
-                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
-                            model_realisations: int = 500, conf_level: int = 90, ml_mcmc_start: bool = True,
-                            ml_rand_dev: float = 1e-4, num_walkers: int = 30, num_steps: int = 20000,
+                            use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
+                            min_snr: float = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
+                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
+                            sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
+                            psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+                            num_cores: int = NUM_CORES, num_walkers: int = 30, num_steps: int = 20000,
                             show_images: bool = False, figsize: tuple = (14, 14)):
     """
     A convenience function that calls radial_model_stack and makes plots of the average profile, individual profiles,
@@ -657,10 +658,6 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param str fit_method: The method to use when fitting the model to the profile.
     :param bool use_peak: Controls whether the peak position is used as the centre of the brightness profile
         for each GalaxyCluster object.
-    :param list model_priors: A list of priors to use when fitting the model with MCMC, default is None in which
-        case the default priors for the selected model are used.
-    :param list model_start_pars: A list of start parameters to use when fitting with methods like curve_fit, default
-        is None in which case the default start parameters for the selected model are used.
     :param int pix_step: The width (in pixels) of each annular bin for the individual profiles, default is 1.
     :param ndarray radii: The radii (in units of scale_radius) at which to measure and stack surface brightness.
     :param int/float min_snr: The minimum allowed signal to noise for individual cluster profiles. Default is
@@ -680,12 +677,6 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
     :param int num_cores: The number of cores to use when calculating the brightness profiles, the default is 90%
         of available cores.
-    :param int model_realisations: The number of random realisations of a model to generate.
-    :param int conf_level: The confidence level at which to measure uncertainties of parameters and profiles.
-    :param bool ml_mcmc_start: If True then maximum likelihood estimation will be used to generate start parameters for
-        MCMC fitting, otherwise they will be randomly drawn from parameter priors
-    :param float ml_rand_dev: The scale of the random deviation around start parameters used for starting the
-        different walkers in the MCMC ensemble sampler.
     :param int num_walkers: The number of walkers in the MCMC ensemble sampler.
     :param int num_steps: The number of steps in the chain that each walker should take.
     :param bool show_images: If true then for each source in the stack an image and profile will be displayed
@@ -693,10 +684,9 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
     :param tuple figsize: The desired figure size for the plot.
     """
     # Calls the stacking function
-    results = radial_model_stack(sources, model, scale_radius, fit_method, use_peak, model_priors, model_start_pars,
-                                 pix_step, radii, min_snr, lo_en, hi_en, custom_temps, sim_met, abund_table, psf_corr,
-                                 psf_model, psf_bins, psf_algo, psf_iter, num_cores, model_realisations, conf_level,
-                                 ml_mcmc_start, ml_rand_dev, num_walkers, num_steps)
+    results = radial_model_stack(sources, model, scale_radius, fit_method, use_peak, pix_step, radii, min_snr,
+                                 lo_en, hi_en, custom_temps, sim_met, abund_table, psf_corr, psf_model, psf_bins,
+                                 psf_algo, psf_iter, num_cores, num_walkers, num_steps)
 
     # Gets the individual scaled profiles from results
     all_prof = results[1]

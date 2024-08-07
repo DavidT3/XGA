@@ -1,41 +1,43 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 24/05/2022, 20:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:50. Copyright (c) The Contributors
 
 import os
 import pickle
-import warnings
 from copy import deepcopy
 from itertools import product
 from shutil import copyfile
 from typing import Tuple, List, Dict, Union
+from warnings import warn, simplefilter
 
 import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.coordinates import SkyCoord
-from astropy.cosmology import Planck15
 from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
-from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
-from regions import read_ds9, PixelRegion
+from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion, PixelRegion,
+                     Regions)
 
-from .. import xga_conf
+from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
-    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
+    NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NotSampleMemberError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
 from ..products import PROD_MAP, EventList, BaseProduct, BaseAggregateProduct, Image, Spectrum, ExpMap, \
     RateMap, PSFGrid, BaseProfile1D, AnnularSpectra
+from ..products.lightcurve import LightCurve, AggregateLightCurve
 from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
-from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS
+from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
+    DEFAULT_COSMO
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
-warnings.simplefilter('ignore', wcs.FITSFixedWarning)
+simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class BaseSource:
@@ -51,18 +53,46 @@ class BaseSource:
         proper distance units such as kpc cannot be used.
     :param str name: The name of the source, default is None in which case a name will be assembled from the
         coordinates given.
-    :param cosmology: An astropy cosmology object to use for analysis of this source, default is Planck15.
+    :param Cosmology cosmology: An astropy cosmology object to use for analysis of this source, default is a
+        concordance flat LambdaCDM model.
     :param bool load_products: Should existing XGA generated products for this source be loaded in, default
         is True.
     :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
         load_products is True. Default is False.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
-    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False):
+    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
+                 in_sample: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others.
+
+        :param float ra: The right ascension (in degrees) of the source.
+        :param float dec: The declination (in degrees) of the source.
+        :param float redshift: The redshift of the source, default is None. Not supplying a redshift means that
+            proper distance units such as kpc cannot be used.
+        :param str name: The name of the source, default is None in which case a name will be assembled from the
+            coordinates given.
+        :param Cosmology cosmology: An astropy cosmology object to use for analysis of this source, default is a
+            concordance flat LambdaCDM model.
+        :param bool load_products: Should existing XGA generated products for this source be loaded in, default
+            is True.
+        :param bool load_fits: Should existing XSPEC fits for this source be loaded in, will only work if
+            load_products is True. Default is False.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or
+            not, setting to True suppresses some warnings so that they can be displayed at the end of the sample
+            progress bar. Default is False. User should only set to True to remove warnings.
         """
+        # This tells the source that it is a part of a sample, which we will check to see whether to suppress warnings
+        self._samp_member = in_sample
+        # This is what the warnings (or warning codes) are stored in instead, so an external process working on the
+        #  sample (or in the sample init) can look up what warnings are there.
+        self._supp_warn = []
+
+        # This sets up the user-defined coordinate attribute
         self._ra_dec = np.array([ra, dec])
         if name is not None:
             # We don't be liking spaces in source names, we also don't like underscores
@@ -88,20 +118,76 @@ class BaseSource:
 
         # Only want ObsIDs, not pointing coordinates as well
         # Don't know if I'll always use the simple method
-        matches = simple_xmm_match(ra, dec)
+        matches, excluded = simple_xmm_match(ra, dec)
+
+        # This will store information on the observations that were never included in analysis (so it's distinct from
+        #  the disassociated_obs information) - I don't know if this is the solution I'll stick with, but it'll do
+        blacklisted_obs = {}
+        for row_ind, row in excluded.iterrows():
+            # Just blacklist all instruments because for an ObsID to be in the excluded return
+            #  from simple_xmm_match this has to be the case
+            blacklisted_obs[row['ObsID']] = ['pn', 'mos1', 'mos2']
+
+        # This checks that the observations have at least one usable instrument
         obs = matches["ObsID"].values
         instruments = {o: [] for o in obs}
         for o in obs:
-            if matches[matches["ObsID"] == o]["USE_PN"].values[0]:
-                instruments[o].append("pn")
-            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0]:
-                instruments[o].append("mos1")
-            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0]:
-                instruments[o].append("mos2")
+            # As the simple_xmm_match will only tell us about observations in which EVERY instrument is
+            #  blacklisted, I have to check in the blacklist to see whether some individual instruments
+            #  have to be excluded
+            excl_pn = False
+            excl_mos1 = False
+            excl_mos2 = False
+            if o in BLACKLIST['ObsID'].values:
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_PN'].values[0] == 'T':
+                    excl_pn = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS1'].values[0] == 'T':
+                    excl_mos1 = True
+                if BLACKLIST[BLACKLIST['ObsID'] == o]['EXCLUDE_MOS2'].values[0] == 'T':
+                    excl_mos2 = True
 
-        # This checks that the observations have at least one usable instrument
+            # Here we see if PN is allowed by the census (things like CalClosed observations are excluded in
+            #  the census) and if PN is allowed by the blacklist (individual instruments can be blacklisted).
+            if matches[matches["ObsID"] == o]["USE_PN"].values[0] and not excl_pn:
+                instruments[o].append("pn")
+            # If excluded by the blacklist, then that needs
+            elif excl_pn:
+                # The behaviour writing PN to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["pn"]
+                else:
+                    blacklisted_obs[o] += ['pn']
+
+            # Now we repeat the same process for MOS1 and 2 - its quite clunky and there's probably a more
+            #  elegant way that I could write this, but ah well
+            if matches[matches["ObsID"] == o]["USE_MOS1"].values[0] and not excl_mos1:
+                instruments[o].append("mos1")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos1:
+                # The behaviour writing MOS1 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos1"]
+                else:
+                    blacklisted_obs[o] += ['mos1']
+
+            if matches[matches["ObsID"] == o]["USE_MOS2"].values[0] and not excl_mos2:
+                instruments[o].append("mos2")
+            # If excluded by the blacklist, then that needs
+            elif excl_mos2:
+                # The behaviour writing MOS2 to the dictionary changes slightly depending on whether the ObsID
+                #  has an entry yet or not
+                if o not in blacklisted_obs:
+                    blacklisted_obs[o] = ["mos2"]
+                else:
+                    blacklisted_obs[o] += ['mos2']
+
+        # Information about which ObsIDs/instruments are available, and which have been blacklisted, is stored
+        #  in class attributes here.
         self._obs = [o for o in obs if len(instruments[o]) > 0]
         self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+        self._blacklisted_obs = blacklisted_obs
 
         # self._obs can be empty after this cleaning step, so do quick check and raise error if so.
         if len(self._obs) == 0:
@@ -121,7 +207,7 @@ class BaseSource:
 
         # Check in a box of half-side 5 arcminutes, should give an idea of which are on-axis
         try:
-            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))["ObsID"].values
+            on_axis_match = simple_xmm_match(ra, dec, Quantity(5, 'arcmin'))[0]["ObsID"].values
         except NoMatchFoundError:
             on_axis_match = np.array([])
         self._onaxis = list(np.array(self._obs)[np.isin(self._obs, on_axis_match)])
@@ -129,11 +215,18 @@ class BaseSource:
         # nhlookup returns average and weighted average values, so just take the first
         self._nH = nh_lookup(self.ra_dec)[0]
         self._redshift = redshift
+        # This method uses the instruments attribute to check and see whether a particular ObsID-Instrument
+        #  combination is allowed for this source. As that attribute was constructed using the blacklist information
+        #  we can be sure that every ObsID-Instrument combination loaded in here is allowed to be here. The only
+        #  other way for them to change is through using the dissociate observation capability
         self._products, region_dict, self._att_files = self._initial_products()
 
         # Want to update the ObsIDs associated with this source after seeing if all files are present
         self._obs = list(self._products.keys())
-        self._instruments = {o: instruments[o] for o in self._obs if len(instruments[o]) > 0}
+        # This (no using the self._products keys) should ensure that the instruments attribute is adjusted properly
+        #  to the realities reflected by what event lists are actually available (per the initial products method)
+        self._instruments = {o: [cur_i for cur_i in list(self._products[o].keys())
+                                 if cur_i != 'combined'] for o in self._obs if len(instruments[o]) > 0}
 
         self._cosmo = cosmology
         if redshift is not None:
@@ -202,6 +295,9 @@ class BaseSource:
 
         self._peak_lo_en = Quantity(0.5, 'keV')
         self._peak_hi_en = Quantity(2.0, 'keV')
+        # Peaks don't really have any meaning for the BaseSource class, so even though this is a boolean variable
+        #  when populated properly I set it to None here
+        self._use_peak = None
 
         # These attributes pertain to the cleaning of observations (as in disassociating them from the source if
         #  they don't include enough of the object we care about).
@@ -360,13 +456,15 @@ class BaseSource:
 
         # Cleans any observations that don't have at least one instrument associated with them
         obs_dict = {o: v for o, v in obs_dict.items() if len(v) != 0}
+
         if len(obs_dict) == 0:
             raise NoValidObservationsError("{s} has {n} observations ({a}), none of which have the necessary"
                                            " files.".format(s=self.name, n=len(self._obs), a=", ".join(self._obs)))
         return obs_dict, reg_dict, att_dict
 
-    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D,
-                                              List[BaseProduct], List[BaseAggregateProduct], List[BaseProfile1D]]):
+    def update_products(self, prod_obj: Union[BaseProduct, BaseAggregateProduct, BaseProfile1D, List[BaseProduct],
+                                              List[BaseAggregateProduct], List[BaseProfile1D]],
+                        update_inv: bool = True):
         """
         Setter method for the products attribute of source objects. Cannot delete existing products,
         but will overwrite existing products. Raises errors if the ObsID is not associated
@@ -377,6 +475,9 @@ class BaseSource:
 
         :param BaseProduct/BaseAggregateProduct/BaseProfile1D/List[BaseProduct]/List[BaseProfile1D] prod_obj: The
             new product object(s) to be added to the source object.
+        :param bool update_inv: This flag is to avoid unnecessary read-writes when this method is called by a method
+            (such as _existing_xga_products) which want to add products to the source storage structure, but don't
+            want the inventory file altered (as they know the product is already in there).
         """
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
@@ -389,11 +490,12 @@ class BaseSource:
 
         for po in prod_obj:
             if po is not None:
-                if isinstance(po, Image):
+                if isinstance(po, Image) or isinstance(po, LightCurve):
                     extra_key = po.storage_key
                     en_key = "bound_{l}-{u}".format(l=float(po.energy_bounds[0].value),
                                                     u=float(po.energy_bounds[1].value))
-                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D):
+                elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D) or \
+                        isinstance(po, AggregateLightCurve):
                     extra_key = po.storage_key
                 elif type(po) == PSFGrid:
                     # The first part of the key is the model used (by default its ELLBETA for example), and
@@ -490,9 +592,8 @@ class BaseSource:
 
                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
                     po.save()
-
                 # Here we make sure to store a record of the added product in the relevant inventory file
-                if isinstance(po, BaseProduct) and po.obs_id != 'combined':
+                if isinstance(po, BaseProduct) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -516,15 +617,16 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, po.obs_id, po.instrument, info_key, s_name, po.type],
                                          ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
-                    # Appends the series
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
+
                     # Checks for rows that are exact duplicates, this should never happen as far as I can tell, but
                     #  if it did I think it would cause problems so better to be safe and add this.
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     # Saves the updated inventory file
                     inven.to_csv(OUTPUT + "{}/inventory.csv".format(po.obs_id), index=False)
 
-                elif isinstance(po, BaseProduct) and po.obs_id == 'combined':
+                elif isinstance(po, BaseProduct) and po.obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -551,11 +653,12 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, s_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "combined/inventory.csv".format(po.obs_id), index=False)
 
-                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined':
+                elif isinstance(po, BaseProfile1D) and po.obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -570,11 +673,12 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
-                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined':
+                elif isinstance(po, BaseProfile1D) and po.obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), dtype=str)
 
                     # Don't want to store a None value as a string for the info_key
@@ -589,7 +693,8 @@ class BaseSource:
                     # Creates new pandas series to be appended to the inventory dataframe
                     new_line = pd.Series([f_name, o_str, i_str, info_key, po.src_name, po.type],
                                          ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
-                    inven = inven.append(new_line, ignore_index=True)
+                    # Concatenates the series with the inventory dataframe
+                    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "profiles/{}/inventory.csv".format(self.name), index=False)
 
@@ -602,17 +707,17 @@ class BaseSource:
         :param bool read_fits: Boolean flag that controls whether past fits are read back in or not.
         """
 
-        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> BaseProduct:
+        def parse_image_like(file_path: str, exact_type: str, merged: bool = False) -> Union[Image, ExpMap]:
             """
             Very simple little function that takes the path to an XGA generated image-like product (so either an
             image or an exposure map), parses the file path and makes an XGA object of the correct type by using
             the exact_type variable.
 
-            :param str file_path: Absolute path to an XGA-generated XMM data product.
+            :param str file_path: Absolute path to an XGA-generated data product.
             :param str exact_type: Either 'image' or 'expmap', the type of product that the file_path leads to.
             :param bool merged: Whether this is a merged file or not.
-            :return: An XGA product object.
-            :rtype: BaseProduct
+            :return: An XGA Image or ExpMap object.
+            :rtype: Union[Image, ExpMap]
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
             im_info = file_path.split("/")[-1].split("_")
@@ -651,6 +756,61 @@ class BaseSource:
 
             return final_obj
 
+        def parse_lightcurve(inven_entry: pd.Series) -> LightCurve:
+            """
+            Very simple little function that takes information on an XGA-generated lightcurve (including a path to
+            the file), and sets up a LightCurve product that can be added to the product storage structure
+            of the source.
+
+            :param pd.Series inven_entry: The inventory entry from which a LightCurve object should be parsed.
+            :return: An XGA LightCurve object
+            :rtype: LightCurve
+            """
+            if inven_entry['src_name'] == self.name:
+                # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
+                #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
+                #  later to read in the data
+                rel_path = cur_d + inven_entry['file_name']
+                rel_obs_id = inven_entry['obs_id']
+                rel_inst = inven_entry['inst']
+
+                # Make sure that the current ObsID and instrument are actually associated with the source
+                if rel_obs_id in self.obs_ids and rel_inst in self.instruments[rel_obs_id]:
+                    # We split up the information contained in the info key - this is going to tell us what
+                    #  settings were used to generate the lightcurve
+                    lc_info = inven_entry['info_key'].split("_")
+
+                    # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
+                    rel_lo_en, rel_hi_en = lc_info[1].split("-")
+                    rel_lo_en = Quantity(float(rel_lo_en), "keV")
+                    rel_hi_en = Quantity(float(rel_hi_en), "keV")
+
+                    # We also need to grab the central coordinates and turn them into an Astropy Quantity
+                    rel_central_coord = Quantity([float(lc_info[2].replace('ra', '')),
+                                                  float(lc_info[3].replace('dec', ''))], 'deg')
+
+                    # The inner and outer radii are always in degrees at this stage, because then we are
+                    #  independent of a cosmology or redshift
+                    rel_inn_rad = Quantity(lc_info[4].replace('ri', ''), 'deg')
+                    rel_out_rad = Quantity(lc_info[5].replace('ro', ''), 'deg')
+
+                    # The timebin size is always in seconds
+                    rel_time_bin = Quantity(lc_info[6].replace('timebin', ''), 's')
+
+                    rel_patt = lc_info[7].replace('pattern', '')
+
+                    # Setting up the lightcurve to be passed back out and stored in the source
+                    final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
+                                           rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True)
+
+                else:
+                    final_obj = None
+
+            else:
+                final_obj = None
+
+            return final_obj
+
         og_dir = os.getcwd()
         # This is used for spectra that should be part of an AnnularSpectra object
         ann_spec_constituents = {}
@@ -672,7 +832,14 @@ class BaseSource:
                     # Fetches lines of the inventory which match the current ObsID and instrument
                     rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
                     for r_ind, r in rel_ims.iterrows():
-                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']))
+                        self.update_products(parse_image_like(cur_d+r['file_name'], r['type']), update_inv=False)
+
+                # This finds the lines of the inventory that are lightCurve entries
+                lc_lines = inven[inven['type'] == 'lightcurve']
+                for row_ind, row in lc_lines.iterrows():
+                    # The parse lightcurve function does check to see if an inventory entry is relevant to this
+                    #  source (using the source name), and if the ObsID and instrument are still associated.
+                    self.update_products(parse_lightcurve(row), update_inv=False)
 
                 # For spectra we search for products that have the name of this object in, as they are for
                 #  specific parts of the observation.
@@ -681,7 +848,7 @@ class BaseSource:
                 named = [os.path.abspath(f) for f in os.listdir(".") if os.path.isfile(f) and
                          self._name.replace("+", "x") in f and obs in f
                          and (XMM_INST[0] in f or XMM_INST[1] in f or XMM_INST[2] in f)]
-                specs = [f for f in named if "spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
+                specs = [f for f in named if "_spec" in f.split('/')[-1] and "back" not in f.split('/')[-1]]
 
                 for sp in specs:
                     # Filename contains a lot of useful information, so splitting it out to get it
@@ -778,7 +945,7 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             try:
-                                self.update_products(obj)
+                                self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
 
@@ -800,12 +967,16 @@ class BaseSource:
                             # And adding it to the source storage structure, but only if its not a member
                             #  of an AnnularSpectra
                             try:
-                                self.update_products(obj)
+                                self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
                     else:
-                        warnings.warn("{src} spectrum {sp} cannot be loaded in due to a mismatch in available"
-                                      " ancillary files".format(src=self.name, sp=sp))
+                        warn_text = "{src} spectrum {sp} cannot be loaded in due to a mismatch in available" \
+                                    " ancillary files".format(src=self.name, sp=sp)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
                         if "ident" in sp.split("/")[-1]:
                             set_id = int(sp.split('ident')[-1].split('_')[0])
                             ann_spec_usable[set_id] = False
@@ -816,24 +987,39 @@ class BaseSource:
         os.chdir(OUTPUT + "profiles/{}".format(self.name))
         saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
         for pf in saved_profs:
-            with open(pf, 'rb') as reado:
-                temp_prof = pickle.load(reado)
-                try:
-                    self.update_products(temp_prof)
-                except NotAssociatedError:
-                    pass
+            try:
+                with open(pf, 'rb') as reado:
+                    temp_prof = pickle.load(reado)
+                    try:
+                        self.update_products(temp_prof, update_inv=False)
+                    except (NotAssociatedError, AttributeError):
+                        pass
+            except (EOFError, pickle.UnpicklingError):
+                warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
+                            "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
+                if not self._samp_member:
+                    # If these errors have been raised then I think that the pickle file has been broken (see issue #935)
+                    warn(warn_text, stacklevel=2)
+                else:
+                    self._supp_warn.append(warn_text)
         os.chdir(og_dir)
 
         # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
         #  those objects and add them to the storage structure
         if len(ann_spec_constituents) != 0:
             for set_id in ann_spec_constituents:
-                if ann_spec_usable[set_id]:
-                    ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                    if self._redshift is not None:
-                        # If we know the redshift we will add the radii to the annular spectra in proper distance units
-                        ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                    self.update_products(ann_spec_obj)
+                try:
+                    if ann_spec_usable[set_id]:
+                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                        if self._redshift is not None:
+                            # If we know the redshift we will add the radii to the annular spectra in proper
+                            #  distance units
+                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                        self.update_products(ann_spec_obj, update_inv=False)
+                except AttributeError:
+                    # This should hopefully act to catch the NoneType has no attribute problems that have plagued this
+                    #  class - while I find a better general solution that should solve this properly
+                    pass
 
         # Here we load in any combined images and exposure maps that may have been generated
         os.chdir(OUTPUT + 'combined')
@@ -857,7 +1043,8 @@ class BaseSource:
             #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they match
             #  exactly and the product can be loaded
             if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True))
+                self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], merged=True),
+                                     update_inv=False)
 
         os.chdir(og_dir)
 
@@ -950,8 +1137,12 @@ class BaseSource:
                         self.add_fit_data(model, global_results, chosen_lums, sp_key)
                 except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
                     chosen_lums = {}
-                    warnings.warn("{src} fit {f} could not be loaded in as there are no matching spectra "
-                                  "available".format(src=self.name, f=fit_name))
+                    warn_text = "{src} fit {f} could not be loaded in as there are no matching spectra " \
+                                "available".format(src=self.name, f=fit_name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
                 fit_data.close()
 
             if len(ann_results) != 0:
@@ -973,9 +1164,13 @@ class BaseSource:
                             #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
                             #         self.update_products(met_prof)
                     except (NoProductAvailableError, ValueError):
-                        warnings.warn("A previous annular spectra profile fit for {src} was not successful, or no "
-                                      "matching spectrum has been loaded, so it cannot be read "
-                                      "in".format(src=self.name))
+                        warn_text = "A previous annular spectra profile fit for {src} was not successful, or no " \
+                                    "matching spectrum has been loaded, so it cannot be read " \
+                                    "in".format(src=self.name)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
 
         os.chdir(og_dir)
 
@@ -1014,8 +1209,12 @@ class BaseSource:
                 #  not loaded into this source (either because it was manually removed, or because the central
                 #  position has changed etc.)
                 except NotAssociatedError:
-                    warnings.warn("Existing fit for {s} could not be loaded due to a mismatch in available "
-                                  "data".format(s=self.name), stacklevel=2)
+                    warn_text = "Existing fit for {s} could not be loaded due to a mismatch in available " \
+                                "data".format(s=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
 
     def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
                      just_obj: bool = True) -> List[BaseProduct]:
@@ -1102,7 +1301,7 @@ class BaseSource:
 
         # Read in the custom region file that every XGA has associated with it. Sources within will be added to the
         #  source list for every ObsID?
-        custom_regs = read_ds9(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name))
+        custom_regs = Regions.read(OUTPUT + "regions/{0}/{0}_custom.reg".format(self.name), format='ds9').regions
         for reg in custom_regs:
             if not isinstance(reg, SkyRegion):
                 raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
@@ -1114,7 +1313,21 @@ class BaseSource:
 
         for obs_id in reg_paths:
             if reg_paths[obs_id] is not None:
-                ds9_regs = read_ds9(reg_paths[obs_id])
+                ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
+                # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
+                #  where they were generated with different resolutions).
+                #  TODO see issue #908, figure out how to support different resolutions of image
+                try:
+                    ims = self.get_images(obs_id)
+                except NoProductAvailableError:
+                    raise NoProductAvailableError("There is no image available for observation {o}, associated "
+                                                  "with {n}. An image is currently required to check for sky "
+                                                  "coordinates being present within a sky region - though hopefully "
+                                                  "no-one will ever see this because I'll have fixed "
+                                                  "it!".format(o=obs_id, n=self.name))
+                    w = None
+                else:
+                    w = ims[0].radec_wcs
                 # Apparently can happen that there are no regions in a region file, so if that is the case
                 #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
                 #  It can't deal with an empty list
@@ -1128,17 +1341,11 @@ class BaseSource:
                 #  one of the images supplied in the config file, not anything that XGA generates.
                 #  But as this method is only run once, before XGA generated products are loaded in, it
                 #  should be fine
-                inst = [k for k in self._products[obs_id] if k in ["pn", "mos1", "mos2"]][0]
-                en = [k for k in self._products[obs_id][inst] if "-" in k][0]
-                # Making an assumption here, that if there are regions there will be images
-                # Getting the radec_wcs property from the Image object
-                im = [i for i in self.get_products("image", obs_id, inst, just_obj=False) if en in i]
-
-                if len(im) != 1:
+                if w is None:
                     raise NoProductAvailableError("There is no image available for observation {o}, associated "
-                                                  "with {n}. An image is require to translate pixel regions "
+                                                  "with {n}. An image is currently required to translate pixel regions "
                                                   "to RA-DEC.".format(o=obs_id, n=self.name))
-                w = im[0][-1].radec_wcs
+
                 sky_regs = [reg.to_sky(w) for reg in ds9_regs]
                 reg_dict[obs_id] = np.array(sky_regs)
             elif isinstance(ds9_regs[0], SkyRegion):
@@ -1166,7 +1373,8 @@ class BaseSource:
                     # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
                     #  that I've noticed previously
                     new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
-                    new_reg.visual['color'] = reg.visual['color']
+                    new_reg.visual['edgecolor'] = reg.visual['edgecolor']
+                    new_reg.visual['facecolor'] = reg.visual['facecolor']
                     reg_dict[obs_id][reg_ind] = new_reg
 
             # Hopefully this bodge doesn't have any unforeseen consequences
@@ -1293,6 +1501,17 @@ class BaseSource:
         """
         return self._obs
 
+    @property
+    def blacklisted(self) -> Dict:
+        """
+        A property getter that returns the dictionary of ObsIDs and their instruments which have been
+        blacklisted, and thus not considered for use in any analysis of this source.
+
+        :return: The dictionary (with ObsIDs as keys) of blacklisted data.
+        :rtype: Dict
+        """
+        return self._blacklisted_obs
+
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
         A method that looks for matches not just based on position, but also on the type of source
@@ -1307,18 +1526,17 @@ class BaseSource:
         :rtype: Tuple[Dict, Dict, Dict]
         """
         # Definitions of the colours of XCS regions can be found in the thesis of Dr Micheal Davidson
-        #  University of Edinburgh - 2005.
+        #  University of Edinburgh - 2005. These are the default XGA colour meanings
         # Red - Point source
         # Green - Extended source
         # Magenta - PSF-sized extended source
         # Blue - Extended source with significant point source contribution
         # Cyan - Extended source with significant Run1 contribution
         # Yellow - Extended source with less than 10 counts
-        if source_type == "ext":
-            allowed_colours = ["green", "magenta", "blue", "cyan", "yellow"]
-        elif source_type == "pnt":
-            allowed_colours = ["red"]
-        else:
+        try:
+            # Gets the allowed colours for the current source type
+            allowed_colours = SRC_REGION_COLOURS[source_type]
+        except KeyError:
             raise ValueError("{} is not a recognised source type, please "
                              "don't use this internal function!".format(source_type))
 
@@ -1355,7 +1573,7 @@ class BaseSource:
                     #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
                     # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
                     for entry in init_region_matches:
-                        if entry.visual["color"] in allowed_colours:
+                        if entry.visual["edgecolor"] in allowed_colours:
                             interim_reg.append(entry)
 
                     # Different matching possibilities
@@ -1370,10 +1588,14 @@ class BaseSource:
                         #  Hence I choose that one for pnt source multi-matches like this, see comment 2 of issue #639
                         #  for an example.
                         results_dict[obs] = interim_reg[0]
-                        warnings.warn("{ns} matches for the point source {n} are found in the {o} region "
-                                      "file. The source nearest to the passed coordinates is accepted, all others "
-                                      "will be placed in the alternate match category and will not be removed "
-                                      "by masks.".format(o=obs, n=self.name, ns=len(interim_reg)))
+                        warn_text = "{ns} matches for the point source {n} are found in the {o} region " \
+                                    "file. The source nearest to the passed coordinates is accepted, all others " \
+                                    "will be placed in the alternate match category and will not be removed " \
+                                    "by masks.".format(o=obs, n=self.name, ns=len(interim_reg))
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
 
                     elif len(interim_reg) > 1 and source_type == "ext":
                         raise MultipleMatchError("More than one match for {n} is found in the region file "
@@ -1435,7 +1657,7 @@ class BaseSource:
         # Doing an initial check so I can throw a warning if the user wants a region-list region AND has supplied
         #  custom central coordinates
         if reg_type == "region" and central_coord is not None:
-            warnings.warn("You cannot use custom central coordinates with a region from supplied region files")
+            warn("You cannot use custom central coordinates with a region from supplied region files", stacklevel=2)
 
         if central_coord is None:
             central_coord = self._default_coord
@@ -1799,6 +2021,68 @@ class BaseSource:
 
         return sn
 
+    def get_counts(self, outer_radius: Union[Quantity, str], central_coord: Quantity = None, lo_en: Quantity = None,
+                   hi_en: Quantity = None, obs_id: str = None, inst: str = None, psf_corr: bool = False,
+                   psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) -> Quantity:
+        """
+        This takes a region type and central coordinate and calculates the background subtracted X-ray counts.
+        The background region is constructed using the back_inn_rad_factor and back_out_rad_factor
+        values, the defaults of which are 1.05*radius and 1.5*radius respectively.
+
+        :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity central_coord: The central coordinate of the region.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :param str obs_id: An ObsID of a specific ratemap to use for the counts calculation. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+        :param str inst: The instrument of a specific ratemap to use for the counts calculation. Default is None, which
+            means the combined ratemap will be used.
+        :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+            side in the PSF grid.
+        :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+        :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+        :return: The background subtracted counts.
+        :rtype: Quantity
+        """
+        # Checking if the user passed any energy limits of their own
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
+
+        # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+        if all([obs_id is None, inst is None]):
+            # Here the user hasn't set ObsID or instrument, so we use the combined data
+            rt = self.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+
+        elif all([obs_id is not None, inst is not None]):
+            # Both ObsID and instrument have been set by the user
+            rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+        else:
+            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
+                             " pass both obs_id and inst.".format(s=self.name))
+
+        if isinstance(outer_radius, str):
+            # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
+            #  method understands that means it should return the mask for the combined data
+            src_mask, bck_mask = self.get_mask(outer_radius, obs_id, central_coord)
+        else:
+            # Here we have the case where the user has passed a custom outer radius, so we need to generate a
+            #  custom mask for it
+            src_mask = self.get_custom_mask(outer_radius, obs_id=obs_id, central_coord=central_coord)
+            bck_mask = self.get_custom_mask(outer_radius*self._back_out_factor, outer_radius*self._back_inn_factor,
+                                            obs_id=obs_id, central_coord=central_coord)
+
+        # We use the ratemap's built in background subtracted counts calculation method
+        cnts = rt.background_subtracted_counts(src_mask, bck_mask)
+
+        return cnts
+
     def regions_within_radii(self, inner_radius: Quantity, outer_radius: Quantity, deg_central_coord: Quantity,
                              regions_to_search: Union[np.ndarray, list] = None) -> np.ndarray:
         """
@@ -1907,17 +2191,17 @@ class BaseSource:
         conv_cen = im.coord_conv(cen, output_unit)
         # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
         #  from degrees to XMM sky coordinates using the factor we calculated in the main function
-        w = reg.width.to('deg').value / 2 / sky_to_deg
+        w = (reg.width.to('deg').value / 2 / sky_to_deg).round(4)
         # We do the same for the height
-        h = reg.height.to('deg').value / 2 / sky_to_deg
+        h = (reg.height.to('deg').value / 2 / sky_to_deg).round(4)
         if w == h:
             shape_str = "(({t}) IN circle({cx},{cy},{r}))"
-            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
+            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].round(4).value, cy=conv_cen[1].round(4).value, r=h)
         else:
             # The rotation angle from the region object is in degrees already
-            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                             cy=conv_cen[1].value, w=w, h=h,
-                                                                             rot=reg.angle.value)
+            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].round(4).value,
+                                                                             cy=conv_cen[1].round(4).value, w=w, h=h,
+                                                                             rot=reg.angle.round(4).value)
         return shape_str
 
     def get_annular_sas_region(self, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, inst: str,
@@ -1997,30 +2281,32 @@ class BaseSource:
         if inner_radius.isscalar and inner_radius.value != 0:
             # And we need to define a SAS string for the actual region of interest
             sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value, ri=inner_radius.value/sky_to_deg,
-                                                     ro=outer_radius.value/sky_to_deg)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     ri=(inner_radius.value/sky_to_deg).round(4),
+                                                     ro=(outer_radius.value/sky_to_deg).round(4))
         # If the inner radius is zero then we write a circle region, because it seems that's a LOT faster in SAS
         elif inner_radius.isscalar and inner_radius.value == 0:
             sas_source_area = "(({t}) IN circle({cx},{cy},{r}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value,
-                                                     r=outer_radius.value/sky_to_deg)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     r=(outer_radius.value/sky_to_deg).round(4))
         elif not inner_radius.isscalar and inner_radius[0].value != 0:
             sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value,
-                                                     wi=inner_radius[0].value/sky_to_deg,
-                                                     hi=inner_radius[1].value/sky_to_deg,
-                                                     wo=outer_radius[0].value/sky_to_deg,
-                                                     ho=outer_radius[1].value/sky_to_deg, rot=rot_angle.to('deg').value)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     wi=(inner_radius[0].value/sky_to_deg).round(4),
+                                                     hi=(inner_radius[1].value/sky_to_deg).round(4),
+                                                     wo=(outer_radius[0].value/sky_to_deg).round(4),
+                                                     ho=(outer_radius[1].value/sky_to_deg).round(4),
+                                                     rot=rot_angle.to('deg').round(4).value)
         elif not inner_radius.isscalar and inner_radius[0].value == 0:
             sas_source_area = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value,
-                                                     w=outer_radius[0].value / sky_to_deg,
-                                                     h=outer_radius[1].value / sky_to_deg,
-                                                     rot=rot_angle.to('deg').value)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     w=(outer_radius[0].value / sky_to_deg).round(4),
+                                                     h=(outer_radius[1].value / sky_to_deg).round(4),
+                                                     rot=rot_angle.to('deg').round(4).value)
 
         # Combining the source region with the regions we need to cut out
         if len(sas_interloper) == 0:
@@ -2433,8 +2719,24 @@ class BaseSource:
         #  that the rest of the function requires
         if isinstance(to_remove, str):
             to_remove = {to_remove: deepcopy(self.instruments[to_remove])}
+        # Here is where they have just passed a list of ObsIDs, and we need to fill in the blanks with the instruments
+        #  currently loaded for those ObsIDs
         elif isinstance(to_remove, list):
             to_remove = {o: deepcopy(self.instruments[o]) for o in to_remove}
+        # Here deals with when someone might have passed a dictionary where there is a single instrument, and
+        #  they haven't put it in a list; e.g. {'0201903501': 'pn'}. This detects instances like that and then
+        #  puts the individual instrument in a list as is expected by the rest of the function
+        elif isinstance(to_remove, dict) and not all([isinstance(v, list) for v in to_remove.values()]):
+            new_to_remove = {}
+            for o in to_remove:
+                if not isinstance(to_remove[o], list):
+                    new_to_remove[o] = [deepcopy(to_remove[o])]
+                else:
+                    new_to_remove[o] = deepcopy(to_remove[o])
+
+            # I use deepcopy again because there have been issues with this function still pointing to old memory
+            #  addresses, so I'm quite paranoid in this bit of code
+            to_remove = deepcopy(new_to_remove)
 
         # We also check to make sure that the data we're being asked to remove actually is associated with the
         #  source. We shall be forgiving if it isn't, and just issue a warning to let the user know that they are
@@ -2442,14 +2744,14 @@ class BaseSource:
         # Iterating through the keys (ObsIDs) in to_remove
         for o in to_remove:
             if o not in self.obs_ids:
-                warnings.warn("{o} data cannot be removed from {s} as they are not associated with "
-                              "it.".format(o=o, s=self.name))
+                warn("{o} data cannot be removed from {s} as they are not associated with "
+                              "it.".format(o=o, s=self.name), stacklevel=2)
             # Check to see whether any of the instruments for o are not actually associated with the source
             elif any([i not in self.instruments[o] for i in to_remove[o]]):
                 bad_list = [i for i in to_remove[o] if i not in self.instruments[o]]
                 bad_str = "/".join(bad_list)
-                warnings.warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
-                              "with it.".format(o=o, ib=bad_str, s=self.name))
+                warn("{o}-{ib} data cannot be removed from {s} as they are not associated "
+                              "with it.".format(o=o, ib=bad_str, s=self.name), stacklevel=2)
 
         # Sets the attribute that tells us whether any data has been removed
         if not self._disassociated:
@@ -2638,14 +2940,14 @@ class BaseSource:
         elif isinstance(inner_radius, str):
             inn_rad_num = self.get_radius(inner_radius, 'deg')
         else:
-            raise TypeError("You may only a quantity or a string as inner_radius")
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
 
         if isinstance(outer_radius, Quantity):
             out_rad_num = self.convert_radius(outer_radius, 'deg')
         elif isinstance(outer_radius, str):
             out_rad_num = self.get_radius(outer_radius, 'deg')
         else:
-            raise TypeError("You may only a quantity or a string as outer_radius")
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
 
         if over_sample is not None:
             over_sample = int(over_sample)
@@ -2902,6 +3204,238 @@ class BaseSource:
         return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                    psf_iter)
 
+    def _get_lc_prod(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                     inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     time_bin_size: Quantity = None) \
+            -> Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A protected method to retrieve XGA LightCurve objects, the user should never interact with this directly.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products), or a single/list of AggregateLightCurve objects.
+        :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        # Set up search strings (for the product storage keys) for the inner and outer radii here. The default None
+        #  value just creates a key that looks for the 'ri' or 'ro' precursor to the value in the key, i.e. it doesn't
+        #  do anything - we also make sure that any radii passed by the user are converted properly
+        if inner_radius is not None and isinstance(inner_radius, Quantity):
+            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg').value)
+        elif inner_radius is not None and isinstance(inner_radius, str):
+            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg').value)
+        elif inner_radius is None:
+            inn_rad_search = "_ri"
+        else:
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
+
+        if outer_radius is not None and isinstance(outer_radius, Quantity):
+            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg').value)
+        elif outer_radius is not None and isinstance(outer_radius, str):
+            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg').value)
+        elif outer_radius is None:
+            out_rad_search = "_ro"
+        else:
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
+
+        # Check to make sure that the time bin size is a legal value, and set up a search string for the time bin
+        #  size in order to narrow down the lightcurves to just the ones that the user wants
+        if time_bin_size is not None and not time_bin_size.unit.is_equivalent('s'):
+            raise UnitConversionError("The 'time_bin_size' argument must be convertible to seconds.")
+        elif time_bin_size is None:
+            time_bin_search = '_timebin'
+        else:
+            time_bin_search = '_timebin{}'.format(time_bin_size.to('s').value)
+
+        # Setting up the energy band search string - if one bound is specified then the other has to be as well, I
+        #  didn't think it made sense otherwise
+        if any([lo_en is not None, hi_en is not None]) and not all([lo_en is not None, hi_en is not None]):
+            raise ValueError("The 'lo_en' and 'hi_en' values must either both be None, or both be an energy value.")
+        if (lo_en is not None and not lo_en.unit.is_equivalent('keV')) or \
+                (hi_en is not None and not hi_en.unit.is_equivalent('keV')):
+            raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
+        # If either is None then we know both are because we checked earlier
+        elif lo_en is None:
+            en_search = 'bound_'
+        elif lo_en is not None:
+            en_search = 'bound_{l}-{u}'.format(l=lo_en.to('keV').value, u=hi_en.to('keV').value)
+
+        if obs_id == 'combined':
+            search_key = 'combined_lightcurve'
+        else:
+            search_key = 'lightcurve'
+        # Grabbing every single lightcurve that matches ObsID and inst passed by the user (remember they could be
+        #  None values, indeed they are by default) - we'll then sweep through whatever list is returned and
+        #  narrow them down
+        all_lcs = self.get_products(search_key, obs_id, inst)
+        # It was getting to the point where a list comprehension was less readable than a for loop, particularly
+        #  with the pattern logic, so I changed it to this
+        matched_prods = []
+        for lc in all_lcs:
+            if out_rad_search in lc.storage_key and inn_rad_search in lc.storage_key and \
+                    time_bin_search in lc.storage_key and en_search in lc.storage_key:
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
+    def get_lightcurves(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                        inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                        hi_en: Quantity = None, time_bin_size: Quantity = None,
+                        pattern: Union[dict, str] = 'default') -> Union[LightCurve, List[LightCurve]]:
+        """
+        A method to retrieve XGA LightCurve objects.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :param dict pattern: Event selection patterns used to create lightcurves of interest. The default value is
+            'default' which uses the default values for generating lightcurves for different instruments, or you
+            can pass a dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}. You can also pass None, which
+            means all light curves matching other search terms will be returned.
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products).
+        :rtype: Union[LightCurve, List[LightCurve]]
+        """
+        from xga.sas import check_pattern
+
+        # TODO This is XMM specific because of the patterns currently
+        # This is where we set up the search string for the patterns specified by the user.
+        if pattern is None:
+            patt_search = "_pattern"
+        elif isinstance(pattern, str):
+            pattern = {'pn': '<=4', 'mos': '<=12'}
+            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+        elif isinstance(pattern, dict):
+            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos'.")
+            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+            patt_search = {inst: "_pattern" + check_pattern(patt)[1] for inst, patt in pattern.items()}
+        else:
+            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                            "instrument names and values are string patterns.")
+
+        # Just makes the search easier down the line
+        if 'mos' in patt_search:
+            patt_search.update({'mos1': patt_search['mos'], 'mos2': patt_search['mos']})
+
+        some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size)
+        matched_prods = []
+        for lc in some_lcs:
+            if isinstance(patt_search, str):
+                rel_patt_search = patt_search
+            else:
+                rel_patt_search = patt_search[lc.instrument]
+
+            if rel_patt_search in lc.storage_key:
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
+    def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
+                                 inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                                 hi_en: Quantity = None, time_bin_size: Quantity = None,
+                                 pattern: Union[dict, str] = "default") \
+            -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at
+        the same time and have been packaged together).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the aggregate lightcurve (for instance 'point' would be acceptable for a PointSource, or
+            Quantity(100, 'kpc')). Default is None, meaning all aggregate lightcurves will be retrieved.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the aggregate lightcurve (for instance 'point' would be acceptable for a PointSource, or
+            Quantity(0, 'kpc')). Default is None, meaning all aggregate lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the aggregate lightcurves you wish to retrieve, the default
+            is None (which will retrieve all aggregate lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the aggregate lightcurves you wish to retrieve, the default
+            is None (which will retrieve all aggregate lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired aggregate lightcurve. The
+            default value is None, in which case all aggregate lightcurves matching other criteria will be retrieved.
+        :param dict pattern: Event selection patterns used to create aggregate lightcurves of interest. The default
+            is 'default' which uses the default values for generating lightcurves for different instruments, or you
+            can pass a dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}. You can also pass None, which
+            means all aggregate  light curves matching other search terms will be returned.
+        :return: An XGA AggregateLightCurve object (if there is an exact match), or a list of XGA AggregateLightCurve
+            objects (if there were multiple matching products).
+        :rtype: Union[AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        from xga.sas import check_pattern
+
+        # TODO This is XMM specific because of the patterns currently
+        # This is where we set up the search string for the patterns specified by the user.
+        if pattern is None:
+            patt_search = "pattern"
+        elif isinstance(pattern, str):
+            pattern = {'pn': '<=4', 'mos': '<=12'}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
+        elif isinstance(pattern, dict):
+            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                 "should be one entry for 'mos'.")
+            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                           for inst, patt in pattern.items()}
+        else:
+            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                            "instrument names and values are string patterns.")
+
+        # Use the internal function to find the combined light curves, then apply pattern checks after
+        some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
+        matched_prods = []
+        for lc in some_lcs:
+            if isinstance(patt_search, str):
+                rel_patt_search = [patt_search]
+            else:
+                rel_patt_search = [patt for inst, patt in patt_search.items()]
+
+            if all([rps in lc.storage_key for rps in rel_patt_search]):
+                matched_prods.append(lc)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
     # The combined photometric products don't really NEED their own get methods, but I figured I would just for
     #  clarity's sake
     def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None, psf_corr: bool = False,
@@ -3137,9 +3671,9 @@ class BaseSource:
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
-            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+            warn("The profile_type you passed contains the word 'profile', which is appended onto "
                           "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.")
+                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = profile_type + "_profile"
         if all([obs_id is None, inst is None]):
@@ -3147,8 +3681,8 @@ class BaseSource:
 
         search_key = profile_type + "_profile"
         if search_key not in ALLOWED_PRODUCTS:
-            warnings.warn("{} seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.".format(search_key))
+            warn("{} seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
 
         matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
         if len(matched_prods) == 1:
@@ -3180,15 +3714,15 @@ class BaseSource:
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
-            warnings.warn("The profile_type you passed contains the word 'profile', which is appended onto "
+            warn("The profile_type you passed contains the word 'profile', which is appended onto "
                           "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.")
+                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = "combined_" + profile_type + "_profile"
 
         if search_key not in ALLOWED_PRODUCTS:
-            warnings.warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.")
+            warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
+                          "true then you have passed an invalid profile type.", stacklevel=2)
 
         matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
         if len(matched_prods) == 1:
@@ -3258,9 +3792,48 @@ class BaseSource:
         # And return our ordered dictionaries
         return obs_inst, snrs
 
+    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
+                      hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
+        """
+        This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
+        given region, with element zero being the lowest counts, and element N being the highest.
+
+        :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
+            named radius such as r500, or an astropy Quantity.
+        :param Quantity lo_en: The lower energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the lower energy bound for peak finding will be used (default is 0.5keV).
+        :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
+            in which case the upper energy bound for peak finding will be used (default is 2.0keV).
+        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
+            of ascending counts, then an array containing the order counts ratios.
+        :rtype: Tuple[np.ndarray, Quantity]
+        """
+        # Set up some lists for the ObsID-Instrument combos and their cnts respectively
+        obs_inst = []
+        cnts = []
+        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+        for obs_id in self.instruments:
+            for inst in self.instruments[obs_id]:
+                cnts.append(self.get_counts(outer_radius, self.default_coord, lo_en, hi_en, obs_id, inst))
+                obs_inst.append([obs_id, inst])
+
+        # Make our storage lists into arrays, easier to work with that way
+        obs_inst = np.array(obs_inst)
+        cnts = Quantity(cnts)
+
+        # We want to order the output by counts, with the lowest being first and the highest being last, so we
+        #  use a numpy function to output the index order needed to re-order our two arrays
+        reorder_cnts = np.argsort(cnts)
+        # Then we use that to re-order them
+        cnts = cnts[reorder_cnts]
+        obs_inst = obs_inst[reorder_cnts]
+
+        # And return our ordered dictionaries'
+        return obs_inst, cnts
+
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
-        This method calculates the separation between the user supplied ra_dec coordinates, and the peak
+        This method calculates the Haversine separation between the user supplied ra_dec coordinates, and the peak
         coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
         peak has been calculated then the result will be 0.
 
@@ -3272,13 +3845,62 @@ class BaseSource:
         if not hasattr(self, 'peak'):
             raise AttributeError("This source does not have a peak attribute, and so an offset cannot be calculated.")
 
-        # Calculate the euclidean distance between ra_dec and peak
-        sep = np.sqrt(abs(self.ra_dec[0] - self.peak[0]) ** 2 + abs(self.ra_dec[1] - self.peak[1]) ** 2)
+        # Calculate the Haversine distance between ra_dec and peak
+        hav_sep = 2 * np.arcsin(np.sqrt((np.sin((self.peak[1] - self.ra_dec[1]) / 2) ** 2) +
+                                        np.cos(self.ra_dec[1]) * np.cos(self.peak[1]) *
+                                        np.sin((self.peak[0] - self.ra_dec[0]) / 2) ** 2))
+
         # Convert the separation to the requested unit - this will throw an error if the unit is stupid
-        conv_sep = self.convert_radius(sep, off_unit)
+        conv_sep = self.convert_radius(hav_sep, off_unit)
 
         # Return the converted separation
         return conv_sep
+
+    @property
+    def peak_lo_en(self) -> Quantity:
+        """
+        This property returns the lower energy bound of the image used for peak finding.
+
+        :return: A quantity containing the lower energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_lo_en
+
+    @property
+    def peak_hi_en(self) -> Quantity:
+        """
+        This property returns the upper energy bound of the image used for peak finding.
+
+        :return: A quantity containing the upper energy limit used for peak finding.
+        :rtype: Quantity
+        """
+        return self._peak_hi_en
+
+    @property
+    def use_peak(self) -> bool:
+        """
+        This property shows whether a particular XGA source object has been setup to use peak coordinates
+        or not. The property is either True, False, or None (if its a BaseSource).
+
+        :return: If the source is set to use peaks, True, otherwise False.
+        :rtype: bool
+        """
+        return self._use_peak
+
+    @property
+    def suppressed_warnings(self) -> List[str]:
+        """
+        A property getter (with no setter) for the warnings that have been suppressed from display to the user as
+        the source was declared as a member of a sample.
+
+        :return: The list of suppressed warnings for this source.
+        :rtype: List[str]
+        """
+        if not self._samp_member:
+            raise NotSampleMemberError("The source for {n} is not a member of a sample, and as such warnings have "
+                                       "not been suppressed.".format(n=self.name))
+        else:
+            return self._supp_warn
 
     def info(self):
         """
@@ -3287,7 +3909,7 @@ class BaseSource:
         print("\n-----------------------------------------------------")
         print("Source Name - {}".format(self._name))
         print("User Coordinates - ({0}, {1}) degrees".format(*self._ra_dec))
-        if self._peaks is not None:
+        if self._use_peak is not None and self._use_peak:
             print("X-ray Peak - ({0}, {1}) degrees".format(*self._peaks["combined"].value))
         print("nH - {}".format(self.nH))
         if self._redshift is not None:
@@ -3303,6 +3925,14 @@ class BaseSource:
                                                     self._initial_region_matches[o].sum() == 1])))
         print("Obs with >1 matches - {}".format(sum([1 for o in self._initial_region_matches if
                                                      self._initial_region_matches[o].sum() > 1])))
+        # If a combined exposure map exists, we'll use it to give the user an idea of the total exposure
+        try:
+            ex = self.get_combined_expmaps()
+            if isinstance(ex, list):
+                ex = ex[0]
+            print("Total exposure - {}".format(ex.get_exp(self.ra_dec).to('ks').round(2)))
+        except NoProductAvailableError:
+            pass
         print("Images associated - {}".format(len(self.get_products("image"))))
         print("Exposure maps associated - {}".format(len(self.get_products("expmap"))))
         print("Combined Ratemaps associated - {}".format(len(self.get_products("combined_ratemap"))))
@@ -3321,27 +3951,28 @@ class BaseSource:
                 print("Custom Region SNR - {}".format(self.get_snr("custom", self._default_coord).round(2)))
 
         if self._r200 is not None:
-            print("R200 - {}".format(self._r200))
+            print("R200 - {}".format(self._r200.round(2)))
             if len(self.get_products('combined_image')) != 0:
                 print("R200 SNR - {}".format(self.get_snr("r200", self._default_coord).round(2)))
         if self._r500 is not None:
-            print("R500 - {}".format(self._r500))
+            print("R500 - {}".format(self._r500.round(2)))
             if len(self.get_products('combined_image')) != 0:
                 print("R500 SNR - {}".format(self.get_snr("r500", self._default_coord).round(2)))
         if self._r2500 is not None:
-            print("R2500 - {}".format(self._r2500))
+            print("R2500 - {}".format(self._r2500.round(2)))
             if len(self.get_products('combined_image')) != 0:
                 print("R2500 SNR - {}".format(self.get_snr("r2500", self._default_coord).round(2)))
 
         # There's probably a neater way of doing the observables - maybe a formatting function?
         if self._richness is not None and self._richness_err is not None \
                 and not isinstance(self._richness_err, (list, tuple, ndarray)):
-            print("Richness - {0}±{1}".format(self._richness, self._richness_err))
+            print("Richness - {0}±{1}".format(self._richness.round(2), self._richness_err.round(2)))
         elif self._richness is not None and self._richness_err is not None \
                 and isinstance(self._richness_err, (list, tuple, ndarray)):
-            print("Richness - {0} -{1}+{2}".format(self._richness, self._richness_err[0], self._richness_err[1]))
+            print("Richness - {0} -{1}+{2}".format(self._richness.round(2), self._richness_err[0].round(2),
+                                                   self._richness_err[1].round(2)))
         elif self._richness is not None and self._richness_err is None:
-            print("Richness - {0}".format(self._richness))
+            print("Richness - {0}".format(self._richness.round(2)))
 
         if self._wl_mass is not None and self._wl_mass_err is not None \
                 and not isinstance(self._wl_mass_err, (list, tuple, ndarray)):
@@ -3357,14 +3988,14 @@ class BaseSource:
             try:
                 tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
                 # Just average the uncertainty for this
-                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean()))
+                print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
             except (ModelNotAssociatedError, NoProductAvailableError):
                 pass
 
             try:
                 lx = self.get_luminosities('r500', 'constant*tbabs*apec', lo_en=Quantity(0.5, 'keV'),
                                            hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
-                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean()))
+                print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
             except (ModelNotAssociatedError, NoProductAvailableError):
                 pass

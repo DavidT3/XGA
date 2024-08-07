@@ -1,0 +1,474 @@
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (david.turner@sussex.ac.uk) 26/02/2021, 10:03. Copyright (c) David J Turner
+
+# This XSPEC script template requires quite a few parameters to be filled in, using the Python formatting
+#  syntax. It will NOT function as a completely general script, but should work as a semi-general script for fitting
+#  with cross-arf information. As in the user can specify what model to use.
+# Much of the infrastructure is shared with the 'general_xspec_fit.xcm' script, but this should only be used for
+#  annular spectra, with all spectra being fit in one run rather than separately.
+
+# As this script is designed to be populated by a Python script, the single curly braces denote places for the Python
+#  .format command to inject a value, and every normal TCL use of curly braces has to be double curly braces
+
+#################################################
+# Sourcing external TCL files
+#################################################
+# The TCl file containing the function that extracts and writes out the final results
+source {xsp}
+
+puts NOTHING DOING YET
+exit
+
+#################################################
+# Setting up XSPEC
+#################################################
+# Turning off caching in the home directory .xspec folder
+autosave off
+
+# Set the statistic type to Cash
+statistic cstat
+
+# Allow the user to select the abundance table to use
+abund {ab}
+
+# The user can also decide which fitting method to use
+method {md}
+
+# The source object cosmology is used to setup XSPEC cosmo
+cosmo {H0} {q0} {lamb0}
+
+# We want plotting data to be in terms of energies, not channels
+setplot energy
+
+# These scripts are running headlessly, so we have to just let XSPEC keep going whenever it asks a question,
+#  that's what this command does
+query yes
+
+#################################################
+# Python supplied variables
+#################################################
+# Set up a list of paths to the spectra we want to fit, done like this to make it more dynamic
+set spec_paths {sp}
+
+# The energy limits applied to the spectra before fitting
+set ignore_lo_en {lo_cut}
+set ignore_hi_en {hi_cut}
+
+# This sets whether the fit should run a check on the spectra before doing the global fit
+set run_pre_check {check}
+set check_pars {cps}
+set check_pars_lo_lim {cpsl}
+set check_pars_hi_lim {cpsh}
+set check_pars_err_lim {cpse}
+
+# The name of the model
+set model_name {m}
+
+# Need the user's parameter choices, initially in the form of a name list and a value list, then an array
+#  Also have lists that define whether a parameter in the model will be linked across different spectra, and whether
+#  a parameter is frozen during fitting
+set par_names {pn}
+set par_values {pv}
+set linking {lk}
+set freezing {fr}
+
+# This flag is set to true if we are using a multiplicative constant to account for the different normalisations
+#  you tend to get from different observations/instruments. If so then the first spectrum's factor will be frozen
+#  at one, as long as the first parameter in the par_names list is 'factor'
+set norm_scale {ns}
+if {{($norm_scale == True) && ([lindex $par_names 0] != "factor")}} {{
+    # If the outside world has set norm_scale to True, but the first parameter of the model isn't a constant factor,
+    #  then we play it safe and change the norm_scale value so no constant is expected
+    set norm_scale False
+}} elseif {{($norm_scale == True) && ([lindex $par_names 0] == "factor")}} {{
+    # Makes absolutely sure that the start value of the constant is 1 if it is there
+    lset par_values 0 1
+}}
+
+# The confidence interval for parameter error estimation, I don't quite know what the parameter corresponds to,
+#  but the tutorials say that 2.706 is equivalent to the 90% confidence region, 9.0 is equivalent to the 3 sigma
+#  range, and 1.0 is equivelant to 1sigma
+set delta_fit_stat {el}
+
+# Now the parameters that xga_extract needs
+set out_file {of}
+set input_redshift {redshift}
+set luminosity_confidence {lel}
+
+# This is where the lower and upper energy limits for the luminosity calculations go, xga_extract needs them
+set lum_low_lims {lll}
+set lum_upp_lims {lul}
+
+# This allows us to specify which nH parameters (with IDs specified in this variable) should be set to zero for
+#  the calculation of unabsorbed luminosity in the xga_extract.tcl file. The issue is that some emission
+#  models (e.g. mekal) have an intrinsic nH parameter, and they were being zeroed along with the
+#  wabs/tbabs/etc. nH parameter
+set nh_par_to_zero {nhmtz}
+#################################################
+
+
+# Here we run a pre-check to see which of the spectra are good enough to actually contribute anything to the fit
+#################################################
+# Running the spectral gauntlet
+#################################################
+if {{$run_pre_check == True}} {{
+
+    # Here we set up a copy of the freezing list
+    set check_freezing $freezing
+    # If we have a constant out the front that is designed to help scale the normalisation when doing
+    #  simultaneous fits then it has to be frozen for this process - as we're fitting one spectrum at a time
+    #  for the checks
+    if {{$norm_scale == True}} {{
+        lset check_freezing 0 T
+    }}
+
+    # Setting up arrays to store the limits in, that way future code can just pass a parameter name and
+    #  get the required limit back
+    array set check_lo_lim {{}}
+    array set check_hi_lim {{}}
+    array set check_err_lim {{}}
+    for {{set i 0}} {{$i < [llength $check_pars]}} {{incr i}} {{
+        set temp_key [lindex $check_pars $i]
+        set check_lo_lim($temp_key) [lindex $check_pars_lo_lim $i]
+        set check_hi_lim($temp_key) [lindex $check_pars_hi_lim $i]
+        set check_err_lim($temp_key) [lindex $check_pars_err_lim $i]
+    }}
+
+    # All the fitting has to be done in this script rather than in a function because for some reason I was
+    #  unable to declare a model with default parameters when in a TCL proc, very annoying
+    #############################################
+    # Setting up spectra for individual fits
+    #############################################
+    # Put the number of spectra in a variable
+    set num_spec [llength $spec_paths]
+
+    # For loop here to load in all the spectra, iterating over path list
+    set counter 1
+    foreach pa $spec_paths {{
+        # Loads each spectrum into its own data and plot group
+        data $counter:$counter $pa
+        incr counter
+        }}
+
+    # Now we ignore the energy range that we don't want to use, for all loaded spectra
+    ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
+
+    # If any channels have been labelled bad, this will discount them from analysis
+    ignore bad
+    #############################################
+    # Setting up model for individual fits
+    #############################################
+    # Model is defined with default parameters, these will be modified later
+    model $model_name
+    /*
+
+    # Get the number of parameters in a variable, for iterating through later. To be clear this is the TOTAL
+    #  number of parameters across all spectra, so a tbabs*apec for 7 spectra would have 35 parameters
+    set num_pars [tcloutr modpar]
+    # This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+    set num_uniq_par [expr {{$num_pars / $num_spec}}]
+
+    # Just combines them into an array, so we can pass a parameter name and get a value and freeze bool. All
+    #  link bools will be false because these models are being fit independently of each other. This is probably
+    #  more complex than it needs to be but it allowed me to just copy some code I'd already written
+    array set par_arr {{}}
+    array set link_arr {{}}
+    array set freeze_arr {{}}
+    for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+        set temp_key [lindex $par_names $i]
+        set temp_contents [array get par_arr]
+
+        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+        set key_count 1
+        while {{$temp_key in $temp_contents}} {{
+            set temp_key [concat [lindex $par_names $i]_$key_count]
+            incr key_count
+            }}
+
+        set par_arr($temp_key) [lindex $par_values $i]
+        # All link parameters are set to False, as these spectra all need to have models fit separately for
+        #  the cleaning step
+        set link_arr($temp_key) F
+        set freeze_arr($temp_key) [lindex $check_freezing $i]
+        }}
+
+    # Here we iterate through the parameters and set them up in the XSPEC model
+    set sep_cnt 1
+    set sep_par_lst {{}}
+    for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+        set cur_par [lindex [tcloutr pinfo $i] 0]
+        if {{$sep_cnt <= $num_uniq_par}} {{
+            # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+            set key_count 1
+            while {{$cur_par in $sep_par_lst}} {{
+                set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+                incr key_count
+                }}
+            lappend sep_par_lst $cur_par
+        }} else {{
+            set sep_cnt 1
+            set sep_par_lst {{$cur_par}}
+        }}
+
+        if {{$i <= $num_uniq_par}} {{
+            newpar $i $par_arr($cur_par)
+        }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+            newpar $i $par_arr($cur_par)
+            }}
+
+        if {{$freeze_arr($cur_par) == "T"}} {{
+            freeze $i
+        }} else {{
+            thaw $i
+            }}
+        incr sep_cnt
+        }}
+    #############################################
+    # Running fit/errors and checking results
+    #############################################
+
+    # This assembles a list of spec paths where each spec name is repeated N times (where N is the number of
+    #  parameters in a model - tbabs*apec has 5 for instance), then we move onto the next spec_path
+    set par_spec {{}}
+    set par_spec_chan {{}}
+
+    set sp_id 1
+    foreach sp $spec_paths {{
+        set range [split [tcloutr noticed $sp_id] -]
+        set num_chan [expr [lindex $range 1] - [lindex $range 0]]
+        for {{set i 1}} {{$i <= $num_uniq_par}} {{incr i 1}} {{
+            lappend par_spec $sp
+            lappend par_spec_chan $num_chan
+        }}
+        incr sp_id
+    }}
+
+    # Run the fits for all models
+    fit 100
+
+    # Setting up this path to store spectra which have met one of our criteria, a further checking step is
+    #  required after this because if we are checking 2 parameters (kT and norm for instance), then a spectrum
+    #  path needs to appear in this list twice so that we know it met the quality check for both parameters
+    set good_spec_paths {{}}
+
+    # We iterate through all the parameters, and find which ones we are checking so we can calculate errors for them
+    for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
+        # Find the equivelant parameter name for the current ipar
+        scan [tcloutr pinfo $ipar] "%s %s" pname punit
+
+        # Check if that parameter name appears in the list of parameters we're meant to be quality checking
+        if {{[lsearch -exact $check_pars $pname] >= 0}} {{
+            # We calculate the errors on the individual fits, though only if its a parameter we're checking
+            error $delta_fit_stat, $ipar
+
+            # Grab the parameter value, and the lower and upper confidence limits
+            scan [tcloutr param $ipar] "%f %f" par_val delta
+            scan [tcloutr error $ipar] "%f %f" lo_conf_lim hi_conf_lim
+
+            # Calculate an upper and lower uncertainty from the confidence limits
+            set lo_err [expr $par_val-$lo_conf_lim]
+            set hi_err [expr $hi_conf_lim-$par_val]
+
+            # Read out the equivelant spectrum path for this particular parameter
+            set cur_sp [lindex $par_spec [expr $ipar-1]]
+            # And the number of noticed channels for this spectrum
+            set cur_chan [lindex $par_spec_chan [expr $ipar-1]]
+
+            # If the parameter meets our quality cuts then the spectrum is added to the good_spec_paths list
+            if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname) && $cur_chan > 10}} {{
+                lappend good_spec_paths $cur_sp
+            }}
+        }}
+    }}
+    #############################################
+    # Final decision on spectra
+    #############################################
+    # Just read the number of parameters we're assessing into its own variable
+    set num_par_test [llength $check_pars]
+    # This list is for the final cleaned spectrum paths, after this final check
+    set final_spec_paths {{}}
+    # Each spectrum path must appear num_par_test times in good_spec_paths to make the final cut, otherwise
+    #  we know that it didn't pass quality checks for all the parameters we were assessing
+    foreach sp $spec_paths {{
+        # Just finds the number of instances of the path in the good_spec_path list
+        if {{[llength [lsearch -all $good_spec_paths $sp]] == $num_par_test}} {{
+            lappend final_spec_paths $sp
+        }}
+    }}
+
+    # The fit script has to exit here if no spectra made it past our cleaning
+    if {{[llength $final_spec_paths] == 0}} {{
+        puts "No acceptable spectra are left after the cleaning step"
+        exit
+    }}
+    #############################################
+    # Cleanup step
+    #############################################
+    # This wipes all existing models, we need to do this before we define the model for the final fit
+    model clear
+    # spec_paths has to be set to the cleaned spec path values, as the rest of the code uses spec_paths to
+    #  load in the data
+    set spec_paths $final_spec_paths
+    # And we remove all the spectra that we already have loaded
+    data none
+
+    # I delete a bunch of variables that are re-used in the code later, I was having some problems with parameter
+    #  linking before I did this, though I'm showing my TCL ignorance a bit as I'm not quite sure why this fixed it
+    unset par_arr
+    unset link_arr
+    unset freeze_arr
+    unset sep_par_lst
+    unset num_pars
+    unset num_uniq_par
+    #############################################
+}}
+#################################################
+
+
+#################################################
+# Setting up spectra for the final fit
+#################################################
+
+# Now put the number of spectra in a variable
+set num_spec [llength $spec_paths]
+
+# For loop here to load in all the spectra, iterating over path list
+set counter 1
+foreach p $spec_paths {{
+    # Loads each spectrum into its own data and plot group
+    data $counter:$counter $p
+    incr counter
+    }}
+
+# Now we ignore the energy range that we don't want to use, for all loaded spectra
+ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
+
+# If any channels have been labelled bad, this will discount them from analysis
+ignore bad
+#################################################
+# Setting up the final model and links
+#################################################
+# Now we must define the model, but without setting any parameters (thats what /* does)
+model $model_name
+/*
+
+# Get the number of parameters in a variable, for iterating through later
+set num_pars [tcloutr modpar]
+# This sets the number of unique parameters for THE MODEL, whereas num_pars is for the model*number of spectra
+set num_uniq_par [expr {{$num_pars / $num_spec}}]
+
+# Probably isn't necessary as the inputs should be governed by XGA, but doing some checks
+if {{[llength $par_names] != $num_uniq_par}} {{
+    puts "par_names list is not the length expected by the defined model"
+    exit
+}} elseif {{[llength $par_values] != $num_uniq_par}} {{
+    puts "par_values list is not the length expected by the defined model"
+    exit
+}} elseif {{[llength $linking] != $num_uniq_par}} {{
+    puts "linking list is not the length expected by the defined model"
+    exit
+}} elseif {{[llength $freezing] != $num_uniq_par}} {{
+    puts "freezing list is not the length expected by the defined model"
+    exit
+}}
+
+# Just combines them into an array, so we can pass a parameter name and get a value, link bool, and freeze bool
+array set par_arr {{}}
+array set link_arr {{}}
+array set freeze_arr {{}}
+for {{set i 0}} {{$i < [llength $par_names]}} {{incr i}} {{
+    # Gets the name of the parameter we're currently dealing with
+    set temp_key [lindex $par_names $i]
+    # Get the current keys of the par_arr
+    set temp_contents [array get par_arr]
+
+    # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+    set key_count 1
+    while {{$temp_key in $temp_contents}} {{
+        # Adds a number to the end of the parameter we're currently dealing with
+        set temp_key [concat [lindex $par_names $i]_$key_count]
+        incr key_count
+        }}
+    # Stores the start value, linking, and freezing information under the parameter names in the arrays
+    #  we defined earlier
+    set par_arr($temp_key) [lindex $par_values $i]
+    set link_arr($temp_key) [lindex $linking $i]
+    set freeze_arr($temp_key) [lindex $freezing $i]
+    }}
+
+# Here we iterate through the parameters and set them up in XSPEC, including user choices on linking and freezing
+set sep_cnt 1
+# sep_cnt keeps track of the current parameter of a given spectrum
+set sep_par_lst {{}}
+for {{set i 1}} {{$i <= $num_pars}} {{incr i}} {{
+    # Grabs the current parameter name, we'll use it to look up start values etc.
+    set cur_par [lindex [tcloutr pinfo $i] 0]
+
+    # As sep_cnt keeps track of the current position within a specific spectrum's model, it cannot be greater than
+    #  the number of parameters per spectrum model (5 for tbabs*apec for instance), so it must be reset to 1
+    #  once it is larger than that number, and we know we've moved onto another spectrum
+    if {{$sep_cnt <= $num_uniq_par}} {{
+        # This while loop deals with duplicate keys (which might occur in a two temperature model for instance)
+        set key_count 1
+        while {{$cur_par in $sep_par_lst}} {{
+            set cur_par [concat [lindex [tcloutr pinfo $i] 0]_$key_count]
+            incr key_count
+            }}
+        lappend sep_par_lst $cur_par
+    }} else {{
+        set sep_cnt 1
+        set sep_par_lst {{$cur_par}}
+    }}
+
+    # If we're still in the first spectrum then the start values MUST be set. Remember that i goes up to the full
+    #  num_pars value (so for tbabs*apec for 7 spectra that number would be 35), but we know that if i is less than
+    #  the number of parameters per spectrum model then we're still on the first spectrum
+    if {{$i <= $num_uniq_par}} {{
+        # Set the start value of the parameter using the handy array we constructed earlier
+        newpar $i $par_arr($cur_par)
+    # If we're past the first spectrum but the current parameter isn't meant to be linked across spectra then we
+    #  must set its starting value. We don't need to do anything if the parameter IS meant to be linked, as that
+    #  will happen automatically
+    }} elseif {{$i > $num_uniq_par && $link_arr($cur_par) == "F"}} {{
+        newpar $i $par_arr($cur_par)
+        }}
+
+    # And finally if the current parameter isn't meant to be able to vary then we must freeze it, or thaw it
+    #  if it should be allowed to vary. If we know that we have a constant at the front to deal with different
+    #  norms for different observations, and that the current parameter is the first model's factor, then we freeze it
+    #  at one, whereas all the rest are allowed to vary
+    if {{($freeze_arr($cur_par) == "T") || (($norm_scale == True) && ($i == 1))}} {{
+        freeze $i
+    }} else {{
+        thaw $i
+        }}
+
+    incr sep_cnt
+    }}
+
+#################################################
+# Run fit and calculate final uncertainties
+#################################################
+# Now of course we run the model fit
+fit 100
+
+# Calculate errors on the fit parameters; error just ignores those parameters that are frozen
+error $delta_fit_stat,1-$num_pars
+#################################################
+# Run the extract script to write results
+#################################################
+# List to store luminosity energy limit pairs in the format required by xga_extract
+set lum_lim_pairs {{}}
+
+# Iterate through the number of luminosity bands supplied
+for {{set i 0}} {{$i < [llength $lum_low_lims]}} {{incr i}} {{
+    set interim {{}}
+    lappend interim [lindex $lum_low_lims $i]
+    lappend interim [lindex $lum_upp_lims $i]
+    lappend lum_lim_pairs $interim
+    }}
+
+# And finally we run the custom XGA script that extracts all the information we want
+xga_extract $out_file $lum_lim_pairs $input_redshift $luminosity_confidence $model_name $nh_par_to_zero
+#################################################
+exit

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 22/04/2022, 15:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -98,7 +98,12 @@ class KingProfile1D(BaseModel1D):
         Calculates the gradient of the king profile at a given point, overriding the numerical method implemented
         in the BaseModel1D class, as this simple model has an easily derivable first derivative.
 
-        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity x: The point(s) at which the slope of the model should be measured. If multiple,
+            non-distribution, radii are to be used, make sure to pass them as an (M,), single dimension, astropy
+            quantity, where M is the number of separate radii to generate realisations for. To marginalise over a
+            radius distribution when generating realisations, pass a multi-dimensional astropy quantity; i.e. for
+            a single set of realisations pass a (1, N) quantity, where N is the number of samples in the parameter
+            posteriors, for realisations for M different radii pass a (M, N) quantity.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
@@ -107,7 +112,13 @@ class KingProfile1D(BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
         if not use_par_dist:
             beta, r_core, norm = self._model_pars
         else:
@@ -212,7 +223,12 @@ class DoubleKingProfile1D(BaseModel1D):
         Calculates the gradient of the double King profile at a given point, overriding the numerical method implemented
         in the BaseModel1D class, as this simple model has an easily derivable first derivative.
 
-        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity x: The point(s) at which the slope of the model should be measured. If multiple,
+            non-distribution, radii are to be used, make sure to pass them as an (M,), single dimension, astropy
+            quantity, where M is the number of separate radii to generate realisations for. To marginalise over a
+            radius distribution when generating realisations, pass a multi-dimensional astropy quantity; i.e. for
+            a single set of realisations pass a (1, N) quantity, where N is the number of samples in the parameter
+            posteriors, for realisations for M different radii pass a (M, N) quantity.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
@@ -221,7 +237,14 @@ class DoubleKingProfile1D(BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
+
         if not use_par_dist:
             beta_one, r_core_one, norm_one, beta_two, r_core_two, norm_two = self._model_pars
         else:
@@ -342,7 +365,12 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         Calculates the gradient of the simple Vikhlinin density profile at a given point, overriding the
         numerical method implemented in the BaseModel1D class.
 
-        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity x: The point(s) at which the slope of the model should be measured. If multiple,
+            non-distribution, radii are to be used, make sure to pass them as an (M,), single dimension, astropy
+            quantity, where M is the number of separate radii to generate realisations for. To marginalise over a
+            radius distribution when generating realisations, pass a multi-dimensional astropy quantity; i.e. for
+            a single set of realisations pass a (1, N) quantity, where N is the number of samples in the parameter
+            posteriors, for realisations for M different radii pass a (M, N) quantity.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
@@ -351,7 +379,14 @@ class SimpleVikhlininDensity1D(BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
+
         if not use_par_dist:
             beta, r_core, alpha, r_s, epsilon, norm = self.model_pars
         else:
@@ -491,7 +526,12 @@ class VikhlininDensity1D(BaseModel1D):
         Calculates the gradient of the full Vikhlinin density profile at a given point, overriding the
         numerical method implemented in the BaseModel1D class.
 
-        :param Quantity x: The point(s) at which the slope of the model should be measured.
+        :param Quantity x: The point(s) at which the slope of the model should be measured. If multiple,
+            non-distribution, radii are to be used, make sure to pass them as an (M,), single dimension, astropy
+            quantity, where M is the number of separate radii to generate realisations for. To marginalise over a
+            radius distribution when generating realisations, pass a multi-dimensional astropy quantity; i.e. for
+            a single set of realisations pass a (1, N) quantity, where N is the number of samples in the parameter
+            posteriors, for realisations for M different radii pass a (M, N) quantity.
         :param Quantity dx: This makes no difference here, as this is an analytical derivative. It has
             been left in so that the inputs for this method don't vary between models.
         :param bool use_par_dist: Should the parameter distributions be used to calculate a derivative
@@ -500,7 +540,13 @@ class VikhlininDensity1D(BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
         if not use_par_dist:
             b, rc, a, rs, e, g, n, b2, rc2, n2 = self.model_pars
         else:

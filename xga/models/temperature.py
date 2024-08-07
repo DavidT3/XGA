@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 11:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 16:04. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -14,7 +14,7 @@ from ..utils import r500, r200, r2500
 class SimpleVikhlininTemperature1D(BaseModel1D):
     """
     An XGA model implementation of the simplified version of Vikhlinin's temperature model. This is for the
-    description of 3D temperature profiles of galaxy clusters.
+    description of 3D temperature profiles (also can be fit to projected temperature) of galaxy clusters.
 
     :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
         representation or an astropy unit object.
@@ -53,12 +53,12 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         else:
             xu_ind = x_convertible.index(True)
 
-        r_cool_starts = [Quantity(100, 'kpc'), Quantity(0.2, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
+        r_cool_starts = [Quantity(50, 'kpc'), Quantity(0.01, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
                          Quantity(0.5, r2500)]
-        r_tran_starts = [Quantity(400, 'kpc'), Quantity(0.6, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
-                         Quantity(1, r2500)]
-        t_min_starts = [Quantity(1, 'keV'), (Quantity(1, 'keV')/k_B).to('K')]
-        t_zero_starts = [Quantity(5, 'keV'), (Quantity(5, 'keV')/k_B).to('K')]
+        r_tran_starts = [Quantity(200, 'kpc'), Quantity(0.015, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
+                         Quantity(0.7, r2500)]
+        t_min_starts = [Quantity(3, 'keV'), (Quantity(3, 'keV')/k_B).to('K')]
+        t_zero_starts = [Quantity(6, 'keV'), (Quantity(6, 'keV')/k_B).to('K')]
 
         start_pars = [r_cool_starts[xu_ind], Quantity(1, ''), t_min_starts[yu_ind], t_zero_starts[yu_ind],
                       r_tran_starts[xu_ind], Quantity(1, '')]
@@ -68,16 +68,23 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        r_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
-                    {'prior': Quantity([0, 2], 'deg'), 'type': 'uniform'},
-                    {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
-                    {'prior': Quantity([0, 1.5], r500), 'type': 'uniform'},
-                    {'prior': Quantity([0, 3], r2500), 'type': 'uniform'}]
-        t_priors = [{'prior': Quantity([0, 15], 'keV'), 'type': 'uniform'},
-                    {'prior': (Quantity([0, 15], 'keV')/k_B).to('K'), 'type': 'uniform'}]
+        rc_priors = [{'prior': Quantity([10, 500], 'kpc'), 'type': 'uniform'},
+                     {'prior': Quantity([0.0, 0.032951243], 'deg'), 'type': 'uniform'},
+                     {'prior': Quantity([0, 0.5], r200), 'type': 'uniform'},
+                     {'prior': Quantity([0, 0.3], r500), 'type': 'uniform'},
+                     {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
+        rt_priors = [{'prior': Quantity([100, 500], 'kpc'), 'type': 'uniform'},
+                     {'prior': Quantity([0.001, 0.032951243], 'deg'), 'type': 'uniform'},
+                     {'prior': Quantity([0.1, 0.5], r200), 'type': 'uniform'},
+                     {'prior': Quantity([0.07, 0.3], r500), 'type': 'uniform'},
+                     {'prior': Quantity([0.2, 1], r2500), 'type': 'uniform'}]
+        t0_priors = [{'prior': Quantity([0.5, 15], 'keV'), 'type': 'uniform'},
+                     {'prior': (Quantity([0.5, 15], 'keV')/k_B).to('K'), 'type': 'uniform'}]
+        tm_priors = [{'prior': Quantity([0.1, 6], 'keV'), 'type': 'uniform'},
+                     {'prior': (Quantity([0.1, 6], 'keV') / k_B).to('K'), 'type': 'uniform'}]
 
-        priors = [r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'}, t_priors[yu_ind],
-                  t_priors[yu_ind], r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'}]
+        priors = [rc_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}, tm_priors[yu_ind],
+                  t0_priors[yu_ind], rt_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}]
 
         nice_pars = [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$", r"R$_{\rm{T}}$", "c"]
         info_dict = {'author': 'Ghirardini et al.', 'year': 2019,
@@ -128,7 +135,14 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         :return: The calculated slope of the model at the supplied x position(s).
         :rtype: Quantity
         """
-        x = x[..., None]
+        # This makes sure that the input radius, or radii, are being used properly. For a single x value, or a set of
+        #  x values, we use [..., None] to ensure that (if the user has decided to use the parameter distribution) we
+        #  get M distributions of the derivative. In the case where the user has passed a distribution of radii, really
+        #  representative of a single radius but with uncertainty, then this does not trigger, and rather than an N
+        #  by N (where N is the number of samples in each posterior) array, you get an M x N array
+        if x.isscalar or (not x.isscalar and x.ndim == 1):
+            x = x[..., None]
+
         if not use_par_dist:
             r_c, a, t_m, t_0, r_t, c = self._model_pars
         else:
@@ -144,7 +158,7 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
 class VikhlininTemperature1D(BaseModel1D):
     """
     An XGA model implementation of the full version of Vikhlinin's temperature model. This is for the
-    description of 3D temperature profiles of galaxy clusters.
+    description of 3D temperature profiles (also can be fit to projected temperature) of galaxy clusters.
 
     :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
         representation or an astropy unit object.
@@ -183,12 +197,12 @@ class VikhlininTemperature1D(BaseModel1D):
         else:
             xu_ind = x_convertible.index(True)
 
-        r_cool_starts = [Quantity(100, 'kpc'), Quantity(0.2, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
+        r_cool_starts = [Quantity(50, 'kpc'), Quantity(0.01, 'deg'), Quantity(0.05, r200), Quantity(0.1, r500),
                          Quantity(0.5, r2500)]
-        r_tran_starts = [Quantity(400, 'kpc'), Quantity(0.6, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
-                         Quantity(1, r2500)]
-        t_min_starts = [Quantity(1, 'keV'), (Quantity(1, 'keV')/k_B).to('K')]
-        t_zero_starts = [Quantity(5, 'keV'), (Quantity(5, 'keV')/k_B).to('K')]
+        r_tran_starts = [Quantity(200, 'kpc'), Quantity(0.015, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
+                         Quantity(0.7, r2500)]
+        t_min_starts = [Quantity(3, 'keV'), (Quantity(3, 'keV') / k_B).to('K')]
+        t_zero_starts = [Quantity(6, 'keV'), (Quantity(6, 'keV') / k_B).to('K')]
 
         start_pars = [r_cool_starts[xu_ind], Quantity(1, ''), t_min_starts[yu_ind], t_zero_starts[yu_ind],
                       r_tran_starts[xu_ind], Quantity(1, ''), Quantity(1, ''), Quantity(1, '')]
@@ -198,17 +212,24 @@ class VikhlininTemperature1D(BaseModel1D):
             # This method also returns the custom start pars converted to exactly the same units as the default
             start_pars = self.compare_units(cust_start_pars, start_pars)
 
-        r_priors = [{'prior': Quantity([0, 2000], 'kpc'), 'type': 'uniform'},
-                    {'prior': Quantity([0, 2], 'deg'), 'type': 'uniform'},
-                    {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
-                    {'prior': Quantity([0, 1.5], r500), 'type': 'uniform'},
-                    {'prior': Quantity([0, 3], r2500), 'type': 'uniform'}]
-        t_priors = [{'prior': Quantity([0, 15], 'keV'), 'type': 'uniform'},
-                    {'prior': (Quantity([0, 15], 'keV')/k_B).to('K'), 'type': 'uniform'}]
+        rc_priors = [{'prior': Quantity([10, 500], 'kpc'), 'type': 'uniform'},
+                     {'prior': Quantity([0.0, 0.032951243], 'deg'), 'type': 'uniform'},
+                     {'prior': Quantity([0, 0.5], r200), 'type': 'uniform'},
+                     {'prior': Quantity([0, 0.3], r500), 'type': 'uniform'},
+                     {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
+        rt_priors = [{'prior': Quantity([100, 500], 'kpc'), 'type': 'uniform'},
+                     {'prior': Quantity([0.001, 0.032951243], 'deg'), 'type': 'uniform'},
+                     {'prior': Quantity([0.1, 0.5], r200), 'type': 'uniform'},
+                     {'prior': Quantity([0.07, 0.3], r500), 'type': 'uniform'},
+                     {'prior': Quantity([0.2, 1], r2500), 'type': 'uniform'}]
+        t0_priors = [{'prior': Quantity([0.5, 15], 'keV'), 'type': 'uniform'},
+                     {'prior': (Quantity([0.5, 15], 'keV') / k_B).to('K'), 'type': 'uniform'}]
+        tm_priors = [{'prior': Quantity([0.1, 6], 'keV'), 'type': 'uniform'},
+                     {'prior': (Quantity([0.1, 6], 'keV') / k_B).to('K'), 'type': 'uniform'}]
 
-        priors = [r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'}, t_priors[yu_ind],
-                  t_priors[yu_ind], r_priors[xu_ind], {'prior': Quantity([-10, 10]), 'type': 'uniform'},
-                  {'prior': Quantity([-10, 10]), 'type': 'uniform'}, {'prior': Quantity([-10, 10]), 'type': 'uniform'}]
+        priors = [rc_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}, tm_priors[yu_ind],
+                  t0_priors[yu_ind], rt_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'},
+                  {'prior': Quantity([0, 5]), 'type': 'uniform'}, {'prior': Quantity([0, 5]), 'type': 'uniform'}]
 
         nice_pars = [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$", r"R$_{\rm{T}}$", "a", "b",
                      "c"]

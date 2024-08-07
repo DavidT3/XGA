@@ -1,17 +1,18 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 02/02/2022, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 14:13. Copyright (c) The Contributors
 
-import warnings
 from typing import Tuple, List, Union
+from warnings import warn, simplefilter
 
 import numpy as np
 from astropy import wcs
 from astropy.coordinates import SkyCoord
-from astropy.cosmology import Planck15
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitBase, deg, UnitConversionError
 from numpy import ndarray
 
 from .base import BaseSource
+from .. import DEFAULT_COSMO
 from ..exceptions import NotAssociatedError, PeakConvergenceFailedError, NoRegionsError, NoValidObservationsError, \
     NoProductAvailableError
 from ..products import RateMap
@@ -19,7 +20,7 @@ from ..sourcetools import rad_to_ang, ang_to_rad, nh_lookup
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
-warnings.simplefilter('ignore', wcs.FITSFixedWarning)
+simplefilter('ignore', wcs.FITSFixedWarning)
 
 
 class ExtendedSource(BaseSource):
@@ -47,18 +48,45 @@ class ExtendedSource(BaseSource):
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
         is hierarchical, simple may also be passed.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
-                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5, cosmology=Planck15,
-                 load_products: bool = True, load_fits: bool = False, peak_find_method: str = "hierarchical"):
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology: Cosmology = DEFAULT_COSMO,  load_products: bool = True, load_fits: bool = False,
+                 peak_find_method: str = "hierarchical", in_sample: bool = False):
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
+
+        :param float ra: The right-ascension of the source, in degrees.
+        :param float dec: The declination of the source, in degrees.
+        :param float redshift: The redshift of the source, optional. Default is None.
+        :param str name: The name of the source, optional. Name will be constructed from position if None.
+        :param Quantity custom_region_radius: A custom analysis region radius for this source, optional.
+        :param bool use_peak: Whether peak position should be found and used.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
+            from. Default is 0.5keV
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak position
+            from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+            is False. User should only set to True to remove warnings.
         """
         # Calling the BaseSource init method
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample)
 
         self._custom_region_radius = None
         # Setting up the custom region radius attributes
@@ -106,8 +134,17 @@ class ExtendedSource(BaseSource):
         # Run through any alternative matches and raise warnings
         for o in self._alt_match_regions:
             if len(self._alt_match_regions[o]) > 0:
-                warnings.warn("There are {0} alternative matches for observation {1}, associated with "
-                              "source {2}".format(len(self._alt_match_regions[o]), o, self.name))
+                warn_text = "There are {0} alternative matches for observation {1}, associated with " \
+                            "source {2}".format(len(self._alt_match_regions[o]), o, self.name)
+                if not self._samp_member:
+                    warn(warn_text, stacklevel=2)
+                else:
+                    self._supp_warn.append(warn_text)
+
+        if not in_sample:
+            # We make sure there are some images in existence, using the peak finding energy bounds
+            from xga.sas import evselect_image
+            evselect_image(self, self.peak_lo_en, self.peak_hi_en)
 
         self._interloper_masks = {}
         for obs_id in self.obs_ids:
@@ -121,13 +158,22 @@ class ExtendedSource(BaseSource):
 
         # If in some of the observations the source has not been detected, a warning will be raised
         if True in self._detected.values() and False in self._detected.values():
-            warnings.warn("{n} has not been detected in all region files, so generating and fitting products"
-                          " with the 'region' reg_type will not use all available data".format(n=self.name))
+            warn_text = "{n} has not been detected in all region files, so generating and fitting products" \
+                        " with the 'region' reg_type will not use all available data".format(n=self.name)
+            if not self._samp_member:
+                warn(warn_text, stacklevel=2)
+            else:
+                self._supp_warn.append(warn_text)
+
         # If the source wasn't detected in ALL of the observations, then we have to rely on a custom region,
         #  and if no custom region options are passed by the user then an error is raised.
         elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is not None:
-            warnings.warn("{n} has not been detected in ANY region files, so generating and fitting products"
-                          " with the 'region' reg_type will not work".format(n=self.name))
+            warn_text = "{n} has not been detected in ANY region files, so generating and fitting products" \
+                        " with the 'region' reg_type will not work".format(n=self.name)
+            if not self._samp_member:
+                warn(warn_text, stacklevel=2)
+            else:
+                self._supp_warn.append(warn_text)
         elif all([det is False for det in self._detected.values()]) and self._custom_region_radius is None \
                 and "GalaxyCluster" not in repr(self):
             raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region or "
@@ -435,18 +481,53 @@ class PointSource(BaseSource):
         radius for the background region. Default is 1.05.
     :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
         radius for the background region. Default is 1.5.
-    :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+    :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
         True. This option is here so that sample objects can regenerate all merged products at once, which is
         more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
+    :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+        to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+        is False. User should only set to True to remove warnings.
     """
     def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology=Planck15, load_products=True, load_fits=False,
-                 regen_merged: bool = True):
-        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits)
+                 back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
+                 regen_merged: bool = True, in_sample: bool = False):
+        """
+        The init of the general XGA point source class.
+
+        :param float ra: The right-ascension of the point source, in degrees.
+        :param float dec: The declination of the point source, in degrees.
+        :param float redshift: The redshift of the point source, optional. Default is None.
+        :param str name: The name of the point source, optional. If no names are supplied
+            then they will be constructed from the supplied coordinates.
+        :param Quantity point_radius: The point source analysis region radius for this sample. An astropy quantity
+            containing the radius should be passed; remember that units like kpc will also need redshift
+            information. Default is 30 arcsecond radius.
+        :param bool use_peak: Whether peak position should be found and used. For PointSource the 'simple' peak
+            finding method is the only one available, other methods are allowed for extended sources.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+            position from. Default is 0.5keV.
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+            position from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_products: Whether existing products should be loaded from disk.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
+            True. This option is here so that sample objects can regenerate all merged products at once, which is
+            more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
+        :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+            is False. User should only set to True to remove warnings.
+        """
+
+        super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample)
         # This uses the added context of the type of source to find (or not find) matches in region files
         # This is the internal dictionary where all regions, defined by reg-files or by users, will be stored
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("pnt")
@@ -474,6 +555,11 @@ class PointSource(BaseSource):
         else:
             raise UnitConversionError("Can't convert {u} to a XGA supported length unit".format(u=point_radius.unit))
         self._radii["search"] = search_aperture
+
+        if not in_sample:
+            # We make sure there are some images in existence, using the peak finding energy bounds
+            from xga.sas import evselect_image
+            evselect_image(self, self.peak_lo_en, self.peak_hi_en)
 
         # This generates masks to remove interloper regions
         self._interloper_masks = {}
