@@ -259,6 +259,8 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
 
+    raise NotImplementedError("This has not been implemented yet.")
+
     def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) \
             -> Tuple[Quantity, int]:
         """
@@ -519,6 +521,8 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
+    raise NotImplementedError("This has not been implemented yet.")
+
 
     def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) \
             -> Tuple[Quantity, int]:
