@@ -76,6 +76,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
                                                        spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins)
+    
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
     # This checks and sets up a predictable structure for the models needed for this measurement.
@@ -91,7 +92,18 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(temp_model)}
 
     # Here we take only the sources that have a successful global temperature measurement
-    cut_sources = [src for src_ind, src in enumerate(sources) if has_glob_temp[src_ind]]
+    # the format of has_glob_temp is a dictionary with telescope keys, and then an array of booleans
+    cut_sources = []
+    for sind, src in enumerate(sources):
+        # this collects if the sources has a temp for each telescope
+        has_temp = []
+        for key in has_glob_temp:
+            has_temp.append(has_glob_temp[key][sind])
+
+        # if a source has a glob temp in at least one telescope it gets parsed on
+        if sum(has_temp) > 0:
+            cut_sources.append(src)
+    
     cut_rads = Quantity([rads_dict[str(src)] for src in cut_sources])
     if len(cut_sources) == 0:
         raise ValueError("No sources have a successful global temperature measurement.")
@@ -129,3 +141,23 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     dens_prof_dict = {str(cut_cut_sources[p_ind]): p for p_ind, p in enumerate(dens_profs)}
 
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
+
+def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]): -> list
+    """
+    Returns a list of all the telescopes associated to each Source. For most functions within
+    sourcetools, the initial sources argument may be a list, so the telescopes attribute can't be
+    used.
+    """
+
+    if isinstance(sources, list):
+        # This collects all telescopes associated with each source, so there will be duplicates
+        all_telescopes_inc_dups = []
+            for src in sources:
+                all_telescopes_inc_dups.extend(src.telescopes)
+        # and now removing the duplicates
+        all_telescopes = list(set(all_telescopes_inc_dups))
+    
+    else:
+        all_telescopes = sources.telescopes
+    
+    return all_telescopes
