@@ -141,20 +141,20 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             src_dict[tel] = temp_profs[tel][p_ind]
         temp_prof_dict[str(cut_sources[p_ind])] = src_dict
 
-    # Now we take only the sources that have successful 3D temperature profiles. We do the temperature profile
-    #  stuff first because its more difficult, and why should we waste time on a density profile if the temperature
-    #  profile cannot even be measured.
+    # Now we take only the sources that have successful 3D temperature profiles. 
+    # We do the temperature profile stuff first because its more difficult, and why should we waste 
+    # time on a density profile if the temperature profile cannot even be measured.
+    # We keep source that have had at least one successful profile in any of the associated telescopes.
     cut_cut_sources = []
     for p_ind, p in enumerate(cut_sources):
+        # the string of the source objects is the key in temp_prof_dict
         src_key = str(cut_sources[p_ind])
-        # this collects if the sources have a prof for each telescope
+        # storing the profile objects for every telescope in this list
         has_prof = []
         for tel in temp_prof_dict[src_key]:
             prof = temp_prof_dict[src_key][tel]
             has_prof.append(prof)
-
-        # If there is a telescope where a profile object isnt None, then they can have denisty 
-        # profiles measured
+        # keeping a source if at least one profile has been measured for any of the telescopes
         if has_prof.count(None) != len(temp_prof_dict[src_key]):
             cut_cut_sources.append(cut_sources[p_ind])
 
@@ -174,8 +174,16 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                        inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn,
                                        psf_bins=psf_bins)
     
-    # Set this up to lookup density profiles based on source
-    dens_prof_dict = {str(cut_cut_sources[p_ind]): p for p_ind, p in enumerate(dens_profs)}
+    # Once again reformatting this output to lookup density profiles based on source
+    # so dens_prof_dict will be of the form: {src_key : {'xmm': prof, 'erosita': prof} etc.}
+    dens_prof_dict = {}
+    for p_ind, p in enumerate(cut_cut_sources):
+        # this is the nested dict that will have telescope keys and profile object values
+        src_dict = {}
+        for tel in dens_profs:
+            # dens_profs is of the form {'xmm': [Profile, Profile, etc.]}
+            src_dict[tel] = dens_profs[tel][p_ind]
+        dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
 
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 
