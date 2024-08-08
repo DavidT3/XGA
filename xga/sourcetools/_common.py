@@ -40,9 +40,14 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
                      min_sn=min_sn, over_sample=over_sample, num_cores=num_cores)
 
+    # returning a dictionary of telescope keys and values that are a list of len(sources) where 
+    # each element in the list is a boolean indicated whether a glob temp has been measured
+    # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
     has_glob_temp = {key : [] for key in all_tels}
     for src_ind, src in enumerate(sources):
-        for tel in src.telescopes:
+        # We cycle over the telescopes in the Sample and not the Source, so that every list in 
+        # has_glob_temp is the same length
+        for tel in all_tels:
             try:
                 src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec', 
                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
@@ -51,6 +56,9 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
             except ModelNotAssociatedError:
                 warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
                     "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
+                has_glob_temp[tel].append(False)
+            # If the telescope is not associated with this Source it will raise a NotAssociatedError
+            except NotAssociatedError:
                 has_glob_temp[tel].append(False)
 
     return sources, out_rads, has_glob_temp
@@ -146,7 +154,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
         # profiles measured
         if has_prof.count(None) != len(temp_prof_dict[src_key]):
             cut_cut_sources.append(cut_sources[p_ind])
-
 
     cut_cut_rads = Quantity([rads_dict[str(src)] for src in cut_cut_sources])
 
