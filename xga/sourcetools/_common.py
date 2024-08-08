@@ -25,6 +25,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
     global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
+    all_tels = sources.telescopes
     # If it's a single source I shove it in a list, so I can just iterate over the sources parameter
     #  like I do when it's a Sample object
     if isinstance(sources, BaseSource):
@@ -39,16 +40,18 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
                      min_sn=min_sn, over_sample=over_sample, num_cores=num_cores)
 
-    has_glob_temp = []
+    has_glob_temp = {key : [] for key in all_tels}
     for src_ind, src in enumerate(sources):
-        try:
-            src.get_temperature(global_out_rads[src_ind], 'constant*tbabs*apec', group_spec=group_spec,
-                                min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
-            has_glob_temp.append(True)
-        except ModelNotAssociatedError:
-            warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
-                 "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
-            has_glob_temp.append(False)
+        for tel in src.telescopes:
+            try:
+                src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec', 
+                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
+                                    over_sample=over_sample)
+                has_glob_temp[tel].append(True)
+            except ModelNotAssociatedError:
+                warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
+                    "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
+                has_glob_temp[tel].append(False)
 
     return sources, out_rads, has_glob_temp
 
