@@ -115,13 +115,39 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                         freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
                                         temp_hi_en=temp_hi_en, num_cores=num_cores)
 
+    # TODO case where a source has a measured glob temp in one telescope and not the others
     # This just allows us to quickly look-up the temperature profile we need later
-    temp_prof_dict = {str(cut_sources[p_ind]): p for p_ind, p in enumerate(temp_profs)}
+    # It is stored with sources as keys, then a dictionary value, this dictionary has a telescope
+    # keys with values that are the profile object, ie. {src1: {'xmm' : Profile}}
+    temp_prof_dict = {}
+    for p_ind, p in enumerate(cut_sources):
+        # this dict will have telescope keys and profile object values
+        src_dict = {}
+        for tel in temp_3d_prof:
+            if has_glob_temp[tel][p_ind]
+            src_dict[tel] = temp_3d_prof[tel][p_ind]
+        
+        temp_3d_prof[str(cut_sources[p_ind])] = src_dict
+
 
     # Now we take only the sources that have successful 3D temperature profiles. We do the temperature profile
     #  stuff first because its more difficult, and why should we waste time on a density profile if the temperature
     #  profile cannot even be measured.
-    cut_cut_sources = [cut_sources[prof_ind] for prof_ind, prof in enumerate(temp_profs) if prof is not None]
+    cut_cut_sources = []
+    for p_ind, p in enumerate(cut_sources):
+        src_key = str(cut_sources[p_ind])
+        # this collects if the sources have a prof for each telescope
+        has_prof = []
+        for tel in temp_prof_dict[src_key]:
+            prof = temp_prof_dict[src_key][tel]
+            has_prof.append(prof)
+
+        # If there is a telescope where a profile object isnt None, then they can have denisty 
+        # profiles measured
+        if has_prof.count(None) != len(temp_prof_dict[src_key]):
+            cut_cut_sources.append(cut_sources[p_ind])
+
+
     cut_cut_rads = Quantity([rads_dict[str(src)] for src in cut_cut_sources])
 
     # And checking again if this stage of the measurement worked out
@@ -137,6 +163,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                        min_sn=spec_min_sn, over_sample=over_sample, conv_outer_radius=global_radius,
                                        inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn,
                                        psf_bins=psf_bins)
+    
     # Set this up to lookup density profiles based on source
     dens_prof_dict = {str(cut_cut_sources[p_ind]): p for p_ind, p in enumerate(dens_profs)}
 
