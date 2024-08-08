@@ -17,6 +17,7 @@ from ..products.profile import GasTemperature3D
 from ..samples import BaseSample, ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
+from ._common import _get_all_telescopes
 
 ALLOWED_ANN_METHODS = ['min_snr', 'min_cnt']
 
@@ -617,7 +618,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     
     # collecting the associated telescopes for later use
     if telescope is None:
-        src_telescopes = sources.telescopes
+        src_telescopes = _get_all_telescopes(sources)
     else:
         src_telescopes = telescope
 
@@ -755,7 +756,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
     # collecting the associated telescopes for later use
     if telescope is None:
-        src_telescopes = sources.telescopes
+        src_telescopes = _get_all_telescopes(sources)
     else:
         src_telescopes = telescope
     
@@ -997,7 +998,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         raise NotImplementedError("This method isn't implemented yet")
 
     # getting all the associated telescopes for later use
-    all_tels = sources.telescopes
+    all_tels = _get_all_telescopes(sources)
 
     # So we can iterate through sources without worrying if there's more than one cluster
     if not isinstance(sources, (BaseSample, list)):

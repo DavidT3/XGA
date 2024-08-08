@@ -81,14 +81,16 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     if stacked_spectra:
         raise NotImplementedError("Stacking spectra is not yet supported for annular spectra generation and fitting.")
 
-    radii = _parse_radii_input(sources.telescopes, radii)
+    telescopes = _get_all_telescopes(sources)
+
+    radii = _parse_radii_input(telescopes, radii)
     # TODO This will probably be replaced by a centralised function that generates annular spectra for many
     #  different telescopes at some point
-    if 'xmm' in sources.telescopes:
+    if 'xmm' in telescopes:
         # We make sure the requested sets of annular spectra have actually been generated (for XMM)
         spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
 
-    if 'erosita' in sources.telescopes:
+    if 'erosita' in telescopes:
         esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)

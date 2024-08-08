@@ -25,6 +25,7 @@ from ..sourcetools.deproj import shell_ann_vol_intersect
 from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
+from ._common import _get_all_telescopes
 
 
 def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
@@ -94,7 +95,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         Dict[str, list]], Union[Dict[str, str], Dict[str, list]]]
     """
     # storing all the telescopes in a list for later use
-    all_tels = sources.telescopes
+    all_tels = _get_all_telescopes(sources)
     # If its a single source I shove it in a list so I can just iterate over the sources parameter
     #  like I do when its a Sample object
     if isinstance(sources, BaseSource):
@@ -555,8 +556,10 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # First we check the number of arguments passed for the model
     model = model_check(sources, model)
 
+    all_tels = _get_all_telescopes(sources)
+
     # Setting up dict to store profiles in
-    final_dens_profs = {key : [] for key in sources.telescopes}
+    final_dens_profs = {key : [] for key in all_tels}
 
     with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
               total=len(sources), position=0) as dens_prog:
@@ -793,7 +796,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
         raise NotImplementedError("This method isn't implemented yet")
 
     # collecting all the associated telescopes here for later use
-    all_tels = sources.telescopes
+    all_tels = _get_all_telescopes(sources)
 
     # So we can iterate through sources without worrying if there's more than one cluster
     if not isinstance(sources, ClusterSample):
