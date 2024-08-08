@@ -185,5 +185,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
 
     # In case only one source is being analysed
     if len(final_entropy_profs) == 1:
-        final_entropy_profs = final_entropy_profs[0]
+        # this will select the inner nested dictionary
+        final_entropy_profs = next(iter(d.values()))
+    
     return final_entropy_profs
