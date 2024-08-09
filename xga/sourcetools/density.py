@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:16. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -598,13 +598,20 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     There are a number of choices of method for inverse abel transforming, provided by the Python package PyAbel:
 
         * 'direct' - This attempts a direct integration of the inverse-Abel integral (see
-            https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
-            cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
-            radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
-            generated for a minimum signal-to-noise for instance) then this is the method that will be used.
-        * 'basex' -
-        * 'hansen_law_ho0' -
-        * 'hansen_law_ho1' -
+        https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
+        cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
+        radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
+        generated for a minimum signal-to-noise for instance) then this is the method that will be used.
+        * 'basex' - This method (basis set expansion) uses functions with a known analytic inverse-abel
+        transform (gaussian-like in this case).
+        * 'hansen_law_ho0' - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
+        a coordinate transformation to model the Abel transform as a set of linear differential equation. This
+        particular choice uses hold_order=0, which assumes a constant intensity across a pixel (between grid points)
+        for the driving function (the image gradient for the inverse transform).
+        * 'hansen_law_ho1' - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
+        a coordinate transformation to model the Abel transform as a set of linear differential equation. This
+        particular choice uses hold_order=1, which assumes a linear intensity variation between grid points, which may
+        yield a more accurate transform for some functions
         * 'onion_bordas' -
         * 'onion_peeling' -
         * 'two_point' -
