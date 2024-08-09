@@ -1,4 +1,4 @@
-conda env create -f environment.yml --from-history
+conda export --from-history>environment.yml
 
 That makes the environment file.
 
