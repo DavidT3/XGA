@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:35. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -597,30 +597,30 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
     There are a number of choices of method for inverse abel transforming, provided by the Python package PyAbel:
 
-        * `direct` - This attempts a direct integration of the inverse-Abel integral (see
-            https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
-            cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
-            radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
-            generated for a minimum signal-to-noise for instance) then this is the method that will be used.
-        * `basex` - This method (basis set expansion) uses functions with a known analytic inverse-abel
-            transform (gaussian-like in this case).
-        * `hansen_law_ho0` - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
-            a coordinate transformation to model the Abel transform as a set of linear differential equation. This
-            particular choice uses hold_order=0, which assumes a constant intensity across a pixel (between grid points)
-            for the driving function (the image gradient for the inverse transform).
-        * `hansen_law_ho1` - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
-            a coordinate transformation to model the Abel transform as a set of linear differential equation. This
-            particular choice uses hold_order=1, which assumes a linear intensity variation between grid points, which may
-            yield a more accurate transform for some functions
-        * `onion_peeling` - In the onion-peeling method the projection is approximated by rings of constant property,
-            see the PyAbel documentation for the mathematical explanation.
-        * `two_point` - The Abel integral is broken into intervals between the radius points, with the function
-            assumed to be constant within the points.
-        * `three_point` - This method exploits the observation that the value of the Abel inverted data at any radial
-            position r is primarily determined from changes in the projection data in the neighborhood of r. The
-            projection data (raw data) is expanded as a quadratic function of in the neighborhood of each data point,
-            which allows an analytical deprojection.
-        * `daun` - Similar to onion peeling, but uses 'Tikhonov regularization'.
+    * `direct` - This attempts a direct integration of the inverse-Abel integral (see
+        https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
+        cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
+        radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
+        generated for a minimum signal-to-noise for instance) then this is the method that will be used.
+    * `basex` - This method (basis set expansion) uses functions with a known analytic inverse-abel
+        transform (gaussian-like in this case).
+    * `hansen_law_ho0` - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
+        a coordinate transformation to model the Abel transform as a set of linear differential equation. This
+        particular choice uses hold_order=0, which assumes a constant intensity across a pixel (between grid points)
+        for the driving function (the image gradient for the inverse transform).
+    * `hansen_law_ho1` - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
+        a coordinate transformation to model the Abel transform as a set of linear differential equation. This
+        particular choice uses hold_order=1, which assumes a linear intensity variation between grid points, which may
+        yield a more accurate transform for some functions
+    * `onion_peeling` - In the onion-peeling method the projection is approximated by rings of constant property,
+        see the PyAbel documentation for the mathematical explanation.
+    * `two_point` - The Abel integral is broken into intervals between the radius points, with the function
+        assumed to be constant within the points.
+    * `three_point` - This method exploits the observation that the value of the Abel inverted data at any radial
+        position r is primarily determined from changes in the projection data in the neighborhood of r. The
+        projection data (raw data) is expanded as a quadratic function of in the neighborhood of each data point,
+        which allows an analytical deprojection.
+    * `daun` - Similar to onion peeling, but uses 'Tikhonov regularization'.
 
     The PyAbel documentation provides a useful discussion of when and when not to use different methods
     (https://pyabel.readthedocs.io/en/latest/transform_methods.html), and the authors also wrote a paper comparing
