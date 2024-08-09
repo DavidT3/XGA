@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:29. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -617,8 +617,10 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         * `two_point` - The Abel integral is broken into intervals between the radius points, with the function
             assumed to be constant within the points.
         * `three_point` - This method exploits the observation that the value of the Abel inverted data at any radial
-            position r is primarily determined from changes in the projection data in the neighborhood of r.
-        * `daun` -
+            position r is primarily determined from changes in the projection data in the neighborhood of r. The
+            projection data (raw data) is expanded as a quadratic function of in the neighborhood of each data point,
+            which allows an analytical deprojection.
+        * `daun` - Similar to onion peeling, but uses 'Tikhonov regularization'.
 
     The PyAbel documentation provides a useful discussion of when and when not to use different methods
     (https://pyabel.readthedocs.io/en/latest/transform_methods.html), and the authors also wrote a paper comparing
