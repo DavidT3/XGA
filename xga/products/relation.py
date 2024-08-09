@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:23. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -835,7 +835,7 @@ class ScalingRelation:
         elif x_values.isscalar:
             # And handles the case where the input x_values are scalar, in which case the 'len' call above would
             #  cause them to get stroppy and error
-            ez = np.array([1.])
+            ez = 1.
 
         # Now we propagate the uncertainties on the input parameters, if they have them (and if the model is a
         #  power law) - would be nice to generalise this somehow
@@ -857,7 +857,7 @@ class ScalingRelation:
             # We use a slightly different method of combining the predicted value and uncertainty depending on whether
             #  a single x-value was passed, or a set of them.
             if x_values.isscalar:
-                predicted_y = Quantity([predicted_y, predicted_y_errs[0]])
+                predicted_y = Quantity([predicted_y, predicted_y_errs])
             else:
                 predicted_y = np.vstack([predicted_y, predicted_y_errs]).T
 
