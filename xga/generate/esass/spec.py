@@ -265,7 +265,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             if isinstance(source, ExtendedSource):
-                if combine_obs:
+                if combine_obs and (len(source.obs_ids['erosita']) > 1):
                     im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
                                                     telescope='erosita')
                 else:
