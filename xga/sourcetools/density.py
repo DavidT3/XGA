@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/08/2024, 14:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:36. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -597,7 +597,15 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
     There are a number of choices of method for inverse abel transforming, provided by the Python package PyAbel:
 
-        !!INSERT CHOICES HERE!!
+        * 'direct' -
+        * 'basex' -
+        * 'hansen_law_ho0' -
+        * 'hansen_law_ho1' -
+        * 'onion_bordas' -
+        * 'onion_peeling' -
+        * 'two_point' -
+        * 'three_point' -
+        * 'daun' -
 
     :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
         profiles for.
