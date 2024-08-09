@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 09:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:29. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -104,8 +104,8 @@ class ScalingRelation:
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
         #  passed in by the user.
-        self._fit_pars = fit_pars
-        self._fit_par_errs = fit_par_errs
+        self._fit_pars = np.array(fit_pars)
+        self._fit_par_errs = np.array(fit_par_errs)
 
         # This should be a Python function of the model which was fit to create this relation, and which will take the
         #  passed fit parameters as arguments
@@ -759,11 +759,11 @@ class ScalingRelation:
                 cosmo: Cosmology = None, x_errors: Quantity = None) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
-        appropriate set of x values. If a power of E(z) was applied to the y-axis data before fitting, and that
+        appropriate set of x value(s). If a power of E(z) was applied to the y-axis data before fitting, and that
         information was passed on declaration (using 'dim_hubb_ind'), then a redshift and cosmology are required
         to remove out the E(z) contribution.
 
-        :param Quantity x_values: The x values to predict y values for.
+        :param Quantity x_values: The x value(s) to predict y value(s) for.
         :param float/np.ndarray redshift: The redshift(s) of the objects for which we wish to predict values. This is
             only necessary if the 'dim_hubb_ind' argument was set on declaration. Default is None.
         :param Cosmology cosmo: The cosmology in which we wish to predict values. This is only necessary if the
@@ -774,8 +774,11 @@ class ScalingRelation:
         :return: The predicted y values (and predicted uncertainties if x-errors were passed).
         :rtype: Quantity
         """
+        # Ensure no floats are being passed in, as we need units!
+        if type(x_values) is not Quantity:
+            raise TypeError("The 'x_values' argument must be an astropy quantity.")
         # Got to check that people aren't passing any nonsense x quantities in
-        if not x_values.unit.is_equivalent(self.x_unit):
+        elif not x_values.unit.is_equivalent(self.x_unit):
             raise UnitConversionError('Values of x passed to the predict method ({xp}) must be convertible '
                                       'to the x-axis units of this scaling relation '
                                       '({xr}).'.format(xp=x_values.unit.to_string(), xr=self.x_unit.to_string()))
@@ -826,11 +829,16 @@ class ScalingRelation:
             # We store this so that error propogation can use it later
             ez = (cosmo.efunc(redshift)**self._ez_power)
             predicted_y /= ez
-        else:
+        elif not x_values.isscalar:
             # This means that error propagation doesn't need to keep checking whether there is an ez power stored
             ez = np.ones(len(predicted_y))
+        elif x_values.isscalar:
+            # And handles the case where the input x_values are scalar, in which case the 'len' call above would
+            #  cause them to get stroppy and error
+            ez = 1.
 
-        # errors
+        # Now we propagate the uncertainties on the input parameters, if they have them (and if the model is a
+        #  power law) - would be nice to generalise this somehow
         if x_errors is not None and self.model_func == power_law:
             # This is just the error propagation for a powerlaw - the standard form of a scaling relation
             term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) *
