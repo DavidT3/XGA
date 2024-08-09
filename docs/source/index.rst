@@ -23,7 +23,7 @@ Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
 
 
 .. code-block::
-   :caption: If you make use of XGA in academic work, please cite the following software paper
+   :caption: If you make use of XGA in academic work, please cite the following software paper and ASCL entry
    :name: BibTeX Reference
 
    @ARTICLE{2022arXiv220201236T,
@@ -40,5 +40,20 @@ Welcome to X-ray: Generate and Analyse (XGA)'s documentation!
     primaryClass = {astro-ph.IM},
           adsurl = {https://ui.adsabs.harvard.edu/abs/2022arXiv220201236T},
          adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+   }
+
+   @MISC{xgaascl,
+       author = {{Turner}, D.~J. and {Giles}, P.~A. and {Romer}, A.~K. and {Korbina}, V.},
+        title = "{XGA: Efficient analysis of XMM observations}",
+     keywords = {Software},
+   howpublished = {Astrophysics Source Code Library, record ascl:2301.012},
+         year = 2023,
+        month = jan,
+          eid = {ascl:2301.012},
+        pages = {ascl:2301.012},
+   archivePrefix = {ascl},
+       eprint = {2301.012},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2023ascl.soft01012T},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
    }
 
