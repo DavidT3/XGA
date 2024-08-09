@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:04. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -597,7 +597,11 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
 
     There are a number of choices of method for inverse abel transforming, provided by the Python package PyAbel:
 
-        * 'direct' -
+        * 'direct' - This attempts a direct integration of the inverse-Abel integral (see
+            https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
+            cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
+            radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
+            generated for a minimum signal-to-noise for instance) then this is the method that will be used.
         * 'basex' -
         * 'hansen_law_ho0' -
         * 'hansen_law_ho1' -
@@ -607,11 +611,18 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         * 'three_point' -
         * 'daun' -
 
+    The PyAbel documentation provides a useful discussion of when and when not to use different methods
+    (https://pyabel.readthedocs.io/en/latest/transform_methods.html), and the authors also wrote a paper comparing
+    the various methods (https://arxiv.org/abs/1902.09007).
+
     :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
         profiles for.
     :param str/Quantity outer_radius: The radius to which the surface brightness profile should be generated. It can
         be a named radius (e.g. 'r500', 'r200') or a quantity containing a value (or values, if a sample of clusters
         has been passed).
+    :param str inv_abel_method: The method/algorithm which should be used for the inverse abel transform of the
+        surface brightness profile data. We advise reading the information in the docstring before making a choice, as
+        well as experimenting a little.
     :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
         will be generated.
     :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
@@ -649,10 +660,6 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
         a single value or an entry for each cluster being analysed.
-    :param str inv_abel_method: The method which should be used for the inverse abel transform of model which
-        is fitted to the surface brightness profile. This overrides the default method for the model, which is either
-        'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
-        models which don't have an analytical solution. Default is None.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
