@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:29. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -104,8 +104,8 @@ class ScalingRelation:
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
         #  passed in by the user.
-        self._fit_pars = fit_pars
-        self._fit_par_errs = fit_par_errs
+        self._fit_pars = np.array(fit_pars)
+        self._fit_par_errs = np.array(fit_par_errs)
 
         # This should be a Python function of the model which was fit to create this relation, and which will take the
         #  passed fit parameters as arguments
