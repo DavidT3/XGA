@@ -89,7 +89,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             inst_no = inst_nums[inst_ind]
 
             try:
-                if combine_obs:
+                if combine_obs and (len(source.obs_ids['erosita']) > 1):
                     check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
                                             min_counts, min_sn, telescope='erosita')
                 else:
@@ -121,7 +121,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 t_step = t_step_survey
 
             # setting up file names for output files
-            if combine_obs:
+            if combine_obs and (len(source.obs_ids['erosita']) > 1):
                 # The files produced by this function will now be stored in the combined directory.
                 final_dest_dir = OUTPUT + "erosita/combined/"
                 rand_ident = randint(0, 1e+8)
@@ -186,7 +186,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # TODO put issue, renaming spectra
             # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
             # The names of spectra will be different depending on if it is from a combined eventlist
-            if combine_obs:
+            if combine_obs  and (len(source.obs_ids['erosita']) > 1):
                 prefix = str(rand_ident) + '_' + '{n}_'.format(n=source_name)
             else:
                 prefix = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=source_name)
@@ -265,16 +265,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             if isinstance(source, ExtendedSource):
-                if combine_obs and (len(source.obs_ids['erosita']) > 1):
-                    im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
-                                                    telescope='erosita')
-                else:
-                    # We only need the image path for extended source generation 
-                    im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
-                        telescope='erosita')
-                # We have a slightly different command for extended and point sources
-                s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
-                                                i=inst_no, ts=t_step, em=im.path, et=et)
+                try:
+                    if combine_obs and (len(source.obs_ids['erosita']) > 1):
+                        im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
+                                                        telescope='erosita')
+                    else:
+                        # We only need the image path for extended source generation 
+                        im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
+                            telescope='erosita')
+                    # We have a slightly different command for extended and point sources
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
+                                                    i=inst_no, ts=t_step, em=im.path, et=et)
+                except:
+                    raise ValueError(f"it was this sources {source.name}")
+
             else:
                 s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
                                                 i=inst_no, ts=t_step)
@@ -491,7 +495,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and len(source.obs_ids['erosita']) == 1:
+        if combine_obs and (len(source.obs_ids['erosita']) == 1):
             combine_obs = False
 
         if outer_radius != 'region':
