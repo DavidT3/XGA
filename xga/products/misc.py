@@ -180,6 +180,10 @@ class EventList(BaseProduct):
             try:
                 # reads the events table into a np.recarray
                 arr = fitsio.read(self.path, columns=colnames, ext=1)
+
+                # making sure that the byte order is correct
+                arr = arr.byteswap().newbyteorder()
+                
                 # nicer to have a dataframe than a recarray
                 return pd.DataFrame.from_records(arr)
             
