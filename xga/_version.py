@@ -1,6 +1,6 @@
 
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 14:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 16:09. Copyright (c) The Contributors
 
 # This file helps to compute a version number in source trees obtained from
 # git-archive tarball (such as those provided by githubs download-from-tag
@@ -54,8 +54,8 @@ def get_config() -> VersioneerConfig:
     cfg = VersioneerConfig()
     cfg.VCS = "git"
     cfg.style = "pep440"
-    cfg.tag_prefix = "'v'"
-    cfg.parentdir_prefix = "xga-"
+    cfg.tag_prefix = ""
+    cfg.parentdir_prefix = "None"
     cfg.versionfile_source = "xga/_version.py"
     cfg.verbose = False
     return cfg
@@ -191,6 +191,7 @@ def git_versions_from_keywords(
     verbose: bool,
 ) -> Dict[str, Any]:
     """Get version information from git keywords."""
+
     if "refnames" not in keywords:
         raise NotThisMethod("Short version file found")
     date = keywords.get("date")
@@ -287,7 +288,7 @@ def git_pieces_from_vcs(
     # if there isn't one, this yields HEX[-dirty] (no NUM)
     describe_out, rc = runner(GITS, [
         "describe", "--tags", "--dirty", "--always", "--long",
-        "--match", f"{tag_prefix}[[:digit:]]*"
+        "--match", f"v*"  # TODO THIS IS WHERE I BODGED IT
     ], cwd=root)
     # --long was added in git-1.5.5
     if describe_out is None:
@@ -646,7 +647,6 @@ def get_versions() -> Dict[str, Any]:
     # __file__, we can work backwards from there to the root. Some
     # py2exe/bbfreeze/non-CPython implementations don't do __file__, in which
     # case we can only use expanded keywords.
-
     cfg = get_config()
     verbose = cfg.verbose
 
