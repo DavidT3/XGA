@@ -47,10 +47,13 @@ jobs:
         build
         --user
 
+    - name: GIMMEEEEE
+      run: >-
+        git describe --tags --dirty --always --long
+
     - name: COME ON JUST WORK
       run: >-
         git describe --tags --dirty --always --long --match v*
-        git describe --tags --dirty --always --long
 
     - name: Build a binary wheel and source tarball
       run: >-
