@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 11:43. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1313,7 +1313,15 @@ class BaseSource:
 
         for obs_id in reg_paths:
             if reg_paths[obs_id] is not None:
-                ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
+                # With the newer versions of regions we're now using, there is an explicit check for width and height
+                #  of regions being positive (definitely a good idea) - finding such a region in a file will trigger
+                #  a ValueError, and I'd like to catch it and add more context
+                try:
+                    ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
+                except ValueError as err:
+                    err.args = (err.args[0] + "- {o} is the associated ObsID.".format(o=obs_id), )
+                    raise err
+
                 # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
                 #  where they were generated with different resolutions).
                 #  TODO see issue #908, figure out how to support different resolutions of image
