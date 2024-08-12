@@ -189,12 +189,17 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             
             # then we can continue with the rest of the sources
             continue
+        
+        # Define this variable for each source no it doesn't get overwritten with the wrong value
+        # later in the loop
+        use_combine_obs = combine_obs
+        
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and (len(source.obs_ids['erosita']) == 1):
-            combine_obs = False
+        if use_combine_obs and len(source.obs_ids['erosita']) == 1:
+            use_combine_obs = False
     
-        if not combine_obs:
+        if not use_combine_obs:
             # Check which event lists are associated with each individual source
             for pack in source.get_products("events", telescope='erosita', just_obj=False):
                 obs_id = pack[1]
@@ -385,12 +390,16 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             # then we can continue with the rest of the sources
             continue
         
+        # Define this variable for each source no it doesn't get overwritten with the wrong value
+        # later in the loop
+        use_combine_obs = combine_obs
+        
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and len(source.obs_ids['erosita']) == 1:
-            combine_obs = False
+        if use_combine_obs and len(source.obs_ids['erosita']) == 1:
+            use_combine_obs = False
         
-        if not combine_obs:
+        if not use_combine_obs:
             # Check which event lists are associated with each individual source
             for pack in source.get_products("events",  telescope='erosita', just_obj=False):
                 obs_id = pack[1]
