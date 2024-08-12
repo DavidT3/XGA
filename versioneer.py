@@ -1,4 +1,7 @@
 
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 16:50. Copyright (c) The Contributors
+
 # Version: 0.29
 
 """The Versioneer - like a rocketeer, but for versions.
@@ -310,6 +313,7 @@ https://img.shields.io/travis/com/python-versioneer/python-versioneer.svg
 
 import configparser
 import errno
+import functools
 import json
 import os
 import re
@@ -318,7 +322,6 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, cast, Dict, List, Optional, Tuple, Union
 from typing import NoReturn
-import functools
 
 have_tomllib = True
 if sys.version_info >= (3, 11):
@@ -1322,7 +1325,7 @@ def git_pieces_from_vcs(
     # if there isn't one, this yields HEX[-dirty] (no NUM)
     describe_out, rc = runner(GITS, [
         "describe", "--tags", "--dirty", "--always", "--long",
-        "--match", f"{tag_prefix}[[:digit:]]*"
+        "--match", f"v*"  # TODO THIS IS WHERE I BODGED IT - IDENTICAL TO _version.py
     ], cwd=root)
     # --long was added in git-1.5.5
     if describe_out is None:
