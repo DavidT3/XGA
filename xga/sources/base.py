@@ -1206,7 +1206,12 @@ class BaseSource:
             # inventory. This is because annular spectrum need to be read in, and their info key
             # follows a different format to regular spectrum, so this is more general
             file_name = str(row['file_name'])
-            info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
+
+            # the naming scheme for combined spectra is slightly different to not combined
+            if not combined_obs:
+                info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
+            else:
+                info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[2:])
             
             info_key_parts = info_key.split("_")
 
