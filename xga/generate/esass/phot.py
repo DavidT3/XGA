@@ -37,14 +37,24 @@ def _img_params_from_evtlist(evt_list: EventList):
     demin = rel_df['DEC'].min()
     demax = rel_df['DEC'].max()
 
-    # deleting this to save memory
-    del rel_df
-
     # we want the minimum separation, ie. between ra=1 and ra=359 we want a difference of 2, not 358
     if abs(ramin - ramax) > 180:
         rasep = abs(ramin - ramax + 360)
     else:
         rasep = abs(ramin - ramax)
+    
+    # If rasep is really tiny, then what has happened is that ramin = 0.00001 and ramax = 359.9999
+    # and this means that our events go around the 0 deg. RA in the sky, so using ramin won't work
+    # I could do this more thoroughly by sorting in some way, but this is the fastest way I think
+    if rasep > 0.001:
+        # This is the RA on the 0 - 20 deg side
+        ra1 = rel_df[(rel_df['RA'] < 20) & (rel_df['RA'] > 0)]['RA'].max()
+        # This is the RA on the 340 - 360
+        ra2 = rel_df[(rel_df['RA'] > 340) & (rel_df['RA'] < 360)]['RA'].min()
+        rasep = abs(ra1 - ra2 + 360)
+    
+    # deleting this to save memory
+    del rel_df
 
     decsep = abs(demin - demax)
 
@@ -181,7 +191,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             continue
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
-        if combine_obs and len(source.obs_ids['erosita']) == 1:
+        if combine_obs and (len(source.obs_ids['erosita']) == 1):
             combine_obs = False
     
         if not combine_obs:
