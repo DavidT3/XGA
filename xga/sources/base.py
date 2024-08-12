@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 11:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 11:43. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1319,7 +1319,7 @@ class BaseSource:
                 try:
                     ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
                 except ValueError as err:
-                    err.args = (err.args[0] + "- {o} is the associated ObsID.".format(o=obs_id))
+                    err.args = (err.args[0] + "- {o} is the associated ObsID.".format(o=obs_id), )
                     raise err
 
                 # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
