@@ -247,6 +247,15 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                 exists = []
 
             if isinstance(exists, BaseProduct) and exists.usable:
+                # we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+                #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
+                #  bugs occuring in the esass_call wrapper
+                sources_cmds.append(np.array([]))
+                sources_paths.append(np.array([]))
+                # This contains any other information that will be needed to instantiate the class
+                # once the eSASS cmd has run
+                sources_extras.append(np.array([]))
+                sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
                 continue
 
             en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
