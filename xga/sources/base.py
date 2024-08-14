@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/08/2024, 11:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 15:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -910,13 +910,6 @@ class BaseSource:
                     arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
                     rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
 
-                    # This tries to find any cross-arfs that might have been generated that match the current spectrum
-                    #  - though of course this is only relevant for annular spectra
-                    # TODO make this actually work/do something, also this would fall over if 'cross' were in a
-                    #  source name I think?
-                    c_arf = [f for f in named if "arf" in f and 'cross' in f and "back" not in f and
-                             sp_info_str == f.split('.arf')[0]]
-
                     # As RMFs can be generated for source and background spectra separately, or one for both,
                     #  we need to check for matching RMFs to the spectrum we found
                     if len(rmf) == 0:
@@ -1023,6 +1016,17 @@ class BaseSource:
                             # If we know the redshift we will add the radii to the annular spectra in proper
                             #  distance units
                             ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+
+                        # This tries to find any cross-arfs that might have been generated that match the current
+                        #  annular spectrum - we'll read them in and add them to the spectrum
+                        # TODO This would fall over if 'cross' were in a source name I think? - this will be replaced
+                        #  when Jess and I's work on the multi-mission branch, and will be far more efficient as it
+                        #  will involve far fewer read operations
+                        search_set_ident = "ident{}".format(ann_spec_obj.set_ident)
+                        rel_c_arfs = [oi + "/" + f for oi in ann_spec_obj.obs_ids for f in os.listdir(oi)
+                                      if search_set_ident in f and "arf" in f and 'cross' in f and "back" not in f]
+                        print(rel_c_arfs)
+
                         self.update_products(ann_spec_obj, update_inv=False)
                 except AttributeError:
                     # This should hopefully act to catch the NoneType has no attribute problems that have plagued this
