@@ -1,11 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 16:25. Copyright (c) The Contributors
 
 import os
 import warnings
 from functools import wraps
 # from multiprocessing.dummy import Pool
 from multiprocessing import Pool
+from random import randint
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
 
@@ -42,11 +43,20 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # We assume the output will be usable to start with
     usable = True
 
-    cmd = "xspec - {}".format(x_script)
+    tmp_ident = str(randint(0, int(1e+8)))
+    tmp_hea_dir = os.path.join(os.path.dirname(out_file), tmp_ident, 'pfiles/')
+    os.makedirs(tmp_hea_dir)
+    'setenv PFILES "{};$HEADAS/syspfiles"'.format(tmp_hea_dir)
+
+
+    cmd = 'setenv PFILES "{};$HEADAS/syspfiles";'.format(tmp_hea_dir) + "xspec - {}".format(x_script)
     # I add exec to the beginning to make sure that the command inherits the same process ID as the shell, which
     #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
     #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
     xspec_proc = Popen("exec " + cmd, shell=True, stdout=PIPE, stderr=PIPE)
+
+
+    # shutil.rmtree(tmp_hea_dir)
 
     # This makes sure the process is killed if it does timeout
     try:
