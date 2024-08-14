@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 15:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 15:36. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1023,7 +1023,8 @@ class BaseSource:
                         #  when Jess and I's work on the multi-mission branch, and will be far more efficient as it
                         #  will involve far fewer read operations
                         search_set_ident = "ident{}".format(ann_spec_obj.set_ident)
-                        rel_c_arfs = [oi + "/" + f for oi in ann_spec_obj.obs_ids for f in os.listdir(oi)
+                        rel_c_arfs = [os.path.join(OUTPUT, oi, f) for oi in ann_spec_obj.obs_ids
+                                      for f in os.listdir(OUTPUT + oi)
                                       if search_set_ident in f and "arf" in f and 'cross' in f and "back" not in f]
                         print(rel_c_arfs)
 
