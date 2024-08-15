@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:26. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2367,8 +2367,8 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # We do a final check to make sure that no None values sneak through
         if None in rel_arfs.values():
-            raise ValueError("One or more cross-arfs for your selection have not been assigned to this annular "
-                             "spectrum.")
+            raise NotAssociatedError("One or more cross-arfs for your selection have not been assigned to this "
+                                     "annular spectrum.")
         return rel_arfs
 
     def get_cross_arf_lo_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
