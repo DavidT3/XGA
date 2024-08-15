@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:20. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1026,10 +1026,7 @@ class BaseSource:
                         rel_c_arfs = [os.path.join(OUTPUT, oi, f) for oi in ann_spec_obj.obs_ids
                                       for f in os.listdir(OUTPUT + oi)
                                       if search_set_ident in f and "arf" in f and "back" not in f]
-                        print(rel_c_arfs)
-                        print(len(rel_c_arfs))
                         # SO MANY FOR LOOPS, but I can't think of a better way right now
-                        counto = 0
                         for rel_c_arf in rel_c_arfs:
                             cur_f_name = os.path.basename(rel_c_arf)
                             f_name_parts = cur_f_name.split('.arf')[0].split('_')
@@ -1039,8 +1036,6 @@ class BaseSource:
                             out_ann = f_name_parts[-1]
                             ann_spec_obj.add_cross_arf(rel_c_arf, cur_oi, cur_inst, int(inn_ann), int(out_ann),
                                                        ann_spec_obj.set_ident)
-                            counto += 1
-                        print('loado', counto)
 
                         self.update_products(ann_spec_obj, update_inv=False)
                 except AttributeError:
