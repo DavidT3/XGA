@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 13:39. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -873,7 +873,7 @@ class ScalingRelation:
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
              point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-             third_dim_cmap: Union[str, Colormap] = 'plasma'):
+             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -919,6 +919,8 @@ class ScalingRelation:
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
             data point coordinates to determine the location a label should be added. You can use this to fine-tune
             the label positions relative to their data point.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -1063,6 +1065,17 @@ class ScalingRelation:
         ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
                         facecolor=model_colour, alpha=0.6, interpolate=True)
 
+        # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
+        #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
+        #  appropriate, if there was one
+        if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
+            raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
+                                      'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
+                                                                        yr=self.y_unit.to_string()))
+        elif y_lims is not None:
+            # Setting the axis limits
+            ax.set_ylim(y_lims.value)
+
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
@@ -1145,7 +1158,7 @@ class ScalingRelation:
 
         # If we did colour the data by a third dimension then we should add a colour-bar to the relation
         if show_third_dim:
-            cbar = plt.colorbar(cmap_mapper)
+            cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
             if self.third_dimension_data.unit.is_equivalent(''):
                 cbar_lab = self.third_dimension_name
             else:
@@ -1354,7 +1367,8 @@ class AggregateScalingRelation:
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
-             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None):
+             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
+             y_lims: Quantity = None):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -1389,6 +1403,8 @@ class AggregateScalingRelation:
             plot, including the unit string.
         :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
             plot, including the unit string.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up, so I think the duplication is justified.
@@ -1518,6 +1534,17 @@ class AggregateScalingRelation:
             plt.plot(model_x * rel.x_norm.value, model_lower, color=m_colour, linestyle="--")
             ax.fill_between(model_x * rel.x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
                             facecolor=m_colour, alpha=0.6, interpolate=True)
+
+        # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
+        #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
+        #  appropriate, if there was one
+        if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
+            raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
+                                      'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
+                                                                        yr=self.y_unit.to_string()))
+        elif y_lims is not None:
+            # Setting the axis limits
+            ax.set_ylim(y_lims.value)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
