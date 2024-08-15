@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 23:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 23:28. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -7,6 +7,7 @@ from functools import wraps
 # from multiprocessing.dummy import Pool
 from multiprocessing import Pool
 from random import randint
+from shutil import rmtree
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
 
@@ -57,12 +58,11 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
 
     # Remove the temporary directory
-    # shutil.rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
+    rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
 
     # This makes sure the process is killed if it does timeout
     try:
         out, err = xspec_proc.communicate(timeout=timeout)
-        print(err)
     except TimeoutExpired:
         xspec_proc.kill()
         out, err = xspec_proc.communicate()
