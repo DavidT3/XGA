@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 23:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 23:17. Copyright (c) The Contributors
 
 import os
 import shutil
@@ -51,11 +51,12 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     tmp_hea_dir = os.path.join(os.path.dirname(out_file), tmp_ident, 'pfiles/')
     os.makedirs(tmp_hea_dir)
 
-    cmd = 'export PFILES="{};$HEADAS/syspfiles";'.format(tmp_hea_dir) + "xspec - {}".format(x_script)
     # I add exec to the beginning to make sure that the command inherits the same process ID as the shell, which
     #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
     #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
-    xspec_proc = Popen("exec " + cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    cmd = 'export PFILES="{};$HEADAS/syspfiles";'.format(tmp_hea_dir) + "exec xspec - {}".format(x_script)
+    print(cmd)
+    xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
 
     # Remove the temporary directory
     shutil.rmtree(tmp_hea_dir)
