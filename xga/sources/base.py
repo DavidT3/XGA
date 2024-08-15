@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:12. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1032,7 +1032,7 @@ class BaseSource:
                         counto = 0
                         for rel_c_arf in rel_c_arfs:
                             cur_f_name = os.path.basename(rel_c_arf)
-                            f_name_parts = cur_f_name.split('.')[0].split('_')
+                            f_name_parts = cur_f_name.split('.arf')[0].split('_')
                             cur_oi = f_name_parts[0]
                             cur_inst = f_name_parts[1]
                             inn_ann = f_name_parts[-2]
