@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 12:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 13:23. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1145,7 +1145,7 @@ class ScalingRelation:
 
         # If we did colour the data by a third dimension then we should add a colour-bar to the relation
         if show_third_dim:
-            cbar = plt.colorbar(cmap_mapper)
+            cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
             if self.third_dimension_data.unit.is_equivalent(''):
                 cbar_lab = self.third_dimension_name
             else:
