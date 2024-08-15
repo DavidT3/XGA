@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 13:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 13:39. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1068,7 +1068,7 @@ class ScalingRelation:
         # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
         #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
         #  appropriate, if there was one
-        if y_lims is not None and not y_lims.unit.is_equivalent(self.x_unit):
+        if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
             raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
                                       'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
                                                                         yr=self.y_unit.to_string()))
@@ -1538,7 +1538,7 @@ class AggregateScalingRelation:
         # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
         #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
         #  appropriate, if there was one
-        if y_lims is not None and not y_lims.unit.is_equivalent(self.x_unit):
+        if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
             raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
                                       'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
                                                                         yr=self.y_unit.to_string()))
