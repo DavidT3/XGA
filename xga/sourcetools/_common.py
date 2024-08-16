@@ -187,7 +187,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 
-def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]): -> list
+def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
     """
     Returns a list of all the telescopes associated to each Source. For most functions within
     sourcetools, the initial sources argument may be a list, so the telescopes attribute can't be
