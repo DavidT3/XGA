@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:33. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2740,6 +2740,44 @@ class AnnularSpectra(BaseAggregateProduct):
             return proc_data
         else:
             return proc_data[par]
+
+    def get_fit_statistic(self, annulus_ident: int, model: str = None, fit_conf: Union[str, dict] = None):
+        """
+        Method that will retrieve fit statistic from the AnnularSpectra object. If no model name is supplied, but
+        only one model has been fit to this annular spectrum, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the fit statistic.
+        :param str model: The name of the fitted model that you're requesting the fit statistic of
+            (e.g. constant*tbabs*apec).
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        """
+        model, fit_conf = self._get_fit_checks(annulus_ident, model, None, fit_conf)
+
+        return self._fit_stat[annulus_ident][model][fit_conf]
+
+    def get_test_statistic(self, annulus_ident: int, model: str = None, fit_conf: Union[str, dict] = None):
+        """
+        Method that will retrieve test statistic from the AnnularSpectra object. If no model name is supplied, but
+        only one model has been fit to this annular spectrum, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the fit statistic.
+        :param str model: The name of the fitted model that you're requesting the fit statistic of
+            (e.g. constant*tbabs*apec).
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested test statistic.
+        """
+        model, fit_conf = self._get_fit_checks(annulus_ident, model, None, fit_conf)
+
+        return self._test_stat[annulus_ident][model][fit_conf]
 
     def get_luminosities(self, annulus_ident: int, model: str, lo_en: Quantity = None, hi_en: Quantity = None) \
             -> Union[Quantity, Dict[str, Quantity]]:
