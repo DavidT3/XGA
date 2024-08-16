@@ -15,7 +15,7 @@ from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
-
+from ...sourcetools._common import _get_all_telescopes
 
 @xspec_call
 def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, 
