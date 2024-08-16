@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 13:00. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2671,20 +2671,20 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Have to check that the user has passed a legal annulus ID, otherwise we'll be getting key errors down the
         #  line from the dictionary accesses, and they are far less informative.
-        if annulus_ident < 0:
+        if annulus_ident is not None and annulus_ident < 0:
             raise ValueError("Annulus IDs can only be positive.")
-        elif annulus_ident >= self.num_annuli:
+        elif annulus_ident is not None and annulus_ident >= self.num_annuli:
             raise ValueError("Annulus indexing starts at zero, and this AnnularSpectra only has {} "
                              "annuli.".format(self._num_ann))
 
         # Bunch of checks to make sure the requested results actually exist
-        if len(self._fit_results[annulus_ident]) == 0:
+        if annulus_ident is not None and len(self._fit_results[annulus_ident]) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object.")
-        elif model not in self._fit_results[annulus_ident]:
+        elif annulus_ident is not None and model not in self._fit_results[annulus_ident]:
             av_mods = ", ".join(self._fit_results[annulus_ident].keys())
             raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; available "
                                           "models are {a}".format(m=model, a=av_mods))
-        elif par is not None and par not in self._fit_results[annulus_ident][model]:
+        elif annulus_ident is not None and par is not None and par not in self._fit_results[annulus_ident][model]:
             av_pars = ", ".join(self._fit_results[annulus_ident][model].keys())
             raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
                                               "available parameters are {a}".format(p=par, m=model, a=av_pars))
@@ -2842,7 +2842,8 @@ class AnnularSpectra(BaseAggregateProduct):
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
-    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], upper_limit: Quantity = None) \
+    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], upper_limit: Quantity = None,
+                         fit_conf: Union[str, dict] = None) \
             -> Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]:
         """
         This generates a radial profile of the requested fit parameter using the stored results from
@@ -2854,6 +2855,9 @@ class AnnularSpectra(BaseAggregateProduct):
         :param Unit/str par_unit: The unit of the free model parameter as an astropy unit object, or a string
             representation (e.g. keV).
         :param Quantity upper_limit: Allows an allowed upper limit for the y values in the profile to be passed.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: The requested profile object.
         :rtype: Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]
         """
@@ -2865,16 +2869,19 @@ class AnnularSpectra(BaseAggregateProduct):
             raise UnitConversionError("Currently proper radius units are required to generate "
                                       "profiles, please assign some using the proper_radii property.")
 
+        # This is somewhat redundant, as we run get_results in the loop, but we want the checked fit_conf value
+        model, fit_conf = self._get_fit_checks(None, model, par, fit_conf)
+
         par_data = {}
         for ai in range(self._num_ann):
             # We read it out into an interim parameter
-            cur_data = self.get_results(ai, model, par)
+            cur_data = self.get_results(ai, model, par, fit_conf)
             # In cases where the parameter in question wasn't linked across separate spectra there will be a
             #  measurement for each spectrum per annulus
             if cur_data.ndim != 1:
                 # There are multiple values available here, and we want to sort them out into the ObsID-instrument
                 #  combinations
-                obs_order = self._obs_order[ai][model]
+                obs_order = self._obs_order[ai][model][fit_conf]
                 for i in range(cur_data.shape[0]):
                     obs_inst = "-".join(obs_order[i])
                     # This was we create a profile for each ObsID-Instrument combination
@@ -3260,7 +3267,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
         """
         # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
-        #  commits, because its trying to be clever. Its a behaviour I normally appreciate, but not here.
+        #  commits, because it's trying to be clever. It's a behaviour I normally appreciate, but not here.
         Axes3D
 
         # Setup the figure as we normally would
