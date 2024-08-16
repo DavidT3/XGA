@@ -4383,8 +4383,15 @@ class BaseSource:
         # TODO the refactoring got a bit dicey - take a look around and make sure I didn't destroy anything
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
-        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample,
-                                 telescope=telescope)
+        try:
+            # Spectra can be retrieved either from get_spectra or get_combined_spectra methods
+            # so we try both ways in a try except statement
+            specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, 
+                                     min_sn, over_sample, telescope=telescope)
+        except:
+            specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec, 
+                                              min_counts, min_sn, over_sample, telescope=telescope)
+
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
             storage_key = specs[0].storage_key
