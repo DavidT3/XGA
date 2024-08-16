@@ -1342,7 +1342,6 @@ class BaseSource:
                         spec_lines = inven[inven['type'] == 'spectrum']
                         for row_ind, row in spec_lines.iterrows():
                             obj, set_id, ann_id = parse_spectrum(row, False)
-                            
                             if set_id != None:
                                 obj.annulus_ident = ann_id
                                 obj.set_ident = set_id
@@ -1443,7 +1442,6 @@ class BaseSource:
                 rel_inven = inven[inven['type'] == 'spectrum']
                 for row_ind, row in rel_inven.iterrows():
                     obj, set_id, ann_id = parse_spectrum(row, True)
-                                
                     try:
                         self.update_products(obj, update_inv=False)
                     except NotAssociatedError:
@@ -2469,7 +2467,7 @@ class BaseSource:
                     extra_key = po.model + "_" + str(po.num_bins)
                 else:
                     extra_key = None
-
+                
                 # All information about where to place it in our storage hierarchy can be pulled from the product
                 # object itself
                 obs_id = po.obs_id
@@ -2490,6 +2488,17 @@ class BaseSource:
                 # 'Combined' will effectively be stored as another ObsID
                 if "combined" not in self._products[tel]:
                     self._products[tel]["combined"] = {}
+
+                # There can be combined obs ids using only one instrument
+                for allowed_inst in ALLOWED_INST[tel]:
+                    if allowed_inst not in self._products[tel]["combined"]:
+                        self._products[tel]["combined"][allowed_inst] = {}
+                
+                # This is for combined obs and combined instrument
+                if "combined" not in self._products[tel]["combined"]:
+                    self._products[tel]["combined"]["combined"] = {}
+                                
+                # TODO set up combined and all instrument names - needs to be generalised remember!
 
                 # The product gets the name of this source object added to it
                 po.src_name = self.name
@@ -2516,12 +2525,12 @@ class BaseSource:
                 # Here we deal with merged products, they live in the same dictionary, but with no instrument entry
                 #  and ObsID = 'combined'
                 elif extra_key is not None and obs_id == "combined":
-                    if extra_key not in self._products[tel][obs_id]:
-                        self._products[tel][obs_id][extra_key] = {}
-                    self._products[tel][obs_id][extra_key][p_type] = po
+                    if extra_key not in self._products[tel][obs_id][inst]:
+                        self._products[tel][obs_id][inst][extra_key] = {}
+                    self._products[tel][obs_id][inst][extra_key][p_type] = po
 
                 elif extra_key is None and obs_id == "combined":
-                    self._products[tel][obs_id][p_type] = po
+                    self._products[tel][obs_id][inst][p_type] = po
 
                 # This is for an image being added, so we look for a matching exposure map. If it exists we can
                 #  make a ratemap
@@ -2558,7 +2567,7 @@ class BaseSource:
                         new_rt = RateMap(po, exs[0][-1])
                         new_rt.src_name = self.name
                         # Remember obs_id for combined products is just 'combined'
-                        self._products[tel][obs_id][extra_key]["combined_ratemap"] = new_rt
+                        self._products[tel][obs_id][inst][extra_key]["combined_ratemap"] = new_rt
 
                 elif p_type == "combined_expmap":
                     ims = [prod for prod in self.get_products("combined_image", just_obj=False, telescope=tel)
@@ -2567,7 +2576,8 @@ class BaseSource:
                         for im in ims:
                             new_rt = RateMap(im[-1], po)
                             new_rt.src_name = self.name
-                            self._products[tel][obs_id][im[-2]]["combined_ratemap"] = new_rt
+                            self._products[tel][obs_id][inst][im[-2]]["combined_ratemap"] = new_rt
+                
 
                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
                     po.save()
