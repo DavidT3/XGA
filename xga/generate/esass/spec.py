@@ -64,7 +64,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
-
     def _append_spec_info(evt_list):
         """
         Internal method to get the parameters required for the srctool spectral generation command.
@@ -89,9 +88,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             inst_no = inst_nums[inst_ind]
 
             try:
-                if combine_obs and (len(source.obs_ids['erosita']) > 1):
+                if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                     check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
                                             min_counts, min_sn, telescope='erosita')
+
                 else:
                     # Got to check if this spectrum already exists
                     check_sp = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
@@ -100,7 +100,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 
             except NoProductAvailableError:
                 exists = False
-
+            
             if exists and check_sp.usable and not force_gen:
                 continue
 
@@ -121,7 +121,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 t_step = t_step_survey
 
             # setting up file names for output files
-            if combine_obs and (len(source.obs_ids['erosita']) > 1):
+            if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                 # The files produced by this function will now be stored in the combined directory.
                 final_dest_dir = OUTPUT + "erosita/combined/"
                 rand_ident = randint(0, 1e+8)
@@ -186,7 +186,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # TODO put issue, renaming spectra
             # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
             # The names of spectra will be different depending on if it is from a combined eventlist
-            if combine_obs  and (len(source.obs_ids['erosita']) > 1):
+            if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                 prefix = str(rand_ident) + '_' + '{n}_'.format(n=source_name)
             else:
                 prefix = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=source_name)
@@ -266,7 +266,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Fills out the srctool command to make the main and background spectra
             if isinstance(source, ExtendedSource):
                 try:
-                    if combine_obs and (len(source.obs_ids['erosita']) > 1):
+                    if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                         im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
                                                         telescope='erosita')
                     else:
@@ -493,10 +493,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # then we can continue with the rest of the sources
             continue
 
-        # if the user has set combine_obs to True and there is only one observation, then we 
+        # need to set this so the combine_obs variable doesnt get overwritten
+        use_combine_obs = combine_obs
+        # if the user has set combine_obs to True and there is only one observation, then we
         # use the combine_obs = False functionality instead
-        if combine_obs and (len(source.obs_ids['erosita']) == 1):
-            combine_obs = False
+        if use_combine_obs and (len(source.obs_ids['erosita']) == 1):
+            use_combine_obs = False
 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
@@ -522,7 +524,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         # Adds on the extra information about grouping to the storage key
         spec_storage_name += extra_name
 
-        if not combine_obs:
+        if not use_combine_obs:
             # Check which event lists are associated with each individual source
             for evt_list in source.get_products("events", telescope='erosita', just_obj=True):
                 # This function then uses the evtlist to generate spec commands, final paths, 
