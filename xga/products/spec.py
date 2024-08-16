@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 15:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 16:49. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1263,18 +1263,19 @@ class Spectrum(BaseProduct):
         else:
             return self._luminosities[model][fit_conf][en_key]
 
-    def get_rate(self, model: str) -> Quantity:
+    def get_rate(self, model: str = None, fit_conf: Union[str, dict] = None) -> Quantity:
         """
         Fetches the count rate for a particular model fitted to this spectrum.
 
         :param model: The model to fetch count rate for.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: Count rate in counts per second.
         :rtype: Quantity
         """
-        if model not in self._count_rate:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum")
-        else:
-            rate = Quantity(self._count_rate[model], 'ct/s')
+        model, fit_conf = self._get_fit_checks(model, fit_conf)
+        rate = Quantity(self._count_rate[model][fit_conf], 'ct/s')
 
         return rate
 
