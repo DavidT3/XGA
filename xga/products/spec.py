@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 16:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 17:49. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1267,6 +1267,10 @@ class Spectrum(BaseProduct):
         """
         Fetches the count rate for a particular model fitted to this spectrum.
 
+        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
+
         :param model: The model to fetch count rate for.
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
@@ -1338,19 +1342,25 @@ class Spectrum(BaseProduct):
         rel_vals = self._conv_factors[model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
-    def get_plot_data(self, model: str) -> dict:
+    def get_plot_data(self, model: str = None, fit_conf: Union[str, dict] = None) -> dict:
         """
         Simply grabs the plot data dictionary for a given model, if the spectrum has had a fit performed on it.
 
-        :param str model:
+        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
+
+        :param str model: The model for which the plotting data is to be retrieved. Default is None, which will
+            automatically be set to the model name IF only one model has been fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: All information required to plot the data and model.
         :rtype: dict
         """
-        if model not in self._plot_data:
-            raise ModelNotAssociatedError("{m} does not have any plot data associated with it in this "
-                                          "spectrum".format(m=model))
+        model, fit_conf = self._get_fit_checks(model, fit_conf)
 
-        return self._plot_data[model]
+        return self._plot_data[model][fit_conf]
 
     def conv_channel_energy(self, to_convert: Quantity) -> Quantity:
         """
