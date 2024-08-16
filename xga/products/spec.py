@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 17:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 17:57. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1791,30 +1791,34 @@ class Spectrum(BaseProduct):
             plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
             plt.xlabel("Energy [keV]", fontsize=fontsize)
 
-            for mod_ind, mod in enumerate(self._plot_data):
-                # Extract the x values which we gathered from XSPEC (they will be in keV)
-                x = self._plot_data[mod]["x"]
-                # Cut the x dataset to just the energy range we want
-                sel_x = (x > lo_lim) & (x < hi_lim)
-                plot_x = x[sel_x]
+            plot_cnt = 0
+            for mod in self.fitted_models:
+                # We also iterate through the different fit configurations for the current model, and plot them
+                #  separately - currently with the only the model name in the legend
+                for fit_conf in self.fitted_model_configurations[mod]:
+                    # Extract the x values which we gathered from XSPEC (they will be in keV)
+                    x = self._plot_data[mod]["x"]
+                    # Cut the x dataset to just the energy range we want
+                    sel_x = (x > lo_lim) & (x < hi_lim)
+                    plot_x = x[sel_x]
 
-                if mod_ind == 0:
-                    # Read out the data just for line length reasons
-                    # Make the cuts based on energy values supplied to the view method
-                    plot_y = self._plot_data[mod]["y"][sel_x]
-                    plot_xerr = self._plot_data[mod]["x_err"][sel_x]
-                    plot_yerr = self._plot_data[mod]["y_err"][sel_x]
-                    plot_mod = self._plot_data[mod]["model"][sel_x]
+                    if plot_cnt == 0:
+                        # Read out the data just for line length reasons
+                        # Make the cuts based on energy values supplied to the view method
+                        plot_y = self._plot_data[mod]["y"][sel_x]
+                        plot_xerr = self._plot_data[mod]["x_err"][sel_x]
+                        plot_yerr = self._plot_data[mod]["y_err"][sel_x]
+                        plot_mod = self._plot_data[mod]["model"][sel_x]
 
-                    plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
-                                 label="Background subtracted source data", zorder=1)
-                else:
-                    # Don't want to re-plot data points as they should be identical, so if there is another model
-                    #  only it will be plotted
-                    plot_mod = self._plot_data[mod]["model"][sel_x]
+                        plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
+                                     label="Background subtracted source data", zorder=1)
+                    else:
+                        # Don't want to re-plot data points as they should be identical, so if there is another model
+                        #  only it will be plotted
+                        plot_mod = self._plot_data[mod]["model"][sel_x]
 
-                # The model line is put on
-                plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
+                    # The model line is put on
+                    plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
 
         # Generate the legend for the data and model(s)
         plt.legend(loc="best", fontsize=fontsize-1)
