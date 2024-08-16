@@ -14,10 +14,28 @@ from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..samples import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
-from ..sourcetools.density import inv_abel_fitted_model
-from ..sourcetools.temperature import onion_deproj_temp_prof
+from ..samples import BaseSample
 from ..xspec.fit import single_temp_apec
 
+def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
+    """
+    Returns a list of all the telescopes associated to each Source. For most functions within
+    sourcetools, the initial sources argument may be a list, so the telescopes attribute can't be
+    used.
+    """
+
+    if isinstance(sources, list):
+        # This collects all telescopes associated with each source, so there will be duplicates
+        all_telescopes_inc_dups = []
+        for src in sources:
+            all_telescopes_inc_dups.extend(src.telescopes)
+        # and now removing the duplicates
+        all_telescopes = list(set(all_telescopes_inc_dups))
+    
+    else:
+        all_telescopes = sources.telescopes
+    
+    return all_telescopes
 
 def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, min_counts: int,
                   min_sn: float, over_sample: float, num_cores: int, psf_bins: int):
@@ -120,7 +138,9 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     cut_rads = Quantity([rads_dict[str(src)] for src in cut_sources])
     if len(cut_sources) == 0:
         raise ValueError("No sources have a successful global temperature measurement.")
-
+    
+    # I know this looks nasty, but I had to do this to avoid a circular import error
+    from ..sourcetools.temperature import onion_deproj_temp_prof
     # Attempt to measure their 3D temperature profiles
     temp_profs = onion_deproj_temp_prof(cut_sources, cut_rads, temp_annulus_method, temp_min_snr, temp_min_cnt,
                                         temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
@@ -166,7 +186,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     # We also need to setup the sb model list for our cut sample
     sb_models_cut = [sb_model_dict[str(src)] for src in cut_cut_sources]
-    # Now we run the inverse abel density profile generator
+     # I know this looks nasty, but I had to do this to avoid a circular import error
+    from ..sourcetools.density import inv_abel_fitted_model
     dens_profs = inv_abel_fitted_model(cut_cut_sources, sb_models_cut, fit_method, cut_cut_rads, pix_step=sb_pix_step,
                                        min_snr=sb_min_snr, abund_table=abund_table, num_steps=num_steps,
                                        num_walkers=num_walkers, group_spec=group_spec, min_counts=spec_min_counts,
@@ -187,22 +208,3 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 
-def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
-    """
-    Returns a list of all the telescopes associated to each Source. For most functions within
-    sourcetools, the initial sources argument may be a list, so the telescopes attribute can't be
-    used.
-    """
-
-    if isinstance(sources, list):
-        # This collects all telescopes associated with each source, so there will be duplicates
-        all_telescopes_inc_dups = []
-        for src in sources:
-            all_telescopes_inc_dups.extend(src.telescopes)
-        # and now removing the duplicates
-        all_telescopes = list(set(all_telescopes_inc_dups))
-    
-    else:
-        all_telescopes = sources.telescopes
-    
-    return all_telescopes
