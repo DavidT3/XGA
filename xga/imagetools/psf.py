@@ -13,7 +13,7 @@ from fitsio import write
 from scipy.signal import convolve
 from tqdm import tqdm
 
-from ..exceptions import NotAssociatedError
+from ..exceptions import NotAssociatedError, NoProductAvailableError
 from ..generate.sas import evselect_image, psfgen, emosaic
 from ..products import PSFGrid, Image
 from ..samples.base import BaseSample
@@ -127,9 +127,12 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         # All the image objects of the specified energy range (so every combination of ObsID and instrument)
         match_images = source.get_images(lo_en=lo_en, hi_en=hi_en, telescope='xmm')
 
-        # Check to see if all individual PSF corrected images are present
-        psf_corr_prod = source.get_images(lo_en=lo_en, hi_en=hi_en, psf_corr=True, psf_model=psf_model, psf_bins=bins,
-                                          psf_iter=iterations, psf_algo='rl', telescope='xmm')
+        try:
+            # Check to see if all individual PSF corrected images are present
+            psf_corr_prod = source.get_images(lo_en=lo_en, hi_en=hi_en, psf_corr=True, psf_model=psf_model, psf_bins=bins,
+                                            psf_iter=iterations, psf_algo='rl', telescope='xmm')
+        except NoProductAvailableError:
+            psf_corr_prod = []
 
         # If all the PSF corrected images are present then we skip, the correction has already been performed.
         if len(psf_corr_prod) == len(match_images):
@@ -254,7 +257,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
                       header=new_header(im.header))
 
                 # Makes an XGA product of our brand new image
-                fin_im = Image(os.path.join(OUTPUT, 'xmm', obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en)
+                fin_im = Image(os.path.join(OUTPUT, 'xmm', obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en, telescope='xmm')
                 # Adds PSF correction information for XGA's internal use
                 fin_im.psf_corrected = True
                 fin_im.psf_algorithm = "rl"
