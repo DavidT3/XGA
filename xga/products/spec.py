@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:00. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2614,21 +2614,21 @@ class AnnularSpectra(BaseAggregateProduct):
             # And now storing the luminosity results
             self._luminosities[ai][model][fit_conf] = lums[ai]
 
-    def get_results(self, annulus_ident: int, model: str = None, par: str = None, fit_conf: Union[str, dict] = None):
+    def _get_fit_checks(self, annulus_ident: int, model: str = None, par: str = None,
+                        fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
         """
-        Important method that will retrieve fit results from the AnnularSpectra object. Either for a specific
-        parameter of the supplied model combination, or for all of them. If a specific parameter is requested,
-        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
-        of such numpy arrays, with the keys corresponding to parameter names.
+        An internal function to perform input checks and pre-processing for get methods that access fit results, or
+        other related information such as fit statistic.
 
         :param int annulus_ident: The annulus for which you wish to retrieve the fit results.
         :param str model: The name of the fitted model that you're requesting the results from
             (e.g. constant*tbabs*apec).
         :param str par: The name of the parameter you want a result for.
-        :param str/dict fit_conf:
-
-        :return: The requested result value, and uncertainties.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The model name and fit configuration.
+        :rtype: Tuple[str, str]
         """
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
         #  has been fit to this annular spectrum - otherwise how are we to know which model they want?
@@ -2688,6 +2688,31 @@ class AnnularSpectra(BaseAggregateProduct):
             av_pars = ", ".join(self._fit_results[annulus_ident][model].keys())
             raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
                                               "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        return model, fit_conf
+
+    def get_results(self, annulus_ident: int, model: str = None, par: str = None, fit_conf: Union[str, dict] = None):
+        """
+        Important method that will retrieve fit results from the AnnularSpectra object. Either for a specific
+        parameter of the supplied model combination, or for all of them. If a specific parameter is requested,
+        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        of such numpy arrays, with the keys corresponding to parameter names.
+
+        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model will
+        be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if a
+        model was only fit with one fit configuration then that will be automatically selected.
+
+        :param int annulus_ident: The annulus for which you wish to retrieve the fit results.
+        :param str model: The name of the fitted model that you're requesting the results from
+            (e.g. constant*tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested result value, and uncertainties.
+        """
+        model, fit_conf = self._get_fit_checks(annulus_ident, model, par, fit_conf)
 
         # Read out into variable for readabilities sake
         fit_data = self._fit_results[annulus_ident][model][fit_conf]
