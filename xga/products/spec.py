@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 15:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 15:35. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -129,6 +129,8 @@ class Spectrum(BaseProduct):
         self._plot_data = {}
         self._luminosities = {}
         self._count_rate = {}
+        # self._fit_stat = {}
+        # self._test_stat = {}
 
         # This is specifically for fakeit runs (for cntrate - lum conversions) on the ARF/RMF
         #  associated with this Spectrum
@@ -1153,7 +1155,71 @@ class Spectrum(BaseProduct):
                                             "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                             "model": plot_data["YMODEL"][:]}
 
-    def get_luminosities(self, model: str, lo_en: Quantity = None, hi_en: Quantity = None):
+    def _get_fit_checks(self, model: str = None, fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
+        """
+        An internal function to perform input checks and pre-processing for get methods that access fit results, or
+        other related information such as fit statistic.
+
+        :param str model: The name of the fitted model that you're requesting the results from
+            (e.g. constant*tbabs*apec).
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The model name and fit configuration.
+        :rtype: Tuple[str, str]
+        """
+        # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
+        #  has been fit to this spectrum - otherwise how are we to know which model they want?
+        if len(self.fitted_models) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum object.")
+        elif model is None and len(self.fitted_models) != 1:
+            av_mods = ", ".join(self.fitted_models)
+            raise ValueError("Multiple models have been fit to this spectrum, so model=None is not "
+                             "valid; available models are {a}".format(m=model, a=av_mods))
+        elif model is None:
+            # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
+            #  automatically select it for them
+            model = self.fitted_models[0]
+        elif model is not None and model not in self.fitted_models:
+            av_mods = ", ".join(self.fitted_models)
+            raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
+                                          "models are {a}".format(m=model, a=av_mods))
+
+        # Checks the input fit configuration values - if they are completely illegal we throw an error
+        if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
+            raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
+                            "changed-from-default fit function arguments as keys and changed values as items.")
+        # TODO Need to implement the behaviour when a dictionary of changed arguments is passed
+        # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
+        #  as a string
+        elif isinstance(fit_conf, dict):
+            raise NotImplementedError("The ability to pass changed fit-function arguments in a dictionary and "
+                                      "construct the key is not yet implemented.")
+        elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
+            av_fconfs = ", ".join(self.fitted_model_configurations[model])
+            raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to this "
+                                          "spectrum; available fit configurations are "
+                                          "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+        # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
+        elif fit_conf is None and len(self.fitted_model_configurations[model]) != 1:
+            av_fconfs = ", ".join(self.fitted_model_configurations[model])
+            raise ValueError("The {m} model has been fit with multiple configuration, so fit_conf=None is not "
+                             "valid; available fit configurations are {a}".format(m=model, a=av_fconfs))
+        # However here they passed no fit configuration, and only one has been used for the model, so we're all good
+        #  and will select it for them
+        elif fit_conf is None and len(self.fitted_model_configurations[model] == 1):
+            fit_conf = self.fitted_model_configurations[model][0]
+
+        # # We also check that
+        # if par is not None and par not in self._fit_results[annulus_ident][model]:
+        #     av_pars = ", ".join(self._fit_results[annulus_ident][model].keys())
+        #     raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
+        #                                       "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        return model, fit_conf
+
+    def get_luminosities(self, model: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                         fit_conf: Union[str, dict] = None):
         """
         Returns the luminosities measured for this spectrum from a given model.
 
