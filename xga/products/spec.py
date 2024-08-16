@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 15:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 15:38. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1223,13 +1223,24 @@ class Spectrum(BaseProduct):
         """
         Returns the luminosities measured for this spectrum from a given model.
 
+        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
+
         :param model: Name of model to fetch luminosities for.
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: Luminosity measurement, either for all energy bands, or the one requested with the energy
             limit parameters. Luminosity measurements are presented as three column numpy arrays, with column 0
             being the value, column 1 being err-, and column 2 being err+.
         """
+        # Use the internal method to check the model name and fit configuration - populating them if they are None
+        #  and only one model and/or one configuration of that model has been fit
+        model, fit_conf = self._get_fit_checks(model, fit_conf)
+
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
@@ -1239,14 +1250,8 @@ class Spectrum(BaseProduct):
         else:
             en_key = None
 
-        # Checks that the requested region, model and energy band actually exist
-        if len(self._luminosities) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.src_name))
-        elif model not in self._luminosities:
-            av_mods = ", ".join(self._luminosities.keys())
-            raise ModelNotAssociatedError("{0} has not been fitted to this spectrum; "
-                                          "available models are {1}".format(model, av_mods))
-        elif en_key is not None and en_key not in self._luminosities[model]:
+        # Checks that the requested energy band actually exists
+        if en_key is not None and en_key not in self._luminosities[model]:
             av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
                                               "energy bands are {b}".format(l=lo_en.to("keV").value,
@@ -1254,9 +1259,9 @@ class Spectrum(BaseProduct):
                                                                             m=model, b=av_bands))
 
         if en_key is None:
-            return self._luminosities[model]
+            return self._luminosities[model][fit_conf]
         else:
-            return self._luminosities[model][en_key]
+            return self._luminosities[model][fit_conf][en_key]
 
     def get_rate(self, model: str) -> Quantity:
         """
