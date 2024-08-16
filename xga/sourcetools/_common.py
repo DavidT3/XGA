@@ -197,8 +197,8 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
     if isinstance(sources, list):
         # This collects all telescopes associated with each source, so there will be duplicates
         all_telescopes_inc_dups = []
-            for src in sources:
-                all_telescopes_inc_dups.extend(src.telescopes)
+        for src in sources:
+            all_telescopes_inc_dups.extend(src.telescopes)
         # and now removing the duplicates
         all_telescopes = list(set(all_telescopes_inc_dups))
     
