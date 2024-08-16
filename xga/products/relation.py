@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 13:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:07. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -873,7 +873,7 @@ class ScalingRelation:
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
              point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None):
+             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -921,6 +921,8 @@ class ScalingRelation:
             the label positions relative to their data point.
         :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
             relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -1112,6 +1114,13 @@ class ScalingRelation:
         # Use the axis limits quite a lot in this next bit, so read them out into variables
         x_axis_lims = ax.get_xlim()
         y_axis_lims = ax.get_ylim()
+
+        # The user can request a one-to-one line be overplotted on the view (obviously not relevant to general
+        #  scaling relations, but great for comparisons)
+        if one_to_one:
+            min_from = min(min(x_axis_lims), min(y_axis_lims))
+            max_to = max(max(x_axis_lims), max(y_axis_lims))
+            plt.plot([min_from, max_to], [min_from, max_to], color='red', linestyle='dashed', label='1:1')
 
         # This dynamically changes how tick labels are formatted depending on the values displayed
         if max(x_axis_lims) < 1000:
@@ -1368,7 +1377,7 @@ class AggregateScalingRelation:
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
              data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
-             y_lims: Quantity = None):
+             y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -1405,6 +1414,8 @@ class AggregateScalingRelation:
             plot, including the unit string.
         :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
             relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up, so I think the duplication is justified.
@@ -1582,6 +1593,13 @@ class AggregateScalingRelation:
         # Use the axis limits quite a lot in this next bit, so read them out into variables
         x_axis_lims = ax.get_xlim()
         y_axis_lims = ax.get_ylim()
+
+        # The user can request a one-to-one line be overplotted on the view (obviously not relevant to general
+        #  scaling relations, but great for comparisons)
+        if one_to_one:
+            min_from = min(min(x_axis_lims), min(y_axis_lims))
+            max_to = max(max(x_axis_lims), max(y_axis_lims))
+            plt.plot([min_from, max_to], [min_from, max_to], color='red', linestyle='dashed', label='1:1')
 
         # This dynamically changes how tick labels are formatted depending on the values displayed
         if max(x_axis_lims) < 1000:
