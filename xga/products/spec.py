@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:40. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2767,8 +2767,8 @@ class AnnularSpectra(BaseAggregateProduct):
         behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
         configuration then that will be automatically selected.
 
-        :param int annulus_ident: The annulus for which you wish to retrieve the fit statistic.
-        :param str model: The name of the fitted model that you're requesting the fit statistic of
+        :param int annulus_ident: The annulus for which you wish to retrieve the test statistic.
+        :param str model: The name of the fitted model that you're requesting the test statistic of
             (e.g. constant*tbabs*apec).
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
@@ -2779,18 +2779,25 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return self._test_stat[annulus_ident][model][fit_conf]
 
-    def get_luminosities(self, annulus_ident: int, model: str, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[Quantity, Dict[str, Quantity]]:
+    def get_luminosities(self, annulus_ident: int, model: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                         fit_conf: Union[str, dict] = None) -> Union[Quantity, Dict[str, Quantity]]:
         """
         This will retrieve luminosities of specific annuli from fits performed on this AnnularSpectra object.
         A model name must be supplied, and if a luminosity from a specific energy range is desired then lower
         and upper energy bounds may be passed.
 
+        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
+
         :param int annulus_ident: The annulus for which you wish to retrieve the luminosities.
-        :param str model: The name of the fitted model that you're requesting the results
-            from (e.g. constant*tbabs*apec).
+        :param str model: The name of the fitted model that you're requesting the luminosity of
+            (e.g. constant*tbabs*apec).
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: The requested luminosity value, and uncertainties. If a specific energy range has been supplied
             then a quantity containing the value (col 1), -err (col 2), and +err (col 3), will be returned. If no
             energy range is supplied then a dictionary of all available luminosity quantities will be returned.
@@ -2804,6 +2811,9 @@ class AnnularSpectra(BaseAggregateProduct):
             en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
         else:
             en_key = None
+
+        # Checking the model fit retrieval arguments that were passed in
+        model, fit_conf = self._get_fit_checks(annulus_ident, model, None, fit_conf)
 
         # Checks that the requested region, model and energy band actually exist
         if len(self._luminosities[annulus_ident]) == 0:
@@ -2822,13 +2832,13 @@ class AnnularSpectra(BaseAggregateProduct):
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[annulus_ident][model]:
-                lum_value = self._luminosities[annulus_ident][model][lum_key]
+            for lum_key in self._luminosities[annulus_ident][model][fit_conf]:
+                lum_value = self._luminosities[annulus_ident][model][fit_conf][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[annulus_ident][model][en_key]
+            lum_value = self._luminosities[annulus_ident][model][fit_conf][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
