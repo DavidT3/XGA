@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 09:30. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1868,6 +1868,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # These will be stored on a per model basis
         self._total_count_rate = {ai: {} for ai in range(self._num_ann)}
         self._test_stat = {ai: {} for ai in range(self._num_ann)}
+        self._fit_stat = {ai: {} for ai in range(self._num_ann)}
         self._dof = {ai: {} for ai in range(self._num_ann)}
 
         # Finally the most important outputs, the fit results and luminosities. There obviously is some data
@@ -2552,6 +2553,7 @@ class AnnularSpectra(BaseAggregateProduct):
             self._total_count_rate[ai][model] = [float(tab_line[ai]["TOTAL_COUNT_RATE"]),
                                                  float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"])]
             self._test_stat[ai][model] = float(tab_line[ai]["TEST_STATISTIC"])
+            self._fit_stat[ai][model] = float(tab_line[ai]["FIT_STATISTIC"])
             self._dof[ai][model] = float(tab_line[ai]["DOF"])
             self._obs_order[ai][model] = obs_order[ai]
 
