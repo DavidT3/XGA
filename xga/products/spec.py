@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 17:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 19:11. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3196,14 +3196,21 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.tight_layout()
         plt.show()
 
-    def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8)):
+    def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8), fit_conf: Union[str, dict] = None):
         """
         An equivalent to the Spectrum view method, but allows all spectra from the same annulus to be
         displayed on the same axis.
 
+        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
+
         :param int ann_ident: The integer identifier of the annulus you wish to see spectra for.
         :param str model: The fitted model to display on the data.
         :param tuple figsize: The size of the plot.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         """
         # Grabs the relevant spectra using the annular ident
         rel_spec = self.get_spectra(ann_ident)
@@ -3219,6 +3226,18 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.title("{n} - Annulus {num}".format(n=self.src_name, num=ann_ident))
         # Boolean flag to check if any spectra have plot data, for the end of this method
         anything_plotted = False
+
+        if model is None and len(self.fitted_models) == 1:
+            model = self.fitted_models[0]
+
+        # TODO CONVERT TO USING FIT_CONF, DEAL WITH THE FACT THAT THE SINGLE DICTIONARY TO KEY CONVERTER WAS TO BE
+        #  IN THE INTERNAL GET CHECKER, AND MAKE THIS METHOD SHOW A PLOT EVEN WITHOUT A MODEL FIT
+
+        if fit_conf is None:
+            fit_conf = self.fitted_model_configurations[model]
+        elif fit_conf is not None and fit_conf not in self.fitted_model_configurations[model]:
+            raise ModelNotAssociatedError("The fit configuration")
+
 
         # Set up lists to store the model line and data plot handlers, so legends for fit and data can be put on
         #  the same line
