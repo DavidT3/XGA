@@ -53,7 +53,12 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     :return: Most likely just the passed in sources, but if a single source was passed then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
-    for tel in sources.telescopes:
+    # sorry have to import here due to a circular import 
+    from ...sourcetools._common import _get_all_telescopes
+    # this returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
+    all_telescopes = _get_all_telescopes(sources)
+
+    for tel in all_telescopes:
         # TODO create a function that does this sort of thing for us - as in generating spectra for each of the
         #  telescopes that are associated with a source or sample
         # Each telescope has its own methods of generating spectra
