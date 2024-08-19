@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 17:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 17:27. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -290,6 +290,19 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    fit_conf = _gen_fit_conf({'start_temp': start_temp,
+                              'start_met': start_met,
+                              'freeze_nh': freeze_nh,
+                              'freeze_met': freeze_met,
+                              'freeze_temp': freeze_temp,
+                              'lo_en': lo_en, 'hi_en': hi_en,
+                              'par_fit_stat': par_fit_stat,
+                              'abund_table': abund_table,
+                              'fit_method': fit_method,
+                              'spectrum_checking': spectrum_checking})
+
     script_paths = []
     outfile_paths = []
     src_inds = []
@@ -368,7 +381,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, None
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
 
 
 @xspec_call
@@ -420,7 +433,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -444,6 +457,20 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     par_names = "{factor nH Tmax beta inv_slope nH abundanc Redshift switch norm}"
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
+
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    fit_conf = _gen_fit_conf({'start_max_temp': start_max_temp,
+                              'start_met': start_met,
+                              'start_t_rat': start_t_rat,
+                              'start_inv_em_slope': start_inv_em_slope,
+                              'freeze_nh': freeze_nh,
+                              'freeze_met': freeze_met,
+                              'lo_en': lo_en, 'hi_en': hi_en,
+                              'par_fit_stat': par_fit_stat,
+                              'abund_table': abund_table,
+                              'fit_method': fit_method,
+                              'spectrum_checking': spectrum_checking})
 
     script_paths = []
     outfile_paths = []
@@ -524,7 +551,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
 
 
 @xspec_call
