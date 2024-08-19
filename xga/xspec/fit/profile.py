@@ -1,12 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 18:06. Copyright (c) The Contributors
 
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _write_xspec_script, _check_inputs, _write_crossarf_xspec_script
+from ._common import _write_xspec_script, _check_inputs, _write_crossarf_xspec_script, _gen_fit_conf
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError, NoProductAvailableError
@@ -93,6 +93,18 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     par_names = "{factor nH kT Abundanc Redshift norm}"
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
+
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    fit_conf = _gen_fit_conf({'start_temp': start_temp,
+                              'start_met': start_met,
+                              'freeze_nh': freeze_nh,
+                              'freeze_met': freeze_met,
+                              'lo_en': lo_en, 'hi_en': hi_en,
+                              'par_fit_stat': par_fit_stat,
+                              'abund_table': abund_table,
+                              'fit_method': fit_method,
+                              'spectrum_checking': spectrum_checking})
 
     script_paths = []
     outfile_paths = []
@@ -185,7 +197,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_conf
 
 
 @xspec_call
