@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2643,12 +2643,16 @@ class BaseSource:
     def get_luminosities(self, outer_radius: Union[str, Quantity], model: str,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
                          hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None):
+                         over_sample: float = None, fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -2668,7 +2672,11 @@ class BaseSource:
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: The requested luminosity value, and uncertainties.
+        :rtype: Union[dict, Quantity]
         """
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
@@ -2679,6 +2687,8 @@ class BaseSource:
         else:
             storage_key = specs.storage_key
 
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
@@ -2688,17 +2698,10 @@ class BaseSource:
         else:
             en_key = None
 
-        # Checks that the requested region, model and energy band actually exist
-        if len(self._luminosities) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif storage_key not in self._luminosities:
-            raise ModelNotAssociatedError("These spectra have no associated XSPEC fit to {s}.".format(s=self.name))
-        elif model not in self._luminosities[storage_key]:
-            av_mods = ", ".join(self._luminosities[storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to these spectra of {s}; "
-                                          "available models are {a}".format(m=model, s=self.name, a=av_mods))
-        elif en_key is not None and en_key not in self._luminosities[storage_key][model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[storage_key][model].keys()])
+        # Checks the energy band actually exists
+        if en_key is not None and en_key not in self._luminosities[storage_key][model][fit_conf]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV"
+                                  for en in self._luminosities[storage_key][model][fit_conf].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
                                               "energy bands are {b}".format(l=lo_en.to("keV").value,
                                                                             u=hi_en.to("keV").value,
@@ -2707,13 +2710,13 @@ class BaseSource:
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[storage_key][model]:
-                lum_value = self._luminosities[storage_key][model][lum_key]
+            for lum_key in self._luminosities[storage_key][model][fit_conf]:
+                lum_value = self._luminosities[storage_key][model][fit_conf][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[storage_key][model][en_key]
+            lum_value = self._luminosities[storage_key][model][fit_conf][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
