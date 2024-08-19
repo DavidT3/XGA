@@ -64,8 +64,11 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         stacking procedure for a particular telescope is not supported, this function will instead use individual
         spectra for an ObsID. The default is False.
     """
-    # collecting all the telescopes associated here for use later
-    all_telescopes = sources.telescopes
+    # need to import here to avoid circular import errors
+    from ..sourcetools._common import _get_all_telescopes
+    # collecting all the telescopes associated here for use later, use a function to account for 
+    # if sources is input as a list
+    all_telescopes = _get_all_telescopes(sources)
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
