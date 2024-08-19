@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 18:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -146,7 +146,8 @@ def xspec_call(xspec_func):
         #  and 3rd is the number of cores to use.
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
-        script_list, paths, cores, run_type, src_inds, radii, timeout = xspec_func(*args, **kwargs)
+        (script_list, paths, cores, run_type, src_inds, radii, timeout, model_name,
+            fit_conf) = xspec_func(*args, **kwargs)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
@@ -189,6 +190,8 @@ def xspec_call(xspec_func):
         elif len(script_list) == 0:
             warnings.warn("All XSPEC operations had already been run.", stacklevel=2)
 
+        # This allows to keep track of any errors that need to be raised at the end of the loop
+        xspec_errs = []
         # Now we assign the fit results to source objects
         for src_repr in results:
             # Made this lookup list earlier, using string representations of source objects.
@@ -298,8 +301,12 @@ def xspec_call(xspec_func):
                                               res_table["Lx_{}".format(comb)].values, model)
 
                 elif len(res_set) != 0 and not res_set[1]:
-                    for err in res_set[2]:
-                        raise XSPECFitError(err)
+                    if not ann_fit:
+                        rel_script = script_list[ind]
+                        storage_key = rel_script.split(s.name)[-1].split(model_name)
+                        s.add_fit_failure(model_name, storage_key, fit_conf)
+                    if len(res_set[2]) != 0:
+                        xspec_errs += res_set[2]
 
             if ann_fit:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
@@ -329,6 +336,10 @@ def xspec_call(xspec_func):
                 except ValueError:
                     warnings.warn("{src} annular spectra profile fit was not "
                                   "successful".format(src=ann_spec.src_name), stacklevel=2)
+
+        # If there are were any errors raised during the XSPEC fitting process, this is where they shall be heard.
+        if len(xspec_errs) != 0:
+            raise XSPECFitError(xspec_errs)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
