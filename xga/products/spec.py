@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 19:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/08/2024, 21:43. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3227,17 +3227,22 @@ class AnnularSpectra(BaseAggregateProduct):
         # Boolean flag to check if any spectra have plot data, for the end of this method
         anything_plotted = False
 
+        # If the user hasn't passed a model, and only one has been fit, then we'll set 'model' for them. If there are
+        #  no models then of course model being None is totally fine
         if model is None and len(self.fitted_models) == 1:
             model = self.fitted_models[0]
 
         # TODO CONVERT TO USING FIT_CONF, DEAL WITH THE FACT THAT THE SINGLE DICTIONARY TO KEY CONVERTER WAS TO BE
         #  IN THE INTERNAL GET CHECKER, AND MAKE THIS METHOD SHOW A PLOT EVEN WITHOUT A MODEL FIT
 
-        if fit_conf is None:
+        if fit_conf is None and model is not None:
             fit_conf = self.fitted_model_configurations[model]
         elif fit_conf is not None and fit_conf not in self.fitted_model_configurations[model]:
             raise ModelNotAssociatedError("The fit configuration")
 
+        # TODO SHOULD ADD A GET_VIEW METHOD TO SPECTRUM (IF I DIDN'T ALREADY DO THAT) AND USE THAT
+        raise NotImplementedError("We are in the process of altering how model fits are stored and accessed in "
+                                  "AnnularSpectrum and Spectrum instances - this view method will need to be rebuilt.")
 
         # Set up lists to store the model line and data plot handlers, so legends for fit and data can be put on
         #  the same line
