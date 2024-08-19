@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 16:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 16:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2422,6 +2422,18 @@ class BaseSource:
         """
         return {s_ident: {m: list(self._fit_results[s_ident][m].keys()) for m in self.fitted_models[s_ident]}
                 for s_ident in self._fit_results}
+
+    @property
+    def fitted_model_failures(self) -> dict:
+        """
+        Property that returns a dictionary with spectrum storage identifiers as top level keys, model names as lower
+        level keys, and lists of fit configuration identifiers that correspond to FAILED fits.
+
+        :return: Dictionary with model names as keys, and lists of model configuration identifiers as values.
+        :rtype: dict
+        """
+        return {s_ident: {m: list(self._failed_fits[s_ident][m].keys()) for m in self._failed_fits[s_ident]}
+                for s_ident in self._failed_fits}
 
     def add_fit_failure(self, model: str, spec_storage_key: str, fit_conf: str):
         """
