@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 14:08. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -250,7 +250,7 @@ class BaseSample:
     def Lx(self, outer_radius: Union[str, Quantity], model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True):
+           over_sample: float = None, quality_checks: bool = True, fit_conf: Union[str, dict] = None):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -274,11 +274,14 @@ class BaseSample:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
@@ -293,11 +296,13 @@ class BaseSample:
             raise NotImplementedError("Sorry region fitting is currently well supported")
 
         lums = []
+        warns = []
         for src_ind, src in enumerate(self._sources.values()):
+            src: BaseSource
             try:
                 # Fetch the luminosity from a given source using the dedicated method
                 lx_val = src.get_luminosities(out_rads[src_ind], model, inn_rads[src_ind], lo_en, hi_en, group_spec,
-                                              min_counts, min_sn, over_sample)
+                                              min_counts, min_sn, over_sample, fit_conf)
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
                 if quality_checks and len(frac_err[frac_err >= 1]) != 0:
@@ -306,9 +311,10 @@ class BaseSample:
                     lums.append(lx_val)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
-                # If any of the possible errors are thrown, we print the error as a warning and replace
-                #  that entry with a NaN
-                warn(str(err))
+                # If any of the possible errors are thrown, we grab the name of the source and replace
+                #  that entry with a NaN - the names will be included in a warning at the end
+                # warn(str(err))
+                warns.append(src.name)
                 lums.append(np.array([np.NaN, np.NaN, np.NaN]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
@@ -318,6 +324,12 @@ class BaseSample:
         check_lums = lums[~np.isnan(lums)]
         if len(check_lums) == 0:
             raise ValueError("All luminosities appear to be NaN.")
+
+        # If there were any errors for any of the sources, we include their names in a warning here
+        if len(warns) > 0:
+            warn_text = ("Problems occurred (there may have been no successful model fit) while attempting to retrieve "
+                         "luminosities for the following sources; {}".format(",".join(warns)))
+            warn(warn_text, stacklevel=2)
 
         return lums
 

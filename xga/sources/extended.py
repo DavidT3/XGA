@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 14:08. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -469,7 +469,7 @@ class GalaxyCluster(ExtendedSource):
     def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                         min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                        fit_conf: Union[str, dict] = None):
+                        fit_conf: Union[str, dict] = None) -> Quantity:
         """
         Convenience method that calls get_results to retrieve temperature measurements. All matching values
         from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
@@ -492,10 +492,14 @@ class GalaxyCluster(ExtendedSource):
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: The temperature value, and uncertainties.
+        :rtype: Quantity
         """
         res = self.get_results(outer_radius, model, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample,
                                fit_conf)
