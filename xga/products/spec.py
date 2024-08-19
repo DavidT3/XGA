@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/08/2024, 21:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/08/2024, 21:47. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3322,6 +3322,9 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
         """
+        raise NotImplementedError("We are in the process of altering how model fits are stored and accessed in "
+                                  "AnnularSpectrum and Spectrum instances - this view method will need to be rebuilt.")
+
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
         # This subplot with a 3D projection is what allows us to make a 3-axis plot
@@ -3385,7 +3388,7 @@ class AnnularSpectra(BaseAggregateProduct):
             plt.show()
         else:
             warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
-                          "it".format(m=model))
+                          "it".format(m=model), stacklevel=2)
 
         plt.close('all')
 
@@ -3401,6 +3404,9 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
         """
+        raise NotImplementedError("We are in the process of altering how model fits are stored and accessed in "
+                                  "AnnularSpectrum and Spectrum instances - this view method will need to be rebuilt.")
+
         # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
         #  commits, because it's trying to be clever. It's a behaviour I normally appreciate, but not here.
         Axes3D
