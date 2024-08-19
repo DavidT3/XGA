@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:44. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2639,6 +2639,94 @@ class BaseSource:
             return proc_data
         else:
             return proc_data[par]
+
+    def get_fit_statistic(self, outer_radius: Union[str, Quantity], model: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    fit_conf: Union[str, dict] = None) -> float:
+        """
+        Method that will retrieve fit statistic from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
+        return self._fit_stat[storage_key][model][fit_conf]
+
+    def get_fit_statistic(self, outer_radius: Union[str, Quantity], model: str = None,
+                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                          group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                          fit_conf: Union[str, dict] = None) -> float:
+        """
+        Method that will retrieve test statistic from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
+        return self._test_stat[storage_key][model][fit_conf]
 
     def get_luminosities(self, outer_radius: Union[str, Quantity], model: str,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
