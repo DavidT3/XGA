@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 14:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 14:31. Copyright (c) The Contributors
 
 from typing import List
 
@@ -648,7 +648,7 @@ class ClusterSample(BaseSample):
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
-                warn(str(err))
+                warn(str(err), stacklevel=2)
                 temps.append(np.array([np.NaN, np.NaN, np.NaN]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
