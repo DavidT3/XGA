@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 18:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 18:12. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -252,11 +252,11 @@ def xspec_call(xspec_func):
                                     spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
 
                             # Adds information from this fit to the spectrum object.
-                            spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)])
+                            spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)], fit_conf)
 
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                            processed_lums = spec.get_luminosities(model)
+                            processed_lums = spec.get_luminosities(model, fit_conf=fit_conf)
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
 
@@ -270,7 +270,6 @@ def xspec_call(xspec_func):
                             chosen_lums = inst_lums["mos2"]
                         else:
                             chosen_lums = inst_lums["mos1"]
-
                         if ann_fit:
                             ann_results[spec.annulus_ident] = global_results
                             ann_lums[spec.annulus_ident] = chosen_lums
@@ -278,7 +277,7 @@ def xspec_call(xspec_func):
 
                         elif not ann_fit:
                             # Push global fit results, luminosities etc. into the corresponding source object.
-                            s.add_fit_data(model, global_results, chosen_lums, sp_key)
+                            s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf)
 
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
@@ -313,7 +312,7 @@ def xspec_call(xspec_func):
                 #  the last spectra that was opened in the loop
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
                 try:
-                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order)
+                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order, fit_conf)
 
                     # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                     #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
@@ -326,8 +325,8 @@ def xspec_call(xspec_func):
                         norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
                         s.update_products(norm_prof)
 
-                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
-                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
+                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec', fit_conf=fit_conf):
+                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '', fit_conf=fit_conf)
                             s.update_products(met_prof)
 
                     else:
