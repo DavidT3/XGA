@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 11:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 17:24. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -7,7 +7,7 @@ from typing import List, Union
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _check_inputs, _write_xspec_script, _pregen_spectra
+from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _gen_fit_conf
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
@@ -106,6 +106,19 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    fit_conf = _gen_fit_conf({'start_temp': start_temp,
+                              'start_met': start_met,
+                              'freeze_nh': freeze_nh,
+                              'freeze_met': freeze_met,
+                              'freeze_temp': freeze_temp,
+                              'lo_en': lo_en, 'hi_en': hi_en,
+                              'par_fit_stat': par_fit_stat,
+                              'abund_table': abund_table,
+                              'fit_method': fit_method,
+                              'spectrum_checking': spectrum_checking})
+
     script_paths = []
     outfile_paths = []
     src_inds = []
@@ -185,7 +198,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
 
 
 @xspec_call
@@ -355,7 +368,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             src_inds.append(src_ind)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, None
 
 
 @xspec_call
