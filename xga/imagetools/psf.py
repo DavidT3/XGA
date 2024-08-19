@@ -139,6 +139,9 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
             continue
         else:
             sub_sources.append(source)
+    # if there are no sources then exit the function
+    if len(sub_sources) == 0:
+        return
 
     # Should have cleaned it so that only those sources that need it will have PSFs generated
     psfgen(sub_sources, bins, psf_model, num_cores=num_cores)
