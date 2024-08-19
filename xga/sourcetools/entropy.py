@@ -130,7 +130,8 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                                           temp_use_worst, freeze_met, abund_table, temp_lo_en,
                                                           temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
                                                           over_sample, one_rmf, num_cores, show_warn, psf_bins)
-
+    # need to import here to avoid circular import errors
+    from ..sourcetools._common import _get_all_telescopes
     # collecting all the associated telescopes to loop over later
     all_tels = _get_all_telescopes(sources)
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them from the sources sometimes
@@ -186,6 +187,6 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     # In case only one source is being analysed
     if len(final_entropy_profs) == 1:
         # this will select the inner nested dictionary
-        final_entropy_profs = next(iter(d.values()))
+        final_entropy_profs = next(iter(final_entropy_profs.values()))
     
     return final_entropy_profs
