@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 09:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 09:55. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1120,6 +1120,7 @@ class Spectrum(BaseProduct):
             self._exp = float(tab_line["EXPOSURE"])
 
         # This is the count rate and error for this spectrum.
+        self._count_rate[model].setdefault(model, {})
         self._count_rate[model][fit_conf] = [float(tab_line["COUNT_RATE"]), float(tab_line["COUNT_RATE_ERR"])]
 
         # Searches for column headers with 'Lx' in them (this has to be dynamic as the user can calculate
@@ -1149,8 +1150,9 @@ class Spectrum(BaseProduct):
             elif err_type == "+":
                 lx_dict[en_band][2] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
 
+        self._luminosities.setdefault(model, {})
         self._luminosities[model][fit_conf] = lx_dict
-
+        self._plot_data.setdefault(model, {})
         self._plot_data[model][fit_conf] = {"x": plot_data["X"][:], "x_err": plot_data["XERR"][:],
                                             "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
                                             "model": plot_data["YMODEL"][:]}
@@ -2685,11 +2687,18 @@ class AnnularSpectra(BaseAggregateProduct):
         for ai in range(0, self._num_ann):
             # Various global values of interest
             self._total_exp[ai] = float(tab_line[ai]["TOTAL_EXPOSURE"])
+            # If the model isn't already a key in the nested dictionary, this will add a dictionary entry (neatest
+            #  way I could find of doing this).
+            self._total_count_rate[ai].setdefault(model, {})
             self._total_count_rate[ai][model][fit_conf] = [float(tab_line[ai]["TOTAL_COUNT_RATE"]),
                                                            float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"])]
+            self._test_stat[ai].setdefault(model, {})
             self._test_stat[ai][model][fit_conf] = float(tab_line[ai]["TEST_STATISTIC"])
+            self._fit_stat[ai].setdefault(model, {})
             self._fit_stat[ai][model][fit_conf] = float(tab_line[ai]["FIT_STATISTIC"])
+            self._dof[ai].setdefault(model, {})
             self._dof[ai][model][fit_conf] = float(tab_line[ai]["DOF"])
+            self._obs_order[ai].setdefault(model, {})
             self._obs_order[ai][model][fit_conf] = obs_order[ai]
 
             # The parameters available will obviously be dynamic, so have to find out what they are and then
@@ -2721,8 +2730,10 @@ class AnnularSpectra(BaseAggregateProduct):
                 mod_res[par_name][ident][pos] = float(tab_line[ai][par])
 
             # Storing the fit results
+            self._fit_results[ai].setdefault(model, {})
             self._fit_results[ai][model][fit_conf] = mod_res
             # And now storing the luminosity results
+            self._luminosities[ai].setdefault(model, {})
             self._luminosities[ai][model][fit_conf] = lums[ai]
 
     def _get_fit_checks(self, annulus_ident: int, model: str = None, par: str = None,
