@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 09:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:27. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1225,7 +1225,7 @@ class Spectrum(BaseProduct):
         """
         Returns the luminosities measured for this spectrum from a given model.
 
-        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        If no model name is supplied, but only one model has been fit to this spectrum, then that model
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
         a model was only fit with one fit configuration then that will be automatically selected.
 
@@ -1269,7 +1269,7 @@ class Spectrum(BaseProduct):
         """
         Fetches the count rate for a particular model fitted to this spectrum.
 
-        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        If no model name is supplied, but only one model has been fit to this spectrum, then that model
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
         a model was only fit with one fit configuration then that will be automatically selected.
 
@@ -1348,7 +1348,7 @@ class Spectrum(BaseProduct):
         """
         Simply grabs the plot data dictionary for a given model, if the spectrum has had a fit performed on it.
 
-        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
+        If no model name is supplied, but only one model has been fit to this spectrum, then that model
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
         a model was only fit with one fit configuration then that will be automatically selected.
 

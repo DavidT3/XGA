@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 10:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:27. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2398,6 +2398,30 @@ class BaseSource:
         """
         return self._name
 
+    @property
+    def fitted_models(self) -> dict:
+        """
+        A property that gets the list of spectral models that have been fit to each set of spectra that were
+        generated for this source.
+
+        :return: A dict with keys being storage identifiers for spectra, and values being lists of models fit to
+            this spectrum.
+        :rtype: dict
+        """
+        return {s_ident: list(self._fit_results[s_ident].keys()) for s_ident in self._fit_results}
+
+    @property
+    def fitted_model_configurations(self) -> dict:
+        """
+        Property that returns a dictionary with spectrum storage identifiers as top level keys, model names as lower
+        level keys, and lists of fit configuration identifiers as values.
+
+        :return: Dictionary with model names as keys, and lists of model configuration identifiers as values.
+        :rtype: dict
+        """
+        return {s_ident: {m: list(self._fit_results[s_ident][m].keys()) for m in self.fitted_models[s_ident]}
+                for s_ident in self._fit_results}
+
     def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str, fit_conf: str):
         """
         A method that stores fit results and global information for a set of spectra in a source object.
@@ -2435,6 +2459,7 @@ class BaseSource:
         self._total_count_rate[spec_storage_key][model][fit_conf] = [float(tab_line["TOTAL_COUNT_RATE"]),
                                                                      float(tab_line["TOTAL_COUNT_RATE_ERR"])]
         self._test_stat[spec_storage_key][model][fit_conf] = float(tab_line["TEST_STATISTIC"])
+        self._fit_stat[spec_storage_key][model][fit_conf] = float(tab_line["FIT_STATISTIC"])
         self._dof[spec_storage_key][model][fit_conf] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
@@ -2471,15 +2496,87 @@ class BaseSource:
         # And now storing the luminosity results
         self._luminosities[spec_storage_key][model][fit_conf] = lums
 
-    def get_results(self, outer_radius: Union[str, Quantity], model: str,
+    def _get_fit_checks(self, spec_storage_key: str, model: str = None, par: str = None,
+                        fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
+        """
+        An internal function to perform input checks and pre-processing for get methods that access fit results, or
+        other related information such as fit statistic.
+
+        :param str model: The name of the fitted model that you're requesting the results from
+            (e.g. constant*tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The model name and fit configuration.
+        :rtype: Tuple[str, str]
+        """
+
+        # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
+        #  has been fit to this spectrum - otherwise how are we to know which model they want?
+        if len(self.fitted_models[spec_storage_key]) == 0:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with the specified Spectrum object.")
+        elif model is None and len(self.fitted_models[spec_storage_key]) != 1:
+            av_mods = ", ".join(self.fitted_models[spec_storage_key])
+            raise ValueError("Multiple models have been fit to the specified spectrum, so model=None is not "
+                             "valid; available models are {a}".format(m=model, a=av_mods))
+        elif model is None:
+            # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
+            #  automatically select it for them
+            model = self.fitted_models[spec_storage_key][0]
+        elif model is not None and model not in self.fitted_models[spec_storage_key]:
+            av_mods = ", ".join(self.fitted_models[spec_storage_key])
+            raise ModelNotAssociatedError("{m} has not been fitted to the specified spectrum; available "
+                                          "models are {a}".format(m=model, a=av_mods))
+
+        # Checks the input fit configuration values - if they are completely illegal we throw an error
+        if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
+            raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
+                            "changed-from-default fit function arguments as keys and changed values as items.")
+        # TODO Need to implement the behaviour when a dictionary of changed arguments is passed
+        # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
+        #  as a string
+        elif isinstance(fit_conf, dict):
+            raise NotImplementedError("The ability to pass changed fit-function arguments in a dictionary and "
+                                      "construct the key is not yet implemented.")
+        elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[spec_storage_key][model]:
+            av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
+            raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to the "
+                                          "specified spectrum; available fit configurations are "
+                                          "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+        # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
+        elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model]) != 1:
+            av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
+            raise ValueError("The {m} model has been fit to the specified spectrum with multiple configuration, so "
+                             "fit_conf=None is not valid; available fit configurations are "
+                             "{a}".format(m=model, a=av_fconfs))
+        # However here they passed no fit configuration, and only one has been used for the model, so we're all good
+        #  and will select it for them
+        elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model] == 1):
+            fit_conf = self.fitted_model_configurations[spec_storage_key][model][0]
+
+        # Check to make sure the requested results actually exist
+        if par is not None and par not in self._fit_results[spec_storage_key][model][fit_conf]:
+            av_pars = ", ".join(self._fit_results[spec_storage_key][model][fit_conf].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to the specified spectra; "
+                                              "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        return model, fit_conf
+
+    def get_results(self, outer_radius: Union[str, Quantity], model: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
-                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -2495,36 +2592,29 @@ class BaseSource:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: The requested result value, and uncertainties.
+        :rtype: Union[dict, Quantity]
         """
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
             storage_key = specs[0].storage_key
         else:
             storage_key = specs.storage_key
 
-        # Bunch of checks to make sure the requested results actually exist
-        if len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif storage_key not in self._fit_results:
-            raise ModelNotAssociatedError("Those spectra have no associated XSPEC fit to {s}".format(s=self.name))
-        elif model not in self._fit_results[storage_key]:
-            av_mods = ", ".join(self._fit_results[storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to those spectra of {s}; available "
-                                          "models are {a}".format(m=model, s=self.name, a=av_mods))
-        elif par is not None and par not in self._fit_results[storage_key][model]:
-            av_pars = ", ".join(self._fit_results[storage_key][model].keys())
-            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to {s}, "
-                                              "the options are {a}".format(p=par, m=model, s=self.name, a=av_pars))
+        model, fit_conf = self._get_fit_checks(storage_key, model, par, fit_conf)
 
         # Read out into variable for readabilities sake
-        fit_data = self._fit_results[storage_key][model]
+        fit_data = self._fit_results[storage_key][model][fit_conf]
         proc_data = {}  # Where the output will ive
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into
@@ -3770,7 +3860,7 @@ class BaseSource:
         return matched_prods
 
     @property
-    def fitted_models(self) -> List[str]:
+    def all_fitted_models(self) -> List[str]:
         """
         This property cycles through all the available fit results, and finds the unique names of XSPEC models
         that have been fitted to this source.
@@ -3975,7 +4065,7 @@ class BaseSource:
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
         if len(self._fit_results) != 0:
-            print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
+            print("Fitted Models - {}".format(" | ".join(self.all_fitted_models)))
 
         if self._regions is not None and "custom" in self._radii:
             if self._redshift is not None:
