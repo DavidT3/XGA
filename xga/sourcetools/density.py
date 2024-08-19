@@ -179,7 +179,6 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     except KeyError:
         raise NotImplementedError("That is an acceptable abundance table, but I haven't added the " 
                                   "conversion factor to the dictionary yet")
-
     if conv_temp is not None:
         if isinstance(conv_temp, Quantity):
             if not conv_temp.isscalar and len(conv_temp) != len(sources):
@@ -223,8 +222,12 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                 temps[tel].append(temp_temp.value)
 
         for key in temps:
-            temps[key] = Quantity(temps[key], 'keV')
-
+            # If there is only one source, then we dont want to parse a list into the Quantity object
+            if len(temps[key]) == 1:
+                temps[key] = Quantity(temps[key][0], 'keV')
+            else:
+                temps[key] = Quantity(temps[key], 'keV')
+        
     # This call actually does the fakeit calculation of the conversion factors, then stores them in 
     # the  XGA Spectrum objects
     cluster_cr_conv(sources, conv_outer_radius, inner_radius, temps, abund_table=abund_table, 

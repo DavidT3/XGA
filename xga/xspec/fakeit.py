@@ -69,6 +69,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     # collecting all the telescopes associated here for use later, use a function to account for 
     # if sources is input as a list
     all_telescopes = _get_all_telescopes(sources)
+
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -79,6 +80,10 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
 
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
+    
+    # pregen spectra can output a BaseSource after inputting it as a list, so turning this back to a list
+    if isinstance(sources, BaseSource):
+        sources = [sources]
 
     # Checks that the luminosity energy bands are pairs of values
     if conv_en.shape[1] != 2:
@@ -87,7 +92,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     # Are the lower limits smaller than the upper limits? - Obviously they should be so I check
     elif not all([conv_en[pair_ind, 0] < conv_en[pair_ind, 1] for pair_ind in range(0, conv_en.shape[0])]):
         raise ValueError("Luminosity energy band first entries must be smaller than second entries.")
-
+    
     # setting the default temp as 3 kev
     if sim_temp is None:
         sim_temp = {key : Quantity(3, 'keV') for key in all_telescopes}
