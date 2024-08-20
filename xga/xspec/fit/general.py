@@ -1,17 +1,18 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:07. Copyright (c) The Contributors
 
 import warnings
+from inspect import signature, Parameter
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
 from ._common import _check_inputs, _write_xspec_script, _pregen_spectra
-from ..fitconfgen import _gen_fit_conf
+from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
 from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
+from ...exceptions import NoProductAvailableError, ModelNotAssociatedError, XGADeveloperError
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -109,16 +110,18 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    fit_conf = _gen_fit_conf({'start_temp': start_temp,
-                              'start_met': start_met,
-                              'freeze_nh': freeze_nh,
-                              'freeze_met': freeze_met,
-                              'freeze_temp': freeze_temp,
-                              'lo_en': lo_en, 'hi_en': hi_en,
-                              'par_fit_stat': par_fit_stat,
-                              'abund_table': abund_table,
-                              'fit_method': fit_method,
-                              'spectrum_checking': spectrum_checking})
+    rel_args = FIT_FUNC_ARGS['single_temp_apec']
+
+    sig = signature(single_temp_apec)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
