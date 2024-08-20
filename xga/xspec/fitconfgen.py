@@ -1,12 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:11. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from types import FunctionType
 
 from astropy.units import Quantity
-
-# 'freeze_nh': True,
 
 # This constant very importantly defined whether each argument to the XGA XSPEC fitting functions should be included
 #  in the fit configuration storage key - we define it here so that this information can be accessed outside the
@@ -14,7 +12,7 @@ from astropy.units import Quantity
 #  an argument has been added that is not accounted for here.
 FIT_FUNC_ARGS = {
     'single_temp_apec': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
-                         'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
+                         'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
                          'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
