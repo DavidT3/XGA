@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 13:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 13:53. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from types import FunctionType
@@ -50,26 +50,41 @@ FIT_FUNC_ARGS = {
 
 def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict = None) -> str:
     """
+    This function is a convenient way to assemble a fit configuration key without adding together all the function
+    arguments yourself, and is used in various parts of XGA to make it easier to retrieve non-default model fits. It
+    takes the default parameter values of the model fit, knowledge of which parameters are to be included in the
+    fit configuration storage key, and (optionally) a dictionary of the parameters which were changed from the
+    default fit (in the case where this changed parameter dictionary is not supplied, the default key will be made).
 
-    :param FunctionType fit_func:
-    :param dict changed_pars:
-    :return:
+    :param FunctionType fit_func: The XGA XSPEC function that was run, and for which a fit configuration storage
+        key is to be generated.
+    :param dict changed_pars: A dictionary containing parameters that were altered from the default values when the
+        fit function was called, and the values that they were altered too. This is to make it easier to assemble a
+        fit configuration key for a non-default model run.
+    :return: The full fit configuration storage key.
     :rtype: str
     """
+    # This reads the signature (i.e. the first line of the function definition with all the arguments) - we shall
+    #  need it in order to know what the default values are
     sig = signature(fit_func)
+    # This gets the dictionary that describes whether an argument is relevant to the fit configuration key for
+    #  the function that has been passed
+    rel_args = FIT_FUNC_ARGS[fit_func.__name__]
 
+    # This snippet uses the read-in signature of the function to create a dictionary of keyword arguments and
+    #  default values - we shall need this in order to make it easier to construct the key, as the user will only
+    #  need to supply values for the parameters that they changed from default.
     def_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
-    print(def_args)
 
     if changed_pars is not None and not isinstance(changed_pars, dict):
         raise TypeError("'changed_pars' argument must be a dictionary of the values that were changed from default")
-    elif changed_pars is not None and any([ch_par_key not in def_args for ch_par_key in changed_pars]):
+    elif changed_pars is not None and any([ch_par_key not in rel_args for ch_par_key in changed_pars]):
         not_pres = ", ".join([ch_par_key for ch_par_key in changed_pars if ch_par_key not in def_args])
-        all_args = ". ".join(list(def_args.keys()))
-        raise KeyError("Some entries in 'changed_pars' ({be}) do not correspond to any keyword argument for the "
-                       "passed function; the keyword arguments are {kw}.".format(be=not_pres, kw=all_args))
+        all_args = ". ".join([kn for kn in rel_args if rel_args[kn]])
+        raise KeyError("Some entries in 'changed_pars' ({be}) do not correspond to a keyword argument that is "
+                       "included in the fit configuration key for {f}; the keyword arguments are "
+                       "{kw}.".format(be=not_pres, kw=all_args, f=fit_func.__name__))
 
-    rel_args = FIT_FUNC_ARGS[fit_func.__name__]
     # Here we set up the dictionary that will make the default key - if the user passed information on parameters
     #  they changed then we're going to replace them in this dictionary, but if they didn't pass anything then
     #  this will stay as it is
