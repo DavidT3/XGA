@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:38. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -311,6 +311,10 @@ def xspec_call(xspec_func):
             if len(results[src_repr]) == 0 and run_type == 'fit' and not ann_fit:
                 rel_script = script_list[ind]
                 storage_key = rel_script.split(s.name)[-1].split(model_name)
+                print(storage_key)
+                print(model_name)
+                print(fit_conf)
+
                 s.add_fit_failure(model_name, storage_key, fit_conf)
 
             if ann_fit:
