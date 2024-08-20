@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 16:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 20:09. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2547,7 +2547,7 @@ class BaseSource:
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
         #  has been fit to this spectrum - otherwise how are we to know which model they want?
-        if len(self.fitted_models[spec_storage_key]) == 0:
+        if spec_storage_key not in self.fitted_models:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with the specified Spectrum object.")
         elif model is None and len(self.fitted_models[spec_storage_key]) != 1:
             av_mods = ", ".join(self.fitted_models[spec_storage_key])
