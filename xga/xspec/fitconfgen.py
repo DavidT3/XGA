@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 11:00. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from types import FunctionType
@@ -16,32 +16,38 @@ FIT_FUNC_ARGS = {
                          'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
+
     'single_temp_mekal': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
                           'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
                           'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                           'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                           'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
+
     'multi_temp_dem_apec': {'inner_radius': False, 'start_max_temp': True, 'start_met': True, 'start_t_rat': True,
                             'start_inv_em_slope': True, 'lum_en': False, 'freeze_nh': True, 'freeze_met': True,
                             'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
                             'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False,
                             'min_sn': False, 'over_sample': False, 'one_rmf': False, 'num_cores': False,
                             'spectrum_checking': False, 'timeout': False},
+
     'power_law': {'inner_radius': False, 'redshifted': False, 'lum_en': False, 'start_pho_index': True,
                   'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
                   'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
                   'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False},
+
     'blackbody': {'inner_radius': False, 'redshifted': False, 'lum_en': False, 'start_temp': True,
                   'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
                   'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
                   'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False},
+
+    'single_temp_apec_profile': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
+                                 'freeze_nh': True, 'freeze_met': True, 'lo_en': True, 'hi_en': True,
+                                 'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
+                                 'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
+                                 'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False}
 }
 
-# inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-#                         start_max_temp: Quantity = Quantity(5.0, "keV"), start_met: float = 0.3,
-#                         start_t_rat: float = 0.1, start_inv_em_slope: float = 0.25,
-#                         lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-#                         freeze_nh: bool = True, freeze_met: bool = True
+
 def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict = None):
     sig = signature(fit_func)
 
