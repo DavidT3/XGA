@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:55. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -296,16 +296,17 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    fit_conf = _gen_fit_conf({'start_temp': start_temp,
-                              'start_met': start_met,
-                              'freeze_nh': freeze_nh,
-                              'freeze_met': freeze_met,
-                              'freeze_temp': freeze_temp,
-                              'lo_en': lo_en, 'hi_en': hi_en,
-                              'par_fit_stat': par_fit_stat,
-                              'abund_table': abund_table,
-                              'fit_method': fit_method,
-                              'spectrum_checking': spectrum_checking})
+    rel_args = FIT_FUNC_ARGS['single_temp_mekal']
+    sig = signature(single_temp_mekal)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
@@ -464,17 +465,17 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    fit_conf = _gen_fit_conf({'start_max_temp': start_max_temp,
-                              'start_met': start_met,
-                              'start_t_rat': start_t_rat,
-                              'start_inv_em_slope': start_inv_em_slope,
-                              'freeze_nh': freeze_nh,
-                              'freeze_met': freeze_met,
-                              'lo_en': lo_en, 'hi_en': hi_en,
-                              'par_fit_stat': par_fit_stat,
-                              'abund_table': abund_table,
-                              'fit_method': fit_method,
-                              'spectrum_checking': spectrum_checking})
+    rel_args = FIT_FUNC_ARGS['multi_temp_dem_apec']
+    sig = signature(multi_temp_dem_apec)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
@@ -624,14 +625,21 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     else:
         model = "constant*tbabs*powerlaw"
         par_names = "{factor nH PhoIndex norm}"
-    # Generate the fit_conf for this model - the 'redshifted' argument is taken care of by the difference in the
-    #  model name depending on the input
-    fit_conf = _gen_fit_conf({'start_pho_index': start_pho_index,
-                              'freeze_nh': freeze_nh,
-                              'lo_en': lo_en, 'hi_en': hi_en,
-                              'par_fit_stat': par_fit_stat,
-                              'abund_table': abund_table,
-                              'fit_method': fit_method})
+
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['power_law']
+    sig = signature(power_law)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError(
+            "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
@@ -777,13 +785,20 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         model = "constant*tbabs*bbody"
         par_names = "{factor nH kT norm}"
 
-    # Generate the fit_conf storage key for this model fit
-    fit_conf = _gen_fit_conf({'start_temp': start_temp,
-                              'freeze_nh': freeze_nh,
-                              'lo_en': lo_en, 'hi_en': hi_en,
-                              'par_fit_stat': par_fit_stat,
-                              'abund_table': abund_table,
-                              'fit_method': fit_method})
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['blackbody']
+    sig = signature(blackbody)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError(
+            "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
