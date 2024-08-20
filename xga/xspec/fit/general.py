@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 21:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 09:36. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -7,7 +7,8 @@ from typing import List, Union
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _gen_fit_conf
+from ._common import _check_inputs, _write_xspec_script, _pregen_spectra
+from ..fitconfgen import _gen_fit_conf
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
