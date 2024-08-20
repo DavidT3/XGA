@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 11:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:06. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -205,8 +205,6 @@ def xspec_call(xspec_func):
             ann_lums = {}
             ann_obs_order = {}
 
-            print(results[src_repr])
-
             for res_set in results[src_repr]:
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
@@ -308,6 +306,12 @@ def xspec_call(xspec_func):
                         s.add_fit_failure(model_name, storage_key, fit_conf)
                     if len(res_set[2]) != 0:
                         xspec_errs += res_set[2]
+
+            # This records a failure if the fit timed out
+            if len(results[src_repr]) == 0 and run_type == 'fit' and not ann_fit:
+                rel_script = script_list[ind]
+                storage_key = rel_script.split(s.name)[-1].split(model_name)
+                s.add_fit_failure(model_name, storage_key, fit_conf)
 
             if ann_fit:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
