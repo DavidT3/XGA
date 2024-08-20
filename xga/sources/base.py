@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 14:26. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -34,6 +34,7 @@ from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
     DEFAULT_COSMO
+from ..xspec.fitconfgen import fit_conf_from_function, FIT_FUNC_MODEL_NAMES
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -2566,12 +2567,10 @@ class BaseSource:
         if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
             raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
                             "changed-from-default fit function arguments as keys and changed values as items.")
-        # TODO Need to implement the behaviour when a dictionary of changed arguments is passed
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
-            raise NotImplementedError("The ability to pass changed fit-function arguments in a dictionary and "
-                                      "construct the key is not yet implemented.")
+            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
         elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[spec_storage_key][model]:
             av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
             raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to the "
