@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 20:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 20:46. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1209,7 +1209,7 @@ class Spectrum(BaseProduct):
                              "valid; available fit configurations are {a}".format(m=model, a=av_fconfs))
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[model] == 1):
+        elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
             fit_conf = self.fitted_model_configurations[model][0]
 
         # # We also check that
@@ -2788,7 +2788,7 @@ class AnnularSpectra(BaseAggregateProduct):
                              "valid; available fit configurations are {a}".format(m=model, a=av_fconfs))
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[model] == 1):
+        elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
             fit_conf = self.fitted_model_configurations[model][0]
 
         # Have to check that the user has passed a legal annulus ID, otherwise we'll be getting key errors down the
