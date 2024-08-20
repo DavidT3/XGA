@@ -1,10 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 13:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 14:25. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from types import FunctionType
 
 from astropy.units import Quantity
+
+from xga.xspec import single_temp_apec, single_temp_mekal, multi_temp_dem_apec, power_law, blackbody
 
 # This constant very importantly defined whether each argument to the XGA XSPEC fitting functions should be included
 #  in the fit configuration storage key - we define it here so that this information can be accessed outside the
@@ -46,6 +48,16 @@ FIT_FUNC_ARGS = {
                                  'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                                  'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False}
 }
+
+# This allows us to make a link between the model that was fit and the XGA function
+FIT_FUNC_MODEL_NAMES = {'constant*tbabs*apec': single_temp_apec,
+                        'constant*tbabs*mekal': single_temp_mekal,
+                        'constant*tbabs*wdem': multi_temp_dem_apec,
+                        'constant*tbabs*zpowerlw': power_law,
+                        'constant*tbabs*powerlaw': power_law,
+                        'constant*tbabs*zbbody': blackbody,
+                        'constant*tbabs*bbody': blackbody
+                        }
 
 
 def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict = None) -> str:
