@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 13:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 20:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1120,7 +1120,7 @@ class Spectrum(BaseProduct):
             self._exp = float(tab_line["EXPOSURE"])
 
         # This is the count rate and error for this spectrum.
-        self._count_rate[model].setdefault(model, {})
+        self._count_rate.setdefault(model, {})
         self._count_rate[model][fit_conf] = [float(tab_line["COUNT_RATE"]), float(tab_line["COUNT_RATE_ERR"])]
 
         # Searches for column headers with 'Lx' in them (this has to be dynamic as the user can calculate
