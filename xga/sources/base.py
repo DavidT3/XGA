@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 14:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 15:01. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -34,7 +34,8 @@ from ..sourcetools import simple_xmm_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, XMM_INST, dict_search, xmm_det, xmm_sky, OUTPUT, CENSUS, SRC_REGION_COLOURS, \
     DEFAULT_COSMO
-from ..xspec.fitconfgen import fit_conf_from_function, FIT_FUNC_MODEL_NAMES
+from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+from ..xspec.fitconfgen import fit_conf_from_function
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really

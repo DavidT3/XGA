@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 14:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 15:01. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -20,7 +20,8 @@ from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, X
     FailedProductError
 from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
 from ..utils import dict_search
-from ..xspec.fitconfgen import fit_conf_from_function, FIT_FUNC_MODEL_NAMES
+from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+from ..xspec.fitconfgen import fit_conf_from_function
 
 
 class Spectrum(BaseProduct):
