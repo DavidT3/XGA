@@ -1491,7 +1491,15 @@ class BaseSource:
                     try:
                         inst_lums = {}
                         obs_order = []
-                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):                            
+                            # We need to check if this spectrum is a combined_spectrum or not
+                            # this can be done by seeing which directory it is stored in
+                            directory = line["SPEC_PATH"].strip(" ").split("/")[-2]
+                            if directory == 'combined':
+                                comb_spec = True
+                            else:
+                                comb_spec = False
+                            
                             sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                             # Want to derive the spectra storage key from the file name, this strips off some
                             #  unnecessary info
@@ -1502,9 +1510,13 @@ class BaseSource:
                             if set_id is None:
                                 # This adds ra back on, and removes any ident information if it is there
                                 sp_key = 'ra' + sp_key
-                                # Finds the appropriate matching spectrum object for the current table line
-                                spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
-                                                         telescope=tel)[0]
+
+                                if not comb_spec:
+                                    # Finds the appropriate matching spectrum object for the current table line
+                                    spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
+                                                            telescope=tel)[0]
+                                else:
+                                    spec = self.get_products("combined_spectrum", extra_key=sp_key, telescope=tel)[0]
                             else:
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 ann_spec = self.get_annular_spectra(set_id=set_id)
