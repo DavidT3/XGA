@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 18:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 11:43. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -204,6 +204,8 @@ def xspec_call(xspec_func):
             ann_results = {}
             ann_lums = {}
             ann_obs_order = {}
+
+            print(results[src_repr])
 
             for res_set in results[src_repr]:
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
