@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 12:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 13:21. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from types import FunctionType
@@ -48,7 +48,14 @@ FIT_FUNC_ARGS = {
 }
 
 
-def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict = None):
+def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict = None) -> str:
+    """
+
+    :param FunctionType fit_func:
+    :param dict changed_pars:
+    :return:
+    :rtype: str
+    """
     sig = signature(fit_func)
 
     def_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
@@ -62,8 +69,21 @@ def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict = None):
         raise KeyError("Some entries in 'changed_pars' ({be}) do not correspond to any keyword argument for the "
                        "passed function; the keyword arguments are {kw}.".format(be=not_pres, kw=all_args))
 
-    # TODO Need to handle any unit conversions I think
+    rel_args = FIT_FUNC_ARGS[fit_func.__name__]
+    # Here we set up the dictionary that will make the default key - if the user passed information on parameters
+    #  they changed then we're going to replace them in this dictionary, but if they didn't pass anything then
+    #  this will stay as it is
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
 
+    if changed_pars is not None:
+        for kn in changed_pars:
+            # TODO Need to handle any unit conversions I think
+            in_fit_conf[kn] = changed_pars[kn]
+
+    # Use the fit_conf function to generate the required key
+    fit_conf = _gen_fit_conf(in_fit_conf)
+
+    return fit_conf
 
 
 def _gen_fit_conf(key_comps: dict) -> str:
