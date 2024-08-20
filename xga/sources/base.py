@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 20:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 20:45. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2585,7 +2585,7 @@ class BaseSource:
                              "{a}".format(m=model, a=av_fconfs))
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
-        elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model] == 1):
+        elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model]) == 1:
             fit_conf = self.fitted_model_configurations[spec_storage_key][model][0]
 
         # Check to make sure the requested results actually exist
