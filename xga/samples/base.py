@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:48. Copyright (c) The Contributors
 
-from typing import Union, List, Dict
+from typing import Union, List, Dict, TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
@@ -15,6 +15,9 @@ from .. import DEFAULT_COSMO
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..exceptions import NoValidObservationsError
 from ..sourcetools.misc import coord_to_name
+
+if TYPE_CHECKING:
+    from ..sources.base import BaseSource
 
 
 class BaseSample:
