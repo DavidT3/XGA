@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:23. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -14,7 +14,7 @@ import pandas as pd
 from fitsio import FITS
 from tqdm import tqdm
 
-from .. import XSPEC_VERSION
+from .. import XSPEC_VERSION, OUTPUT
 from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
@@ -147,7 +147,7 @@ def xspec_call(xspec_func):
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
         (script_list, paths, cores, run_type, src_inds, radii, timeout, model_name,
-            fit_conf) = xspec_func(*args, **kwargs)
+            fit_conf, inv_ents) = xspec_func(*args, **kwargs)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
@@ -301,17 +301,24 @@ def xspec_call(xspec_func):
 
                 elif len(res_set) != 0 and not res_set[1]:
                     if not ann_fit:
-                        rel_script = script_list[ind]
-                        storage_key = rel_script.split(s.name)[-1].split(model_name)
+                        # This uses the presumptive inventory entry to grab the spectrum storage key
+                        storage_key = inv_ents[ind][1]
                         s.add_fit_failure(model_name, storage_key, fit_conf[ind])
                     if len(res_set[2]) != 0:
                         xspec_errs += res_set[2]
 
             # This records a failure if the fit timed out
             if len(script_list) != 0 and len(results[src_repr]) == 0 and run_type == 'fit' and not ann_fit:
-                rel_script = script_list[ind]
-                storage_key = rel_script.split(s.name)[-1].split(model_name)[0][1:-1]
+                # This uses the presumptive inventory entry to grab the spectrum storage key
+                storage_key = inv_ents[ind][1]
                 s.add_fit_failure(model_name, storage_key, fit_conf[ind])
+            # But if the fit succeeded then we'll put it in the inventory!
+            elif len(script_list) != 0 and len(results[src_repr]) != 0 and run_type == 'fit':
+                inv_ent = inv_ents[ind]
+                inv_path = OUTPUT + "XSPEC/" + s.name + "/inventory.csv"
+                with open(inv_path, 'a') as appendo:
+                    inv_ent_line = ",".join(inv_ent) + "\n"
+                    appendo.write(inv_ent_line)
 
             if ann_fit:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
