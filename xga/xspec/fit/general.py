@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:09. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -292,7 +292,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
-        start_temp = Quantity([start_temp.value] * len(sources), start_temp.unit)
+        # Doing it like this, defining a new variable and then redeclaring the start_temp in each bit of the loop
+        #  below is important, as the fit_conf generation code accesses the current value of start_temp specifically
+        all_start_temps = Quantity([start_temp.value.copy()] * len(sources), start_temp.unit.copy())
+    else:
+        all_start_temps = start_temp.copy()
 
     # This function is for a set model, absorbed mekal, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -313,12 +317,10 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
 
-    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
-    fit_conf = _gen_fit_conf(in_fit_conf)
-
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -342,9 +344,9 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy()).value
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1,
+        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp, 1,
                                                                   start_met, source.redshift, 1, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependent on user input
@@ -371,6 +373,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             check_hi_lims = "{}"
             check_err_lims = "{}"
 
+        # We generate the fit configuration key here, on a source by source basis, as the start temperature is allowed
+        #  to be different for every source
+        in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+        fit_conf = _gen_fit_conf(in_fit_conf)
+
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
         #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
@@ -392,9 +399,10 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
 
 
 @xspec_call
@@ -482,12 +490,17 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
 
+    # We generate the fit configuration key - in this case there are no relevant variables that can have different
+    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
+    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
+    #  is having a fit run
     in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -562,9 +575,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
 
 
 @xspec_call
