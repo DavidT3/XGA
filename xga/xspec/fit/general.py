@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:35. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -151,10 +151,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp, start_met,
-                                                          source.redshift, 1.)
+        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp.value,
+                                                          start_met, source.redshift, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
         #  include the temperature, if the user wants it fixed at the start value
@@ -344,10 +344,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp, 1,
-                                                                  start_met, source.redshift, 1, 1.)
+        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value,
+                                                                  start_temp.value, 1, start_met, source.redshift,
+                                                                  1, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependent on user input
         freezing = "{{F {n} {t} T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
