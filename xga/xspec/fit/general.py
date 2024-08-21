@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:15. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -17,12 +17,6 @@ from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 
-
-# Trying this new feature that allows me to import these classes only if type checking is going on - hopefully
-#  this will avoid circular import errors
-# if TYPE_CHECKING:
-#     from ...samples.base import BaseSample
-#     from ...sources import BaseSource
 
 @xspec_call
 def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],

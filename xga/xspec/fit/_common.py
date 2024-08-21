@@ -1,19 +1,17 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:15. Copyright (c) The Contributors
 
 import os
 import warnings
-from typing import List, Union, Tuple, TYPE_CHECKING
+from typing import List, Union, Tuple
 
 from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES, \
     CROSS_ARF_XSPEC_SCRIPT
+from ...samples.base import BaseSample
 from ...sas import evselect_spectrum, region_setup
-
-if TYPE_CHECKING:
-    from ...sources import BaseSource
-    from ...samples.base import BaseSample
+from ...sources import ExtendedSource, PointSource, BaseSource
 
 
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -85,8 +83,6 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
-
-    from ...sources import ExtendedSource, PointSource, BaseSource
 
     # This function supports passing both individual sources and samples of sources, but I do require that
     #  the sources object is iterable
