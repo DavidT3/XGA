@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 14:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:23. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -183,9 +183,13 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
 
     # We're keeping an inventory of XSPEC fits for each source, and if it doesn't already exist we set up the file
     if not os.path.exists(dest_dir + 'inventory.csv'):
+        # These are the columns we want to have in our inventory file
+        inv_cols = ['results_file', 'spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name', 'type',
+                    'set_ident']
         with open(dest_dir + 'inventory.csv', 'w') as writo:
-            writo.writelines(['results_file', 'spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name', 'type',
-                              'set_ident'])
+            # Writing out the inventory column names to the new file
+            inv_hdr = ",".join(inv_cols) + "\n"
+            writo.write(inv_hdr)
 
     # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit configuration key
     #  will be too long to be allowed, so we're going to keep an inventory and assign them random identifiers.
