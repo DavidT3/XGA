@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 14:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:47. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -14,7 +14,6 @@ from tqdm import tqdm
 from .. import DEFAULT_COSMO
 from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..exceptions import NoValidObservationsError
-from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 
 
@@ -38,6 +37,10 @@ class BaseSample:
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  no_prog_bar: bool = False):
+
+        # TODO MAYBE REMOVE?
+        from ..sources.base import BaseSource
+
         if len(ra) == 0:
             raise ValueError("You have passed an empty array for the RA values.")
 
