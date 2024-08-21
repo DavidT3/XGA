@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:58. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -402,3 +402,6 @@ def single_temp_apec_crossarf_profile(sources: Union[BaseSource, BaseSample], ra
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout
 
 
+# This allows us to make a link between the model that was fit to a profile and the XGA function
+PROF_FIT_FUNC_MODEL_NAMES = {'constant*tbabs*apec': single_temp_apec_profile
+                             }
