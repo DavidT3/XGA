@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:17. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -20,8 +20,6 @@ from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, X
     FailedProductError
 from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
 from ..utils import dict_search
-from ..xspec.fit import FIT_FUNC_MODEL_NAMES
-from ..xspec.fitconfgen import fit_conf_from_function
 
 
 class Spectrum(BaseProduct):
@@ -1172,6 +1170,9 @@ class Spectrum(BaseProduct):
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fitconfgen import fit_conf_from_function
+
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
         #  has been fit to this spectrum - otherwise how are we to know which model they want?
         if len(self.fitted_models) == 0:
@@ -2752,6 +2753,9 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fitconfgen import fit_conf_from_function
+
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
         #  has been fit to this annular spectrum - otherwise how are we to know which model they want?
         if model is None and len(self.fitted_models) == 0:
