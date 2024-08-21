@@ -207,7 +207,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 fit_confs.append(fit_conf)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_conf
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_confs
 
 
 @xspec_call
