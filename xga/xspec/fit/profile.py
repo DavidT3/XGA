@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 12:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:07. Copyright (c) The Contributors
 from inspect import signature, Parameter
 from typing import List, Union
 
@@ -113,12 +113,11 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
-
     script_paths = []
     outfile_paths = []
     src_inds = []
     fit_confs = []
-
+    inv_ents = []
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -192,22 +191,26 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             file_prefix = spec_objs[0].storage_key + "_ident{}_".format(spec_objs[0].set_ident) \
                           + str(spec_objs[0].annulus_ident)
-            out_file, script_file = _write_xspec_script(source, file_prefix, model, abund_table, fit_method, specs,
-                                                        lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                        par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf,
-                                                        source.redshift, spectrum_checking, check_list, check_lo_lims,
-                                                        check_hi_lims, check_err_lims, True, fit_conf, nh_to_zero)
 
             try:
                 res = ann_spec.get_results(0, model, 'kT', fit_conf)
             except ModelNotAssociatedError:
+                out_file, script_file, inv_ent = _write_xspec_script(source, file_prefix, model, abund_table,
+                                                                     fit_method, specs, lo_en, hi_en, par_names,
+                                                                     par_values, linking, freezing, par_fit_stat,
+                                                                     lum_low_lims, lum_upp_lims, lum_conf,
+                                                                     source.redshift, spectrum_checking, check_list,
+                                                                     check_lo_lims, check_hi_lims, check_err_lims,
+                                                                     True, fit_conf, nh_to_zero)
+
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
                 fit_confs.append(fit_conf)
+                inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_confs
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:07. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -753,9 +753,10 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
             fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -926,7 +927,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 # This allows us to make a link between the model that was fit and the XGA function
