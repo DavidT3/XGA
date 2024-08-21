@@ -1,8 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 12:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 14:44. Copyright (c) The Contributors
 
 import os
 import warnings
+from random import randint
 from typing import List, Union, Tuple
 
 from astropy.units import Quantity, UnitConversionError
@@ -128,7 +129,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                         freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str, lum_conf: float,
                         redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
                         check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool, fit_conf: str,
-                        which_par_nh: str = 'None') -> Tuple[str, str]:
+                        which_par_nh: str = 'None') -> Tuple[str, str, list]:
     """
     This writes out a configured XSPEC script, and is common to all fit functions that DON'T USE cross-arfs.
 
@@ -166,8 +167,9 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         output file names in order to uniquely identify model fits with different configurations.
     :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
         of unabsorbed luminosities.
-    :return: The paths to the output file and the script file.
-    :rtype: Tuple[str, str]
+    :return: The paths to the output file and the script file, plus the presumptive entry for the fit inventory in the
+        case that the fit is successful.
+    :rtype: Tuple[str, str, list]
     """
     # Read in the template file for the XSPEC script.
     with open(BASE_XSPEC_SCRIPT, 'r') as x_script:
@@ -178,9 +180,49 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
-    # Defining where the output summary file of the fit is written
-    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf
-    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf + ".xcm"
+
+    # We're keeping an inventory of XSPEC fits for each source, and if it doesn't already exist we set up the file
+    if not os.path.exists(dest_dir + 'inventory.csv'):
+        with open(dest_dir + 'inventory.csv', 'w') as writo:
+            writo.writelines(['results_file', 'spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name', 'type',
+                              'set_ident'])
+
+    # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit configuration key
+    #  will be too long to be allowed, so we're going to keep an inventory and assign them random identifiers.
+    rand_ident = randint(0, int(1e+8))
+    # We create the eventual final output results file from the fit - it won't necessarily get made because the fit
+    #  might fail, but we're making life easier on ourselves by creating the inventory entry here so it can be put
+    #  in the file by xspec_call if the fit succeeds
+    final_res_file = dest_dir + source.name + "_" + str(rand_ident) + ".fits"
+
+    # Create strings of the ObsID-instruments that represent the data currently associated with the source
+    i_str = "/".join([i for o in source.instruments for i in source.instruments[o]])
+    o_str = "/".join([o for o in source.instruments for i in source.instruments[o]])
+
+    # This way we can identify if the fit is to an annular spectrum or a regular set of spectra
+    if 'ident' in spec_storage_key:
+        # These only occur in the annular spectra
+        set_ident = spec_storage_key.split('ident')[-1].split('_')[0]
+    else:
+        set_ident = ''
+
+    # Now we can define the 'type' of fit it is - this will help out when reading things in
+    if set_ident == '':
+        fit_type = 'global'
+    elif set_ident != '' and 'cross_arf' not in fit_conf:
+        fit_type = 'ann'
+    elif set_ident != '' and 'cross_arf' in fit_conf:
+        fit_type = 'ann_carf'
+
+    # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
+    inv_ent = [final_res_file, spec_storage_key, fit_conf, o_str, i_str, source.name, fit_type, set_ident]
+
+    # Defining where the output summary file of the fit is written - these file names used to contain all the
+    #  information about the fit, but we're using an inventory file and randomly generated identifiers now
+    # out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf
+    # script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf + ".xcm"
+    out_file = dest_dir + source.name + "_" + str(rand_ident)
+    script_file = dest_dir + source.name + "_" + str(rand_ident) + '.xcm'
 
     # The template is filled out here, taking everything we have generated and everything the user
     #  passed in. The result is an XSPEC script that can be run as is.
@@ -196,7 +238,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     with open(script_file, 'w') as xcm:
         xcm.write(script)
 
-    return out_file, script_file
+    return out_file, script_file, inv_ent
 
 
 def _write_crossarf_xspec_script(source: BaseSource, spec_storage_key: str, model: str, abund_table: str,
