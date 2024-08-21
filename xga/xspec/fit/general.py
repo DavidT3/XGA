@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:14. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -692,7 +692,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         else:
             z = 1
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to one.".format(s=source.name))
+                          " will be invalid, as redshift has been set to one.".format(s=source.name), stacklevel=2)
 
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
@@ -855,7 +855,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         else:
             z = 1
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to one.".format(s=source.name))
+                          " will be invalid, as redshift has been set to one.".format(s=source.name), stacklevel=2)
 
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
