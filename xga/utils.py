@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 12:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 16:43. Copyright (c) The Contributors
 
 import json
 import os
@@ -17,7 +17,7 @@ from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import read_header
 from fitsio.header import FITSHDR
-from numpy import nan, floor
+from numpy import floor
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError
@@ -408,7 +408,7 @@ else:
     SAS_VERSION = None
     if "SAS_DIR" not in os.environ:
         warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
-             "all functions in xga.sas will not work.")
+             "all functions in xga.sas will not work.", stacklevel=2)
         SAS_VERSION = None
         SAS_AVAIL = False
     else:
@@ -421,14 +421,14 @@ else:
     #  anything with SAS
     if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
         warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
-             "functions in xga.sas will not work.")
+             "functions in xga.sas will not work.", stacklevel=2)
         SAS_AVAIL = False
 
     # Equivelant for the XSPEC dependency
     XSPEC_VERSION = None
     # Got to make sure we can access command line XSPEC.
     if shutil.which("xspec") is None:
-        warn("Unable to locate an XSPEC installation.")
+        warn("Unable to locate an XSPEC installation.", stacklevel=2)
     else:
         try:
             # The XSPEC into text includes the version, so I read that out and parse it
