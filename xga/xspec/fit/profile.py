@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/08/2024, 09:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:54. Copyright (c) The Contributors
 
 from typing import List, Union
 
@@ -184,11 +184,11 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             file_prefix = spec_objs[0].storage_key + "_ident{}_".format(spec_objs[0].set_ident) \
                           + str(spec_objs[0].annulus_ident)
-            out_file, script_file = _write_xspec_script(source, file_prefix, model, abund_table, fit_method,
-                                                        specs, lo_en, hi_en, par_names, par_values, linking, freezing,
+            out_file, script_file = _write_xspec_script(source, file_prefix, model, abund_table, fit_method, specs,
+                                                        lo_en, hi_en, par_names, par_values, linking, freezing,
                                                         par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf,
                                                         source.redshift, spectrum_checking, check_list, check_lo_lims,
-                                                        check_hi_lims, check_err_lims, True, nh_to_zero)
+                                                        check_hi_lims, check_err_lims, True, fit_conf, nh_to_zero)
 
             try:
                 res = ann_spec.get_results(0, model, 'kT', fit_conf)
