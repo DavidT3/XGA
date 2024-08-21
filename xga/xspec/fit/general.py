@@ -1,9 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 09:41. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
-from typing import List, Union
+from typing import List, Union, TYPE_CHECKING
 
 import astropy.units as u
 from astropy.units import Quantity
@@ -14,8 +14,12 @@ from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import NoProductAvailableError, ModelNotAssociatedError, XGADeveloperError
 from ...products import Spectrum
-from ...samples.base import BaseSample
-from ...sources import BaseSource
+
+# Trying this new feature that allows me to import these classes only if type checking is going on - hopefully
+#  this will avoid circular import errors
+if TYPE_CHECKING:
+    from ...samples.base import BaseSample
+    from ...sources import BaseSource
 
 
 @xspec_call
