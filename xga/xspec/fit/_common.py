@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 12:28. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -179,11 +179,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
     # Defining where the output summary file of the fit is written
-    # out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf
-    # script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf + ".xcm"
-
-    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model
-    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + ".xcm"
+    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf
+    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf + ".xcm"
 
     # The template is filled out here, taking everything we have generated and everything the user
     #  passed in. The result is an XSPEC script that can be run as is.
