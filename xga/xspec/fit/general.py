@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:11. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -660,12 +660,17 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         raise XGADeveloperError(
             "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
 
+    # We generate the fit configuration key - in this case there are no relevant variables that can have different
+    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
+    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
+    #  is having a fit run
     in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
@@ -735,9 +740,10 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
 
 
 @xspec_call
@@ -819,12 +825,17 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         raise XGADeveloperError(
             "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
 
+    # We generate the fit configuration key - in this case there are no relevant variables that can have different
+    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
+    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
+    #  is having a fit run
     in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
     fit_conf = _gen_fit_conf(in_fit_conf)
 
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
@@ -897,9 +908,10 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_conf
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
 
 
 # This allows us to make a link between the model that was fit and the XGA function
