@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 11:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:04. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -128,6 +128,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     outfile_paths = []
     src_inds = []
     fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -192,25 +193,27 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         #  them all.
         nh_to_zero = "{2}"
 
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, fit_conf, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                 linking, freezing, par_fit_stat, lum_low_lims,
+                                                                 lum_upp_lims, lum_conf, source.redshift,
+                                                                 spectrum_checking, check_list, check_lo_lims,
+                                                                 check_hi_lims, check_err_lims, True, fit_conf,
+                                                                 nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
             fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -321,6 +324,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     outfile_paths = []
     src_inds = []
     fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -385,25 +389,28 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         #  them all.
         nh_to_zero = "{2}"
 
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, fit_conf, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names,
+                                                                 par_values, linking, freezing, par_fit_stat,
+                                                                 lum_low_lims, lum_upp_lims, lum_conf,
+                                                                 source.redshift, spectrum_checking, check_list,
+                                                                 check_lo_lims, check_hi_lims, check_err_lims, True,
+                                                                 fit_conf, nh_to_zero)
+
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
             fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -502,6 +509,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     outfile_paths = []
     src_inds = []
     fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -560,26 +568,28 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         #  them all.
         nh_to_zero = "{2}"
 
-        # This internal function writes out the XSPEC script with all the information we've assembled in this
-        #  function - filling out the XSPEC template and writing to disk
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, fit_conf, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'Tmax', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            # This internal function writes out the XSPEC script with all the information we've assembled in this
+            #  function - filling out the XSPEC template and writing to disk
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names,
+                                                                 par_values, linking, freezing, par_fit_stat,
+                                                                 lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
+                                                                 spectrum_checking, check_list, check_lo_lims,
+                                                                 check_hi_lims, check_err_lims, True, fit_conf,
+                                                                 nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
             fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -672,6 +682,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     outfile_paths = []
     src_inds = []
     fit_confs = []
+    inv_ents = []
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
@@ -728,16 +739,16 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         #  them all.
         nh_to_zero = "{2}"
 
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, fit_conf, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
                                      min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                 linking, freezing, par_fit_stat, lum_low_lims,
+                                                                 lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
+                                                                 "{}", True, fit_conf, nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
@@ -837,6 +848,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     outfile_paths = []
     src_inds = []
     fit_confs = []
+    inv_ents = []
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
@@ -896,20 +908,22 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
         #  them all.
         nh_to_zero = "{2}"
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, fit_conf, nh_to_zero)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
                                      min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                 linking, freezing, par_fit_stat, lum_low_lims,
+                                                                 lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
+                                                                 "{}", True, fit_conf, nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
             fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs
