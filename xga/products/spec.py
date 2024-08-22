@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 14:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 14:06. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3708,7 +3708,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Simply setting x-label and limits, don't currently scale this axis with log (though I would like to),
         #  because the 3D version of matplotlib doesn't easily support it
         ax.set_xlabel("Energy [keV]")
-        ax.set_xlim3d(plot_x.min(), plot_x.max())
+        # ax.set_xlim3d(plot_x.min(), plot_x.max())
 
         # Setting the lower limit of the z axis to zero, but leaving the top end open
         ax.set_zlim3d(0)
