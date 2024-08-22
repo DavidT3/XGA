@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 12:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 12:24. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1905,7 +1905,9 @@ class Spectrum(BaseProduct):
                         plot_mod = cur_fit_data["model"][sel_x]
 
                     # The model line is put on
-                    ax.plot(plot_x, plot_mod, label=mod + ' - ' + fc, linewidth=1.5)
+                    changed = self.fitted_model_configuration_diffs[mod][fc]
+                    fc_str = "; ".join([par + " - " + val for par, val in changed.items()])
+                    ax.plot(plot_x, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
 
         # Setting up the scaling aspects of the plot
         ax.set_xscale(xscale)
