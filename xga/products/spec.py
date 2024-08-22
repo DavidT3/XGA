@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:37. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3760,7 +3760,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #                   "it".format(m=model), stacklevel=2)
         # plt.tight_layout()
         plt.legend()
-        ax.set_box_aspect(aspect=None, zoom=1)
+        ax.set_box_aspect(aspect=None, zoom=0.95)
         plt.show()
         plt.close('all')
 
