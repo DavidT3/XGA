@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:30. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3487,8 +3487,16 @@ class AnnularSpectra(BaseAggregateProduct):
         # Set a relevant title
         plt.title("{sn} - {o}-{i} Annular Spectra".format(sn=self.src_name, o=obs_id, i=inst))
 
+        # Keep the original values of model and fit_conf
+        og_model = model
+        og_fit_conf = fit_conf
+
         # We iterate through all the annuli
         for ann_ident in range(0, self._num_ann):
+            # The value of model and fit_conf will likely be changed as part of this iteration, so we reset them to
+            #  the og values
+            model = og_model
+            fit_conf = og_fit_conf
 
             spec = self.get_spectra(ann_ident, obs_id, inst)
 
