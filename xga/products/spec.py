@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:13. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3632,15 +3632,15 @@ class AnnularSpectra(BaseAggregateProduct):
             if self.proper_radii is not None:
                 # Need to set up an array for the y axis (the radius axis) which is the same dimensions
                 #  as the x and z arrays
-                ys = np.full(shape=(len(x_dat),), fill_value=self.proper_annulus_centres[ann_ident].value)
+                y_fill = self.proper_annulus_centres[ann_ident].value
                 chosen_unit = self.proper_radii.unit
             else:
-                ys = np.full(shape=(len(x_dat),), fill_value=self.annulus_centres[ann_ident].value)
+                y_fill = self.annulus_centres[ann_ident].value
                 chosen_unit = self.radii.unit
 
-            print(ys)
-
             if not show_model_fits:
+                ys = np.full(shape=(len(x_dat),), fill_value=y_fill)
+
                 # Plotting the data, accounting for the different combinations of x-axis and y-axis
                 if back_sub:
                     # If we're going for background subtracted data, then that is all we plot
@@ -3677,6 +3677,7 @@ class AnnularSpectra(BaseAggregateProduct):
                     # We also iterate through the different fit configurations for the current model, and plot them
                     #  separately - currently with the only the model name in the legend
                     for fc in fit_conf[mod]:
+
                         cur_fit_data = spec.get_plot_data(mod, fc)
 
                         # Extract the x values which we gathered from XSPEC (they will be in keV)
@@ -3685,6 +3686,8 @@ class AnnularSpectra(BaseAggregateProduct):
                         sel_x = (x > lo_lim) & (x < hi_lim)
                         plot_x = x[sel_x]
 
+                        ys = np.full(shape=(len(x),), fill_value=y_fill)
+
                         if plot_cnt == 0:
                             # Read out the data just for line length reasons
                             # Make the cuts based on energy values supplied to the view method
@@ -3692,9 +3695,6 @@ class AnnularSpectra(BaseAggregateProduct):
                             plot_xerr = cur_fit_data["x_err"][sel_x]
                             plot_yerr = cur_fit_data["y_err"][sel_x]
                             plot_mod = cur_fit_data["model"][sel_x]
-                            print(plot_x.shape)
-                            print(ys.shape)
-                            print(plot_y.shape)
                             ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
                                         label="Background subtracted source data", zorder=1)
                             plot_cnt += 1
