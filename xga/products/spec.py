@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 19:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 19:19. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3747,19 +3747,10 @@ class AnnularSpectra(BaseAggregateProduct):
         else:
             y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
         ax.set_ylim3d(y_lims)
-        # if anything_plotted:
-        #     # Sets up the legend so that matching data point and models are on the same line in the legend
-        #     labels = ["{o}-{i} Data".format(o=obs_id, i=inst), "{o}-{i} Folded Model".format(o=obs_id, i=inst)]
-        #     ax.legend(handles=[data_line[0], mod_line[0]], labels=labels,
-        #               handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
-        #     plt.tight_layout()
-        #     plt.show()
-        # else:
-        #     warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
-        #                   "it".format(m=model), stacklevel=2)
-        plt.tight_layout()
+
+        # plt.tight_layout()
         plt.legend()
-        # ax.set_box_aspect(aspect=None, zoom=0.95)
+        ax.set_box_aspect(aspect=(7, 4, 3), zoom=0.92)
         plt.show()
         plt.close('all')
 
