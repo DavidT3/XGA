@@ -1,8 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:53. Copyright (c) The Contributors
 
 import os
 import warnings
+from copy import deepcopy
 from typing import Tuple, Union, List, Dict
 from warnings import warn
 
@@ -3487,18 +3488,56 @@ class AnnularSpectra(BaseAggregateProduct):
         # Set a relevant title
         plt.title("{sn} - {o}-{i} Annular Spectra".format(sn=self.src_name, o=obs_id, i=inst))
 
-        # Keep the original values of model and fit_conf
-        og_model = model
-        og_fit_conf = fit_conf
+        # This just checks whether the grouped argument to this method is compatible with whether the spectrum
+        #  associated with this Spectrum instance has actually been grouped - if not then we automatically
+        #  set the method argument to False
+        if not self.grouped:
+            grouped = False
+
+        # This just ensures that everything works if someone has passed an integer for the channel limits
+        lo_lim = Quantity(lo_lim)
+        hi_lim = Quantity(hi_lim)
+
+        # Performing checks on the limits
+        if lo_lim >= hi_lim:
+            raise ValueError("The hi_lim argument cannot be less than or equal to the lo_lim argument")
+
+        # Keep the original values of model and fit_conf - they can change in the loop
+        og_model = deepcopy(model)
+        og_fit_conf = deepcopy(fit_conf)
+        # Same deal with the energy limits
+        og_lo_lim = lo_lim.copy()
+        og_hi_lim = hi_lim.copy()
 
         # We iterate through all the annuli
         for ann_ident in range(0, self._num_ann):
             # The value of model and fit_conf will likely be changed as part of this iteration, so we reset them to
             #  the og values
-            model = og_model
-            fit_conf = og_fit_conf
+            model = deepcopy(og_model)
+            fit_conf = deepcopy(og_fit_conf)
+            lo_lim = og_lo_lim.copy()
+            hi_lim = og_hi_lim.copy()
 
             spec = self.get_spectra(ann_ident, obs_id, inst)
+
+            # These just make sure that limits in units of either channel or energy are converted appropriately to what
+            #  we're plotting on the x-axis, channels or energies.
+            if not energy and lo_lim.unit != '':
+                lo_lim = spec.conv_channel_energy(lo_lim)
+            if not energy and hi_lim.unit != '':
+                hi_lim = spec.conv_channel_energy(hi_lim)
+            if energy and not lo_lim.unit.is_equivalent('keV'):
+                lo_lim = spec.conv_channel_energy(lo_lim)
+            if energy and not hi_lim.unit.is_equivalent('keV'):
+                hi_lim = spec.conv_channel_energy(hi_lim)
+
+            # Reads out the values of the limits as matplotlib sometimes gets upset by astropy quantities
+            if energy:
+                lo_lim = lo_lim.to("keV").value
+                hi_lim = hi_lim.to("keV").value
+            else:
+                lo_lim = lo_lim.value
+                hi_lim = hi_lim.value
 
             if len(self.fitted_models) > 0:
                 show_model_fits = True
@@ -3545,39 +3584,6 @@ class AnnularSpectra(BaseAggregateProduct):
 
                 fit_conf = {model: [fit_conf]}
                 model = [model]
-
-            # This just checks whether the grouped argument to this method is compatible with whether the spectrum
-            #  associated with this Spectrum instance has actually been grouped - if not then we automatically
-            #  set the method argument to False
-            if not spec.grouped:
-                grouped = False
-
-            # This just ensures that everything works if someone has passed an integer for the channel limits
-            lo_lim = Quantity(lo_lim)
-            hi_lim = Quantity(hi_lim)
-
-            # Performing checks on the limits
-            if lo_lim >= hi_lim:
-                raise ValueError("The hi_lim argument cannot be less than or equal to the lo_lim argument")
-
-            # These just make sure that limits in units of either channel or energy are converted appropriately to what
-            #  we're plotting on the x-axis, channels or energies.
-            if not energy and lo_lim.unit != '':
-                lo_lim = spec.conv_channel_energy(lo_lim)
-            if not energy and hi_lim.unit != '':
-                hi_lim = spec.conv_channel_energy(hi_lim)
-            if energy and not lo_lim.unit.is_equivalent('keV'):
-                lo_lim = spec.conv_channel_energy(lo_lim)
-            if energy and not hi_lim.unit.is_equivalent('keV'):
-                hi_lim = spec.conv_channel_energy(hi_lim)
-
-            # Reads out the values of the limits as matplotlib sometimes gets upset by astropy quantities
-            if energy:
-                lo_lim = lo_lim.to("keV").value
-                hi_lim = hi_lim.to("keV").value
-            else:
-                lo_lim = lo_lim.value
-                hi_lim = hi_lim.value
 
             if not grouped:
                 sct = spec.count_rates.copy()
@@ -3690,8 +3696,11 @@ class AnnularSpectra(BaseAggregateProduct):
 
                         # Extract the x values which we gathered from XSPEC (they will be in keV)
                         x = cur_fit_data["x"]
+                        print(x)
+                        print(lo_lim, hi_lim)
                         # Cut the x dataset to just the energy range we want
                         sel_x = (x > lo_lim) & (x < hi_lim)
+                        print(sel_x)
                         plot_x = x[sel_x]
 
                         ys = np.full(shape=(len(x),), fill_value=y_fill)
