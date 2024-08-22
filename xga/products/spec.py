@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 17:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:00. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3758,7 +3758,8 @@ class AnnularSpectra(BaseAggregateProduct):
         # else:
         #     warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
         #                   "it".format(m=model), stacklevel=2)
-        plt.tight_layout()
+        # plt.tight_layout()
+        ax.set_box_aspect(aspect=None, zoom=0.8)
         plt.show()
         plt.close('all')
 
