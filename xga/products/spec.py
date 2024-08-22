@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 13:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 14:05. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1909,7 +1909,7 @@ class Spectrum(BaseProduct):
 
                     # The model line is put on
                     changed = self.fitted_model_configuration_diffs[mod][fc]
-                    fc_str = "; ".join([par + " - " + val for par, val in changed.items()])
+                    fc_str = "; ".join([par + "=" + val for par, val in changed.items()])
                     ax.plot(plot_x, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
 
         # Setting up the scaling aspects of the plot
@@ -3428,116 +3428,12 @@ class AnnularSpectra(BaseAggregateProduct):
         # Wipe the figure
         plt.close("all")
 
-    def old_view_annulus(self, ann_ident: int, model: str, fit_conf: Union[str, dict] = None, figsize: Tuple = (12, 8)):
-        """
-        An equivalent to the Spectrum view method, but
-
-        If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
-        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
-        a model was only fit with one fit configuration then that will be automatically selected.
-
-        :param str model: The fitted model to display on the data.
-        :param tuple figsize: The size of the plot.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
-        """
-        # Grabs the relevant spectra using the annular ident
-        rel_spec = self.get_spectra(ann_ident)
-        # Sets up a matplotlib figure
-        plt.figure(figsize=figsize)
-
-        # Set the plot up to look nice and professional.
-        ax = plt.gca()
-        ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-
-        # Set the title with all relevant information about the spectrum object in it
-        plt.title("{n} - Annulus {num}".format(n=self.src_name, num=ann_ident))
-        # Boolean flag to check if any spectra have plot data, for the end of this method
-        anything_plotted = False
-
-        # If the user hasn't passed a model, and only one has been fit, then we'll set 'model' for them. If there are
-        #  no models then of course model being None is totally fine
-        if model is None and len(self.fitted_models) == 1:
-            model = self.fitted_models[0]
-
-        # TODO CONVERT TO USING FIT_CONF, DEAL WITH THE FACT THAT THE SINGLE DICTIONARY TO KEY CONVERTER WAS TO BE
-        #  IN THE INTERNAL GET CHECKER, AND MAKE THIS METHOD SHOW A PLOT EVEN WITHOUT A MODEL FIT
-
-        if fit_conf is None and model is not None:
-            fit_conf = self.fitted_model_configurations[model]
-        elif fit_conf is not None and fit_conf not in self.fitted_model_configurations[model]:
-            raise ModelNotAssociatedError("The fit configuration")
-
-        # TODO SHOULD ADD A GET_VIEW METHOD TO SPECTRUM (IF I DIDN'T ALREADY DO THAT) AND USE THAT
-        raise NotImplementedError("We are in the process of altering how model fits are stored and accessed in "
-                                  "AnnularSpectrum and Spectrum instances - this view method will need to be rebuilt.")
-
-        # Set up lists to store the model line and data plot handlers, so legends for fit and data can be put on
-        #  the same line
-        mod_handlers = []
-        plot_handlers = []
-        # This stores the legend labels
-        labels = []
-        # Iterate through all matching spectra
-        for spec in rel_spec:
-            # This grabs the plot data if available
-            try:
-                all_plot_data = spec.get_plot_data(model)
-                anything_plotted = True
-            except ModelNotAssociatedError:
-                continue
-
-            # Gets x data and model data
-            plot_x = all_plot_data["x"]
-            plot_mod = all_plot_data["model"]
-            # These are used as plot limits on the x axis
-            lo_en = plot_x.min()
-            hi_en = plot_x.max()
-
-            # Grabs y data + errors
-            plot_y = all_plot_data["y"]
-            plot_xerr = all_plot_data["x_err"]
-            plot_yerr = all_plot_data["y_err"]
-            # Plots the actual data, with errorbars
-            cur_plot = plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="+",
-                                    label="{o}-{i}".format(o=spec.obs_id, i=spec.instrument), zorder=1)
-            # The model line is put on
-            cur_mod = plt.plot(plot_x, plot_mod, label=model, linewidth=2, color=cur_plot[0].get_color())[0]
-            mod_handlers.append(cur_mod)
-            plot_handlers.append(cur_plot)
-            labels.append("{o}-{i}".format(o=spec.obs_id, i=spec.instrument))
-
-        # Sets up the legend so that matching data point and models are on the same line in the legend
-        ax.legend(handles=zip(plot_handlers, mod_handlers), labels=labels,
-                  handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
-
-        # Ensure axis is limited to the chosen energy range
-        plt.xlim(lo_en, hi_en)
-
-        # Just sets how the figure looks with axis labels
-        plt.xlabel("Energy [keV]")
-        plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
-        ax.set_xscale("log")
-        ax.xaxis.set_major_formatter(ScalarFormatter())
-        ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-
-        plt.tight_layout()
-        # Display the spectrum
-
-        if anything_plotted:
-            plt.show()
-        else:
-            warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
-                          "it".format(m=model))
-
-        # Wipe the figure
-        plt.close("all")
-
-    def view_annuli(self, obs_id: str, inst: str, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30,
-                    azimuthal_angle: int = -60):
+    def view_annuli(self, obs_id: str, inst: str, model: str = None, fit_conf: Union[str, dict] = None,
+                    elevation_angle: int = 30, azimuthal_angle: int = -60, figsize: Tuple = (12, 8),
+                    lo_lim: Quantity = Quantity(0.3, "keV"), hi_lim: Quantity = Quantity(7.9, "keV"),
+                    back_sub: bool = True, energy: bool = True, src_colour: str = 'black',
+                    bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log", yscale: str = "linear",
+                    fontsize: Union[int, float] = 14):
         """
         This view method is one of several in the AnnularSpectra class, and will display data and associated model
         fits for a single ObsID-Instrument combination for all annuli in this AnnularSpectra, in a 3D plot. The
@@ -3547,13 +3443,38 @@ class AnnularSpectra(BaseAggregateProduct):
 
         :param str obs_id: The ObsID of the spectra to display.
         :param str inst: The instrument of the spectra to display.
-        :param str model: The model fit to display
+        :param str model: This parameter allows you to specify a particular model to plot. Default is None, in which
+            case a model will be automatically selected if only one has been fit, or no model will be shown if
+            one has not.
+        :param str/dict fit_conf: This parameter allows you to specify a particular fit configuration of a model to
+            plot (if 'show_model_fits' is True and 'model' is set). Pass either a dictionary with keys being the names
+            of parameters passed to the XGA XSPEC fit function that were changed from default, and values being the
+            changed values, or a full string representation of the fit configuration that is being requested. The
+            default is None - if only one fit configuration has been run for the model, then that will be automatically
+            selected.
         :param tuple figsize: The size of the figure.
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
+        :param Quantity lo_lim: The lower limit applied to the plot, either a unitless Quantity (representing
+            channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
+            Default is 0.3 keV, matching the default lower limit of the XGA implementation of XSPEC fitting.
+        :param Quantity hi_lim: The upper limit applied to the plot, either a unitless Quantity (representing
+            channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
+            Default is 7.9 keV, matching the default lower limit of the XGA implementation of XSPEC fitting.
+        :param bool back_sub: Whether the plotted data should have their background subtracted, default is True.
+        :param bool energy: Controls whether the x-axis is in units of energy, default is True. If False then
+            channels are plotted instead.
+        :param str src_colour: The colour in which to plot the source spectrum. Default is 'black'.
+        :param str bck_colour: The colour in which to plot the background spectrum. Default is 'firebrick' red.
+        :param bool grouped: Whether the grouped spectrum should be plotted, default is True. If the spectrum has not
+            been grouped then this be automatically set to False.
+        :param str xscale: The scaling to be applied to the x-axis, default is 'log'.
+        :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
+        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
+            fontsize will be fontsize + 1. Default is 14.
         """
-        raise NotImplementedError("We are in the process of altering how model fits are stored and accessed in "
-                                  "AnnularSpectrum and Spectrum instances - this view method will need to be rebuilt.")
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fitconfgen import fit_conf_from_function
 
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
@@ -3566,31 +3487,223 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # We iterate through all the annuli
         for ann_ident in range(0, self._num_ann):
-            spec = self.get_spectra(ann_ident, obs_id, inst)
-            # This checks that the requested model has actually been fitted to said spectrum
-            try:
-                all_plot_data = spec.get_plot_data(model)
-                anything_plotted = True
-            except ModelNotAssociatedError:
-                continue
 
-            # Gets x data and model data
-            plot_x = all_plot_data["x"]
-            plot_mod = all_plot_data["model"]
+            spec = self.get_spectra(ann_ident, obs_id, inst)
+
+            if len(self.fitted_models) > 0:
+                show_model_fits = True
+            else:
+                show_model_fits = False
+
+            # Now we deal with the different models/model fit configurations that can and cannot be specified
+            if show_model_fits and model is None and fit_conf is not None:
+                raise ValueError("Specifying a fit configuration ('fit_conf') is not supported without setting the "
+                                 "'model' argument; use the 'fitted_model_configurations' property of this Spectrum to "
+                                 "see which models and configurations are available.")
+            elif show_model_fits and model is None and fit_conf is None:
+                model = self.fitted_models
+                fit_conf = self.fitted_model_configurations
+            elif show_model_fits and model is not None and fit_conf is None:
+                # I indent this check because it is just a bit easier for me that way
+                if model not in self.fitted_models:
+                    av_mods = ", ".join(self.fitted_models)
+                    raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
+                                                  "models are {a}".format(m=model, a=av_mods))
+
+                # If we're here then the model is valid, and in this case no fit configuration has been specified, so
+                #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
+                #  fit configs in a list in a dictionary with model name as key
+                fit_conf = {model: self.fitted_model_configurations[model]}
+                model = [model]
+            elif show_model_fits and model is not None and fit_conf is not None:
+                if model not in self.fitted_models:
+                    av_mods = ", ".join(self.fitted_models)
+                    raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
+                                                  "models are {a}".format(m=model, a=av_mods))
+
+                # If the configuration is a dictionary we need to try to turn that into a proper fit configuration key
+                if isinstance(fit_conf, dict):
+                    fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+
+                # And now we check if the fit configuration is available to this Spectrum instance
+                if fit_conf not in self.fitted_model_configurations[model]:
+                    av_fconfs = ", ".join(self.fitted_model_configurations[model])
+                    raise ModelNotAssociatedError(
+                        "The {fc} fit configuration has not been used for any {m} fit to this "
+                        "spectrum; available fit configurations are "
+                        "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+
+                fit_conf = {model: [fit_conf]}
+                model = [model]
+
+            # This just checks whether the grouped argument to this method is compatible with whether the spectrum
+            #  associated with this Spectrum instance has actually been grouped - if not then we automatically
+            #  set the method argument to False
+            if not spec.grouped:
+                grouped = False
+
+            # This just ensures that everything works if someone has passed an integer for the channel limits
+            lo_lim = Quantity(lo_lim)
+            hi_lim = Quantity(hi_lim)
+
+            # Performing checks on the limits
+            if lo_lim >= hi_lim:
+                raise ValueError("The hi_lim argument cannot be less than or equal to the lo_lim argument")
+
+            # These just make sure that limits in units of either channel or energy are converted appropriately to what
+            #  we're plotting on the x-axis, channels or energies.
+            if not energy and lo_lim.unit != '':
+                lo_lim = spec.conv_channel_energy(lo_lim)
+            if not energy and hi_lim.unit != '':
+                hi_lim = spec.conv_channel_energy(hi_lim)
+            if energy and not lo_lim.unit.is_equivalent('keV'):
+                lo_lim = spec.conv_channel_energy(lo_lim)
+            if energy and not hi_lim.unit.is_equivalent('keV'):
+                hi_lim = spec.conv_channel_energy(hi_lim)
+
+            # Reads out the values of the limits as matplotlib sometimes gets upset by astropy quantities
+            if energy:
+                lo_lim = lo_lim.to("keV").value
+                hi_lim = hi_lim.to("keV").value
+            else:
+                lo_lim = lo_lim.value
+                hi_lim = hi_lim.value
+
+            if not grouped:
+                sct = spec.count_rates.copy()
+                bct = spec.back_count_rates.copy()
+                if energy:
+                    x_dat = spec.conv_channel_energy(spec.channels.copy()).value
+                    x_wid = (spec.rmf_channels_hi_en - spec.rmf_channels_lo_en).value
+                else:
+                    x_dat = spec.channels.copy()
+                    x_wid = 1
+            else:
+                grp_info = spec.get_grouped_data()
+                sct = grp_info[0]
+                bct = grp_info[1]
+                if energy:
+                    # This entry is the middle energy of each bin
+                    x_dat = grp_info[-1][:, 0].value
+                    # This entry is the 'error' (but really just half the width) of each energy bin
+                    x_wid = grp_info[-1][:, 1].value
+                else:
+                    # This entry is the middle channel of each bin
+                    x_dat = grp_info[4][:, 0].value
+                    # This entry is the 'error' (but really just half the width) of each channel bin
+                    x_wid = grp_info[4][:, 1].value
+
+            # We check that the x limits are actually sensible values, if they are higher (for the top limit) or lower (
+            #  (for the lower limit) than the data that are actually available then we nudge them to those values
+            if lo_lim < x_dat.min():
+                lo_lim = x_dat.min()
+            if hi_lim > x_dat.max():
+                hi_lim = x_dat.max()
+
+            # We pre-select the data based on the passed lower and upper limits - first making a selection mask array
+            sel_x = (x_dat <= hi_lim) & (x_dat >= lo_lim)
+            # Then selecting the relevant source count, background count, and x-data (energy or channel) entries
+            sct = sct[sel_x]
+            bct = bct[sel_x]
+            x_dat = x_dat[sel_x]
+            x_wid = x_wid[sel_x]
+            # This is what the y-data are divided by to make it per keV or per channel, the width of the bin essentially
+            per_x = x_wid * 2
+
+            # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
+            #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
+            #  effectively scale the exposure time by dividing the count rate by it
+            src_rate = sct / spec.header['AREASCAL']
+
+            # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
+            #  values, which scales the background flux to the same area as the source
+            bck_rate = (spec.header['BACKSCAL'] / spec.back_header['BACKSCAL']) * (bct / spec.back_header['AREASCAL'])
+
+            # And finally subtracting one from the other - they both have error columns which are also subtracted
+            #  here (which is completely meaningless of course), but don't worry we'll fix that on the next line!
+            src_sub_bck_rate = src_rate - bck_rate
+            # Simple error propagation to replace the nonsense uncertainty column in src_sub_bck_rate
+            src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1] ** 2 + bck_rate[:, 1] ** 2)
 
             # Depending on what radius information is available to this AnnularSpectra, depends which we use
             # We will always prefer to use proper radii if they are available
             if self.proper_radii is not None:
                 # Need to set up an array for the y axis (the radius axis) which is the same dimensions
                 #  as the x and z arrays
-                ys = np.full(shape=(len(plot_x),), fill_value=self.proper_annulus_centres[ann_ident].value)
+                ys = np.full(shape=(len(x_dat),), fill_value=self.proper_annulus_centres[ann_ident].value)
                 chosen_unit = self.proper_radii.unit
             else:
-                ys = np.full(shape=(len(plot_x),), fill_value=self.annulus_centres[ann_ident].value)
+                ys = np.full(shape=(len(x_dat),), fill_value=self.annulus_centres[ann_ident].value)
                 chosen_unit = self.radii.unit
 
-            data_line = ax.plot(plot_x, ys, all_plot_data['y'], '+', alpha=0.5)
-            mod_line = ax.plot(plot_x, ys, plot_mod, alpha=0.5, linewidth=2, color=data_line[0].get_color())
+            if not show_model_fits:
+                # Plotting the data, accounting for the different combinations of x-axis and y-axis
+                if back_sub:
+                    # If we're going for background subtracted data, then that is all we plot
+                    ax.errorbar(x_dat, ys, src_sub_bck_rate.value[:, 0] / per_x, xerr=x_wid,
+                                yerr=src_sub_bck_rate.value[:, 1] / per_x, fmt="+", color=src_colour,
+                                label="Background subtracted source data", zorder=1)
+                else:
+                    # But if we're not wanting background subtracted, we need to plot the source and background spectra
+                    ax.errorbar(x_dat, ys, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x,
+                                fmt="+",
+                                color=src_colour, label="Source data", zorder=1)
+                    ax.errorbar(x_dat, ys, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x,
+                                fmt="x",
+                                color=bck_colour, label="Background data", zorder=1)
+
+                # Energy vs channel has already been encoded in the x data, but we still need to plot different
+                #  axis labels
+                if energy:
+                    ax.set_ylabel("Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
+                    ax.set_xlabel("Energy [keV]", fontsize=fontsize)
+                else:
+                    ax.set_ylabel("Counts s$^{-1}$ Channel$^{-1}$", fontsize=fontsize)
+                    ax.set_xlabel("Channel", fontsize=fontsize)
+
+            # In this case the user wants the fitted spectra, and there ARE fits to plot, so rather than plot our own
+            #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
+            else:
+                # Set the axis labels
+                ax.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
+                ax.set_xlabel("Energy [keV]", fontsize=fontsize)
+
+                plot_cnt = 0
+                for mod in model:
+                    # We also iterate through the different fit configurations for the current model, and plot them
+                    #  separately - currently with the only the model name in the legend
+                    for fc in fit_conf[mod]:
+                        cur_fit_data = spec.get_plot_data(mod, fc)
+
+                        # Extract the x values which we gathered from XSPEC (they will be in keV)
+                        x = cur_fit_data["x"]
+                        # Cut the x dataset to just the energy range we want
+                        sel_x = (x > lo_lim) & (x < hi_lim)
+                        plot_x = x[sel_x]
+
+                        if plot_cnt == 0:
+                            # Read out the data just for line length reasons
+                            # Make the cuts based on energy values supplied to the view method
+                            plot_y = cur_fit_data["y"][sel_x]
+                            plot_xerr = cur_fit_data["x_err"][sel_x]
+                            plot_yerr = cur_fit_data["y_err"][sel_x]
+                            plot_mod = cur_fit_data["model"][sel_x]
+
+                            ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
+                                        label="Background subtracted source data", zorder=1)
+                            plot_cnt += 1
+                        else:
+                            # Don't want to re-plot data points as they should be identical, so if there is another model
+                            #  only it will be plotted
+                            plot_mod = cur_fit_data["model"][sel_x]
+
+                        # The model line is put on
+                        changed = spec.fitted_model_configuration_diffs[mod][fc]
+                        fc_str = "; ".join([par + " - " + val for par, val in changed.items()])
+                        ax.plot(plot_x, ys, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
+
+            # data_line = ax.plot(plot_x, ys, all_plot_data['y'], '+', alpha=0.5)
+            # mod_line = ax.plot(plot_x, ys, plot_mod, alpha=0.5, linewidth=2, color=data_line[0].get_color())
 
         # Simply setting x-label and limits, don't currently scale this axis with log (though I would like to),
         #  because the 3D version of matplotlib doesn't easily support it
@@ -3609,17 +3722,18 @@ class AnnularSpectra(BaseAggregateProduct):
             y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
         ax.set_ylim3d(y_lims)
 
-        if anything_plotted:
-            # Sets up the legend so that matching data point and models are on the same line in the legend
-            labels = ["{o}-{i} Data".format(o=obs_id, i=inst), "{o}-{i} Folded Model".format(o=obs_id, i=inst)]
-            ax.legend(handles=[data_line[0], mod_line[0]], labels=labels,
-                      handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
-            plt.tight_layout()
-            plt.show()
-        else:
-            warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
-                          "it".format(m=model), stacklevel=2)
-
+        # if anything_plotted:
+        #     # Sets up the legend so that matching data point and models are on the same line in the legend
+        #     labels = ["{o}-{i} Data".format(o=obs_id, i=inst), "{o}-{i} Folded Model".format(o=obs_id, i=inst)]
+        #     ax.legend(handles=[data_line[0], mod_line[0]], labels=labels,
+        #               handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
+        #     plt.tight_layout()
+        #     plt.show()
+        # else:
+        #     warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
+        #                   "it".format(m=model), stacklevel=2)
+        plt.tight_layout()
+        plt.show()
         plt.close('all')
 
     def view(self, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30, azimuthal_angle: int = -60):
