@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 12:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 12:51. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1133,12 +1133,13 @@ class Spectrum(BaseProduct):
                         #  and then split on those names, determining which results in the shortest string value (which
                         #  would be the correct name)
                         cands = {in_arg: par.split(in_arg)[-1] for in_arg in mod_args if in_arg in par}
-                        print(cands)
-                        chos_arg = np.argmin(np.array([len(val) for val in list(cands.values())]))
-                        final_par = np.array(list(cands.keys()))[chos_arg]
-                        final_val = np.array(list(cands.values()))[chos_arg]
+                        if len(cands) != 0:
+                            print(cands)
+                            chos_arg = np.argmin(np.array([len(val) for val in list(cands.values())]))
+                            final_par = np.array(list(cands.keys()))[chos_arg]
+                            final_val = np.array(list(cands.values()))[chos_arg]
 
-                        diffs[mod][cur_fit_conf][final_par] = final_val
+                            diffs[mod][cur_fit_conf][final_par] = final_val
 
         return diffs
 
