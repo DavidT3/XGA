@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 12:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 13:08. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1127,6 +1127,8 @@ class Spectrum(BaseProduct):
                 diffs[mod][cur_fit_conf] = {}
                 for par in cur_fit_conf.split('_'):
                     if par not in def_fit_conf:
+                        print(par)
+                        print(mod_args)
                         # We are trying to split the fitconf key into parname and value - but there is no easy way to
                         #  do that without knowing the parname. Thus we identify candidates (candidates because it
                         #  is conceivable that there are parnames for the function that are substrings of each other),
