@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 11:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 11:44. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1844,7 +1844,7 @@ class Spectrum(BaseProduct):
             for mod in model:
                 # We also iterate through the different fit configurations for the current model, and plot them
                 #  separately - currently with the only the model name in the legend
-                for fc in fit_conf[model]:
+                for fc in fit_conf[mod]:
                     cur_fit_data = self.get_plot_data(mod, fc)
 
                     # Extract the x values which we gathered from XSPEC (they will be in keV)
@@ -3311,10 +3311,53 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.tight_layout()
         plt.show()
 
-    def view_annulus(self, ann_ident: int, model: str, fit_conf: Union[str, dict] = None, figsize: Tuple = (12, 8)):
+    def view_annulus(self, ann_ident: int, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
+             hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
+             src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
+             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
+             save_path: str = None, model: str = None, fit_conf: Union[str, dict] = None):
         """
-        An equivalent to the Spectrum view method, but allows all spectra from the same annulus to be
-        displayed on the same axis.
+        A view method that allows all spectra from a particular annulus to be displayed on the same axis.
+
+        A spectrum can be viewed prior to fitting, and this method will produce plots that should be the same as the
+        XSPEC count/s/keV (or channel) spectrum views. If a model has been fit, and the user wishes to display it, then
+        the 'normalised count/s/keV' that are plotted are extracted from the XSPEC data, rather than assembled in this
+        method.
+
+        :param tuple figsize: The desired size of the output figure, default is (10, 7).
+        :param Quantity lo_lim: The lower limit applied to the plot, either a unitless Quantity (representing
+            channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
+            Default is 0.3 keV, matching the default lower limit of the XGA implementation of XSPEC fitting.
+        :param Quantity hi_lim: The upper limit applied to the plot, either a unitless Quantity (representing
+            channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
+            Default is 7.9 keV, matching the default lower limit of the XGA implementation of XSPEC fitting.
+        :param bool back_sub: Whether the plotted data should have their background subtracted, default is True.
+        :param bool energy: Controls whether the x-axis is in units of energy, default is True. If False then
+            channels are plotted instead.
+        :param str src_colour: The colour in which to plot the source spectrum. Default is 'black'.
+        :param str bck_colour: The colour in which to plot the background spectrum. Default is 'firebrick' red.
+        :param bool grouped: Whether the grouped spectrum should be plotted, default is True. If the spectrum has not
+            been grouped then this be automatically set to False.
+        :param str xscale: The scaling to be applied to the x-axis, default is 'log'.
+        :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
+        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
+            fontsize will be fontsize + 1. Default is 14.
+        :param bool show_model_fits: Whether any models fit to the spectrum by XSPEC should be shown. Default is
+            True, but will be set to False if no fits have been performed.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
+        :param str model: This parameter allows you to specify a particular model to plot (if show_model_fits is
+            True). Default is None, in which case all models will be shown (if available).
+        :param str/dict fit_conf: This parameter allows you to specify a particular fit configuration of a model to
+            plot (if 'show_model_fits' is True and 'model' is set). Pass either a dictionary with keys being the names
+            of parameters passed to the XGA XSPEC fit function that were changed from default, and values being the
+            changed values, or a full string representation of the fit configuration that is being requested. Default
+            is None, in which case all fit configurations of a model will be plotted.
+        """
+
+    def old_view_annulus(self, ann_ident: int, model: str, fit_conf: Union[str, dict] = None, figsize: Tuple = (12, 8)):
+        """
+        An equivalent to the Spectrum view method, but
 
         If no model name is supplied, but only one model has been fit to this annular spectrum, then that model
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
