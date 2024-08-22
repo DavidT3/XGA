@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 11:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 12:21. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1101,6 +1101,45 @@ class Spectrum(BaseProduct):
         """
         return {m: list(self._plot_data[m].keys()) for m in self.fitted_models}
 
+    @property
+    def fitted_model_configuration_diffs(self) -> dict:
+        """
+        Property that returns the difference of each fitted model configuration from the default for that particular
+        model - making it easier to identify only those parameters that were altered.
+
+        :return: Dictionary with model names as keys, fit configuration identifiers as lower level keys, and
+            dictionaries of parameters-changed-from-default as values.
+        :rtype: dict
+        """
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fitconfgen import fit_conf_from_function, FIT_FUNC_ARGS
+
+        diffs = {}
+        for mod in self.fitted_models:
+            diffs.setdefault(mod, {})
+            def_fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[mod])
+
+            mod_args = [in_arg for in_arg in FIT_FUNC_ARGS[mod] if FIT_FUNC_ARGS[mod][in_arg]]
+
+            for cur_fit_conf in self.fitted_model_configurations[mod]:
+                diffs[mod][cur_fit_conf] = {}
+                for par in cur_fit_conf.split('_'):
+                    if par not in def_fit_conf:
+                        # We are trying to split the fitconf key into parname and value - but there is no easy way to
+                        #  do that without knowing the parname. Thus we identify candidates (candidates because it
+                        #  is conceivable that there are parnames for the function that are substrings of each other),
+                        #  and then split on those names, determining which results in the shortest string value (which
+                        #  would be the correct name)
+                        cands = {in_arg: par.split(in_arg)[-1] for in_arg in mod_args if in_arg in par}
+                        print(cands)
+                        chos_arg = np.argmin(np.array([len(val) for val in list(cands.values())]))
+                        final_par = np.array(list(cands.keys()))[chos_arg]
+                        final_val = np.array(list(cands.values()))[chos_arg]
+
+                        diffs[mod][cur_fit_conf][final_par] = final_val
+
+        return diffs
+
     def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU, fit_conf: str):
         """
         Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
@@ -1859,6 +1898,7 @@ class Spectrum(BaseProduct):
 
                         ax.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
                                     label="Background subtracted source data", zorder=1)
+                        plot_cnt += 1
                     else:
                         # Don't want to re-plot data points as they should be identical, so if there is another model
                         #  only it will be plotted
