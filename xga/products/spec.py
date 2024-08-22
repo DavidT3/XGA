@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:03. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3696,11 +3696,8 @@ class AnnularSpectra(BaseAggregateProduct):
 
                         # Extract the x values which we gathered from XSPEC (they will be in keV)
                         x = cur_fit_data["x"]
-                        print(x)
-                        print(lo_lim, hi_lim)
                         # Cut the x dataset to just the energy range we want
                         sel_x = (x > lo_lim) & (x < hi_lim)
-                        print(sel_x)
                         plot_x = x[sel_x]
 
                         ys = np.full(shape=(len(x),), fill_value=y_fill)
@@ -3712,8 +3709,6 @@ class AnnularSpectra(BaseAggregateProduct):
                             plot_xerr = cur_fit_data["x_err"][sel_x]
                             plot_yerr = cur_fit_data["y_err"][sel_x]
                             plot_mod = cur_fit_data["model"][sel_x]
-
-                            print(plot_x.shape, ys.shape, plot_y.shape)
 
                             ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
                                         label="Background subtracted source data", zorder=1)
@@ -3759,6 +3754,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #     warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
         #                   "it".format(m=model), stacklevel=2)
         # plt.tight_layout()
+        plt.legend()
         ax.set_box_aspect(aspect=None, zoom=0.8)
         plt.show()
         plt.close('all')
