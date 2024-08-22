@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 14:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 16:31. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2905,7 +2905,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
         #  has been fit to this annular spectrum - otherwise how are we to know which model they want?
-        if model is None and len(self.fitted_models) == 0:
+        if len(self.fitted_models) == 0:
             # Sort of duplicates an error further down, but this case will only trigger if 'model' is None.
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object.")
         elif model is None and len(self.fitted_models) != 1:
