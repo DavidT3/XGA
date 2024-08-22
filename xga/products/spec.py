@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:22. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3650,7 +3650,7 @@ class AnnularSpectra(BaseAggregateProduct):
                 y_fill = self.proper_annulus_centres[ann_ident].value
                 chosen_unit = self.proper_radii.unit
                 patch = Rectangle((lo_lim, self.proper_radii[ann_ident].value), hi_lim-lo_lim,
-                                  self.proper_radii[ann_ident+1].value-self.proper_radii[ann_ident].value)
+                                  self.proper_radii[ann_ident+1].value-self.proper_radii[ann_ident].value, hatch="/")
                 ax.add_patch(patch)
                 art3d.pathpatch_2d_to_3d(patch, )
                 # ax.axhspan(self.proper_radii[ann_ident].value, self.proper_radii[ann_ident+1].value)
