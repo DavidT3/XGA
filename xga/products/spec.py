@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:10. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3648,9 +3648,11 @@ class AnnularSpectra(BaseAggregateProduct):
                 #  as the x and z arrays
                 y_fill = self.proper_annulus_centres[ann_ident].value
                 chosen_unit = self.proper_radii.unit
+                ax.axhspan(self.proper_radii[ann_ident].value, self.proper_radii[ann_ident+1].value)
             else:
                 y_fill = self.annulus_centres[ann_ident].value
                 chosen_unit = self.radii.unit
+                ax.axhspan(self.radii[ann_ident].value, self.radii[ann_ident+1].value)
 
             if not show_model_fits:
                 ys = np.full(shape=(len(x_dat),), fill_value=y_fill)
@@ -3742,7 +3744,6 @@ class AnnularSpectra(BaseAggregateProduct):
         else:
             y_lims = [self.annulus_centres.value[0], self.proper_radii.value[-1]]
         ax.set_ylim3d(y_lims)
-
         # if anything_plotted:
         #     # Sets up the legend so that matching data point and models are on the same line in the legend
         #     labels = ["{o}-{i} Data".format(o=obs_id, i=inst), "{o}-{i} Folded Model".format(o=obs_id, i=inst)]
