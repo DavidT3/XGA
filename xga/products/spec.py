@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 16:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 16:46. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -2955,10 +2955,12 @@ class AnnularSpectra(BaseAggregateProduct):
             av_mods = ", ".join(self._fit_results[annulus_ident].keys())
             raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; available "
                                           "models are {a}".format(m=model, a=av_mods))
-        elif annulus_ident is not None and par is not None and par not in self._fit_results[annulus_ident][model]:
-            av_pars = ", ".join(self._fit_results[annulus_ident][model].keys())
-            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to this AnnularSpectra; "
-                                              "available parameters are {a}".format(p=par, m=model, a=av_pars))
+        elif (annulus_ident is not None and par is not None and
+              par not in self._fit_results[annulus_ident][model][fit_conf]):
+            av_pars = ", ".join(self._fit_results[annulus_ident][model][fit_conf].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m}-{fc} fit to this "
+                                              "AnnularSpectra; available parameters are "
+                                              "{a}".format(p=par, m=model, a=av_pars, fc=fit_conf))
 
         return model, fit_conf
 
