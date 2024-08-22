@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 19:04. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3435,8 +3435,7 @@ class AnnularSpectra(BaseAggregateProduct):
                     elevation_angle: int = 30, azimuthal_angle: int = -60, figsize: Tuple = (12, 8),
                     lo_lim: Quantity = Quantity(0.3, "keV"), hi_lim: Quantity = Quantity(7.9, "keV"),
                     back_sub: bool = True, energy: bool = True, src_colour: str = 'black',
-                    bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log", yscale: str = "linear",
-                    fontsize: Union[int, float] = 14):
+                    bck_colour: str = 'firebrick', grouped: bool = True, fontsize: Union[int, float] = 14):
         """
         This view method is one of several in the AnnularSpectra class, and will display data and associated model
         fits for a single ObsID-Instrument combination for all annuli in this AnnularSpectra, in a 3D plot. The
@@ -3758,9 +3757,9 @@ class AnnularSpectra(BaseAggregateProduct):
         # else:
         #     warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
         #                   "it".format(m=model), stacklevel=2)
-        # plt.tight_layout()
+        plt.tight_layout()
         plt.legend()
-        ax.set_box_aspect(aspect=None, zoom=0.95)
+        # ax.set_box_aspect(aspect=None, zoom=0.95)
         plt.show()
         plt.close('all')
 
