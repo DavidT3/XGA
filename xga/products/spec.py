@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 10:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 11:30. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1804,8 +1804,8 @@ class Spectrum(BaseProduct):
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
         # Set the title with all relevant information about the spectrum object in it
-        ax.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
-                 fontsize=fontsize + 1)
+        ax.set_title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
+                     fontsize=fontsize + 1)
 
         # This is an ugly way of doing this, but I hope that in the future I'll be able to implement this 'properly'
         #  and just undo this
@@ -3311,7 +3311,7 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.tight_layout()
         plt.show()
 
-    def view_annulus(self, ann_ident: int, model: str, figsize: Tuple = (12, 8), fit_conf: Union[str, dict] = None):
+    def view_annulus(self, ann_ident: int, model: str, fit_conf: Union[str, dict] = None, figsize: Tuple = (12, 8)):
         """
         An equivalent to the Spectrum view method, but allows all spectra from the same annulus to be
         displayed on the same axis.
