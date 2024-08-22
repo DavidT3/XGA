@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 10:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 10:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1871,9 +1871,6 @@ class Spectrum(BaseProduct):
                     # The model line is put on
                     ax.plot(plot_x, plot_mod, label=mod + ' - ' + fc, linewidth=1.5)
 
-        # Generate the legend for the data and model(s)
-        ax.legend(loc="best", fontsize=fontsize - 1)
-
         # Setting up the scaling aspects of the plot
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
@@ -1934,6 +1931,9 @@ class Spectrum(BaseProduct):
 
         ax = self.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
                            fontsize, show_model_fits, model, fit_conf)
+
+        # Generate the legend for the data and model(s)
+        plt.legend(loc="best", fontsize=fontsize - 1)
 
         # Removing extraneous whitespace around the plot
         plt.tight_layout()
