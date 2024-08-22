@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 11:55. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1803,10 +1803,6 @@ class Spectrum(BaseProduct):
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # Set the title with all relevant information about the spectrum object in it
-        ax.set_title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
-                     fontsize=fontsize + 1)
-
         # This is an ugly way of doing this, but I hope that in the future I'll be able to implement this 'properly'
         #  and just undo this
         if not show_model_fits:
@@ -1931,6 +1927,10 @@ class Spectrum(BaseProduct):
 
         ax = self.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
                            fontsize, show_model_fits, model, fit_conf)
+
+        # Set the title with all relevant information about the spectrum object in it
+        ax.set_title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
+                     fontsize=fontsize + 1)
 
         # Generate the legend for the data and model(s)
         plt.legend(loc="best", fontsize=fontsize - 1)
@@ -3312,10 +3312,11 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.show()
 
     def view_annulus(self, ann_ident: int, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
-             hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-             src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
-             save_path: str = None, model: str = None, fit_conf: Union[str, dict] = None):
+                     hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
+                     src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True,
+                     xscale: str = "log", yscale: str = "linear", fontsize: Union[int, float] = 14,
+                     show_model_fits: bool = True, save_path: str = None, model: str = None,
+                     fit_conf: Union[str, dict] = None):
         """
         A view method that allows all spectra from a particular annulus to be displayed on the same axis.
 
@@ -3324,6 +3325,7 @@ class AnnularSpectra(BaseAggregateProduct):
         the 'normalised count/s/keV' that are plotted are extracted from the XSPEC data, rather than assembled in this
         method.
 
+        :param int ann_ident: The integer identifier of the annulus you wish to see spectra for.
         :param tuple figsize: The desired size of the output figure, default is (10, 7).
         :param Quantity lo_lim: The lower limit applied to the plot, either a unitless Quantity (representing
             channels) or an energy Quantity. Limits will be automatically converted to the units of the x-axis.
@@ -3354,6 +3356,32 @@ class AnnularSpectra(BaseAggregateProduct):
             changed values, or a full string representation of the fit configuration that is being requested. Default
             is None, in which case all fit configurations of a model will be plotted.
         """
+        # Grabs the relevant spectra using the annular ident
+        rel_spec = self.get_spectra(ann_ident)
+
+        # Create figure object
+        plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=figsize)
+        ax = plt.gca()
+        for sp in rel_spec:
+            ax = sp.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
+                             fontsize, show_model_fits, model, fit_conf)
+
+        # Generate the legend for the data and model(s)
+        # plt.legend(loc="best", fontsize=fontsize - 1)
+
+        # Removing extraneous whitespace around the plot
+        plt.tight_layout()
+
+        # If the user passed a save_path value, then we assume they want to save the figure
+        if save_path is not None:
+            plt.savefig(save_path)
+
+        # Display the spectrum
+        plt.show()
+
+        # Wipe the figure
+        plt.close("all")
 
     def old_view_annulus(self, ann_ident: int, model: str, fit_conf: Union[str, dict] = None, figsize: Tuple = (12, 8)):
         """
@@ -3363,7 +3391,6 @@ class AnnularSpectra(BaseAggregateProduct):
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
         a model was only fit with one fit configuration then that will be automatically selected.
 
-        :param int ann_ident: The integer identifier of the annulus you wish to see spectra for.
         :param str model: The fitted model to display on the data.
         :param tuple figsize: The size of the plot.
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
