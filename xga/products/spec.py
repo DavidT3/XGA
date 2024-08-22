@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 18:21. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -14,8 +14,9 @@ from fitsio import hdu, FITS, read, read_header, FITSHDR
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.patches import Rectangle
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D, art3d
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError, \
@@ -3648,11 +3649,15 @@ class AnnularSpectra(BaseAggregateProduct):
                 #  as the x and z arrays
                 y_fill = self.proper_annulus_centres[ann_ident].value
                 chosen_unit = self.proper_radii.unit
-                ax.axhspan(self.proper_radii[ann_ident].value, self.proper_radii[ann_ident+1].value)
+                patch = Rectangle((lo_lim, self.proper_radii[ann_ident].value), hi_lim-lo_lim,
+                                  self.proper_radii[ann_ident+1].value-self.proper_radii[ann_ident].value)
+                ax.add_patch(patch)
+                art3d.pathpatch_2d_to_3d(patch, )
+                # ax.axhspan(self.proper_radii[ann_ident].value, self.proper_radii[ann_ident+1].value)
             else:
                 y_fill = self.annulus_centres[ann_ident].value
                 chosen_unit = self.radii.unit
-                ax.axhspan(self.radii[ann_ident].value, self.radii[ann_ident+1].value)
+                # ax.axhspan(self.radii[ann_ident].value, self.radii[ann_ident+1].value)
 
             if not show_model_fits:
                 ys = np.full(shape=(len(x_dat),), fill_value=y_fill)
