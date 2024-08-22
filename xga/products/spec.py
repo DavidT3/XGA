@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 19:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 19:52. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3714,9 +3714,11 @@ class AnnularSpectra(BaseAggregateProduct):
                             plot_xerr = cur_fit_data["x_err"][sel_x]
                             plot_yerr = cur_fit_data["y_err"][sel_x]
                             plot_mod = cur_fit_data["model"][sel_x]
-
-                            ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
-                                        label="Background subtracted source data", zorder=1)
+                            if ann_ident == 0:
+                                ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
+                                            label="Background subtracted source data", zorder=1)
+                            else:
+                                ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", zorder=1)
                             plot_cnt += 1
                         else:
                             # Don't want to re-plot data points as they should be identical, so if there is another model
