@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 10:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 10:49. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -115,7 +115,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         #  consolidated into the fits file
         part_file_now = out_file.split('/')[-1]
         to_remove = [f for f in os.listdir(rel_path) if part_file_now in f and f[-5:] != '.fits' and f[-4:] != '.xcm']
-        print(to_remove)
+        for file_tr in to_remove:
+            full_path = os.path.join(rel_path, file_tr)
+            os.remove(full_path)
 
         # I'm going to try returning the file path as that should be pickleable
         res_tables = out_file + ".fits"
