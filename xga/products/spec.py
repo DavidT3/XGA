@@ -1,8 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 19:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 09:37. Copyright (c) The Contributors
 
 import os
-import warnings
 from copy import deepcopy
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -3756,20 +3755,26 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.show()
         plt.close('all')
 
-    def view(self, model: str, figsize: tuple = (12, 8), elevation_angle: int = 30, azimuthal_angle: int = -60):
+    def view(self, model: str = None, fit_conf: Union[str, dict] = None, figsize: tuple = (12, 8),
+             elevation_angle: int = 30, azimuthal_angle: int = -60):
         """
         This view method is one of several in the AnnularSpectra class, and will display model fits to
         all spectra for each annuli in a 3D plot. No data is displayed in this viewing method, primarily
-        because its so visually confusing. If you wish to see model fits displayed over actual data in this style,
+        because it's so visually confusing. If you wish to see model fits displayed over actual data in this style,
         please use view_annuli.
 
-        :param str model: The model fit to display
+        :param str model: The model fit to display. The default is None, in which case if one model has been fit
+            then it will be automatically selected. If multiple models have been fit then a model name must
+            be supplied.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit
+            method and values being the changed values (only values changed-from-default need be included) or a
+            full string representation of the fit configuration that is being requested. Default is None, and if
+            only one fit configuration has been run for the model then it will be automatically selected, otherwise
+            it will need to be specified.
         :param tuple figsize: The size of the figure.
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
         """
-        raise NotImplementedError("We are in the process of altering how model fits are stored and accessed in "
-                                  "AnnularSpectrum and Spectrum instances - this view method will need to be rebuilt.")
 
         # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
         #  commits, because it's trying to be clever. It's a behaviour I normally appreciate, but not here.
@@ -3784,6 +3789,10 @@ class AnnularSpectra(BaseAggregateProduct):
         # Set a relevant title
         plt.title("{sn} - Annular Spectra Folded Models".format(sn=self.src_name))
 
+        # Storing the original model and fit_conf values
+        og_model = deepcopy(model)
+        og_fit_conf = deepcopy(fit_conf)
+
         # The colour dictionary is to store a colour for a specific ObsID-instrument combo once its
         #  first been plotted - this is because we want the same ObsID-instrument combos to have the same colours
         #  for all annuli
@@ -3793,6 +3802,12 @@ class AnnularSpectra(BaseAggregateProduct):
         labels = []
         # We iterate through all the annuli
         for ann_ident in range(0, self._num_ann):
+            # Restoring the original values of model and fit_conf
+            model = og_model
+            fit_conf = deepcopy(og_fit_conf)
+            # Run the model checks
+            model, fit_conf = self._get_fit_checks(ann_ident, model, None, fit_conf)
+
             # Remember the instruments property is a dictionary of ObsID: {instruments}, which is why we do a nested
             #  for loop like we do here
             for o in self.instruments:
@@ -3808,13 +3823,7 @@ class AnnularSpectra(BaseAggregateProduct):
                     #  the current annulus
                     spec = self.get_spectra(ann_ident, o, i)
 
-                    # This checks that the requested model has actually been fitted to said spectrum
-                    try:
-                        all_plot_data = spec.get_plot_data(model)
-                        anything_plotted = True
-                    except ModelNotAssociatedError:
-                        continue
-
+                    all_plot_data = spec.get_plot_data(model, fit_conf)
                     # Gets x data and model data
                     plot_x = all_plot_data["x"]
                     plot_mod = all_plot_data["model"]
@@ -3863,13 +3872,9 @@ class AnnularSpectra(BaseAggregateProduct):
         # Sets up the legend so that matching data point and models are on the same line in the legend
         ax.legend(handles=handlers, labels=labels, handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
 
-        plt.tight_layout()
-
-        if anything_plotted:
-            plt.show()
-        else:
-            warnings.warn("There are no {m} XSPEC fits associated with this AnnularSpectra, so you can't view "
-                          "it".format(m=model))
+        # plt.tight_layout()
+        ax.set_box_aspect(aspect=(5.5, 4, 3), zoom=0.86)
+        plt.show()
 
         plt.close('all')
 
