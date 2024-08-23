@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 09:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 09:54. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -3823,7 +3823,12 @@ class AnnularSpectra(BaseAggregateProduct):
                     #  the current annulus
                     spec = self.get_spectra(ann_ident, o, i)
 
-                    all_plot_data = spec.get_plot_data(model, fit_conf)
+                    try:
+                        all_plot_data = spec.get_plot_data(model, fit_conf)
+                    except ModelNotAssociatedError:
+                        print(spec.obs_id, spec.instrument)
+                        continue
+
                     # Gets x data and model data
                     plot_x = all_plot_data["x"]
                     plot_mod = all_plot_data["model"]
