@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 17:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -195,7 +195,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
             inv_hdr = ",".join(inv_cols) + "\n"
             writo.write(inv_hdr)
 
-    if rand_ident is not None:
+    if rand_ident is None:
         # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit
         #  configuration key will be too long to be allowed, so we're going to keep an inventory and assign them
         #  random identifiers.
