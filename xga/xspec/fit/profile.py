@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/08/2024, 16:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 17:30. Copyright (c) The Contributors
 from inspect import signature, Parameter
+from random import randint
 from typing import List, Union
 
 import astropy.units as u
@@ -137,6 +138,13 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             # This shouldn't ever go off I don't think
             raise ValueError("Multiple annular spectra set matches have been found.")
 
+        # We are going to generate a random identifier for this set of fits, which will be used as part of the
+        #  filename for the results files generated from the XSPEC run. We're doing this outside of the
+        #  _write_xspec_script function because we will append annulus identifers to the end of the identifiers, so
+        #  we can both easily identify the annulus fits which belong together and still have unique results files for
+        #  each annulus
+        rand_ident = randint(0, int(1e+8))
+
         # We step through the annuli and make fitting scripts for them all independently
         for ann_id in range(ann_spec.num_annuli):
             # We fetch the spectrum objects for this particular annulus
@@ -193,7 +201,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                           + str(spec_objs[0].annulus_ident)
 
             try:
-                res = ann_spec.get_results(0, model, 'kT', fit_conf)
+                res = ann_spec.get_results(ann_id, model, 'kT', fit_conf)
             except ModelNotAssociatedError:
                 out_file, script_file, inv_ent = _write_xspec_script(source, file_prefix, model, abund_table,
                                                                      fit_method, specs, lo_en, hi_en, par_names,
@@ -201,7 +209,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                                                                      lum_low_lims, lum_upp_lims, lum_conf,
                                                                      source.redshift, spectrum_checking, check_list,
                                                                      check_lo_lims, check_hi_lims, check_err_lims,
-                                                                     True, fit_conf, nh_to_zero)
+                                                                     True, fit_conf, nh_to_zero,
+                                                                     str(rand_ident) + "_" + str(ann_id))
 
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
