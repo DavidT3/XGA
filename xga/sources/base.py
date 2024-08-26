@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:41. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1092,8 +1092,18 @@ class BaseSource:
                 fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
                 spec_key = row['spec_key']
                 fit_conf = row['fit_conf_key']
-                fit_ois = row['obs_ids']
-                fit_insts = row['insts']
+                fit_ois = row['obs_ids'].split(',')
+                fit_insts = np.array(row['insts'].split(','))
+
+                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi)[0]]) for oi in list(set(fit_ois))}
+                print(oi_dict)
+
+                print(oi_dict == self.instruments)
+
+
+                # Now we check to see if the same observations are associated with the source currently as they
+                #  were at the time of the original fit
+
 
                 # Load in the results table
                 fit_data = FITS(fit_file)
