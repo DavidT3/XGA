@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 17:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:21. Copyright (c) The Contributors
 from inspect import signature, Parameter
 from random import randint
 from typing import List, Union
@@ -220,6 +220,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
+    print(inv_ents)
     return script_paths, outfile_paths, num_cores, run_type, src_inds, deg_rad, timeout, model, fit_confs, inv_ents
 
 

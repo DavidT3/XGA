@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:21. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -200,6 +200,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         #  configuration key will be too long to be allowed, so we're going to keep an inventory and assign them
         #  random identifiers.
         rand_ident = randint(0, int(1e+8))
+
     # We create the eventual final output results file from the fit - it won't necessarily get made because the fit
     #  might fail, but we're making life easier on ourselves by creating the inventory entry here so it can be put
     #  in the file by xspec_call if the fit succeeds
@@ -216,6 +217,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         set_ident = spec_storage_key.split('ident')[-1].split('_')[0]
     else:
         set_ident = ''
+
+    print(set_ident)
 
     # Now we can define the 'type' of fit it is - this will help out when reading things in
     if set_ident == '':
