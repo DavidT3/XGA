@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:45. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -220,7 +220,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         fit_type = 'ann_carf'
 
     # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
-    inv_ent = [final_res_file, spec_storage_key, fit_conf, o_str, i_str, source.name, fit_type, set_ident]
+    inv_ent = [final_res_file, spec_storage_key, fit_conf, o_str, i_str, source.name, fit_type, str(set_ident)]
 
     # Defining where the output summary file of the fit is written - these file names used to contain all the
     #  information about the fit, but we're using an inventory file and randomly generated identifiers now
