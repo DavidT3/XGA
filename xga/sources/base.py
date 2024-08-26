@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:22. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1086,8 +1086,6 @@ class BaseSource:
                                                        'type', 'set_ident'])
             cur_fit_inv = cur_fit_inv.reset_index(drop=True)
 
-            print(cur_fit_inv)
-
             for row_ind, row in cur_fit_inv.iterrows():
                 # We'll read out some key information from the row into variables to make our life a little neater
                 fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
@@ -1096,20 +1094,13 @@ class BaseSource:
                 fit_ois = row['obs_ids'].split('/')
                 fit_insts = np.array(row['insts'].split('/'))
 
-                print(fit_ois)
-
-                for oi in list(set(fit_ois)):
-                    print(oi)
-                    print(np.argwhere(np.array(fit_ois) == oi))
-                    print(fit_insts[np.argwhere(np.array(fit_ois) == oi)])
-
-
                 oi_dict = {oi: list(fit_insts[np.argwhere(np.array(fit_ois) == oi)[0]])
                            for oi in list(set(fit_ois))}
+
+                print(self.instruments)
                 print(oi_dict)
-
                 print(oi_dict == self.instruments)
-
+                print(set(oi_dict) == set(self.instruments))
 
                 # Now we check to see if the same observations are associated with the source currently as they
                 #  were at the time of the original fit
@@ -1122,6 +1113,14 @@ class BaseSource:
 
                 if row['type'] == 'global':
                     rel_sps = self.get_products('spectrum', extra_key=spec_key)
+
+                    inst_lums = {}
+                    obs_order = []
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        print(line)
+                        stop
+                        sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+
                     print(rel_sps)
                 elif 'ann' in row['type']:
                     rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
