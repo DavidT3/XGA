@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 15:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 15:23. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1130,7 +1130,7 @@ class BaseSource:
                         rel_sp = rel_sps[line_ind]
 
                         # Adds information from this fit to the spectrum object.
-                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)], fit_conf)
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
