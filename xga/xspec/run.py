@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 19:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 19:23. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -166,6 +166,9 @@ def xspec_call(xspec_func):
         fit_conf_lookup = {o_file: fit_conf[o_file_ind] for o_file_ind, o_file in enumerate(paths)}
         inv_ent_lookup = {o_file: inv_ents[o_file_ind] for o_file_ind, o_file in enumerate(paths)}
 
+        print(fit_conf_lookup)
+        print(inv_ent_lookup)
+        stop
         # Make sure the timeout is converted to seconds, then just stored as a float
         timeout = timeout.to('second').value
 
