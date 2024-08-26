@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:06. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -197,7 +197,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     # We create the eventual final output results file from the fit - it won't necessarily get made because the fit
     #  might fail, but we're making life easier on ourselves by creating the inventory entry here so it can be put
     #  in the file by xspec_call if the fit succeeds
-    final_res_file = dest_dir + source.name + "_" + str(rand_ident) + ".fits"
+    # We are making it a relative path to make it more resilient to the output directory being moved
+    final_res_file = source.name + '_' + str(rand_ident) + ".fits"
 
     # Create strings of the ObsID-instruments that represent the data currently associated with the source
     i_str = "/".join([i for o in source.instruments for i in source.instruments[o]])
