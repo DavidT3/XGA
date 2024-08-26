@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 19:14. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -160,6 +160,12 @@ def xspec_call(xspec_func):
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
+        # We also make lookup dictionaries that link the outfile name to the fit configuration and the inventory
+        #  entry - this is necessary because annular spectrum fits may produce multiple fit files (for separate
+        #  annular spectra) per source, so relying on src_ind does not work at all
+        fit_conf_lookup = {o_file: fit_conf[o_file_ind] for o_file_ind, o_file in enumerate(paths)}
+        inv_ent_lookup = {o_file: inv_ents[o_file_ind] for o_file_ind, o_file in enumerate(paths)}
+
         # Make sure the timeout is converted to seconds, then just stored as a float
         timeout = timeout.to('second').value
 
@@ -215,6 +221,7 @@ def xspec_call(xspec_func):
             ann_obs_order = {}
 
             for res_set in results[src_repr]:
+                print(res_set[0])
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
                         global_results = res_table["RESULTS"][0]
@@ -261,11 +268,12 @@ def xspec_call(xspec_func):
                                     spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
 
                             # Adds information from this fit to the spectrum object.
-                            spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)], fit_conf[ind])
+                            spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)],
+                                              fit_conf_lookup[res_set[0]])
 
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                            processed_lums = spec.get_luminosities(model, fit_conf=fit_conf[ind])
+                            processed_lums = spec.get_luminosities(model, fit_conf=fit_conf_lookup[res_set[0]])
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
 
@@ -286,7 +294,7 @@ def xspec_call(xspec_func):
 
                         elif not ann_fit:
                             # Push global fit results, luminosities etc. into the corresponding source object.
-                            s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf[ind])
+                            s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf_lookup[res_set[0]])
 
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
@@ -311,47 +319,47 @@ def xspec_call(xspec_func):
                 elif len(res_set) != 0 and not res_set[1]:
                     if not ann_fit:
                         # This uses the presumptive inventory entry to grab the spectrum storage key
-                        storage_key = inv_ents[ind][1]
-                        s.add_fit_failure(model_name, storage_key, fit_conf[ind])
+                        storage_key = inv_ent_lookup[res_set[0]][1]
+                        s.add_fit_failure(model_name, storage_key, fit_conf_lookup[res_set[0]])
                     if len(res_set[2]) != 0:
                         xspec_errs += res_set[2]
 
             # This records a failure if the fit timed out
             if len(script_list) != 0 and len(results[src_repr]) == 0 and run_type == 'fit' and not ann_fit:
                 # This uses the presumptive inventory entry to grab the spectrum storage key
-                storage_key = inv_ents[ind][1]
-                s.add_fit_failure(model_name, storage_key, fit_conf[ind])
+                storage_key = inv_ent_lookup[res_set[0]][1]
+                s.add_fit_failure(model_name, storage_key, fit_conf_lookup[res_set[0]])
             # But if the fit succeeded then we'll put it in the inventory!
             elif len(script_list) != 0 and len(results[src_repr]) != 0 and run_type == 'fit':
-                inv_ent = inv_ents[ind]
+                inv_ent = inv_ents[res_set[0]]
                 inv_path = OUTPUT + "XSPEC/" + s.name + "/inventory.csv"
                 with open(inv_path, 'a') as appendo:
-                    if not ann_fit:
-                        inv_ent_line = ",".join(inv_ent) + "\n"
-                        appendo.write(inv_ent_line)
-                    else:
-                        appendo.writelines([",".join(ie)+"\n" for ie in inv_ent])
+                    inv_ent_line = ",".join(inv_ent) + "\n"
+                    appendo.write(inv_ent_line)
 
             if ann_fit:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                 #  the last spectra that was opened in the loop
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
                 try:
-                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order, fit_conf[ind])
+                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order, fit_conf_lookup[res_set[0]])
 
                     # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                     #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
                     #  generate a Tx profile automatically
                     if model == "constant*tbabs*apec":
-                        temp_prof = ann_spec.generate_profile(model, 'kT', 'keV', fit_conf=fit_conf[ind])
+                        temp_prof = ann_spec.generate_profile(model, 'kT', 'keV', fit_conf=fit_conf_lookup[res_set[0]])
                         s.update_products(temp_prof)
 
                         # Normalisation profiles can be useful for many things, so we generate them too
-                        norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5', fit_conf=fit_conf[ind])
+                        norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5',
+                                                              fit_conf=fit_conf_lookup[res_set[0]])
                         s.update_products(norm_prof)
 
-                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec', fit_conf=fit_conf[ind]):
-                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '', fit_conf=fit_conf[ind])
+                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec',
+                                                              fit_conf=fit_conf_lookup[res_set[0]]):
+                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '',
+                                                                 fit_conf=fit_conf_lookup[res_set[0]])
                             s.update_products(met_prof)
 
                     else:
