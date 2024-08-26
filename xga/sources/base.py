@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:05. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1079,7 +1079,8 @@ class BaseSource:
             ann_lums = {}
 
             # Everything in this file will be relevant to the current source
-            cur_fit_inv = pd.read_csv(os.path.join(OUTPUT, 'XSPEC', self.name, 'inventory.csv'))
+            cur_fit_inv = pd.read_csv(os.path.join(OUTPUT, 'XSPEC', self.name, 'inventory.csv'),
+                                      dtype={'set_ident': int})
 
             cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
                                                        'type', 'set_ident'])
