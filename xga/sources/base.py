@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:39. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1091,10 +1091,10 @@ class BaseSource:
                 fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
                 spec_key = row['spec_key']
                 fit_conf = row['fit_conf_key']
-                fit_ois = row['obs_ids'].split('/')
+                fit_ois = np.array(row['obs_ids'].split('/'))
                 fit_insts = np.array(row['insts'].split('/'))
 
-                oi_dict = {oi: list(fit_insts[np.argwhere(np.array(fit_ois) == oi)])
+                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi)])
                            for oi in list(set(fit_ois))}
 
                 print(self.instruments)
@@ -1112,17 +1112,26 @@ class BaseSource:
                 model = global_results["MODEL"].strip(" ")
 
                 if row['type'] == 'global':
-                    rel_sps = self.get_products('spectrum', extra_key=spec_key)
-
                     inst_lums = {}
                     obs_order = []
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-                        sp_oi, sp_inst = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")[0:-2]
+                        sp_oi, sp_inst = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")[:-1]
                         print(sp_oi)
                         print(sp_inst)
-                        print(self.get_products('spectrum', sp_oi, sp_inst, spec_key))
+                        rel_sp = self.get_products('spectrum', sp_oi, sp_inst, spec_key)
+                        print(rel_sp)
 
-                    print(rel_sps)
+                        # Adds information from this fit to the spectrum object.
+                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+
+                        # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                        #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                        processed_lums = rel_sp.get_luminosities(model)
+                        if rel_sp.instrument not in inst_lums:
+                            inst_lums[rel_sp.instrument] = processed_lums
+
+
+
                 elif 'ann' in row['type']:
                     rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
                     print(rel_ann_sp)
