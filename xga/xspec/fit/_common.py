@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 17:20. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -129,7 +129,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                         freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str, lum_conf: float,
                         redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
                         check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool, fit_conf: str,
-                        which_par_nh: str = 'None') -> Tuple[str, str, list]:
+                        which_par_nh: str = 'None', rand_ident: str = None) -> Tuple[str, str, list]:
     """
     This writes out a configured XSPEC script, and is common to all fit functions that DON'T USE cross-arfs.
 
@@ -167,6 +167,10 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         output file names in order to uniquely identify model fits with different configurations.
     :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
         of unabsorbed luminosities.
+    :param str rand_ident: A random identifier to identify the fit, and fit results file. Default is None, in which
+        case this function will generate an identifier, but we also allow it to be passed in for annular spectrum
+        fit methods, so we can easily identify annulus fits from the same run (the format will be the same random
+        identifier with _{annulus id} appended).
     :return: The paths to the output file and the script file, plus the presumptive entry for the fit inventory in the
         case that the fit is successful.
     :rtype: Tuple[str, str, list]
@@ -191,9 +195,11 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
             inv_hdr = ",".join(inv_cols) + "\n"
             writo.write(inv_hdr)
 
-    # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit configuration key
-    #  will be too long to be allowed, so we're going to keep an inventory and assign them random identifiers.
-    rand_ident = randint(0, int(1e+8))
+    if rand_ident is not None:
+        # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit
+        #  configuration key will be too long to be allowed, so we're going to keep an inventory and assign them
+        #  random identifiers.
+        rand_ident = randint(0, int(1e+8))
     # We create the eventual final output results file from the fit - it won't necessarily get made because the fit
     #  might fail, but we're making life easier on ourselves by creating the inventory entry here so it can be put
     #  in the file by xspec_call if the fit succeeds
