@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 14:48. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1094,7 +1094,7 @@ class BaseSource:
                 fit_ois = np.array(row['obs_ids'].split('/'))
                 fit_insts = np.array(row['insts'].split('/'))
 
-                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi)].T)
+                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi)].T.astype(str))
                            for oi in list(set(fit_ois))}
 
                 print(self.instruments)
@@ -1114,12 +1114,23 @@ class BaseSource:
                 if row['type'] == 'global':
                     inst_lums = {}
                     obs_order = []
+
+                    assign_res = True
+                    rel_sps = []
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         sp_oi, sp_inst = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")[:2]
-                        print(sp_oi)
-                        print(sp_inst)
                         rel_sp = self.get_products('spectrum', sp_oi, sp_inst, spec_key)
-                        print(rel_sp)
+                        if len(rel_sp) != 1:
+                            assign_res = False
+                            break
+                        else:
+                            rel_sps.append(rel_sp[0])
+
+                    if assign_res:
+                        break
+
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        rel_sp = rel_sps[line_ind]
 
                         # Adds information from this fit to the spectrum object.
                         rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
