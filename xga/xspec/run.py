@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 19:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 19:55. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -324,18 +324,19 @@ def xspec_call(xspec_func):
                     if len(res_set[2]) != 0:
                         xspec_errs += res_set[2]
 
+                # If the fit succeeded then we'll put it in the inventory!
+                if len(script_list) != 0 and len(results[src_repr]) != 0 and run_type == 'fit':
+                    inv_ent = inv_ent_lookup[o_file_lu]
+                    inv_path = OUTPUT + "XSPEC/" + s.name + "/inventory.csv"
+                    with open(inv_path, 'a') as appendo:
+                        inv_ent_line = ",".join(inv_ent) + "\n"
+                        appendo.write(inv_ent_line)
+
             # This records a failure if the fit timed out
             if len(script_list) != 0 and len(results[src_repr]) == 0 and run_type == 'fit' and not ann_fit:
                 # This uses the presumptive inventory entry to grab the spectrum storage key
                 storage_key = inv_ent_lookup[o_file_lu][1]
                 s.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
-            # But if the fit succeeded then we'll put it in the inventory!
-            elif len(script_list) != 0 and len(results[src_repr]) != 0 and run_type == 'fit':
-                inv_ent = inv_ent_lookup[o_file_lu]
-                inv_path = OUTPUT + "XSPEC/" + s.name + "/inventory.csv"
-                with open(inv_path, 'a') as appendo:
-                    inv_ent_line = ",".join(inv_ent) + "\n"
-                    appendo.write(inv_ent_line)
 
             if ann_fit:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
