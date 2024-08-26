@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 15:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 15:11. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1094,28 +1094,14 @@ class BaseSource:
                 fit_ois = np.array(row['obs_ids'].split('/')).flatten()
                 fit_insts = np.array(row['insts'].split('/')).flatten()
 
-                print(fit_ois)
-                print(fit_insts)
-                print(list(set(fit_ois)))
-
-                oi_dict = {}
-                for oi in list(set(fit_ois)):
-                    print(oi)
-                    sello = np.argwhere(fit_ois == oi).T[0]
-                    print(sello)
-                    print(fit_insts[sello])
-
                 oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
                            for oi in list(set(fit_ois))}
 
-                print(self.instruments)
-                print(oi_dict)
-                print(oi_dict == self.instruments)
-                # print(set(oi_dict) == set(self.instruments))
-
                 # Now we check to see if the same observations are associated with the source currently as they
-                #  were at the time of the original fit
-
+                #  were at the time of the original fit - if they are not then we are stopping the load process
+                #  here and moving onto the next entry
+                if oi_dict != self.instruments:
+                    break
 
                 # Load in the results table
                 fit_data = FITS(fit_file)
@@ -1152,11 +1138,28 @@ class BaseSource:
                         if rel_sp.instrument not in inst_lums:
                             inst_lums[rel_sp.instrument] = processed_lums
 
+                    # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                    #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                    #  consistent
+                    if "pn" in inst_lums:
+                        chosen_lums = inst_lums["pn"]
+                        # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                    elif "mos2" in inst_lums:
+                        chosen_lums = inst_lums["mos2"]
+                    elif "mos1" in inst_lums:
+                        chosen_lums = inst_lums["mos1"]
+                    else:
+                        chosen_lums = None
 
+                    # Push global fit results, luminosities etc. into the corresponding source object.
+                    self.add_fit_data(model, global_results, chosen_lums, spec_key, fit_conf)
 
                 elif 'ann' in row['type']:
                     rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
                     print(rel_ann_sp)
+
+            print(self._fit_results)
+
             stop
 
             # prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
