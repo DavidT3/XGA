@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:38. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -217,8 +217,6 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         set_ident = spec_storage_key.split('ident')[-1].split('_')[0]
     else:
         set_ident = ''
-
-    print(set_ident)
 
     # Now we can define the 'type' of fit it is - this will help out when reading things in
     if set_ident == '':

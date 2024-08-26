@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:38. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4378,12 +4378,12 @@ class BaseSource:
         elif self._wl_mass is not None and self._wl_mass_err is None:
             print("Weak Lensing Mass - {0}".format(self._wl_mass))
 
-        if 'get_temperature' in dir(self) and len(self.fitted_model_configurations['constant*tbabs*apec']) == 1:
+        if 'get_temperature' in dir(self):
             try:
                 tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
                 # Just average the uncertainty for this
                 print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
-            except (ModelNotAssociatedError, NoProductAvailableError):
+            except (ModelNotAssociatedError, NoProductAvailableError, ValueError):
                 pass
 
             try:
@@ -4391,7 +4391,7 @@ class BaseSource:
                                            hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
                 print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
-            except (ModelNotAssociatedError, NoProductAvailableError):
+            except (ModelNotAssociatedError, NoProductAvailableError, ValueError):
                 pass
         print("-----------------------------------------------------\n")
 

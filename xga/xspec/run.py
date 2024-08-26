@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 10:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:38. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -326,8 +326,11 @@ def xspec_call(xspec_func):
                 inv_ent = inv_ents[ind]
                 inv_path = OUTPUT + "XSPEC/" + s.name + "/inventory.csv"
                 with open(inv_path, 'a') as appendo:
-                    inv_ent_line = ",".join(inv_ent) + "\n"
-                    appendo.write(inv_ent_line)
+                    if not ann_fit:
+                        inv_ent_line = ",".join(inv_ent) + "\n"
+                        appendo.write(inv_ent_line)
+                    else:
+                        appendo.writelines([",".join(ie)+"\n" for ie in inv_ent])
 
             if ann_fit:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
