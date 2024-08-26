@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 13:21. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1080,12 +1080,12 @@ class BaseSource:
 
             # Everything in this file will be relevant to the current source
             cur_fit_inv = pd.read_csv(os.path.join(OUTPUT, 'XSPEC', self.name, 'inventory.csv'))
-            print(cur_fit_inv[['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name', 'type',
-                               'set_ident']].duplicated().any())
 
             cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
                                                        'type', 'set_ident'])
             cur_fit_inv = cur_fit_inv.reset_index(drop=True)
+
+            print(cur_fit_inv)
 
             for row_ind, row in cur_fit_inv.iterrows():
                 # We'll read out some key information from the row into variables to make our life a little neater
@@ -1103,6 +1103,9 @@ class BaseSource:
                 if row['type'] == 'global':
                     rel_sps = self.get_products('spectrum', extra_key=spec_key)
                     print(rel_sps)
+                elif 'ann' in row['type']:
+                    rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
+                    print(rel_ann_sp)
             stop
 
             # prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
