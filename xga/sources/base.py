@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 20:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 21:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1117,7 +1117,10 @@ class BaseSource:
                             break
                         else:
                             rel_sps.append(rel_sp[0])
-
+                    # TODO I was going to use this
+                    #  or len(rel_sps) != len(self.get_products('spectrum', extra_key=spec_key))
+                    #  to check for spectra that match our description but weren't included in the fit output, but
+                    #  I realise that would break cases where spectrum_checking has excluded some spectra
                     if not assign_res:
                         break
 
@@ -1158,9 +1161,89 @@ class BaseSource:
                                                                                                             ''))
 
             for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
-                fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident]
+                fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident].reset_index(drop=True)
 
-                print(fit_ann_inv_ent)
+                obs_order = {an_id: [] for an_id in fit_ann_inv_ent['ann_id']}
+                ann_lums = {an_id: None for an_id in fit_ann_inv_ent['ann_id']}
+                ann_res = {an_id: None for an_id in fit_ann_inv_ent['ann_id']}
+
+                rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'])
+
+                assign_res = True
+                for row_ind, row in fit_ann_inv_ent.iterrows():
+                    if not assign_res:
+                        break
+
+                    # We'll read out some key information from the row into variables to make our life a little neater
+                    fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
+                    fit_conf = row['fit_conf_key']
+                    fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                    fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                    oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                               for oi in list(set(fit_ois))}
+
+                    # Now we check to see if the same observations are associated with the source currently as they
+                    #  were at the time of the original fit - if they are not then we are stopping the load process
+                    #  here and moving onto the next entry
+                    if oi_dict != self.instruments:
+                        break
+
+
+                    # Load in the results table
+                    fit_data = FITS(fit_file)
+                    global_results = fit_data["RESULTS"][0]
+                    model = global_results["MODEL"].strip(" ")
+
+                    rel_sps = []
+                    inst_lums = {}
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                        sp_oi, sp_inst = spec_info[:2]
+                        sp_ann_id = spec_info[-2]
+
+                        try:
+                            rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
+                            rel_sps.append(rel_sp[0])
+                        except NoProductAvailableError:
+                            assign_res = False
+                            break
+
+                        obs_order[sp_ann_id].append([sp_oi, sp_inst])
+
+                    if not assign_res:
+                        break
+
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        rel_sp = rel_sps[line_ind]
+
+                        # Adds information from this fit to the spectrum object.
+                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)], fit_conf)
+
+                        # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                        #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                        processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                        if rel_sp.instrument not in inst_lums:
+                            inst_lums[rel_sp.instrument] = processed_lums
+
+                    # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                    #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                    #  consistent
+                    if "pn" in inst_lums:
+                        chosen_lums = inst_lums["pn"]
+                        # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                    elif "mos2" in inst_lums:
+                        chosen_lums = inst_lums["mos2"]
+                    elif "mos1" in inst_lums:
+                        chosen_lums = inst_lums["mos1"]
+                    else:
+                        chosen_lums = None
+
+                    ann_lums[row['ann_id']] = chosen_lums
+                    ann_res[row['ann_id']] = global_results
+
+                rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
+                print(rel_ann_sp._fit_results)
 
             #     elif 'ann' in row['type']:
             #         rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
