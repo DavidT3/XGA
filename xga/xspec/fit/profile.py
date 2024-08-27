@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:38. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from random import randint
@@ -87,22 +87,16 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     if not isinstance(start_met, Quantity):
         start_met = Quantity(start_met)
 
-    if not use_cross_arf and first_fit_start_pars:
-        first_fit_start_pars = False
-
-    if not use_cross_arf and detmap_bin != 200:
-        detmap_bin = 200
-
     if use_cross_arf and first_fit_start_pars:
         single_temp_apec_profile(sources, radii, start_temp, start_met, lum_en, freeze_nh, freeze_met,
                                  lo_en, hi_en, par_fit_stat, lum_conf, abund_table, fit_method, group_spec, min_counts,
-                                 min_sn, over_sample, one_rmf, num_cores, spectrum_checking, timeout, False, False)
+                                 min_sn, over_sample, one_rmf, num_cores, spectrum_checking, timeout, False,
+                                 first_fit_start_pars, detmap_bin)
         # We can recreate the fit_conf key that will have been assigned to the preceding non-cross-arf fit here, which
         #  will make it rather easier to retrieve the fit results we need to use as starting values later on
         rel_args = FIT_FUNC_ARGS['single_temp_apec_profile']
         in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
         in_fit_conf['use_cross_arf'] = False
-        in_fit_conf['first_fit_start_pars'] = False
         prefit_fit_conf = _gen_fit_conf(in_fit_conf)
 
     if use_cross_arf:
