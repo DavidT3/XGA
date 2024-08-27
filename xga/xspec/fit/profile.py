@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 11:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:03. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from random import randint
@@ -86,6 +86,12 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     """
     if not isinstance(start_met, Quantity):
         start_met = Quantity(start_met)
+
+    if not use_cross_arf and first_fit_start_pars:
+        first_fit_start_pars = False
+
+    if not use_cross_arf and detmap_bin != 200:
+        detmap_bin = 200
 
     if use_cross_arf and first_fit_start_pars:
         single_temp_apec_profile(sources, radii, start_temp, start_met, lum_en, freeze_nh, freeze_met,
