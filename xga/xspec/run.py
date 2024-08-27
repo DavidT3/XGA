@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 13:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 15:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -10,12 +10,14 @@ from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
 
 import fitsio
+import numpy as np
 import pandas as pd
 from fitsio import FITS
 from tqdm import tqdm
 
 from .. import XSPEC_VERSION, OUTPUT
-from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError
+from ..exceptions import XSPECFitError, XSPECNotFoundError, XGADeveloperError
+from ..products import AnnularSpectra
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -227,6 +229,9 @@ def xspec_call(xspec_func):
             ann_results = {}
             ann_lums = {}
             ann_obs_order = {}
+            # And this tells this method if an annular spectrum used the cross-arf option (the results are stored
+            #  quite differently).
+            with_cross_arf = False
 
             for res_set in results[src_repr]:
                 o_file_lu = res_set[0].replace(".fits", "")
@@ -240,6 +245,9 @@ def xspec_call(xspec_func):
                         first_key = first_key.split('_spec.fits')[0]
                         if "_ident" in first_key:
                             ann_fit = True
+
+                        if inv_ent_lookup[o_file_lu]['type'] == 'ann_carf':
+                            with_cross_arf = True
 
                         inst_lums = {}
                         obs_order = []
@@ -256,24 +264,13 @@ def xspec_call(xspec_func):
                                 sp_key = 'ra' + sp_key
                                 # Finds the appropriate matching spectrum object for the current table line
                                 spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
-                            else:
+                            elif ann_fit:
                                 obs_order.append([sp_info[0], sp_info[1]])
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
-                                sp_key = 'ra' + sp_key.split('_ident')[0]
-                                first_part = sp_key.split('ri')[0]
-                                second_part = "_" + "_".join(sp_key.split('ro')[-1].split("_")[1:])
 
-                                ann_sp_key = first_part + "ar" + "_".join(radii[ind].value.astype(str)) + second_part
-                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key)
-                                if len(ann_specs) > 1:
-                                    raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
-                                                             "this is the developers fault, not yours.")
-                                elif len(ann_specs) == 0:
-                                    raise NoMatchFoundError("Somehow I haven't found the AnnularSpectra that you "
-                                                            "fitted, this is the developers fault, not yours")
-                                else:
-                                    ann_spec = ann_specs[0]
-                                    spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                ann_spec = s.get_annular_spectra(inv_ent_lookup[o_file_lu]['set_ident'])
+                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                ann_lums.setdefault(spec.annulus_ident, {})
 
                             # Adds information from this fit to the spectrum object.
                             spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)],
@@ -282,27 +279,75 @@ def xspec_call(xspec_func):
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
                             processed_lums = spec.get_luminosities(model, fit_conf=fit_conf_lookup[o_file_lu])
-                            if spec.instrument not in inst_lums:
+
+                            if not with_cross_arf and spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
+                            elif with_cross_arf and spec.instrument not in ann_lums[spec.annulus_ident]:
+                                ann_lums[spec.annulus_ident][spec.instrument] = processed_lums
 
                         # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
                         #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
                         #  consistent
-                        if "pn" in inst_lums:
+                        if not with_cross_arf and "pn" in inst_lums:
                             chosen_lums = inst_lums["pn"]
                         # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                        elif "mos2" in inst_lums:
+                        elif not with_cross_arf and "mos2" in inst_lums:
                             chosen_lums = inst_lums["mos2"]
-                        else:
+                        elif not with_cross_arf:
                             chosen_lums = inst_lums["mos1"]
-                        if ann_fit:
+                        else:
+                            # TODO THIS IS DISGUSTING
+                            chosen_lums = {}
+                            for cur_ann_id in ann_lums:
+                                if "pn" in inst_lums:
+                                    cur_chos_lum = inst_lums["pn"]
+                                elif "mos2" in inst_lums:
+                                    cur_chos_lum = inst_lums["mos2"]
+                                else:
+                                    cur_chos_lum = inst_lums["mos1"]
+                                chosen_lums[cur_ann_id] = cur_chos_lum
+
+                        # This is your bog-standard global fit, where the results are now getting stored in the source
+                        #  object - we have already added the plotting information to the individual spectra
+                        if not ann_fit:
+                            # Push global fit results, luminosities etc. into the corresponding source object.
+                            s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf_lookup[o_file_lu])
+
+                        # If this was an annular fit and the cross-arf option was not used, the different annuli
+                        #  results are completely separate in terms of their outputs, as each annuli is run separately,
+                        #  however the cross-arf annular fits have all annuli results output in one file
+                        elif ann_fit and not with_cross_arf:
                             ann_results[spec.annulus_ident] = global_results
                             ann_lums[spec.annulus_ident] = chosen_lums
                             ann_obs_order[spec.annulus_ident] = obs_order
 
-                        elif not ann_fit:
-                            # Push global fit results, luminosities etc. into the corresponding source object.
-                            s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf_lookup[o_file_lu])
+                        # And this is the case where the annular fit was performed with cross-arfs, and all the
+                        # results for all the annuli are output into one file (because the cross-arfs require
+                        #  simultaneous fitting of all annuli)
+                        elif ann_fit and with_cross_arf:
+                            ann_spec: AnnularSpectra
+                            #
+                            col_names = np.array(global_results.get_colnames())
+                            arg_split = np.argwhere(col_names == 'DOF')[0][0]
+                            #
+                            not_par_names = col_names[:arg_split+1]
+                            not_par_names = np.tile(not_par_names[..., None], ann_spec.num_annuli).T
+                            # We select only the column names which were fit parameters, these we need to split up
+                            #  by figuring out which belong to each annulus
+                            col_names = col_names[arg_split+1:]
+                            par_per_ann = len(col_names) / ann_spec.num_annuli
+                            if (par_per_ann % 1) != 0:
+                                raise XGADeveloperError("Assigning results to annular spectrum after cross-arf fit"
+                                                        " has resulted in a non-integer number of parameters per"
+                                                        " annulus. This is the fault of the developers.")
+                            # Now we can split the parameter names into those that belong with each
+                            par_for_ann = col_names.reshape(ann_spec.num_annuli, int(par_per_ann))
+                            par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
+
+                            ann_results = {ann_id: global_results[par_for_ann] for ann_id in ann_spec.annulus_ids}
+
+                            ann_spec.add_fit_data(model, ann_results, chosen_lums, obs_order,
+                                                  fit_conf_lookup[o_file_lu])
 
                 elif len(res_set) != 1 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
@@ -347,7 +392,7 @@ def xspec_call(xspec_func):
                 storage_key = inv_ent_lookup[o_file_lu][1]
                 s.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
 
-            if ann_fit:
+            if ann_fit and not with_cross_arf:
                 # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                 #  the last spectra that was opened in the loop
                 ann_spec = s.get_annular_spectra(set_id=spec.set_ident)

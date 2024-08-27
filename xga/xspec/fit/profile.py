@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 15:54. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from random import randint
@@ -257,8 +257,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             ca_start_temp = []
             ca_start_met = []
             ca_start_norm = []
-            print(prefit_fit_conf)
-            print(ann_spec.fitted_model_configurations)
             for ann_id in ann_spec.annulus_ids:
                 # Here we retrieve the results of the previous fit that was run without cross-arf, to use as starting
                 #  parameters for the cross-arf fits. If we can't get a result for a particular annulus then we're
@@ -276,7 +274,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                         else:
                             ca_start_met.append(start_met)
                     except ModelNotAssociatedError:
-                        print('well shoot')
                         ca_start_temp.append(start_temp)
                         ca_start_norm.append(Quantity(1, 'cm^-5'))
                         ca_start_met.append(start_met)
@@ -293,9 +290,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             start_temp = Quantity(ca_start_temp)
             start_norm = Quantity(ca_start_norm)
             start_met = Quantity(ca_start_met)
-
-            # TODO NEED TO PUT FIT_CONF GENERATION SOMEWHERE DOWN HERE IN THE CASE OF PREVIOUS FIT RESULTS BEING USED
-            #  AS START VALUES
 
             # The start constants will always be one
             start_con = [1] * len(ann_spec.annulus_ids)
@@ -341,8 +335,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                 cur_ann_cross_arfs = []
                 for oi in oi_combos:
                     rel_c_arfs = ann_spec.get_cross_arf_paths(oi[0], oi[1], ann_id)
-                    # This is massive overkill, as this will be setup by XGA I can almost guarantee that the keys will be
-                    #  integer cross-annulus identifiers, and they will be in the right order.
+                    # This is massive overkill, as this will be setup by XGA I can almost guarantee that the keys
+                    #  will be integer cross-annulus identifiers, and they will be in the right order.
                     cross_ids = [en for en in list(rel_c_arfs.keys())]
                     cross_ids.sort()
                     cur_ann_cross_arfs.append("{" + " ".join([rel_c_arfs[c_id] for c_id in cross_ids]) + "}")
