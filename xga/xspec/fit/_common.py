@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 10:22. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -129,9 +129,11 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
                         freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str, lum_conf: float,
                         redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
                         check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool, fit_conf: str,
-                        which_par_nh: str = 'None', rand_ident: str = None) -> Tuple[str, str, list]:
+                        which_par_nh: str = 'None', rand_ident: str = None, cross_arf_paths: str = None,
+                        cross_arf_rmf_paths: str = None) -> Tuple[str, str, list]:
     """
-    This writes out a configured XSPEC script, and is common to all fit functions that DON'T USE cross-arfs.
+    This writes out a configured XSPEC script, for global fits, annular fits, and annular fits with cross-arf
+    support depending on the input parameters.
 
     :param BaseSource source: The source for which an XSPEC script is being created
     :param str spec_storage_key: The storage key that the spectra that have been included in the current fit
@@ -171,14 +173,15 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         case this function will generate an identifier, but we also allow it to be passed in for annular spectrum
         fit methods, so we can easily identify annulus fits from the same run (the format will be the same random
         identifier with _{annulus id} appended).
+    :param str cross_arf_paths: The TCL list of paths to the cross-arf files used for all the annuli
+        and annuli combinations in this script.
+    :param str cross_arf_rmf_paths: The TCL list of paths to the RMFs used to generate the cross-arfs.
+    :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
+        of unabsorbed luminosities.
     :return: The paths to the output file and the script file, plus the presumptive entry for the fit inventory in the
         case that the fit is successful.
     :rtype: Tuple[str, str, list]
     """
-    # Read in the template file for the XSPEC script.
-    with open(BASE_XSPEC_SCRIPT, 'r') as x_script:
-        script = x_script.read()
-
     # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
     #  to be stored
     dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
@@ -221,9 +224,9 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     # Now we can define the 'type' of fit it is - this will help out when reading things in
     if set_ident == '':
         fit_type = 'global'
-    elif set_ident != '' and 'cross_arf' not in fit_conf:
+    elif set_ident != '' and cross_arf_paths is None:
         fit_type = 'ann'
-    elif set_ident != '' and 'cross_arf' in fit_conf:
+    elif set_ident != '' and cross_arf_paths is not None:
         fit_type = 'ann_carf'
 
     # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
@@ -236,15 +239,37 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     out_file = dest_dir + source.name + "_" + str(rand_ident)
     script_file = dest_dir + source.name + "_" + str(rand_ident) + '.xcm'
 
-    # The template is filled out here, taking everything we have generated and everything the user
-    #  passed in. The result is an XSPEC script that can be run as is.
-    script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
-                           q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
-                           hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
-                           lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                           of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
-                           cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
-                           nhmtz=which_par_nh)
+    # We can tell if the 'standard' script template or the cross-arf template is needed by checking whether the
+    #  cross arf paths variable has been set
+    if cross_arf_paths is None:
+        # Read in the template file for the usual XSPEC script.
+        with open(BASE_XSPEC_SCRIPT, 'r') as x_script:
+            script = x_script.read()
+
+        # The template is filled out here, taking everything we have generated and everything the user
+        #  passed in. The result is an XSPEC script that can be run as is.
+        script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
+                               q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
+                               hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
+                               lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
+                               of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
+                               cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
+                               nhmtz=which_par_nh)
+
+    else:
+        # Read in the template file for the cross-arf XSPEC script - quite different fundamentally
+        with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
+            script = x_script.read()
+
+        # The template is filled out here, taking everything we have generated and everything the user
+        #  passed in. The result is an XSPEC script that can be run as is.
+        script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value, q0=0.,
+                               lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
+                               hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values, lk=linking,
+                               fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims, of=out_file,
+                               redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
+                               cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
+                               nhmtz=which_par_nh, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
 
     # Write out the filled-in template to its destination
     with open(script_file, 'w') as xcm:
@@ -252,83 +277,3 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
 
     return out_file, script_file, inv_ent
 
-
-def _write_crossarf_xspec_script(source: BaseSource, spec_storage_key: str, model: str, abund_table: str,
-                                 fit_method: str, ann_spec_paths: str, lo_en: Quantity, hi_en: Quantity,
-                                 par_names: str, par_values: str, linking: str, freezing: str, par_fit_stat: float,
-                                 lum_low_lims: str, lum_upp_lims: str, lum_conf: float, redshift: float,
-                                 pre_check: bool, check_par_names: str, check_par_lo_lims: str,
-                                 check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool,
-                                 cross_arf_paths: str, cross_arf_rmf_paths: str,
-                                 which_par_nh: str = 'None') -> Tuple[str, str]:
-    """
-    This writes out a configured XSPEC script that makes use of cross-arfs.
-
-    :param BaseSource source: The source for which an XSPEC script is being created
-    :param str file_prefix: The prefix that should be added to the script and output file names to uniquely identify
-        it. Part of it will be the storage key that the spectra that have been included in the current fit
-        are stored under.
-    :param str model: The model being fitted to the data.
-    :param str abund_table: The chosen abundance table for XSPEC to use.
-    :param str fit_method: Which fit method should XSPEC use to fit the model to data.
-    :param str ann_spec_paths: A string containing the list of lists to all spectra for all annuli to be fitted.
-    :param Quantity lo_en: The lower energy limit for the data to be fitted.
-    :param Quantity hi_en: The upper energy limit for the data to be fitted.
-    :param str par_names: A string containing the names of the model parameters.
-    :param str par_values: A string containing the start values of the model parameters.
-    :param str linking: A string containing the linking settings for the model.
-    :param str freezing: A string containing the freezing settings for the model.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command.
-    :param str lum_low_lims: A string containing the lower energy limits for the luminosity measurements.
-    :param str lum_upp_lims: A string containing the upper energy limits for the luminosity measurements.
-    :param float lum_conf: The confidence level for XSPEC luminosity measurements.
-    :param float redshift: The redshift of the object.
-    :param bool pre_check: Flag indicating whether a pre-check of the quality of the input spectra
-        should be performed.
-    :param str check_par_names: A string representing a TCL list of model parameter names that checks should be
-        performed on.
-    :param str check_par_lo_lims: A string representing a TCL list of allowed lower limits for the check_par_names
-        parameter entries.
-    :param str check_par_hi_lims: A string representing a TCL list of allowed upper limits for the check_par_names
-        parameter entries.
-    :param str check_par_err_lims: A string representing a TCL list of allowed upper limits for the parameter
-        uncertainties.
-    :param bool norm_scale: Is there an extra constant designed to account for the differences in normalisation
-        you can get from different observations of a cluster.
-    :param str cross_arf_paths: The TCL list of paths to the cross-arf files used for all the annuli
-        and annuli combinations in this script.
-    :param str cross_arf_rmf_paths: The TCL list of paths to the RMFs used to generate the cross-arfs.
-    :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
-        of unabsorbed luminosities.
-    :return: The paths to the output file and the script file.
-    :rtype: Tuple[str, str]
-    """
-
-    # Read in the template file for the XSPEC script.
-    with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
-        script = x_script.read()
-
-    # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
-    #  to be stored
-    dest_dir = OUTPUT + "XSPEC/" + source.name + "/"
-    if not os.path.exists(dest_dir):
-        os.makedirs(dest_dir)
-    # Defining where the output summary file of the fit is written
-    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model
-    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + ".xcm"
-
-    # The template is filled out here, taking everything we have generated and everything the user
-    #  passed in. The result is an XSPEC script that can be run as is.
-    script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value, q0=0.,
-                           lamb0=source.cosmo.Ode0, sp=ann_spec_paths, lo_cut=lo_en.to("keV").value,
-                           hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values, lk=linking, fr=freezing,
-                           el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims, of=out_file, redshift=redshift,
-                           lel=lum_conf, check=pre_check, cps=check_par_names, cpsl=check_par_lo_lims,
-                           cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale, nhmtz=which_par_nh,
-                           cap=cross_arf_paths, carp=cross_arf_rmf_paths)
-
-    # Write out the filled-in template to its destination
-    with open(script_file, 'w') as xcm:
-        xcm.write(script)
-
-    return out_file, script_file
