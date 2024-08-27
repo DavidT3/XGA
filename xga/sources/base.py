@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 21:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 21:13. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1163,9 +1163,9 @@ class BaseSource:
             for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
                 fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident].reset_index(drop=True)
 
-                obs_order = {an_id: [] for an_id in fit_ann_inv_ent['ann_id']}
-                ann_lums = {an_id: None for an_id in fit_ann_inv_ent['ann_id']}
-                ann_res = {an_id: None for an_id in fit_ann_inv_ent['ann_id']}
+                obs_order = {int(an_id): [] for an_id in fit_ann_inv_ent['ann_id']}
+                ann_lums = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id']}
+                ann_res = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id']}
 
                 rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'])
 
@@ -1189,7 +1189,6 @@ class BaseSource:
                     if oi_dict != self.instruments:
                         break
 
-
                     # Load in the results table
                     fit_data = FITS(fit_file)
                     global_results = fit_data["RESULTS"][0]
@@ -1200,7 +1199,7 @@ class BaseSource:
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                         sp_oi, sp_inst = spec_info[:2]
-                        sp_ann_id = spec_info[-2]
+                        sp_ann_id = int(spec_info[-2])
 
                         try:
                             rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
@@ -1239,8 +1238,8 @@ class BaseSource:
                     else:
                         chosen_lums = None
 
-                    ann_lums[row['ann_id']] = chosen_lums
-                    ann_res[row['ann_id']] = global_results
+                    ann_lums[int(row['ann_id'])] = chosen_lums
+                    ann_res[int(row['ann_id'])] = global_results
 
                 rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
                 print(rel_ann_sp._fit_results)
