@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 19:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 13:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -125,7 +125,10 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         res_tables = out_file
         usable = True
     else:
-        res_tables = None
+        # I will pass back where the results table WOULD have been if the fit was successful, but we'll clearly mark
+        #  it as unusable - the reason for this is that the expected outfile can be linked back to the original
+        #  fit_conf, and that is very handy to record failed fits
+        res_tables = out_file
         usable = False
 
     return res_tables, src, usable, error, warn
@@ -187,13 +190,18 @@ def xspec_call(xspec_func):
                     """
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
-                    if results_in[0] is None:
-                        fit.update(1)
-                        return
+
+                    if not results_in[2]:
+                        # In this case the fit has been marked as failure, but there is still useful information
+                        #  in the output (namely the source and the place where the results table SHOULD have been)
+                        #  which the function outside can use to record the failure
+                        res_fits, rel_src = results_in[:2]
+                        results[rel_src].append([res_fits])
+
                     else:
                         res_fits, rel_src, successful, err_list, warn_list = results_in
                         results[rel_src].append([res_fits, successful, err_list, warn_list])
-                        fit.update(1)
+                    fit.update(1)
 
                 for s_ind, s in enumerate(script_list):
                     pth = paths[s_ind]
@@ -222,7 +230,7 @@ def xspec_call(xspec_func):
 
             for res_set in results[src_repr]:
                 o_file_lu = res_set[0].replace(".fits", "")
-                if len(res_set) != 0 and res_set[1] and run_type == "fit":
+                if len(res_set) != 1 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
                         global_results = res_table["RESULTS"][0]
                         model = global_results["MODEL"].strip(" ")
@@ -296,7 +304,7 @@ def xspec_call(xspec_func):
                             # Push global fit results, luminosities etc. into the corresponding source object.
                             s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf_lookup[o_file_lu])
 
-                elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
+                elif len(res_set) != 1 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
                     model = res_set[0].split("_")[-3]
@@ -316,7 +324,7 @@ def xspec_call(xspec_func):
                                               res_table["rate_{}".format(comb)].values,
                                               res_table["Lx_{}".format(comb)].values, model)
 
-                elif len(res_set) != 0 and not res_set[1]:
+                elif len(res_set) != 1 and not res_set[1]:
                     if not ann_fit:
                         # This uses the presumptive inventory entry to grab the spectrum storage key
                         storage_key = inv_ent_lookup[o_file_lu][1]
@@ -325,15 +333,16 @@ def xspec_call(xspec_func):
                         xspec_errs += res_set[2]
 
                 # If the fit succeeded then we'll put it in the inventory!
-                if len(script_list) != 0 and len(results[src_repr]) != 0 and run_type == 'fit':
+                if len(script_list) != 0 and len(res_set) != 1 and run_type == 'fit':
                     inv_ent = inv_ent_lookup[o_file_lu]
                     inv_path = OUTPUT + "XSPEC/" + s.name + "/inventory.csv"
                     with open(inv_path, 'a') as appendo:
                         inv_ent_line = ",".join(inv_ent) + "\n"
                         appendo.write(inv_ent_line)
 
-            # This records a failure if the fit timed out
-            if len(script_list) != 0 and len(results[src_repr]) == 0 and run_type == 'fit' and not ann_fit:
+            # This records a failure if the fit timed out - checking the length of the 0th entry of results for
+            #  this source is valid in this case because there will only be one result if this isn't an annular fit
+            if len(script_list) != 0 and len(results[src_repr][0]) == 1 and run_type == 'fit' and not ann_fit:
                 # This uses the presumptive inventory entry to grab the spectrum storage key
                 storage_key = inv_ent_lookup[o_file_lu][1]
                 s.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
