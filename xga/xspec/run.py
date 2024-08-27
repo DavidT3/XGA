@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 16:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 17:41. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -246,7 +246,7 @@ def xspec_call(xspec_func):
                         if "_ident" in first_key:
                             ann_fit = True
 
-                        if inv_ent_lookup[o_file_lu]['type'] == 'ann_carf':
+                        if inv_ent_lookup[o_file_lu][6] == 'ann_carf':
                             with_cross_arf = True
 
                         inst_lums = {}
