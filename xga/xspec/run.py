@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 15:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 16:56. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -326,15 +326,27 @@ def xspec_call(xspec_func):
                         #  simultaneous fitting of all annuli)
                         elif ann_fit and with_cross_arf:
                             ann_spec: AnnularSpectra
-                            #
+                            # Here our main problem is untangling the parameters in the results table for this fit, as
+                            #  we need to be able to assign them to our N annuli. This starts by reading out all
+                            #  the column names, and figuring out where the fit parameters (which will be relevant
+                            #  to a particular annulus) start.
                             col_names = np.array(global_results.get_colnames())
+                            # We know that fit parameters start after the DOF entry, because that is how we designed
+                            #  the output files, so we can figure out what index to split on that will let us get
+                            #  fit parameters in one array and the general parameters in the other.
                             arg_split = np.argwhere(col_names == 'DOF')[0][0]
-                            #
+                            # We split off the columns that aren't parameters
                             not_par_names = col_names[:arg_split+1]
+                            # Then we tile them, as we're going to be reading out these values repeatedly (i.e. N times
+                            #  where N is the number of annuli). Strictly speaking all the goodness of fit info is not
+                            #  for individual annuli like it is when we don't cross-arf-fit, but the annular spectrum
+                            #  still expects there to be an entry per annulus
                             not_par_names = np.tile(not_par_names[..., None], ann_spec.num_annuli).T
                             # We select only the column names which were fit parameters, these we need to split up
                             #  by figuring out which belong to each annulus
                             col_names = col_names[arg_split+1:]
+                            # Now we figure out how many parameters per annuli there are, this approach is valid
+                            #  because the model setups of each annuli are going to be identical
                             par_per_ann = len(col_names) / ann_spec.num_annuli
                             if (par_per_ann % 1) != 0:
                                 raise XGADeveloperError("Assigning results to annular spectrum after cross-arf fit"
@@ -342,8 +354,12 @@ def xspec_call(xspec_func):
                                                         " annulus. This is the fault of the developers.")
                             # Now we can split the parameter names into those that belong with each
                             par_for_ann = col_names.reshape(ann_spec.num_annuli, int(par_per_ann))
+                            # Now we're adding the not-fit-parameters back on to the front of each row - that way
+                            #  the not-fit-parameter info will be added into each annulus' information to be passed
+                            #  to the annular spectrum
                             par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
 
+                            # Then we put the results in a dictionary, the way the annulus wants it
                             ann_results = {ann_id: global_results[par_for_ann] for ann_id in ann_spec.annulus_ids}
 
                             ann_spec.add_fit_data(model, ann_results, chosen_lums, obs_order,
