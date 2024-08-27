@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:31. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from random import randint
@@ -311,10 +311,13 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             #  start values for the different annuli
             par_values = "{{{c} {nh} {t} {a} {z} {n}}}".format(c="{" + " ".join([str(c) for c in start_con]) + "}",
                                                                nh="{" + " ".join([str(nh) for nh in start_nh]) + "}",
-                                                               t="{" + " ".join([str(t) for t in start_temp]) + "}",
-                                                               a="{" + " ".join([str(a) for a in start_met]) + "}",
+                                                               t="{" + " ".join([str(t)
+                                                                                 for t in start_temp.value]) + "}",
+                                                               a="{" + " ".join([str(a)
+                                                                                 for a in start_met.value]) + "}",
                                                                z="{" + " ".join([str(z) for z in start_z]) + "}",
-                                                               n="{" + " ".join([str(n) for n in start_norm]) + "}")
+                                                               n="{" + " ".join([str(n)
+                                                                                 for n in start_norm.value]) + "}")
 
             # This helps us run through the different ObsID-instrument combinations that are present in the
             #  annular spectrum we're dealing with
