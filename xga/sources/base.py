@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 21:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 21:29. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1148,6 +1148,7 @@ class BaseSource:
                         chosen_lums = inst_lums["mos1"]
                     else:
                         chosen_lums = None
+                    fit_data.close()
 
                     # Push global fit results, luminosities etc. into the corresponding source object.
                     self.add_fit_data(model, global_results, chosen_lums, spec_key, fit_conf)
@@ -1239,6 +1240,7 @@ class BaseSource:
 
                     ann_lums[int(row['ann_id'])] = chosen_lums
                     ann_res[int(row['ann_id'])] = global_results
+                    fit_data.close()
 
                 rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
 
