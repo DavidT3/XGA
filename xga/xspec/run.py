@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 17:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 17:48. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -265,12 +265,13 @@ def xspec_call(xspec_func):
                                 # Finds the appropriate matching spectrum object for the current table line
                                 spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
                             elif ann_fit:
-                                obs_order.append([sp_info[0], sp_info[1]])
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
 
                                 ann_spec = s.get_annular_spectra(inv_ent_lookup[o_file_lu]['set_ident'])
                                 spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
                                 ann_lums.setdefault(spec.annulus_ident, {})
+                                ann_obs_order.setdefault(spec.annulus_ident, [])
+                                ann_obs_order[spec.annulus_ident].append([sp_info[0], sp_info[1]])
 
                             # Adds information from this fit to the spectrum object.
                             spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)],
@@ -362,7 +363,7 @@ def xspec_call(xspec_func):
                             # Then we put the results in a dictionary, the way the annulus wants it
                             ann_results = {ann_id: global_results[par_for_ann] for ann_id in ann_spec.annulus_ids}
 
-                            ann_spec.add_fit_data(model, ann_results, chosen_lums, obs_order,
+                            ann_spec.add_fit_data(model, ann_results, chosen_lums, ann_obs_order,
                                                   fit_conf_lookup[o_file_lu])
 
                 elif len(res_set) != 1 and res_set[1] and run_type == "conv_factors":
