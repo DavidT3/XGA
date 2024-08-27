@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 18:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2024, 20:27. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1080,10 +1080,10 @@ class BaseSource:
                                       dtype={'set_ident': 'Int64'})
 
             cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
-                                                       'type', 'set_ident'])
-            cur_fit_inv = cur_fit_inv.reset_index(drop=True)
+                                                       'type', 'set_ident']).reset_index(drop=True)
+            glob_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'global']
 
-            for row_ind, row in cur_fit_inv.iterrows():
+            for row_ind, row in glob_cur_fit_inv.iterrows():
                 # We'll read out some key information from the row into variables to make our life a little neater
                 fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
                 spec_key = row['spec_key']
@@ -1148,6 +1148,19 @@ class BaseSource:
 
                     # Push global fit results, luminosities etc. into the corresponding source object.
                     self.add_fit_data(model, global_results, chosen_lums, spec_key, fit_conf)
+
+            # ------------ ANNULAR FIT READ IN ------------
+            ann_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann']
+
+            ann_cur_fit_inv['fit_ident'] = ann_cur_fit_inv['results_file'].apply(lambda x: x.split("_")[1])
+            ann_cur_fit_inv['ann_id'] = ann_cur_fit_inv['results_file'].apply(lambda x:
+                                                                              x.split("_annid")[-1].replace('.fits',
+                                                                                                            ''))
+
+            for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
+                fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident]
+
+                print(fit_ann_inv_ent)
 
             #     elif 'ann' in row['type']:
             #         rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
