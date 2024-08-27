@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 12:33. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from random import randint
@@ -263,6 +263,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             ca_start_temp = []
             ca_start_met = []
             ca_start_norm = []
+            print(prefit_fit_conf)
+            print(ann_spec.fitted_model_configurations)
             for ann_id in ann_spec.annulus_ids:
                 # Here we retrieve the results of the previous fit that was run without cross-arf, to use as starting
                 #  parameters for the cross-arf fits. If we can't get a result for a particular annulus then we're
@@ -280,6 +282,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                         else:
                             ca_start_met.append(start_met)
                     except ModelNotAssociatedError:
+                        print('well shoot')
                         ca_start_temp.append(start_temp)
                         ca_start_norm.append(Quantity(1, 'cm^-5'))
                         ca_start_met.append(start_met)
