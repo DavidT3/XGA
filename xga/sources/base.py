@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:47. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1352,6 +1352,11 @@ class BaseSource:
                 #  the not-fit-parameter info will be added into each annulus' information to be passed
                 #  to the annular spectrum
                 par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
+
+                print(par_for_ann)
+
+                for ann_id in rel_ann_sp.annulus_ids:
+                    print(fit_data['RESULTS'][par_for_ann[ann_id]])
 
                 # Then we put the results in a dictionary, the way the annulus wants it
                 ann_results = {ann_id: fit_data['RESULTS'][par_for_ann] for ann_id in rel_ann_sp.annulus_ids}
