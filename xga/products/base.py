@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/08/2024, 09:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/08/2024, 10:29. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -636,12 +636,12 @@ class BaseProfile1D:
         # I'm also going to require that the profiles have knowledge of radii in degree units, also so I can make
         #  predictable storage strings. I don't really like to do this as it feels bodgy, but oh well
         if not radii.unit.is_equivalent('deg') and deg_radii is None and set_storage_key is None:
-            raise ValueError("If the radii variable is not in units that are convertible to degrees, please pass "
-                             "radii in degrees to deg_radii, this profile needs knowledge of the radii in degrees"
+            raise ValueError("If the 'radii' variable is not in units that are convertible to degrees, please pass "
+                             "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
                              " to construct a storage key.")
         elif not radii.unit.is_equivalent('deg') and set_storage_key is None and len(deg_radii) != len(radii):
-            raise ValueError("deg_radii is a different length to radii, they should be equivelant quantities, simply"
-                             " in different units.")
+            raise ValueError("'deg_radii' is a different length to 'radii', they should be equivalent "
+                             "quantities, simply in different units.")
         elif radii.unit.is_equivalent('deg') and set_storage_key is None:
             deg_radii = radii.to('deg')
 
@@ -770,6 +770,11 @@ class BaseProfile1D:
         #  outside of an XGA source analysis. All profiles created by XGA processes running through XGA sources will
         #  autosave, but the default behaviour of the class will be not to autosave.
         self._auto_save = auto_save
+
+        # This attribute is null by default, and can only be set through a property - if set then (when profiles
+        #  are combined into an BaseAggregateProfile1D for the purposes of plotting) the value will be used as the
+        #  label for the profile, rather than just the name
+        self._custom_agg_label = None
 
     def _model_allegiance(self, model: BaseModel1D):
         """
@@ -2426,6 +2431,29 @@ class BaseProfile1D:
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def custom_aggregate_label(self) -> str:
+        """
+        This property is a label that should be used in place of the source name associated with this profile when
+        plotting multiple profiles on one axis through an aggregate profile instance.
+
+        :return: The custom label, default is None.
+        :rtype: str
+        """
+        return self._custom_agg_label
+
+    @custom_aggregate_label.setter
+    def custom_aggregate_label(self, new_val: str):
+        """
+        Setter for the custom_aggregate_label property.
+
+        :param str new_val: The new label.
+        """
+        if isinstance(new_val, str) or new_val is None:
+            self._custom_agg_label = new_val
+        else:
+            raise TypeError("'custom_aggregate_label' must be a string, or None.")
 
     def __len__(self):
         """
