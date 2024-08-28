@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -23,7 +23,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NotSampleMemberError
+    NotSampleMemberError, XGADeveloperError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -1325,7 +1325,7 @@ class BaseSource:
                 #  we need to be able to assign them to our N annuli. This starts by reading out all
                 #  the column names, and figuring out where the fit parameters (which will be relevant
                 #  to a particular annulus) start.
-                col_names = np.array(global_results.get_colnames())
+                col_names = np.array(global_results.dtype.names)
                 # We know that fit parameters start after the DOF entry, because that is how we designed
                 #  the output files, so we can figure out what index to split on that will let us get
                 #  fit parameters in one array and the general parameters in the other.
@@ -1355,7 +1355,7 @@ class BaseSource:
                 par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
 
                 # Then we put the results in a dictionary, the way the annulus wants it
-                ann_results = {ann_id: global_results[par_for_ann] for ann_id in rel_ann_sp.annulus_ids}
+                ann_results = {ann_id: fit_data['RESULTS'][par_for_ann] for ann_id in rel_ann_sp.annulus_ids}
 
                 rel_ann_sp.add_fit_data(model, ann_results, chosen_lums, obs_order, fit_conf)
 
