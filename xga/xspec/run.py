@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 17:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 20:08. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -267,7 +267,7 @@ def xspec_call(xspec_func):
                             elif ann_fit:
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
 
-                                ann_spec = s.get_annular_spectra(inv_ent_lookup[o_file_lu]['set_ident'])
+                                ann_spec = s.get_annular_spectra(inv_ent_lookup[o_file_lu][7])
                                 spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
                                 ann_lums.setdefault(spec.annulus_ident, {})
                                 ann_obs_order.setdefault(spec.annulus_ident, [])
