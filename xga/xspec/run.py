@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 21:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:15. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -300,12 +300,12 @@ def xspec_call(xspec_func):
                             # TODO THIS IS DISGUSTING
                             chosen_lums = {}
                             for cur_ann_id in ann_lums:
-                                if "pn" in inst_lums:
-                                    cur_chos_lum = inst_lums["pn"]
-                                elif "mos2" in inst_lums:
-                                    cur_chos_lum = inst_lums["mos2"]
+                                if "pn" in ann_lums[cur_ann_id]:
+                                    cur_chos_lum = ann_lums[cur_ann_id]["pn"]
+                                elif "mos2" in ann_lums:
+                                    cur_chos_lum = ann_lums[cur_ann_id]["mos2"]
                                 else:
-                                    cur_chos_lum = inst_lums["mos1"]
+                                    cur_chos_lum = ann_lums[cur_ann_id]["mos1"]
                                 chosen_lums[cur_ann_id] = cur_chos_lum
 
                         # This is your bog-standard global fit, where the results are now getting stored in the source
