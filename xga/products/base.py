@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/08/2024, 09:50. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -552,11 +552,18 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False):
+                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, spec_model: str = None,
+                 fit_conf: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -582,6 +589,12 @@ class BaseProfile1D:
             plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
             is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "

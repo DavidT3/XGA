@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 14:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/08/2024, 09:50. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -317,10 +317,16 @@ class GasMass1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 deg_radii: Quantity = None, auto_save: bool = False):
+                 deg_radii: Quantity = None, auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
@@ -342,9 +348,15 @@ class GasMass1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii,
-                         auto_save=auto_save)
+                         auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
         self._prof_type = "gas_mass"
 
         # This is what the y-axis is labelled as during plotting
@@ -413,11 +425,17 @@ class GasDensity3D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
                  associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
-                 auto_save: bool = False):
+                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -444,6 +462,12 @@ class GasDensity3D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -470,7 +494,7 @@ class GasDensity3D(BaseProfile1D):
             values_err = values_err.to(chosen_unit)
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         # Setting the type
         self._prof_type = "gas_density"
@@ -809,10 +833,17 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile. This profile
         will be considered unusable if a temperature value of greater than 30keV is present in the profile, or if a
@@ -835,9 +866,15 @@ class ProjectedGasTemperature1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -885,10 +922,17 @@ class APECNormalisation1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D APEC normalisation profile.
 
@@ -909,9 +953,15 @@ class APECNormalisation1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1093,16 +1143,47 @@ class EmissionMeasure1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
+
+        :param Quantity radii: The radii at which the emission measures have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The emission measures that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
@@ -1138,10 +1219,17 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -1162,10 +1250,16 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -1203,15 +1297,44 @@ class GasTemperature3D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
+
+        :param Quantity radii: The radii at which the gas temperatures have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The gas temperatures that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1247,15 +1370,44 @@ class BaryonFraction(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False):
+                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
+
+        :param Quantity radii: The radii at which the baryon fracion have been measured, this should
+            be in a proper radius unit, such as kpc.
+        :param Quantity values: The baryon fracions that have been measured.
+        :param Quantity centre: The central coordinate the profile was generated from.
+        :param str source_name: The name of the source this profile is associated with.
+        :param str obs_id: The observation which this profile was generated from.
+        :param str inst: The instrument which this profile was generated from.
+        :param Quantity radii_err: Uncertainties on the radii.
+        :param Quantity values_err: Uncertainties on the values.
+        :param int associated_set_id: The set ID of the AnnularSpectra that generated this - if applicable.
+        :param str set_storage_key: Must be present if associated_set_id is, this is the storage key which the
+            associated AnnularSpectra generates to place itself in XGA's store structure.
+        :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
+            units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
+            values converted to degrees, and allows this object to construct a predictable storage key.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1298,12 +1450,19 @@ class HydrostaticMass(BaseProfile1D):
     :param bool progress: Should fit progress bars be shown.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
+
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True, auto_save: bool = False):
+                 progress: bool = True, auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
         """
         The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
         set up the hydrostatic mass profile.
@@ -1330,6 +1489,12 @@ class HydrostaticMass(BaseProfile1D):
         :param bool progress: Should fit progress bars be shown.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
@@ -1425,7 +1590,7 @@ class HydrostaticMass(BaseProfile1D):
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save)
+                         auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         # Need a custom storage key for this mass profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models.
@@ -2180,6 +2345,12 @@ class SpecificEntropy(BaseProfile1D):
         are in (the default).
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
 
     def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
@@ -2187,7 +2358,8 @@ class SpecificEntropy(BaseProfile1D):
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False, auto_save: bool = False):
+                 progress: bool = True, interp_data: bool = False, auto_save: bool = False, spec_model: str = None,
+                 fit_conf: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2241,6 +2413,12 @@ class SpecificEntropy(BaseProfile1D):
             are in (the default).
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
@@ -2404,7 +2582,7 @@ class SpecificEntropy(BaseProfile1D):
 
         super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save)
+                         auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
@@ -2701,11 +2879,17 @@ class Generic1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
                  associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
-                 auto_save: bool = False):
+                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
@@ -2728,10 +2912,16 @@ class Generic1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save)
+                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
 
