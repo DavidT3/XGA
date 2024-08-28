@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:53. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -361,7 +361,7 @@ def xspec_call(xspec_func):
                             par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
 
                             # Then we put the results in a dictionary, the way the annulus wants it
-                            ann_results = {ann_id: res_table['RESULTS'][par_for_ann]
+                            ann_results = {ann_id: res_table['RESULTS'][par_for_ann[ann_id]]
                                            for ann_id in ann_spec.annulus_ids}
 
                             ann_spec.add_fit_data(model, ann_results, chosen_lums, ann_obs_order,
