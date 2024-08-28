@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 21:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 21:59. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3473,6 +3473,10 @@ class BaseSource:
             extra_name = "_minsn{}".format(min_sn)
         else:
             extra_name = ''
+
+        # If set_id is passed then we make sure that it is an integer
+        if set_id is not None:
+            set_id = int(set_id)
 
         # And if it was oversampled during generation then we need to include that as well
         if over_sample is not None:
