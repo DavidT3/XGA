@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 21:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 21:15. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1245,118 +1245,118 @@ class BaseSource:
                 rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
 
             # ------------ CROSS-ARF ANNULAR FIT READ IN ------------
-            # carf_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann_carf']
-            #
-            # for row_ind, row in carf_cur_fit_inv.iterrows():
-            #     # Grab the relevant annular spectrum
-            #     rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
-            #
-            #     # We'll read out some key information from the row into variables to make our life a little neater
-            #     fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
-            #     spec_key = row['spec_key']
-            #     fit_conf = row['fit_conf_key']
-            #     fit_ois = np.array(row['obs_ids'].split('/')).flatten()
-            #     fit_insts = np.array(row['insts'].split('/')).flatten()
-            #
-            #     oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
-            #                for oi in list(set(fit_ois))}
-            #
-            #     # Now we check to see if the same observations are associated with the source currently as they
-            #     #  were at the time of the original fit - if they are not then we are stopping the load process
-            #     #  here and moving onto the next entry
-            #     if oi_dict != self.instruments:
-            #         break
-            #
-            #     # Load in the results table
-            #     fit_data = FITS(fit_file)
-            #     global_results = fit_data["RESULTS"][0]
-            #     model = global_results["MODEL"].strip(" ")
-            #
-            #     inst_lums = {ann_id: {} for ann_id in rel_ann_sp.annulus_ids}
-            #     obs_order = {int(an_id): [] for an_id in rel_ann_sp.annulus_ids}
-            #
-            #     assign_res = True
-            #     rel_sps = []
-            #     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-            #         spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
-            #         sp_oi, sp_inst = spec_info[:2]
-            #         sp_ann_id = int(spec_info[-2])
-            #
-            #         rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
-            #         if len(rel_sp) != 1:
-            #             assign_res = False
-            #             break
-            #         else:
-            #             rel_sps.append(rel_sp[0])
-            #
-            #     if not assign_res:
-            #         break
-            #
-            #     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-            #         rel_sp = rel_sps[line_ind]
-            #
-            #         # Adds information from this fit to the spectrum object.
-            #         rel_sp.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)], fit_conf)
-            #
-            #         obs_order[rel_sp.annulus_ident].append([rel_sp.obs_id, rel_sp.instrument])
-            #
-            #         # The add_fit_data method formats the luminosities nicely, so we grab them back out
-            #         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-            #         processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
-            #         if rel_sp.instrument not in inst_lums[rel_sp.annulus_ident]:
-            #             inst_lums[rel_sp.annulus_ident][rel_sp.instrument] = processed_lums
-            #
-            #     # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
-            #     #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
-            #     #  consistent
-            #     chosen_lums = {}
-            #     for cur_ann_id in inst_lums:
-            #         if "pn" in inst_lums:
-            #             cur_chos_lum = inst_lums["pn"]
-            #         elif "mos2" in inst_lums:
-            #             cur_chos_lum = inst_lums["mos2"]
-            #         else:
-            #             cur_chos_lum = inst_lums["mos1"]
-            #         chosen_lums[cur_ann_id] = cur_chos_lum
-            #     fit_data.close()
-            #
-            #     # Here our main problem is untangling the parameters in the results table for this fit, as
-            #     #  we need to be able to assign them to our N annuli. This starts by reading out all
-            #     #  the column names, and figuring out where the fit parameters (which will be relevant
-            #     #  to a particular annulus) start.
-            #     col_names = np.array(global_results.get_colnames())
-            #     # We know that fit parameters start after the DOF entry, because that is how we designed
-            #     #  the output files, so we can figure out what index to split on that will let us get
-            #     #  fit parameters in one array and the general parameters in the other.
-            #     arg_split = np.argwhere(col_names == 'DOF')[0][0]
-            #     # We split off the columns that aren't parameters
-            #     not_par_names = col_names[:arg_split + 1]
-            #     # Then we tile them, as we're going to be reading out these values repeatedly (i.e. N times
-            #     #  where N is the number of annuli). Strictly speaking all the goodness of fit info is not
-            #     #  for individual annuli like it is when we don't cross-arf-fit, but the annular spectrum
-            #     #  still expects there to be an entry per annulus
-            #     not_par_names = np.tile(not_par_names[..., None], rel_ann_sp.num_annuli).T
-            #     # We select only the column names which were fit parameters, these we need to split up
-            #     #  by figuring out which belong to each annulus
-            #     col_names = col_names[arg_split + 1:]
-            #     # Now we figure out how many parameters per annuli there are, this approach is valid
-            #     #  because the model setups of each annuli are going to be identical
-            #     par_per_ann = len(col_names) / rel_ann_sp.num_annuli
-            #     if (par_per_ann % 1) != 0:
-            #         raise XGADeveloperError("Assigning results to annular spectrum after cross-arf fit"
-            #                                 " has resulted in a non-integer number of parameters per"
-            #                                 " annulus. This is the fault of the developers.")
-            #     # Now we can split the parameter names into those that belong with each
-            #     par_for_ann = col_names.reshape(rel_ann_sp.num_annuli, int(par_per_ann))
-            #     # Now we're adding the not-fit-parameters back on to the front of each row - that way
-            #     #  the not-fit-parameter info will be added into each annulus' information to be passed
-            #     #  to the annular spectrum
-            #     par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
-            #
-            #     # Then we put the results in a dictionary, the way the annulus wants it
-            #     ann_results = {ann_id: global_results[par_for_ann] for ann_id in rel_ann_sp.annulus_ids}
-            #
-            #     rel_ann_sp.add_fit_data(model, ann_results, chosen_lums, obs_order, fit_conf)
+            carf_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann_carf']
+
+            for row_ind, row in carf_cur_fit_inv.iterrows():
+                # Grab the relevant annular spectrum
+                rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
+
+                # We'll read out some key information from the row into variables to make our life a little neater
+                fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
+                spec_key = row['spec_key']
+                fit_conf = row['fit_conf_key']
+                fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                           for oi in list(set(fit_ois))}
+
+                # Now we check to see if the same observations are associated with the source currently as they
+                #  were at the time of the original fit - if they are not then we are stopping the load process
+                #  here and moving onto the next entry
+                if oi_dict != self.instruments:
+                    break
+
+                # Load in the results table
+                fit_data = FITS(fit_file)
+                global_results = fit_data["RESULTS"][0]
+                model = global_results["MODEL"].strip(" ")
+
+                inst_lums = {ann_id: {} for ann_id in rel_ann_sp.annulus_ids}
+                obs_order = {int(an_id): [] for an_id in rel_ann_sp.annulus_ids}
+
+                assign_res = True
+                rel_sps = []
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                    sp_oi, sp_inst = spec_info[:2]
+                    sp_ann_id = int(spec_info[-2])
+
+                    rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
+                    if len(rel_sp) != 1:
+                        assign_res = False
+                        break
+                    else:
+                        rel_sps.append(rel_sp[0])
+
+                if not assign_res:
+                    break
+
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    rel_sp = rel_sps[line_ind]
+
+                    # Adds information from this fit to the spectrum object.
+                    rel_sp.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)], fit_conf)
+
+                    obs_order[rel_sp.annulus_ident].append([rel_sp.obs_id, rel_sp.instrument])
+
+                    # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                    #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                    processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                    if rel_sp.instrument not in inst_lums[rel_sp.annulus_ident]:
+                        inst_lums[rel_sp.annulus_ident][rel_sp.instrument] = processed_lums
+
+                # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                #  consistent
+                chosen_lums = {}
+                for cur_ann_id in inst_lums:
+                    if "pn" in inst_lums:
+                        cur_chos_lum = inst_lums["pn"]
+                    elif "mos2" in inst_lums:
+                        cur_chos_lum = inst_lums["mos2"]
+                    else:
+                        cur_chos_lum = inst_lums["mos1"]
+                    chosen_lums[cur_ann_id] = cur_chos_lum
+                fit_data.close()
+
+                # Here our main problem is untangling the parameters in the results table for this fit, as
+                #  we need to be able to assign them to our N annuli. This starts by reading out all
+                #  the column names, and figuring out where the fit parameters (which will be relevant
+                #  to a particular annulus) start.
+                col_names = np.array(global_results.get_colnames())
+                # We know that fit parameters start after the DOF entry, because that is how we designed
+                #  the output files, so we can figure out what index to split on that will let us get
+                #  fit parameters in one array and the general parameters in the other.
+                arg_split = np.argwhere(col_names == 'DOF')[0][0]
+                # We split off the columns that aren't parameters
+                not_par_names = col_names[:arg_split + 1]
+                # Then we tile them, as we're going to be reading out these values repeatedly (i.e. N times
+                #  where N is the number of annuli). Strictly speaking all the goodness of fit info is not
+                #  for individual annuli like it is when we don't cross-arf-fit, but the annular spectrum
+                #  still expects there to be an entry per annulus
+                not_par_names = np.tile(not_par_names[..., None], rel_ann_sp.num_annuli).T
+                # We select only the column names which were fit parameters, these we need to split up
+                #  by figuring out which belong to each annulus
+                col_names = col_names[arg_split + 1:]
+                # Now we figure out how many parameters per annuli there are, this approach is valid
+                #  because the model setups of each annuli are going to be identical
+                par_per_ann = len(col_names) / rel_ann_sp.num_annuli
+                if (par_per_ann % 1) != 0:
+                    raise XGADeveloperError("Assigning results to annular spectrum after cross-arf fit"
+                                            " has resulted in a non-integer number of parameters per"
+                                            " annulus. This is the fault of the developers.")
+                # Now we can split the parameter names into those that belong with each
+                par_for_ann = col_names.reshape(rel_ann_sp.num_annuli, int(par_per_ann))
+                # Now we're adding the not-fit-parameters back on to the front of each row - that way
+                #  the not-fit-parameter info will be added into each annulus' information to be passed
+                #  to the annular spectrum
+                par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
+
+                # Then we put the results in a dictionary, the way the annulus wants it
+                ann_results = {ann_id: global_results[par_for_ann] for ann_id in rel_ann_sp.annulus_ids}
+
+                rel_ann_sp.add_fit_data(model, ann_results, chosen_lums, obs_order, fit_conf)
 
         os.chdir(og_dir)
 
