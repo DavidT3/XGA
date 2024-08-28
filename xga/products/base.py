@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/08/2024, 10:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/08/2024, 10:32. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2759,10 +2759,13 @@ class BaseAggregateProfile1D:
             else:
                 p_name = p.src_name
 
-            if p.type == "brightness_profile" and p.psf_corrected:
+            if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
                 leg_label = p_name + " PSF Corrected"
-            else:
+            elif p.custom_aggregate_label is None:
                 leg_label = p_name
+            else:
+                leg_label = p.custom_aggregate_label
+
 
             # This subtracts the background if the user wants a background subtracted plot
             plot_y_vals = p.values.copy()
