@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:59. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1354,7 +1354,8 @@ class BaseSource:
                 par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
 
                 # Then we put the results in a dictionary, the way the annulus wants it
-                ann_results = {ann_id: fit_data['RESULTS'][par_for_ann[ann_id]] for ann_id in rel_ann_sp.annulus_ids}
+                ann_results = {ann_id: fit_data['RESULTS'][par_for_ann[ann_id]][0]
+                               for ann_id in rel_ann_sp.annulus_ids}
 
                 rel_ann_sp.add_fit_data(model, ann_results, chosen_lums, obs_order, fit_conf)
                 fit_data.close()
