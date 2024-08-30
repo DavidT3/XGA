@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 09:44. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -188,7 +188,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     run_type = "conv_factors"
     # I don't allow the user to set a timeout for fakeit runs because its unnecessary, but the run code still
     #  needs a value
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour')
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour'), model, None, None
 
 
 
