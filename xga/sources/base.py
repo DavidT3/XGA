@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 14:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 15:07. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1163,7 +1163,11 @@ class BaseSource:
             ann_cur_fit_inv['ann_id'] = ann_ids
 
             for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
+                print(self.name)
+                print(fit_ident)
                 fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident].reset_index(drop=True)
+                print(fit_ann_inv_ent)
+                print('\n')
 
                 obs_order = {int(an_id): [] for an_id in fit_ann_inv_ent['ann_id'].values}
                 ann_lums = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
