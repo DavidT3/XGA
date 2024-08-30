@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/08/2024, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 10:24. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1242,7 +1242,8 @@ class BaseSource:
                     ann_res[int(row['ann_id'])] = global_results
                     fit_data.close()
 
-                rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
+                if assign_res:
+                    rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
 
             # ------------ CROSS-ARF ANNULAR FIT READ IN ------------
             carf_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann_carf']
