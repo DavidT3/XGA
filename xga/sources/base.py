@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 11:00. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1191,6 +1191,9 @@ class BaseSource:
                     #  were at the time of the original fit - if they are not then we are stopping the load process
                     #  here and moving onto the next entry
                     if oi_dict != self.instruments:
+                        print('excuse me?')
+                        print(oi_dict)
+                        print(self.instruments)
                         break
 
                     # Load in the results table
