@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 22:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 14:09. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -405,7 +405,8 @@ def xspec_call(xspec_func):
 
             # This records a failure if the fit timed out - checking the length of the 0th entry of results for
             #  this source is valid in this case because there will only be one result if this isn't an annular fit
-            if len(script_list) != 0 and len(results[src_repr][0]) == 1 and run_type == 'fit' and not ann_fit:
+            if (len(script_list) != 0 and len(results[src_repr]) != 0 and len(results[src_repr][0]) == 1
+                    and run_type == 'fit' and not ann_fit):
                 # This uses the presumptive inventory entry to grab the spectrum storage key
                 storage_key = inv_ent_lookup[o_file_lu][1]
                 s.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
