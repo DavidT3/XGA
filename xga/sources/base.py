@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 11:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 14:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1079,8 +1079,10 @@ class BaseSource:
             cur_fit_inv = pd.read_csv(os.path.join(OUTPUT, 'XSPEC', self.name, 'inventory.csv'),
                                       dtype={'set_ident': 'Int64'})
 
-            cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
-                                                       'type', 'set_ident']).reset_index(drop=True)
+            # TODO DECIDE HOW TO HANDLE THIS PROPERLY - JUST DROPPING DUPLICATES IS NOT SUFFICIENT FOR ANNULAR SPECTRA
+            #  IN PARTICULAR
+            # cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
+            #                                            'type', 'set_ident']).reset_index(drop=True)
             glob_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'global']
 
             for row_ind, row in glob_cur_fit_inv.iterrows():
