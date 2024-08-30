@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 10:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 10:53. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1195,6 +1195,7 @@ class BaseSource:
                     fit_data = FITS(fit_file)
                     global_results = fit_data["RESULTS"][0]
                     model = global_results["MODEL"].strip(" ")
+                    print(model)
 
                     rel_sps = []
                     inst_lums = {}
