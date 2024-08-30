@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 10:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 10:39. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1168,6 +1168,8 @@ class BaseSource:
                 ann_res = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
 
                 rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'])
+
+                print(fit_ann_inv_ent)
 
                 assign_res = True
                 for row_ind, row in fit_ann_inv_ent.iterrows():
