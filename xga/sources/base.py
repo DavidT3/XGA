@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/09/2024, 09:28. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4485,10 +4485,20 @@ class BaseSource:
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :return: The requested luminosity value, and uncertainties.
         """
-        # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
-        #  because then I can just grab the storage key from one of them
-        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample,
-                                 telescope=telescope)
+        try:
+            # Spectra can be retrieved either from get_spectra or get_combined_spectra methods
+            # so we try both ways in a try except statement
+            specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
+                                     min_sn, over_sample, telescope=telescope)
+        except:
+            specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec,
+                                              min_counts, min_sn, over_sample, telescope=telescope)
+
+        # # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        # #  because then I can just grab the storage key from one of them
+        # specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample,
+        #                          telescope=telescope)
+
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
             storage_key = specs[0].storage_key
