@@ -4364,7 +4364,8 @@ class BaseSource:
 
     def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
-                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    stacked_spectra: bool = False):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
@@ -4390,17 +4391,21 @@ class BaseSource:
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            a simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
         # TODO the refactoring got a bit dicey - take a look around and make sure I didn't destroy anything
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
-        try:
-            # Spectra can be retrieved either from get_spectra or get_combined_spectra methods
-            # so we try both ways in a try except statement
+        if not stacked_spectra:
+            # If the user doesn't want the stacked spectra result, then we retrieve the spec objects
+            # from the get_spectra method
             specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, 
                                      min_sn, over_sample, telescope=telescope)
-        except:
+        else:
+            # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
             specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec, 
                                               min_counts, min_sn, over_sample, telescope=telescope)
 
@@ -4457,7 +4462,7 @@ class BaseSource:
     def get_luminosities(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
                          hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None):
+                         over_sample: float = None, stacked_spectra: bool = False):
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
@@ -4483,14 +4488,18 @@ class BaseSource:
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            a simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
         :return: The requested luminosity value, and uncertainties.
         """
-        try:
-            # Spectra can be retrieved either from get_spectra or get_combined_spectra methods
-            # so we try both ways in a try except statement
+        if not stacked_spectra:
+            # If the user doesn't want the stacked spectra result, then we retrieve the spec objects
+            # from the get_spectra method
             specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
                                      min_sn, over_sample, telescope=telescope)
-        except:
+        else:
+            # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
             specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec,
                                               min_counts, min_sn, over_sample, telescope=telescope)
 
