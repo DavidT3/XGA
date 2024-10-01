@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 13:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/10/2024, 19:30. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -523,7 +523,8 @@ class GalaxyCluster(ExtendedSource):
 
     def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
-                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    stacked_spectra: bool = False):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
@@ -552,10 +553,13 @@ class GalaxyCluster(ExtendedSource):
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            a simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
         return super().get_results(outer_radius, telescope, model, inner_radius, par, group_spec, min_counts, min_sn,
-                                   over_sample)
+                                   over_sample, stacked_spectra)
 
     def get_luminosities(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/01/2024, 14:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/10/2024, 19:30. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -10,8 +10,7 @@ from astropy.units import Quantity
 from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _spec_obj_setup
 from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
-from ...products import Spectrum
+from ...exceptions import ModelNotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 
@@ -174,7 +173,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample)
+                                         min_counts, min_sn, over_sample, stacked_spectra)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -337,7 +336,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample)
+                                         min_counts, min_sn, over_sample, stacked_spectra)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -485,7 +484,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             # If the fit has already been performed we do not wish to perform it again
             try:
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
-                                         min_counts, min_sn, over_sample)
+                                         min_counts, min_sn, over_sample, stacked_spectra)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -623,7 +622,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             # If the fit has already been performed we do not wish to perform it again
             try:
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample)
+                                         min_counts, min_sn, over_sample, stacked_spectra)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -764,7 +763,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             # If the fit has already been performed we do not wish to perform it again
             try:
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample)
+                                         min_counts, min_sn, over_sample, stacked_spectra)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
