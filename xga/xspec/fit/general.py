@@ -175,7 +175,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                 stacked_spec = tel == 'erosita'
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spectra=stacked_spec)
+                                         min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -340,7 +340,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                 stacked_spec = tel == 'erosita'
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spectra=stacked_spec)
+                                         min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -490,7 +490,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                 # when retrieving results, we want the stacked ones from erosita
                 stacked_spec = tel == 'erosita'
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spectra)
+                                         min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -630,7 +630,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                 # when retrieving results, we want the stacked ones from erosita
                 stacked_spec = tel == 'erosita'
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spectra)
+                                         min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -773,7 +773,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                 # when retrieving results, we want the stacked ones from erosita
                 stacked_spec = tel == 'erosita'
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spectra)
+                                         min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
