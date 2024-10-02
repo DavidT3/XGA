@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/09/2024, 09:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/10/2024, 11:48. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4693,7 +4693,7 @@ class BaseSource:
 
                 # This should only be a list of ObsIDs at this level, so we assume it is and check them against the
                 #  loaded ObsIDs, giving a warning if they are not valid
-                elif isinstance(val, list):
+                elif isinstance(val, (list, np.ndarray)):
                     for v_oi in val:
                         if v_oi not in self.obs_ids[tel]:
                             warn("{o} is not an ObsID associated with {t} for {n}, and is being "
@@ -4725,7 +4725,7 @@ class BaseSource:
 
                         # This should only be a list of instruments, so we check them and add them to the removal
                         #  dictionary if they are valid
-                        elif isinstance(insts, list):
+                        elif isinstance(insts, (list, np.ndarray)):
                             final_inst_list = []
                             for inst in insts:
                                 if inst.lower() not in self.instruments[tel][v_oi] and inst != 'combined':
