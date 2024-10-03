@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/10/2024, 18:14. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -821,7 +821,10 @@ class Image(BaseProduct):
             # These go between degrees and pixels
             if input_unit == "deg" and out_name == "pix":
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
-                out_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
+                # We define an interim variable, in case the result is NaN - this now causes a warning that we
+                #  wish to avoid, so we replace NaN with a negative number that will cause a failure further down
+                inter_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0)
+                out_coord = np.nan_to_num(inter_coord, nan=Quantity(-100, 'pix')).astype(int)
             elif input_unit == "pix" and out_name == "deg":
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
