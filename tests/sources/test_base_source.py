@@ -96,12 +96,21 @@ def restore_og_cfg():
 class TestGalaxyCluster(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        """
+        This is run once before all tests. Here we define class objects that we want to test.
+        """
         cls.test_src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
                                       r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
                                       search_distance={'erosita': Quantity(3.6, 'deg')})
     @classmethod
     def tearDownClass(cls):
+        """
+        This is run once after all the tests.
+        """
+        # This function restores the user's original config file and deletes the test one made
         restore_og_cfg()
+        # Then we will delete all the products that xga has made so there aren't loads of big files
+        # in the package
 #        shutil.rmtree('tests/test_data/xga_output')
 
     def test_obs_ids_assigned(self):
@@ -148,6 +157,7 @@ class TestGalaxyCluster(unittest.TestCase):
         img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
 
         assert isinstance(img, Image)
+        assert img.obs_id == 'combined'
 
 
 if __name__ == "__main__":
