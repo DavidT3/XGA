@@ -116,6 +116,9 @@ class TestGalaxyCluster(unittest.TestCase):
         assert expected_xmm_obs == xmm_obs
 
     def test_existing_prods_loaded_in_img(self):
+        """
+        Testing _existing_xga_products() in BaseSource for images.
+        """
         src = self.test_src
         evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'))
 
@@ -130,11 +133,22 @@ class TestGalaxyCluster(unittest.TestCase):
         assert all([isinstance(im, Image) for im in img])
 
     def test_existing_prods_loaded_in_img_combined(self):
-        pass
+        """
+        Testing _existing_xga_products() in BaseSource for combined images.
+        """
+        src = self.test_src
+        evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'), combine_obs=True)
 
-# Test right obs are assigned
-# Test existing products are loaded in - combined and non-combined
-# 
+        del(src)
+
+        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        
+        img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
+
+        assert isinstance(img, Image)
+
 
 if __name__ == "__main__":
      unittest.main()
