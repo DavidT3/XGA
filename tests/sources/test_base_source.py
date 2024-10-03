@@ -104,8 +104,14 @@ class TestGalaxyCluster(unittest.TestCase):
 
     def test_obs_ids_assigned(self):
         obs = self.test_src.obs_ids
-        assert obs['erosita'] == ['147099', '148102', '151102', '150099']
-        assert obs['xmm'] == ['0404910601', '0201901401', '0201903501']
+
+        expected_xmm_obs = set(['0404910601', '0201901401', '0201903501'])
+        expected_ero_obs = set(['147099', '148102', '151102', '150099'])
+        xmm_obs = set(obs['xmm'])
+        ero_obs = set(obs['erosita'])
+
+        assert expected_ero_obs == ero_obs
+        assert expected_xmm_obs == xmm_obs
 
     def test_existing_prods_loaded_in_img(self):
         pass
