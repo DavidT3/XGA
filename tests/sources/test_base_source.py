@@ -195,7 +195,7 @@ class TestGalaxyCluster(unittest.TestCase):
 
         assert isinstance(spec, Spectrum)
 
-    def test_existing_prods_loaded_in_idv_inst_spectra(self):
+    def test_existing_prods_loaded_in_idv_inst_comb_obs_spectra(self):
         """
         Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
         """
@@ -208,10 +208,10 @@ class TestGalaxyCluster(unittest.TestCase):
                                       r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
                                       search_distance={'erosita': Quantity(3.6, 'deg')})
         
-        spec = src.get_combined_spectra('r500', telescope='erosita', inst='TM1')
+        spec = src.get_combined_spectra('r500', telescope='erosita', inst='tm1')
 
         assert isinstance(spec, Spectrum)
-        assert spec.instrument == 'TM1'
+        assert spec.instrument == 'tm1'
 
 
 
