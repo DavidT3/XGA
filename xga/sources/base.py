@@ -2519,7 +2519,7 @@ class BaseSource:
                 if obs_id != "combined" and obs_id not in self.obs_ids[tel]:
                     raise NotAssociatedError("{t}-{o} is not associated with source {n}.".format(t=tel, o=obs_id,
                                                                                                  n=self.name))
-                elif inst != "combined" and inst not in self.instruments[tel][obs_id]:
+                elif inst != "combined" and obs_id != "combined" and inst not in self.instruments[tel][obs_id]:
                     raise NotAssociatedError("{i} is not associated with {t} observation "
                                              "{o} for source {n}.".format(i=inst, o=obs_id,
                                                                           t=PRETTY_TELESCOPE_NAMES[tel],
