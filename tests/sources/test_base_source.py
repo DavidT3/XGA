@@ -76,6 +76,8 @@ shutil.move('./tests/test_data/xga.cfg', xga_config_path)
 # Now when xga is imported it will make a new census with the test_data
 import xga
 from xga.sources import GalaxyCluster
+from xga.generate.esass import evtool_image
+from xga.products.phot import Image
 
 # This will be run in the tearDownClass method, which will happen even if tests fail
 def restore_og_cfg():
@@ -114,7 +116,18 @@ class TestGalaxyCluster(unittest.TestCase):
         assert expected_xmm_obs == xmm_obs
 
     def test_existing_prods_loaded_in_img(self):
-        pass
+        src = self.test_src
+        evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'))
+
+        del(src)
+
+        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        
+        img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
+
+        assert all([isinstance(im, Image) for im in img])
 
     def test_existing_prods_loaded_in_img_combined(self):
         pass
