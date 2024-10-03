@@ -78,6 +78,8 @@ import xga
 from xga.sources import GalaxyCluster
 from xga.generate.esass import evtool_image
 from xga.products.phot import Image
+from xga.products.spec import Spectrum
+from xga.generate.esass import srctool_spectrum
 
 # This will be run in the tearDownClass method, which will happen even if tests fail
 def restore_og_cfg():
@@ -158,6 +160,60 @@ class TestGalaxyCluster(unittest.TestCase):
 
         assert isinstance(img, Image)
         assert img.obs_id == 'combined'
+
+    def test_existing_prods_loaded_in_spectra(self):
+        """
+        Testing _existing_xga_products() in BaseSource for spectra.
+        """
+        src = self.test_src
+        srctool_spectrum(src, 'r500', combine_obs=False)
+        
+        del(src)
+
+        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        
+        spec = src.get_spectra('r500', telescope='erosita')
+
+        assert all(isinstance(sp, Spectrum) for sp in spec)
+
+    def test_existing_prods_loaded_in_comb_spectra(self):
+        """
+        Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
+        """
+        src = self.test_src
+        srctool_spectrum(src, 'r500', combine_obs=True)
+        
+        del(src)
+
+        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        
+        spec = src.get_combined_spectra('r500', telescope='erosita')
+
+        assert isinstance(spec, Spectrum)
+
+    def test_existing_prods_loaded_in_idv_inst_spectra(self):
+        """
+        Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
+        """
+        src = self.test_src
+        srctool_spectrum(src, 'r500', combine_obs=True, combine_tm=False)
+        
+        del(src)
+
+        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        
+        spec = src.get_combined_spectra('r500', telescope='erosita', inst='TM1')
+
+        assert isinstance(spec, Spectrum)
+        assert spec.instrument == 'TM1'
+
+
 
 
 if __name__ == "__main__":
