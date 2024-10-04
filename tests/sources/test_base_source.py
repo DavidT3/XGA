@@ -191,7 +191,7 @@ class TestGalaxyCluster(unittest.TestCase):
                                       r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
                                       search_distance={'erosita': Quantity(3.6, 'deg')})
         
-        spec = src.get_combined_spectra('r500', telescope='erosita')
+        spec = src.get_combined_spectra('r500', inst='combined', telescope='erosita')
 
         assert isinstance(spec, Spectrum)
 
@@ -213,8 +213,7 @@ class TestGalaxyCluster(unittest.TestCase):
         assert isinstance(spec, Spectrum)
         assert spec.instrument == 'tm1'
 
-
-
+# TODO combined_spectrum should get things with instruments and obsids
 
 if __name__ == "__main__":
      unittest.main()
