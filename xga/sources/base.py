@@ -1191,14 +1191,20 @@ class BaseSource:
             """
             if combined_obs:
                 obs_id = 'combined'
+                # The inventory column names change depending on if it is combined or not
+                inst_lookup = 'insts'
             else:
                 obs_id = row['obs_id']
+                # The inventory column names change depending on if it is combined or not
+                inst_lookup = 'inst'
+
             if tel == 'erosita' and not combined_obs:
                 obs_id = str(obs_id).zfill(6)
-            if combined_obs:
+
+            inst = row[inst_lookup]
+
+            if '/' in inst:
                 inst = 'combined'
-            else:
-                inst = row['inst']
 
             src_name = row['src_name']
 
@@ -2642,7 +2648,11 @@ class BaseSource:
                     #  are not stored explicitly within the product object. However we are currently within the
                     #  source object that they were generated from, thus we do have that information available
                     # Using the _instruments attribute also gives us access to inst information
-                    i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                    inst = po.instrument
+                    if inst == 'combined':
+                        i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                    else:
+                        i_str = inst
                     o_str = "/".join([o for o in self.instruments[tel] for i in self.instruments[tel][o]])
                     # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
                     #  them into strings
