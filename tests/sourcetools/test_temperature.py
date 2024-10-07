@@ -18,7 +18,7 @@ from xga.sources import GalaxyCluster
 from xga.generate.esass.phot import evtool_image, expmap
 from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
 from xga.sourcetools.temperature import _ann_bins_setup, _snr_bins, _cnt_bins, \
-                                        min_snr_proj_temp_prof
+                                        min_snr_proj_temp_prof, min_cnt_proj_temp_prof
 
 class TestSetupFuncs(unittest.TestCase):
     @classmethod
@@ -110,7 +110,7 @@ class TestSetupFuncs(unittest.TestCase):
         # checking max_ann is the correct type
         assert type(retrn[2]['erosita']) == Quantity
 
-class TestMinSnrPorjTempProf(unittest.TestCase):
+class TestTempProf(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
@@ -144,7 +144,25 @@ class TestMinSnrPorjTempProf(unittest.TestCase):
 
         all_rads = min_snr_proj_temp_prof(self.test_src, Quantity(500, 'kpc'))
         
-        assert all_rads['erosita']
+        assert all_rads['erosita'].unit == 'arcsec'
+        assert all_rads['xmm'].unit == 'arcsec'
+
+    def test_min_cnt_proj_temp_prof_w_two_tscopes(self):
+        
+        # need combined ratemaps already generated for erosita
+        evtool_image(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        expmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        # and for xmm
+        evselect_image(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        eexpmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        emosaic(self.test_src, 'image')
+        emosaic(self.test_src, 'expmap')
+
+        all_rads = min_cnt_proj_temp_prof(self.test_src, Quantity(500, 'kpc'))
+        
+        assert all_rads['erosita'].unit == 'arcsec'
+        assert all_rads['xmm'].unit == 'arcsec'
+
 
 
 
