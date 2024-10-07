@@ -316,8 +316,9 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
                                               corr_mask[tel][..., None]
 
             if ann_masks[tel].shape[2] == 4 and not acceptable:
-                warn("The requested annuli for {s} cannot be created, the data quality is too low. "
-                     "As such a set of four annuli will be returned".format(s=source.name))
+                warn("The requested annuli for {s} for the {t} telescope cannot be created, the "
+                     " data quality is too low. As such a set of four annuli will be "
+                     "returned".format(s=source.name, t=tel))
                 break
         
         # Now of course, pixels must become a more useful unit again
