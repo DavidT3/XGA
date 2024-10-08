@@ -1389,18 +1389,6 @@ class BaseSource:
                         self._supp_warn.append(warn_text)
             os.chdir(og_dir)
 
-            # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
-            #  those objects and add them to the storage structure
-            if len(ann_spec_constituents) != 0:
-                for set_id in ann_spec_constituents:
-                    if ann_spec_usable[set_id]:
-                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                        if self._redshift is not None:
-                            # If we know the redshift we will add the radii to the annular spectra in proper
-                            #  distance units
-                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                        self.update_products(ann_spec_obj, update_inv=False)
-
             # Here we load in any combined images and exposure maps that may have been generated
             os.chdir(OUTPUT + '{t}/combined'.format(t=tel))
             cur_d = os.getcwd() + '/'
@@ -1448,10 +1436,34 @@ class BaseSource:
                 rel_inven = inven[inven['type'] == 'spectrum']
                 for row_ind, row in rel_inven.iterrows():
                     obj, set_id, ann_id = parse_spectrum(row, True)
-                    try:
-                        self.update_products(obj, update_inv=False)
-                    except NotAssociatedError:
-                        pass
+                    if set_id != None:
+                        print('here')
+                        obj.annulus_ident = ann_id
+                        obj.set_ident = set_id
+                        if set_id not in ann_spec_constituents:
+                            ann_spec_constituents[set_id] = []
+                            ann_spec_usable[set_id] = True
+                        ann_spec_constituents[set_id].append(obj)
+                    else:
+                        # And adding it to the source storage structure, but only if its not a member
+                        #  of an AnnularSpectra
+                        try:
+                            self.update_products(obj, update_inv=False)
+                        except NotAssociatedError:
+                            pass
+
+
+            # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
+            #  those objects and add them to the storage structure
+            if len(ann_spec_constituents) != 0:
+                for set_id in ann_spec_constituents:
+                    if ann_spec_usable[set_id]:
+                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                        if self._redshift is not None:
+                            # If we know the redshift we will add the radii to the annular spectra in proper
+                            #  distance units
+                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                        self.update_products(ann_spec_obj, update_inv=False)
 
             os.chdir(og_dir)
 
@@ -3326,6 +3338,8 @@ class BaseSource:
             grp_str = "grp{gr}".format(gr=group_spec) + extra_name
             spec_storage_name = [pos_str, grp_str]
 
+        print(f'{set_id} set_id')
+        print(f'{spec_storage_name} ssn')
         # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
         #  properly constructed storage key
         if set_id is None and radii is not None:
