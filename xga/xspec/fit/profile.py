@@ -77,10 +77,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
     """
-    # TODO Figure out how to do this within the storage framework of XGA - see issue #1098
-    if stacked_spectra:
-        raise NotImplementedError("Stacking spectra is not yet supported for annular spectra generation and fitting.")
-
     telescopes = _get_all_telescopes(sources)
 
     radii = _parse_radii_input(telescopes, radii)
