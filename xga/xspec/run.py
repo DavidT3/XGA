@@ -206,6 +206,7 @@ def xspec_call(xspec_func):
             ann_results = {}
             ann_lums = {}
             ann_obs_order = {}
+            set_ident = {}
 
             for res_set in results[src_repr]:
                 # Extract the telescope from the information passed back by the running of the fit
@@ -300,9 +301,13 @@ def xspec_call(xspec_func):
                             chosen_lums = processed_lums
 
                         if ann_fit:
-                            ann_results[spec.annulus_ident] = global_results
-                            ann_lums[spec.annulus_ident] = chosen_lums
-                            ann_obs_order[spec.annulus_ident] = obs_order
+                            ann_results[tel] = {}
+                            ann_lums[tel] = {}
+                            ann_obs_order[tel] = {}
+                            set_ident[tel] = spec.set_ident
+                            ann_results[tel][spec.annulus_ident] = global_results
+                            ann_lums[tel][spec.annulus_ident] = chosen_lums
+                            ann_obs_order[tel][spec.annulus_ident] = obs_order
 
                         elif not ann_fit:
                             # Push global fit results, luminosities etc. into the corresponding source object.
@@ -334,33 +339,38 @@ def xspec_call(xspec_func):
                         raise XSPECFitError(err)
 
             if ann_fit:
-                # We fetch the annular spectra object that we just fitted, searching by using the set ID of
-                #  the last spectra that was opened in the loop
-                ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
-                try:
-                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order)
+                for tel in ann_results:
+                    print(tel)
+                    # We fetch the annular spectra object that we just fitted, searching by using the set ID of
+                    #  the last spectra that was opened in the loop
+                    ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
+                    try:
+                        print(f'here1 for {tel}')
+                        ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel], 
+                                              ann_obs_order[tel])
 
-                    # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
-                    #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
-                    #  generate a Tx profile automatically
-                    if model == "constant*tbabs*apec":
-                        temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
-                        s.update_products(temp_prof)
+                        # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
+                        #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
+                        #  generate a Tx profile automatically
+                        if model == "constant*tbabs*apec":
+                            print(f'here for {tel}')
+                            temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
+                            s.update_products(temp_prof)
 
-                        # Normalisation profiles can be useful for many things, so we generate them too
-                        norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                        s.update_products(norm_prof)
+                            # Normalisation profiles can be useful for many things, so we generate them too
+                            norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                            s.update_products(norm_prof)
 
-                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
-                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
-                            s.update_products(met_prof)
+                            if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
+                                met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
+                                s.update_products(met_prof)
 
-                    else:
-                        raise NotImplementedError("How have you even managed to fit this model to a profile?! Its not"
-                                                  " supported yet.")
-                except ValueError:
-                    warnings.warn("{src} annular spectra profile fit was not successful".format(src=ann_spec.src_name),
-                                  stacklevel=2)
+                        else:
+                            raise NotImplementedError("How have you even managed to fit this model to a profile?! Its not"
+                                                    " supported yet.")
+                    except ValueError:
+                        warnings.warn("{src} annular spectra profile fit was not successful for the {t} telescope.".format(src=ann_spec.src_name, t=tel),
+                                    stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
