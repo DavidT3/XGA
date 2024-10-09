@@ -1437,7 +1437,6 @@ class BaseSource:
                 for row_ind, row in rel_inven.iterrows():
                     obj, set_id, ann_id = parse_spectrum(row, True)
                     if set_id != None:
-                        print('here')
                         obj.annulus_ident = ann_id
                         obj.set_ident = set_id
                         if set_id not in ann_spec_constituents:
@@ -3338,8 +3337,6 @@ class BaseSource:
             grp_str = "grp{gr}".format(gr=group_spec) + extra_name
             spec_storage_name = [pos_str, grp_str]
 
-        print(f'{set_id} set_id')
-        print(f'{spec_storage_name} ssn')
         # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
         #  properly constructed storage key
         if set_id is None and radii is not None:
