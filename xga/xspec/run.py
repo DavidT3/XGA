@@ -203,9 +203,9 @@ def xspec_call(xspec_func):
 
             # This flag tells this method if the current set of fits are part of an annular spectra or not
             ann_fit = False
-            ann_results = {}
-            ann_lums = {}
-            ann_obs_order = {}
+            ann_results = {tel : {} for tel in s.telescopes}
+            ann_lums = {tel : {} for tel in s.telescopes}
+            ann_obs_order = {tel : {} for tel in s.telescopes}
             set_ident = {}
 
             for res_set in results[src_repr]:
@@ -301,9 +301,6 @@ def xspec_call(xspec_func):
                             chosen_lums = processed_lums
 
                         if ann_fit:
-                            ann_results[tel] = {}
-                            ann_lums[tel] = {}
-                            ann_obs_order[tel] = {}
                             set_ident[tel] = spec.set_ident
                             ann_results[tel][spec.annulus_ident] = global_results
                             ann_lums[tel][spec.annulus_ident] = chosen_lums
@@ -340,14 +337,12 @@ def xspec_call(xspec_func):
 
             if ann_fit:
                 for tel in ann_results:
-                    print(tel)
                     # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                     #  the last spectra that was opened in the loop
                     ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
                     try:
-                        print(f'here1 for {tel}')
                         ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel], 
-                                              ann_obs_order[tel])
+                                                ann_obs_order[tel])
 
                         # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                         #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
