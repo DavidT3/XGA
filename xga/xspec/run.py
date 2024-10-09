@@ -252,17 +252,12 @@ def xspec_call(xspec_func):
                                 else:
                                     spec = s.get_products("combined_spectrum", extra_key=sp_key)[0]
                             else:
-                                # # TODO Sort this out at some point
-                                # if tel != 'xmm':
-                                #     raise NotImplementedError("We do not yet support fitting sets of annular spectra"
-                                #                               " for telescopes other than XMM.")
                                 obs_order.append([sp_info[0], sp_info[1]])
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 first_part = sp_key.split('ri')[0]
                                 second_part = "_" + "_".join(sp_key.split('ro')[-1].split("_")[1:])
-
-                                ann_sp_key = first_part + "ar" + "_".join(radii[ind].value.astype(str)) + second_part
+                                ann_sp_key = first_part + "ar" + "_".join(radii[src_repr][tel].value.astype(str)) + second_part
                                 ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key, telescope=tel)
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
@@ -272,7 +267,13 @@ def xspec_call(xspec_func):
                                                             "fitted, this is the developers fault, not yours")
                                 else:
                                     ann_spec = ann_specs[0]
-                                    spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                    # comb_spec here refers to whether the obs_id is combined
+                                    if not comb_spec:
+                                        spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                    
+                                    else:
+                                    # TODO need to add functionality to recognise whether the instrument is combined or not
+                                        spec = ann_spec.get_spectra(ann_id)
 
                             # Adds information from this fit to the spectrum object.
                             spec.add_fit_data(str(model), line, res_table["PLOT" + str(line_ind + 1)])
