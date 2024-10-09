@@ -117,10 +117,11 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     if isinstance(sources, BaseSource):
         sources = [sources]
 
-    deg_rad = []
+    deg_rad = {}
     for src_ind, source in enumerate(sources):
         source: BaseSource
 
+        deg_rad[repr(source)] = {}
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
         #  least in this current setup
         for tel in source.telescopes:
@@ -137,7 +138,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             #  are found, though as we have run spectrum_set that shouldn't happen
             ann_spec = source.get_annular_spectra(cur_radii, group_spec, min_counts, min_sn, over_sample,
                                                   telescope=tel)
-            deg_rad.append(ann_spec.radii)
+
+            deg_rad[repr(source)][tel] = ann_spec.radii
 
             # If source.get_annular_spectra returns a list, it means that multiple matches have been found
             if isinstance(ann_spec, list):
