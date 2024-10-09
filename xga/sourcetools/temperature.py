@@ -542,7 +542,8 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES, telescope: str = None) -> Dict[str, List[Quantity]]:
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES, telescope: str = None,
+                           stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -592,6 +593,9 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param str tel: The telescope to find radii to create annuli for.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     :return: A dictionary of lists of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
         to a source. Each key corresponds to a telescope.
@@ -681,7 +685,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
-                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met)
+                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met, stacked_spectra=stacked_spectra)
 
     return all_rads
 
