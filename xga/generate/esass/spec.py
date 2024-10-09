@@ -915,25 +915,38 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                     split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
                     # split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
                     split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
+    
                     new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
                     # new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
                     #             + "_back.arf"
                     new_b_spec = (split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
                                   + "_backspec.fits")
 
+                    split_brmf = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
+                    split_barf = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+
+                    new_b_rmf = split_r[-1].replace('_backspec.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + "_backspec.rmf"
+                    new_b_arf = split_barf[-1].replace('_backspec.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + "_backspec.arf"
+
                     # New names into the commands
                     cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
                     # cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
                     cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
+                    cur_cmd = cur_cmd.replace(split_brmf[-1], new_b_rmf)
+                    cur_cmd = cur_cmd.replace(split_barf[-1], new_b_arf)
+
 
                     split_a[-1] = new_arf
                     # split_ba[-1] = new_b_arf
                     split_bs[-1] = new_b_spec
+                    split_brmf[-1] = new_b_rmf
+                    split_barf[-1] = new_b_arf
 
                     # Update the extra info dictionary some more
                     # interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
                     #                               "b_spec_path": "/".join(split_bs)})
-                    interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs)})
+                    interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs),
+                                                  "b_rmf_path": "/".join(split_brmf), "b_arf_path": "/".join(split_barf)})
 
                     # Add the new paths and commands to their respective lists
                     new_paths.append("/".join(split_p))
