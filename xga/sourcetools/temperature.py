@@ -699,7 +699,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
-                           telescope: str = None) -> Dict[str, List[Quantity]]:
+                           telescope: str = None, stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using X-ray count measurements
@@ -743,6 +743,9 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param str tel: The telescope to find radii to create annuli for.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     :return: A dictionary of lists of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
         to a source. Each key corresponds to a telescope.
@@ -824,7 +827,8 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     # This runs the fitting (and generation, if that has not already occurred) of the annular spectra.
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
-                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met)
+                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met, 
+                             stacked_spectra=stacked_spectra)
 
     return all_rads
 
@@ -914,7 +918,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
-                           conf_level: int = 68.2, num_cores: int = NUM_CORES) -> List[GasTemperature3D]:
+                           conf_level: int = 68.2, num_cores: int = NUM_CORES, stacked_spectra: bool = False) -> List[GasTemperature3D]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -978,6 +982,9 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         uncertainties, the default is 3000.
     :param int conf_level: What sigma uncertainties should newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
     :rtype: List[GasTemperature3D]
@@ -992,13 +999,13 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
                                           exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
-                                          abund_table, temp_lo_en, temp_hi_en, num_cores)
+                                          abund_table, temp_lo_en, temp_hi_en, num_cores, stacked_spectra=stacked_spectra)
     elif annulus_method == 'min_cnt':
         # This returns the boundary radii for the annuli, based on a minimum number of counts per annulus in a telescope dictionary
         ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined, lo_en, hi_en,
                                           psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
                                           min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
-                                          num_cores)
+                                          num_cores, stacked_spectra=stacked_spectra)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
