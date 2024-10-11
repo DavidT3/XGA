@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 13:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -67,6 +67,9 @@ class GalaxyCluster(ExtendedSource):
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
+        (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
+        sources will NOT be included in masks, in case they are a bright cool core.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -74,7 +77,7 @@ class GalaxyCluster(ExtendedSource):
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
-                 peak_find_method: str = "hierarchical", in_sample: bool = False, include_core_pnt_srcs: bool = False):
+                 peak_find_method: str = "hierarchical", in_sample: bool = False, include_core_pnt_srcs: bool = True):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
 
