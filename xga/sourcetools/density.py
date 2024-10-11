@@ -571,7 +571,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                       abund_table, lo_en, hi_en, group_spec, 
                                                       min_counts, min_sn, over_sample, obs_id, inst,
                                                       conv_temp, conv_outer_radius, num_cores, 
-                                                      stacked_spectra=True)
+                                                      stacked_spectra=stacked_spectra)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius 
     # values
