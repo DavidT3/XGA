@@ -477,7 +477,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           inst:Union[Dict[str, str], Dict[str, list]] = None, 
                           conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                           conv_outer_radius: Quantity = "r500", inv_abel_method: str = None, 
-                          num_cores: int = NUM_CORES, show_warn: bool = True) -> List[GasDensity3D]:
+                          num_cores: int = NUM_CORES, show_warn: bool = True, 
+                          stacked_spectra: bool = False) -> List[GasDensity3D]:
     """
     A photometric galaxy cluster gas density calculation method where a surface brightness profile 
     is fit with a model and an inverse abel transform is used to infer the 3D count-rate/volume 
@@ -557,6 +558,9 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
         to use.
     :param bool show_warn: Should fit warnings be shown on screen.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     :return: A list of the 3D gas density profiles measured by this function, though if the 
         measurement was not successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
@@ -566,7 +570,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), 
                                                       abund_table, lo_en, hi_en, group_spec, 
                                                       min_counts, min_sn, over_sample, obs_id, inst,
-                                                      conv_temp, conv_outer_radius, num_cores)
+                                                      conv_temp, conv_outer_radius, num_cores, 
+                                                      stacked_spectra=True)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius 
     # values
