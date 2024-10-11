@@ -1224,10 +1224,12 @@ class Spectrum(BaseProduct):
 
             if tel not in self._conv_factors:
                 self._conv_factors[tel] = {}
-            if model not in self._conv_factors:
+            if model not in self._conv_factors[tel]:
                 self._conv_factors[tel][model] = {}
 
             self._conv_factors[tel][model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
+
+            
 
     def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str, tel: str) -> Tuple[Quantity, Quantity, Quantity]:
         """

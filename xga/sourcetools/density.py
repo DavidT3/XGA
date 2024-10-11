@@ -35,7 +35,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None, 
                 conv_outer_radius: Quantity = "r500",
-                num_cores: int = NUM_CORES) -> Tuple[Union[ClusterSample, List], 
+                num_cores: int = NUM_CORES, stacked_spectra: bool = False) -> Tuple[Union[ClusterSample, List], 
                 Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]], 
                 Union[Dict[str, str], Dict[str, list]]]:
     """
@@ -86,6 +86,9 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         measure temperatures for the conversion factor calculation, default is 'r500'. An astropy 
         quantity may also be passed, with either a single value or an entry for each cluster being 
         analysed.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
         to use.
     :return: The source object(s)/sample that was passed in, a dictionary of an array of the 
@@ -202,7 +205,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         # calling this function will also make sure that they are generated
         single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table, 
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
-                         over_sample=over_sample, num_cores=num_cores)
+                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion 
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab 
@@ -211,10 +214,15 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         for src in sources:
             for tel in src.telescopes:
                 try:
-                    # A temporary temperature variable
-                    temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec", 
-                                                    inner_radius, group_spec, min_counts, min_sn, 
-                                                    over_sample)[0]
+                    if tel == 'erosita':
+                        # A temporary temperature variable
+                        temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec", 
+                                                        inner_radius, group_spec, min_counts, min_sn, 
+                                                        over_sample, stacked_spectra=stacked_spectra)[0]
+                    else:
+                        temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec", 
+                                                        inner_radius, group_spec, min_counts, min_sn, 
+                                                        over_sample)[0]
                 except (ModelNotAssociatedError, ParameterNotAssociatedError):
                     warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature "
                         "of 3keV".format(s=src.name))
@@ -232,7 +240,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     # the  XGA Spectrum objects
     cluster_cr_conv(sources, conv_outer_radius, inner_radius, temps, abund_table=abund_table, 
                     num_cores=num_cores, group_spec=group_spec, min_counts=min_counts, 
-                    min_sn=min_sn, over_sample=over_sample)
+                    min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra)
 
     # This where the combined conversion factor that takes a count-rate/volume to a squared number 
     # density of hydrogen
@@ -246,10 +254,20 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
             #  because redshift is REQUIRED to define GalaxyCluster objects
             factor = ((4 * np.pi * (src.angular_diameter_distance.to("cm")*(1 + src.redshift)) ** 2)
                      / (e_to_p_ratio * 10 ** -14))
+            # If we use inst = None in this function, then when we look for spectra to retrieve
+            # a conversion factor for, it can retrieve spectra of individual instruments too
+            # but if inst = None, we only want to retreive combined instrument spectra
+            if tel == 'erosita' and inst[tel][src_ind] == None:
+                lookup_obs = 'combined'
+                lookup_inst = 'combined'
+            else:
+                lookup_obs = obs_id[tel][src_ind]
+                lookup_inst = inst[tel][src_ind]
+
             total_factor = factor * src.norm_conv_factor(conv_outer_radius, tel, lo_en, hi_en, 
                                                          inner_radius, group_spec, min_counts, 
-                                                         min_sn, over_sample, obs_id[tel][src_ind], 
-                                                         inst[tel][src_ind])
+                                                         min_sn, over_sample, lookup_obs, 
+                                                         lookup_inst)
             to_dens_convs[tel].append(total_factor)
 
     return sources, to_dens_convs, obs_id, inst

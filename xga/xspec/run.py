@@ -313,7 +313,7 @@ def xspec_call(xspec_func):
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
-                    model = res_set[0].split("_")[-3]
+                    model = res_set[0].split("_")[-4]
 
                     # We can infer the storage key from the name of the results table, just makes it easier to
                     #  grab the correct spectra
@@ -324,9 +324,18 @@ def xspec_call(xspec_func):
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and lums
+                    # TODO this could be neater and better generalised
                     for comb in combos:
-                        spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
-                                              telescope=tel)[0]
+                        if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
+                            spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                                                telescope=tel)[0]
+                        elif tel == 'erosita':
+                            spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                                                telescope=tel)[0]
+                        else:
+                            spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
+                                            telescope=tel)[0]
+
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
                                               res_table["Lx_{}".format(comb)].values, model, tel)
