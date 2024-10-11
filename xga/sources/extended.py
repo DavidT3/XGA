@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 13:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 13:19. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -254,44 +254,44 @@ class GalaxyCluster(ExtendedSource):
             check_rad = self.convert_radius(self._radii['r2500'] * 2.25 * 0.15, 'deg')
 
         # Here we scrub the anti-results dictionary (I don't know why I called it that...) to make sure cool cores
-        #  aren't accidentally removed, and that chunks of cluster emission aren't removed
-        new_anti_results = {}
-        # The initialization of a GalaxyCluster lets the user control whether point sources near the core should
-        #  be left in (the default behaviour) or still removed. This is a tiny little refinement I've been
+        #  aren't accidentally removed, and that chunks of cluster emission aren't removed.
+        # However, the initialization of a GalaxyCluster lets the user control whether point sources near the core
+        #  should be left in (the default behaviour) or still removed. This is a tiny little refinement I've been
         #  meaning to add for literally years...
-        if self._include_core_pnt:
-            for obs in self._obs:
-                # This is where the cleaned interlopers will be stored
-                new_anti_results[obs] = []
-                # Cycling through the current interloper regions for the current ObsID
-                for reg_obj in anti_results_dict[obs]:
-                    # Calculating the distance (in degrees) of the centre of the current interloper region from
-                    #  the user supplied coordinates of the cluster
-                    dist = dist_from_source(reg_obj)
+        new_anti_results = {}
+        for obs in self._obs:
+            # This is where the cleaned interlopers will be stored
+            new_anti_results[obs] = []
+            # Cycling through the current interloper regions for the current ObsID
+            for reg_obj in anti_results_dict[obs]:
+                # Calculating the distance (in degrees) of the centre of the current interloper region from
+                #  the user supplied coordinates of the cluster
+                dist = dist_from_source(reg_obj)
 
-                    # If the current interloper source is a point source/a PSF sized extended source and is within the
-                    #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
-                    #  cool core and allow it to stay in the analysis
-                    if reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
-                        warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
-                                    "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
-                                    "of a mis-identified cool core".format(s=self.name, o=obs)
-                        if not self._samp_member:
-                            # We do print a warning though
-                            warn(warn_text, stacklevel=2)
-                        else:
-                            self._supp_warn.append(warn_text)
-
-                    elif reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
-                        warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
-                                    "user supplied coordinates of {s}. It will not be excluded from analysis due " \
-                                    "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
-                        if not self._samp_member:
-                            warn(warn_text, stacklevel=2)
-                        else:
-                            self._supp_warn.append(warn_text)
+                # If the current interloper source is a point source/a PSF sized extended source and is within the
+                #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
+                #  cool core and allow it to stay in the analysis - OR THE USER CAN JUST HAVE TURNED THIS BEHAVIOUR
+                #  OFF WITH include_core_pnt
+                if self._include_core_pnt and reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
+                    warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
+                                "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
+                                "of a mis-identified cool core".format(s=self.name, o=obs)
+                    if not self._samp_member:
+                        # We do print a warning though
+                        warn(warn_text, stacklevel=2)
                     else:
-                        new_anti_results[obs].append(reg_obj)
+                        self._supp_warn.append(warn_text)
+
+                elif self._include_core_pnt and reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
+                    warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
+                                "user supplied coordinates of {s}. It will not be excluded from analysis due " \
+                                "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
+                else:
+                    new_anti_results[obs].append(reg_obj)
 
             # Here we run through the 'chosen' region for each observation (so the region that we think is the
             #  cluster) and check if any of the current set of interloper regions intersects with it. If they do
