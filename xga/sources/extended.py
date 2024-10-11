@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -28,7 +28,8 @@ class GalaxyCluster(ExtendedSource):
     This class is for the declaration and analysis of GalaxyCluster sources, and is a subclass of ExtendedSource.
     Using this source for cluster analysis gives you access to many more analyses than an ExtendedSource, and due
     to the passing of overdensity radii it has a more physically based idea of the size of the object. There are
-    also extra source matching steps to deal with the possible detection of cool cores as point sources.
+    also extra source matching steps to deal with the possible detection of cool cores as point sources, which can
+    be turned on and off.
 
     :param float ra: The right-ascension of the cluster, in degrees.
     :param float dec: The declination of the cluster, in degrees.
@@ -66,6 +67,9 @@ class GalaxyCluster(ExtendedSource):
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
+        (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
+        sources will NOT be included in masks, in case they are a bright cool core.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -73,7 +77,7 @@ class GalaxyCluster(ExtendedSource):
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
-                 peak_find_method: str = "hierarchical", in_sample: bool = False):
+                 peak_find_method: str = "hierarchical", in_sample: bool = False, include_core_pnt_srcs: bool = True):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
 
@@ -111,9 +115,19 @@ class GalaxyCluster(ExtendedSource):
         :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
             is hierarchical, simple may also be passed.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
-            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
-            is False. User should only set to True to remove warnings.
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress
+            bar. Default is False. User should only set to True to remove warnings.
+        :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
+            (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
+            sources will NOT be included in masks, in case they are a bright cool core.
+
         """
+        # Store the passed value of 'include_core_pnt_srcs' in an attribute now, before we run the super-class init,
+        #  as we want the GalaxyCluster _source_type_match method to be able to use it to determine if point
+        #  sources that might be a bright cool-core are included or not
+        self._include_core_pnt = include_core_pnt_srcs
+
+        # Set up the radii dictionary, also before the superclass init call.
         self._radii = {}
         if r200 is None and r500 is None and r2500 is None:
             raise ValueError("You must set at least one overdensity radius")
@@ -243,7 +257,10 @@ class GalaxyCluster(ExtendedSource):
             check_rad = self.convert_radius(self._radii['r2500'] * 2.25 * 0.15, 'deg')
 
         # Here we scrub the anti-results dictionary (I don't know why I called it that...) to make sure cool cores
-        #  aren't accidentally removed, and that chunks of cluster emission aren't removed
+        #  aren't accidentally removed, and that chunks of cluster emission aren't removed.
+        # However, the initialization of a GalaxyCluster lets the user control whether point sources near the core
+        #  should be left in (the default behaviour) or still removed. This is a tiny little refinement I've been
+        #  meaning to add for literally years...
         new_anti_results = {}
         for obs in self._obs:
             # This is where the cleaned interlopers will be stored
@@ -256,8 +273,9 @@ class GalaxyCluster(ExtendedSource):
 
                 # If the current interloper source is a point source/a PSF sized extended source and is within the
                 #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
-                #  cool core and allow it to stay in the analysis
-                if reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
+                #  cool core and allow it to stay in the analysis - OR THE USER CAN JUST HAVE TURNED THIS BEHAVIOUR
+                #  OFF WITH include_core_pnt
+                if self._include_core_pnt and reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
                     warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
                                 "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
                                 "of a mis-identified cool core".format(s=self.name, o=obs)
@@ -267,7 +285,7 @@ class GalaxyCluster(ExtendedSource):
                     else:
                         self._supp_warn.append(warn_text)
 
-                elif reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
+                elif self._include_core_pnt and reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
                     warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
                                 "user supplied coordinates of {s}. It will not be excluded from analysis due " \
                                 "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
