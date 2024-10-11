@@ -718,7 +718,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                           freeze_met: bool = True, abund_table: str = "angr", 
                           temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 10000, 
-                          sigma: int = 1, num_cores: int = NUM_CORES) -> List[GasDensity3D]:
+                          sigma: int = 1, num_cores: int = NUM_CORES, 
+                          stacked_spectra: bool = False) -> List[GasDensity3D]:
     """
     A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First 
     checks whether the required annular spectra already exist and have been fit using XSPEC, if not 
@@ -794,6 +795,10 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
     :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of
         available.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be 
+        used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
+        supported, this function will instead use individual spectra for an ObsID. The default is
+        False.
     :return: A list of the 3D gas density profiles measured by this function, though if the 
         measurement was not successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
@@ -809,7 +814,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                                           use_worst, lo_en, hi_en, psf_corr, psf_model, psf_bins, 
                                           psf_algo, psf_iter, allow_negative, exp_corr, group_spec, 
                                           min_counts, min_sn, over_sample, one_rmf, freeze_met,
-                                          abund_table, temp_lo_en, temp_hi_en, num_cores)
+                                          abund_table, temp_lo_en, temp_hi_en, num_cores,
+                                          stacked_spectra=stacked_spectra)
     elif annulus_method == 'min_cnt':
         # This returns the boundary radii for the annuli, based on a minimum number of counts per 
         # annulus
@@ -817,7 +823,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                                           lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, 
                                           psf_iter, group_spec, min_counts, min_sn, over_sample, 
                                           one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
-                                          num_cores)
+                                          num_cores, stacked_spectra=stacked_spectra)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
