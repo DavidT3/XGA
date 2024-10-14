@@ -33,7 +33,8 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                      group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                                      over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                                      show_warn: bool = True,
-                                     psf_bins: int = 4) -> Union[List[SpecificEntropy], SpecificEntropy]:
+                                     psf_bins: int = 4,
+                                     stacked_spectra: bool = False) -> Union[List[SpecificEntropy], SpecificEntropy]:
     """
     A convenience function that should allow the user to easily measure specific entropy profiles for a sample of
     galaxy clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For
@@ -115,6 +116,10 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
     :param int psf_bins: The number of bins per side when generating a grid of PSFs for image correction prior
         to surface brightness profile (and thus density) measurements.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be 
+        used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
+        supported, this function will instead use individual spectra for an ObsID. The default is
+        False.
     :return: A list of the specific entropy profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
     :rtype: List[SpecificEntropy]/SpecificEntropy
@@ -129,7 +134,8 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                                           temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
                                                           temp_use_worst, freeze_met, abund_table, temp_lo_en,
                                                           temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
-                                                          over_sample, one_rmf, num_cores, show_warn, psf_bins)
+                                                          over_sample, one_rmf, num_cores, show_warn, psf_bins, 
+                                                          stacked_spectra)
     # need to import here to avoid circular import errors
     from ..sourcetools._common import _get_all_telescopes
     # collecting all the associated telescopes to loop over later
