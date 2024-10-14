@@ -15,7 +15,7 @@ from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
 from ..products import Spectrum, BaseProfile1D
 from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D, GasDensity3D, GasTemperature3D, \
-    HydrostaticMass
+    HydrostaticMass, SpecificEntropy
 from ..sourcetools import ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source
 
@@ -840,6 +840,60 @@ class GalaxyCluster(ExtendedSource):
         elif len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any density profiles matching your input.")
 
+        return matched_prods
+
+    def get_entropy_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
+                             dens_prof: GasDensity3D = None, dens_model_name: str = None, 
+                             radii: Quantity = None,
+                             telescope: str = None) -> Union[SpecificEntropy, List[SpecificEntropy]]:
+        """
+        A get method for entropy profiles associated with this galaxy cluster. This works in a slightly
+        different way to the temperature and density profile get methods, as you can pass the gas temperature and
+        density profiles used to generate an entropy profile to find it. If none of the optional
+        arguments are passed then all entropy profiles associated with this source will be returned, if
+        only some are passed then entropy profiles which match the limited information will be found.
+
+        :param GasTemperature3D temp_prof: The temperature profile used to generate the required entropy
+            profile, default is None.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required entropy profile, default is None.
+        :param GasDensity3D dens_prof: The density profile used to generate the required entropy
+            profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required entropy profile, default is None.
+        :param Quantity radii: The radii at which the entropy profile was measured, default is None.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
+        :return: Either a single entropy profile, when there is a unique match, or a list of hydrostatic
+            mass profiles if there is not.
+        :rtype: Union[SpecificEntropy, List[SpecificEntropy]]
+        """
+
+        # Get all the hydrostatic mass profiles associated with this source
+        matched_prods = self.get_profiles('combined_specific_entropy', telescope=telescope)
+
+        # Convert the radii to degrees for comparison with deg radii later
+        if radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+
+        # Checking steps, looking for matches with the information passed by the user.
+        if temp_prof is not None:
+            matched_prods = [p for p in matched_prods if p.temperature_profile != temp_prof]
+
+        if dens_prof is not None:
+            matched_prods = [p for p in matched_prods if p.density_profile != dens_prof]
+
+        if temp_model_name is not None:
+            matched_prods = [p for p in matched_prods if p.temperature_model.name != temp_model_name]
+
+        if dens_model_name is not None:
+            matched_prods = [p for p in matched_prods if p.density_model.name != dens_model_name]
+
+        if radii is not None:
+            matched_prods = [p for p in matched_prods if p.deg_radii != radii]
+
+        if isinstance(matched_prods, list) and len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching entropy profiles can be found.")
         return matched_prods
 
     def get_hydrostatic_mass_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
