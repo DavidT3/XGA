@@ -594,7 +594,15 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
             for tel in src.telescopes:
-                sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, 
+                if tel == 'erosita' and psf_corr:
+                    warn("PSF correction is not yet implemented for the erosita telescope."
+                        "Erosita surface brightness profiles will be done without PSF correction.")
+                    
+                    use_psf_corr = False
+                else:
+                    use_psf_corr = psf_corr
+                    
+                sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, use_psf_corr, 
                                   psf_model, psf_bins, psf_algo, psf_iter, pix_step, min_snr, 
                                   obs_id[tel][src_ind], inst[tel][src_ind])
 
