@@ -8,7 +8,7 @@ from astropy.units import Quantity
 
 from .misc import model_check
 from .. import NUM_CORES
-from ..exceptions import ModelNotAssociatedError
+from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
@@ -38,7 +38,7 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
     return all_telescopes
 
 def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, min_counts: int,
-                  min_sn: float, over_sample: float, num_cores: int, psf_bins: int):
+                  min_sn: float, over_sample: float, num_cores: int, psf_bins: int, stacked_spectra: bool):
 
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
     global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
@@ -56,7 +56,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     #  temperature then its absurdly unlikely that we'll be able to measure a temperature profile, so we can avoid
     #  even trying and save some time.
     single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
-                     min_sn=min_sn, over_sample=over_sample, num_cores=num_cores)
+                     min_sn=min_sn, over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
     # returning a dictionary of telescope keys and values that are a list of len(sources) where 
     # each element in the list is a boolean indicated whether a glob temp has been measured
@@ -67,9 +67,15 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
         # has_glob_temp is the same length
         for tel in all_tels:
             try:
-                src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec', 
-                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
-                                    over_sample=over_sample)
+                if tel == 'erosita' and len(src.obs_ids['erosita']) > 1:
+                    # A temporary temperature variable
+                    src.get_temperature(global_out_rads[src_ind], tel, "constant*tbabs*apec", 
+                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
+                                        over_sample=over_sample, stacked_spectra=stacked_spectra)
+                else:
+                    src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec', 
+                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
+                                        over_sample=over_sample)
                 has_glob_temp[tel].append(True)
             except ModelNotAssociatedError:
                 warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
@@ -98,10 +104,11 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                                     group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                                     over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                                    show_warn: bool = True, psf_bins: int = 4):
+                                    show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False):
 
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
-                                                       spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins)
+                                                       spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins,
+                                                       stacked_spectra)
     
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
@@ -146,7 +153,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                         temp_min_width, temp_use_combined, temp_use_worst, min_counts=spec_min_counts,
                                         min_sn=spec_min_sn, over_sample=over_sample, one_rmf=one_rmf,
                                         freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
-                                        temp_hi_en=temp_hi_en, num_cores=num_cores)
+                                        temp_hi_en=temp_hi_en, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
     # DAVID_QUESTION case where a source has a measured glob temp in one telescope and not the others
     # We are reorganising this temp_profs output so it is easier to cycle through in later functions
@@ -193,7 +200,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                        num_walkers=num_walkers, group_spec=group_spec, min_counts=spec_min_counts,
                                        min_sn=spec_min_sn, over_sample=over_sample, conv_outer_radius=global_radius,
                                        inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn,
-                                       psf_bins=psf_bins)
+                                       psf_bins=psf_bins, stacked_spectra=stacked_spectra)
     
     # Once again reformatting this output to lookup density profiles based on source
     # so dens_prof_dict will be of the form: {src_key : {'xmm': prof, 'erosita': prof} etc.}
