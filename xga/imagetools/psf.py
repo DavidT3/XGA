@@ -105,9 +105,12 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
     # Making sure that the necessary images and PSFs are generated
     evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
 
+    # sorry have to import here to avoid circular imports
+    from ..sourcetools._common import _get_all_telescopes
+
     # This method currently only works for xmm, so we need to make sure that XMM is actually associated with the
     #  source, or at least one source if it is in a sample
-    if 'xmm' not in sources.telescopes:
+    if 'xmm' not in _get_all_telescopes(sources):
         raise NotAssociatedError("The XMM telescope is not associated with this source/sample, and this method "
                                  "currently only supports XMM.")
 
