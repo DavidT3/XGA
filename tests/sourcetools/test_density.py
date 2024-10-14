@@ -50,8 +50,8 @@ class TestSetupFuncs(unittest.TestCase):
         
         assert type(res[0][0]) == GalaxyCluster
         assert type(res[1][0]) == Quantity
-        assert set(res[2].keys()) == set('erosita', 'xmm')
-        assert set(res[3].keys()) == set('erosita', 'xmm')
+        assert set(res[2].keys()) == set(['erosita', 'xmm'])
+        assert set(res[3].keys()) == set(['erosita', 'xmm'])
 
     def test_run_sb(self):
         res = _run_sb(self.test_src, 'erosita', Quantity(600, 'kpc'), False, Quantity(0.5, 'keV'), 
