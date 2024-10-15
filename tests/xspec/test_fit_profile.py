@@ -16,11 +16,7 @@ set_up_test_config()
 # Now when xga is imported it will make a new census with the test_data
 import xga
 from xga.sources import GalaxyCluster
-from xga.generate.esass.phot import evtool_image, expmap
-from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
-from xga.sourcetools.density import _dens_setup, _run_sb, inv_abel_fitted_model, \
-                                    ann_spectra_apec_norm
-from xga.products.profile import SurfaceBrightness1D, GasDensity3D
+from xga.xspec.fit import single_temp_apec_profile
 
 class TestSetupFuncs(unittest.TestCase):
     @classmethod
