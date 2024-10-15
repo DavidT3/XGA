@@ -187,7 +187,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
             # The names of spectra will be different depending on if it is from a combined eventlist
             if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
-                prefix = str(rand_ident) + '_' + '{n}_'.format(n=source_name)
+                prefix = str(rand_ident) + '_{i}_'.format(i=inst) + '{n}_'.format(n=source_name)
             else:
                 prefix = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=source_name)
 

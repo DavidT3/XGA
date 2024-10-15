@@ -251,7 +251,7 @@ def xspec_call(xspec_func):
                                     spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
                                                         telescope=tel)[0]
                                 else:
-                                    spec = s.get_products("combined_spectrum", extra_key=sp_key)[0]
+                                    spec = s.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0]
                             else:
                                 obs_order.append([sp_info[0], sp_info[1]])
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
@@ -273,8 +273,7 @@ def xspec_call(xspec_func):
                                         spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
                                     
                                     else:
-                                    # TODO need to add functionality to recognise whether the instrument is combined or not
-                                        spec = ann_spec.get_spectra(ann_id)
+                                        spec = ann_spec.get_spectra(ann_id, inst=sp_info[1])
 
                             # Adds information from this fit to the spectrum object.
                             spec.add_fit_data(str(model), line, res_table["PLOT" + str(line_ind + 1)])

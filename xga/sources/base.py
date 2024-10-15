@@ -1213,12 +1213,8 @@ class BaseSource:
             # follows a different format to regular spectrum, so this is more general
             file_name = str(row['file_name'])
 
-            # the naming scheme for combined spectra is slightly different to not combined
-            if not combined_obs:
-                info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
-            else:
-                info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[2:])
-            
+            info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
+
             info_key_parts = info_key.split("_")
 
             central_coord = Quantity([float(info_key_parts[0].strip('ra')), float(info_key_parts[1].strip('dec'))], 'deg')
@@ -1263,7 +1259,7 @@ class BaseSource:
             if combined_obs:
                 indent_no = row['file_name'].split('_')[0]
                 # the info key actually needs to be used here
-                prod_gen_path = cur_d + indent_no + '_' + str(src_name) + '_' + info_key
+                prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(src_name) + '_' + info_key
             else:
                 prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
             
@@ -2694,13 +2690,19 @@ class BaseSource:
                         if comp_po.obs_id == "combined":
                             inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
 
+                            # For the erosita telescope it is possible to have a combined obs product for
+                            # an individual instrument - with spectra and annular spectra
+                            use_inst = comp_po.instrument
                             # TODO AT LEAST SOME COMBINED PRODUCTS NOW DO HAVE THIS INFORMATION STORED IN THEM, IT WOULD
                             #  PROBABLY BE A GOOD IDEA TO UPDATE HOW THIS WORKS AT SOME POINT
                             # We know that this particular product is a combination of multiple ObsIDs, and those ObsIDs
                             #  are not stored explicitly within the product object. However we are currently within the
                             #  source object that they were generated from, thus we do have that information available
                             # Using the _instruments attribute also gives us access to inst information
-                            i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                            if use_inst == 'combined':
+                                i_str = "/".join([i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+                            else:
+                                i_str = use_inst
                             o_str = "/".join([o for o in self.instruments[tel] for i in self.instruments[tel][o]])
                             # They cannot be stored as lists for a single column entry in a csv though, so I am smushing
                             #  them into strings
