@@ -1431,21 +1431,63 @@ class BaseSource:
             if load_spectra:
                 rel_inven = inven[inven['type'] == 'spectrum']
                 for row_ind, row in rel_inven.iterrows():
-                    obj, set_id, ann_id = parse_spectrum(row, True)
-                    if set_id != None:
-                        obj.annulus_ident = ann_id
-                        obj.set_ident = set_id
-                        if set_id not in ann_spec_constituents:
-                            ann_spec_constituents[set_id] = []
-                            ann_spec_usable[set_id] = True
-                        ann_spec_constituents[set_id].append(obj)
+                    # Spectra can have combined observations but individual instruments.
+                    # Checking that a spectrum is associated to the source is different depending
+                    # on if the instrument is combined or not
+                    o_split = row['obs_ids'].split('/')
+                    # if there is a '/' in the insts entry, that means it should be all the instruments combined
+                    if '/' in row['insts']:
+                        i_split = row['insts'].split('/')
+                        # Assemble a set of observations-instrument strings for the current row, to test against the
+                        #  src_oi_set we assembled earlier
+                        test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
+                        # getting a list of obs_ids to parse to the Eventlist object
+                        obs_list = list(set(o_split))
+                        # First we make sure the sets are the same length, if they're not then we know before starting that this
+                        #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
+                        #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
+                        #  match exactly and the product can be loaded
+                        if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
+                            obj, set_id, ann_id = parse_spectrum(row, True)
+                            if set_id != None:
+                                obj.annulus_ident = ann_id
+                                obj.set_ident = set_id
+                                if set_id not in ann_spec_constituents:
+                                    ann_spec_constituents[set_id] = []
+                                    ann_spec_usable[set_id] = True
+                                ann_spec_constituents[set_id].append(obj)
+                            else:
+                                # And adding it to the source storage structure, but only if its not a member
+                                #  of an AnnularSpectra
+                                try:
+                                    print(self.name)
+                                    print(obj.path)
+                                    self.update_products(obj, update_inv=False)
+                                except NotAssociatedError:
+                                    pass
+                    # This condition deals with checking combined obs, individual instrument
+                    elif set(o_split) == set(self.obs_ids[tel]) and \
+                        all(row['insts'] in self.instruments[tel][o] for o in self.instruments[tel]):
+                        obj, set_id, ann_id = parse_spectrum(row, True)
+                        if set_id != None:
+                            obj.annulus_ident = ann_id
+                            obj.set_ident = set_id
+                            if set_id not in ann_spec_constituents:
+                                ann_spec_constituents[set_id] = []
+                                ann_spec_usable[set_id] = True
+                            ann_spec_constituents[set_id].append(obj)
+                        else:
+                            # And adding it to the source storage structure, but only if its not a member
+                            #  of an AnnularSpectra
+                            try:
+                                self.update_products(obj, update_inv=False)
+                            except NotAssociatedError:
+                                pass
+                    
                     else:
-                        # And adding it to the source storage structure, but only if its not a member
-                        #  of an AnnularSpectra
-                        try:
-                            self.update_products(obj, update_inv=False)
-                        except NotAssociatedError:
-                            pass
+                        pass
+                         
+
 
 
             # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
@@ -4428,6 +4470,14 @@ class BaseSource:
             specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, 
                                      min_sn, over_sample, telescope=telescope)
         else:
+            print(self.name)
+            print(outer_radius)
+            print(inner_radius)
+            print(group_spec)
+            print(min_counts)
+            print(min_sn)
+            print(over_sample)
+            print(telescope)
             # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
             specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec, 
                                               min_counts, min_sn, over_sample, telescope=telescope)
