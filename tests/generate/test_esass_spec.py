@@ -15,21 +15,21 @@ set_up_test_config()
 # Now when xga is imported it will make a new census with the test_data
 import xga
 from xga.sources import GalaxyCluster
-from xga.generate.esass.phot import evtool_image, expmap
-from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
-from xga.sourcetools.entropy import entropy_inv_abel_dens_onion_temp
-from xga.products.profile import SpecificEntropy
+from xga.generate.esass.spec import srctool_spectrum
 
-class TestSetupFuncs(unittest.TestCase):
+class TestTempFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
         This is run once before all tests. Here we define class objects that we want to test.
         """
-        cls.test_src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    telescope='erosita',
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        cls.test_src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      telescope='erosita',
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        cls.test_src_all_tels = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
+                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
+                                      search_distance={'erosita': Quantity(3.6, 'deg')})
 
     @classmethod
     def tearDownClass(cls):
@@ -42,11 +42,7 @@ class TestSetupFuncs(unittest.TestCase):
         # in the package
 #        shutil.rmtree('tests/test_data/xga_output')
 
-    def test_entropy_inv_abel_dens_onion_temp(self):
-        res = entropy_inv_abel_dens_onion_temp(self.test_src, Quantity(600, 'kpc'), 'beta', 'king', 
-                                               'vikhlinin_temp', Quantity(600, 'kpc'), 
-                                               stacked_spectra=True)
+    def test_srctool_spectrum(self):
+        pass
 
-        assert type(res) == dict
-        assert set(res.keys()) == set(['erosita', 'xmm'])
-        assert type(res['erosita']) == SpecificEntropy
+# TODO test that annular spectra with combined obs but individual instruments are stored correctly

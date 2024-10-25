@@ -25,9 +25,9 @@ class TestGalaxyCluster(unittest.TestCase):
         """
         This is run once before all tests. Here we define class objects that we want to test.
         """
-        cls.test_src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
-                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
-                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        cls.test_src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
+                    name="1eRASS_J150407.6-024816", use_peak=False,
+                    search_distance={'erosita': Quantity(3.6, 'deg')})
     @classmethod
     def tearDownClass(cls):
         """
@@ -59,9 +59,9 @@ class TestGalaxyCluster(unittest.TestCase):
 
         del(src)
 
-        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
-                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
-                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
+                    name="1eRASS_J150407.6-024816", use_peak=False,
+                    search_distance={'erosita': Quantity(3.6, 'deg')})
         
         img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
 
@@ -76,9 +76,9 @@ class TestGalaxyCluster(unittest.TestCase):
 
         del(src)
 
-        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
-                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
-                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
+                    name="1eRASS_J150407.6-024816", use_peak=False,
+                    search_distance={'erosita': Quantity(3.6, 'deg')})
         
         img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
 
@@ -94,9 +94,9 @@ class TestGalaxyCluster(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
-                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
-                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
+                    name="1eRASS_J150407.6-024816", use_peak=False,
+                    search_distance={'erosita': Quantity(3.6, 'deg')})
         
         spec = src.get_spectra('r500', telescope='erosita')
 
@@ -111,9 +111,9 @@ class TestGalaxyCluster(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
-                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
-                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
+                    name="1eRASS_J150407.6-024816", use_peak=False,
+                    search_distance={'erosita': Quantity(3.6, 'deg')})
         
         spec = src.get_combined_spectra('r500', inst='combined', telescope='erosita')
 
@@ -128,9 +128,9 @@ class TestGalaxyCluster(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(149.59209, -11.05972, 0.16, r500=Quantity(1200, 'kpc'), 
-                                      r200=Quantity(1700, 'kpc'), name="A907", use_peak=False,
-                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
+                    name="1eRASS_J150407.6-024816", use_peak=False,
+                    search_distance={'erosita': Quantity(3.6, 'deg')})
         
         spec = src.get_combined_spectra('r500', telescope='erosita', inst='tm1')
 
