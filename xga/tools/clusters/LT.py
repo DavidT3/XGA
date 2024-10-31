@@ -280,7 +280,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                          sample_data['name'].values, use_peak=use_peak, peak_find_method=peak_find_method,
                          clean_obs_threshold=0.7, clean_obs_reg=o_dens, load_fits=False, cosmology=cosmo, **o_dens_arg,
                          telescope=telescope, search_distance=search_distance)
-
+    
     # As it is possible some clusters in the sample_data dataframe don't actually have X-ray data, we copy
     #  the sample_data and cut it down, so it only contains entries for clusters that were loaded in the sample at the
     #  beginning of this process
@@ -361,7 +361,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
             txs = samp.Tx(telescope, samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
-                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)[:, 0]
+                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, 
+                          stacked_spectra=stacked_spectra)[:, 0]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
         #  the temperature-luminosity scaling relation has to step in for us, and we just need to read out Lxs
         else:
@@ -495,7 +496,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     #  read out
                     vals += list(rel_src.get_temperature(rel_rad, telescope, group_spec=group_spec,
                                                          min_counts=min_counts, min_sn=min_sn,
-                                                         over_sample=over_sample).value)
+                                                         over_sample=over_sample, stacked_spectra=stacked_spectra).value)
                     # We add columns with informative names
                     cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
@@ -512,7 +513,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 #  requested by the user with lum_en
                 for lum_name, lum in rel_src.get_luminosities(rel_rad, telescope, group_spec=group_spec,
                                                               min_counts=min_counts, min_sn=min_sn,
-                                                              over_sample=over_sample).items():
+                                                              over_sample=over_sample, 
+                                                              stacked_spectra=stacked_spectra).items():
                     # The luminosity and its uncertainties gets added to the values list
                     vals += list(lum.value)
                     # Then the column names get added
@@ -545,14 +547,16 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         # Adding temperature value and uncertainties
                         vals += list(rel_src.get_temperature(rel_rad, telescope, inner_radius=0.15*rel_rad,
                                                              group_spec=group_spec, min_counts=min_counts,
-                                                             min_sn=min_sn, over_sample=over_sample).value)
+                                                             min_sn=min_sn, over_sample=over_sample, 
+                                                             stacked_spectra=stacked_spectra).value)
                         # Corresponding column names (with ce now included to indicate core-excised).
                         cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     # The same process again for core-excised luminosities
                     lce_res = rel_src.get_luminosities(rel_rad, telescope, inner_radius=0.15 * rel_rad,
                                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                                       over_sample=over_sample)
+                                                       over_sample=over_sample, 
+                                                       stacked_spectra=stacked_spectra)
                     for lum_name, lum in lce_res.items():
                         vals += list(lum.value)
                         cols += ['Lx' + o_dens[1:] + 'ce' + lum_name.split('bound')[-1] + p_fix
@@ -563,14 +567,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     if not freeze_met:
                         metce = rel_src.get_results(rel_rad, telescope, inner_radius=0.15 * rel_rad, par='Abundanc',
                                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                                    over_sample=over_sample)
+                                                    over_sample=over_sample, stacked_spectra=stacked_spectra)
                         vals += list(metce)
                         cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     if not freeze_nh:
                         nhce = rel_src.get_results(rel_rad, telescope, inner_radius=0.15 * rel_rad, par='nH',
                                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                                   over_sample=over_sample)
+                                                   over_sample=over_sample, stacked_spectra=stacked_spectra)
                         vals += list(nhce)
                         cols += ['nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
