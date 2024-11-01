@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/02/2024, 11:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/11/2024, 16:30. Copyright (c) The Contributors
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -16,8 +16,6 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../..'))
-import shutil
-
 
 # -- Extra Setup for XGA -----------------------------------------------------
 
@@ -39,25 +37,21 @@ if not os.path.exists(config_path):
     xga_path = '/'.join(current_path.split('/')[:-2])
 
     # The test data includes a mostly complete config file, and census
-    test_cfg_path = os.path.join(xga_path, 'tests', 'test_data', 'xga.cfg')
-    test_census_path = os.path.join(xga_path, 'tests', 'test_data', 'census.csv')
-    test_data_path = os.path.join(xga_path, 'tests', 'test_data')
-
-    # Copy the config and census over to the place they should be on whatever system is building this
-    shutil.copy(test_cfg_path, config_file_path)
-    shutil.copy(test_census_path, census_file_path)
-
-    with open(config_file_path, 'r') as cfg:
-        lines = cfg.readlines()
-
-    lines = [line.replace('root_xmm_dir = ./', 'root_xmm_dir = {}'.format(test_data_path)) for line in lines]
-
-    with open(config_file_path, 'w') as cfg:
-        cfg.write(''.join(lines))
-
-# I don't like to import in the code itself, but it has to be here so we can be sure a valid config file exists
-# from xga import utils
-# utils.XGA_MODE = "DOCS"
+    # test_cfg_path = os.path.join(xga_path, 'tests', 'test_data', 'xga.cfg')
+    # test_census_path = os.path.join(xga_path, 'tests', 'test_data', 'census.csv')
+    # test_data_path = os.path.join(xga_path, 'tests', 'test_data')
+    #
+    # # Copy the config and census over to the place they should be on whatever system is building this
+    # shutil.copy(test_cfg_path, config_file_path)
+    # shutil.copy(test_census_path, census_file_path)
+    #
+    # with open(config_file_path, 'r') as cfg:
+    #     lines = cfg.readlines()
+    #
+    # lines = [line.replace('root_xmm_dir = ./', 'root_xmm_dir = {}'.format(test_data_path)) for line in lines]
+    #
+    # with open(config_file_path, 'w') as cfg:
+    #     cfg.write(''.join(lines))
 
 # -- Project information -----------------------------------------------------
 
