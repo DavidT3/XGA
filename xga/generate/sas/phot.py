@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 09:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:36. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -74,7 +74,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         final_paths = []
         extra_info = []
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -84,7 +84,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             # once the SAS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
-            
+
             # then we can continue with the rest of the sources
             continue
 
@@ -197,7 +197,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
         final_paths = []
         extra_info = []
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -207,7 +207,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             # once the SAS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="expmap"))
-            
+
             # then we can continue with the rest of the sources
             continue
 
@@ -333,7 +333,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     sources_types = []
     for source in sources:
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -366,6 +366,17 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         # This fetches all image objects with the passed energy bounds
         matches = [[match[1], match[-1]] for match in source.get_products(to_mosaic, just_obj=False, telescope='xmm')
                    if en_id in match]
+
+        # In theory this should never be triggered, because we already ran evselect_image so the images should be
+        #  there - but I am now somehow having an error where we get to this point with no errors and no images, so
+        #  we're going to add this in to be absolutely sure (as otherwise emosaic fails with a very unhelpful error).
+        if len(matches) == 0:
+            assoc = ", ".join([cur_oi + cur_i for cur_oi in source.instruments
+                               for cur_i in source.instruments[cur_oi]])
+            raise NoProductAvailableError("The images required for emosaic are not available for {p} - this is not a"
+                                          " usual behaviour as XGA should have generated them; the relevant "
+                                          "observations are {d}.".format(p=source.name, d=assoc))
+
         paths = [product[1].path for product in matches if product[1].usable]
         obs_ids = [product[0] for product in matches if product[1].usable]
         obs_ids_set = []
@@ -378,11 +389,11 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
 
         # The files produced by this function will now be stored in the combined directory.
         final_dest_dir = OUTPUT + "xmm/combined/"
-        rand_ident = randint(0, 1e+8)
+        rand_ident = randint(0, int(1e+8))
         # Makes absolutely sure that the random integer hasn't already been used
         while len([f for f in os.listdir(final_dest_dir)
                    if str(rand_ident) in f.split(OUTPUT+"xmm/combined/")[-1]]) != 0:
-            rand_ident = randint(0, 1e+8)
+            rand_ident = randint(0, int(1e+8))
 
         dest_dir = os.path.join(final_dest_dir, "temp_emosaic_{}".format(rand_ident))
         os.mkdir(dest_dir)
@@ -479,7 +490,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
             final_paths = []
             extra_info = []
             # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-            #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+            #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
             #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
             #  bugs occuring in the sas_call wrapper
             if 'xmm' not in source.telescopes:
@@ -489,7 +500,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # once the SAS cmd has run
                 sources_extras.append(np.array(extra_info))
                 sources_types.append(np.full(sources_cmds[-1].shape, fill_value="psf"))
-                
+
                 # need to move the progress bar along
                 psfgen_prep_progress.update(1)
 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:14. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -30,7 +30,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                              show_warn: bool = True,
-                             psf_bins: int = 4, 
+                             psf_bins: int = 4,
                              stacked_spectra: bool = False) -> Union[List[HydrostaticMass], HydrostaticMass]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
@@ -109,7 +109,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
     :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
     :param int psf_bins: The number of bins per side when generating a grid of PSFs for image correction prior
         to surface brightness profile (and thus density) measurements.
-    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be 
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
         used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
         supported, this function will instead use individual spectra for an ObsID. The default is
         False.
@@ -130,7 +130,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                                                           over_sample, one_rmf, num_cores, show_warn, psf_bins,
                                                           stacked_spectra)
 
-    # need to import here to avoid circular import errors
+    # Need to import here to avoid circular import errors
     from ..sourcetools._common import _get_all_telescopes
     # collecting all the associated telescopes to loop over later
     all_tels = _get_all_telescopes(sources)
@@ -161,8 +161,9 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                         rads = t_prof.radii.copy()[1:]
                         rad_errs = t_prof.radii_err.copy()[1:]
                         deg_rads = src.convert_radius(rads, 'deg')
-                        hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
-                                                num_walkers, num_steps, show_warn=show_warn, progress=False, telescope=tel)
+                        hy_mass = HydrostaticMass(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads,
+                                                  fit_method, num_walkers, num_steps, show_warn=show_warn,
+                                                  progress=False, telescope=tel, auto_save=True)
                         # Add the profile to the source storage structure
                         src.update_products(hy_mass)
                         # Also put it into a list for returning

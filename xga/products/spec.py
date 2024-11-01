@@ -1,6 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 14:25. Copyright (c) The Contributors
-
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:05. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1229,7 +1228,7 @@ class Spectrum(BaseProduct):
 
             self._conv_factors[tel][model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
 
-            
+
 
     def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str, tel: str) -> Tuple[Quantity, Quantity, Quantity]:
         """
@@ -1818,13 +1817,15 @@ class AnnularSpectra(BaseAggregateProduct):
         self._proper_radii = None
         self._proper_ann_centres = None
 
+        # self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
+        #                             for ai in range(self._num_ann)}
+        # self._component_products = {o: {i: {ai: None for ai in range(self._num_ann)}
+        #                                 for i in self._instruments[o]} for o in self.obs_ids}
+
         # Finally storing the spectra inside the product, though with multiple layers of products
         # This sets up the component products dictionary, allowing for the separated storage of
-        #  spectra from different ObsIDs
-        self._component_products = {ai: {o: {i: None for i in self._instruments[o]} for o in self.obs_ids}
-                                    for ai in range(self._num_ann)}
-        self._component_products = {o: {i: {ai: None for ai in range(self._num_ann)}
-                                        for i in self._instruments[o]} for o in self.obs_ids}
+        #  spectra from different ObsIDs. We don't require that every ObsID-inst combo has an entry for every annulus
+        self._component_products = {o: {i: {} for i in self._instruments[o]} for o in self.obs_ids}
         # And putting the spectra in their place
         for s in spectra:
             self._component_products[s.obs_id][s.instrument][s.annulus_ident] = s
@@ -2795,25 +2796,25 @@ class AnnularSpectra(BaseAggregateProduct):
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, associated_set_id=self.set_ident,
                                                          set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
-                                                         telescope=self.telescope)
+                                                         auto_save=True, telescope=self.telescope)
                 elif par == 'kT' and upper_limit is not None:
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                         self.storage_key, deg_radii=mid_radii_deg,
+                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True,
                                                          telescope=self.telescope)
                 elif par == 'Abundanc':
                     new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                         mid_radii_deg, telescope=self.telescope)
+                                                         mid_radii_deg, auto_save=True, telescope=self.telescope)
                 elif par == 'norm':
                     new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
                                                    rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                   mid_radii_deg, telescope=self.telescope)
+                                                   mid_radii_deg, auto_save=True, telescope=self.telescope)
                 else:
                     prof_type = "1d_proj_{}"
                     new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
                                          prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                         mid_radii_deg, telescope=self.telescope)
+                                         mid_radii_deg, auto_save=True, telescope=self.telescope)
 
                 profs.append(new_prof)
 

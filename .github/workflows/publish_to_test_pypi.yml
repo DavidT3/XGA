@@ -23,21 +23,22 @@ jobs:
     name: Build and publish XGA
     # I actually only want to run this one if the pushed commit has a tag - I will only do this for new versions of the module
     if: startsWith(github.ref, 'refs/tags')
-    # The build/publishing process runs on Ubuntu 20.04 - not super important what this is for this use case, so long as its not Windows
-    runs-on: ubuntu-20.04
+    # The build/publishing process runs on the latest version of Ubuntu - not super important what this is for this use case, so long as its not Windows
+    runs-on: ubuntu-latest
     
     # This job has several steps
     steps:
       # Checks out the master branch (what we want to build and publish - hopefully with the VCS info that versioneer needs), then 
       #  activates a relatively recent version of Python
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        fetch-tags: true
     - name: Setup the Python install
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v4
       with:
-        python-version: 3.7
-    
+        python-version: 3.12
+
     # The next two chunks set up PIP properly and build the module
     - name: Install pypa/build
       run: >-
@@ -45,7 +46,7 @@ jobs:
         pip install
         build
         --user
-    
+
     - name: Build a binary wheel and source tarball
       run: >-
         python -m
@@ -54,12 +55,10 @@ jobs:
         --wheel
         --outdir dist/
         .
-    
+
     # Then the module is published to the test PyPI index
     - name: Publish to TestPyPI
-      uses: pypa/gh-action-pypi-publish@master
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
         repository_url: https://test.pypi.org/legacy/
-    
-    

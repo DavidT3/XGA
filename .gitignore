@@ -7,3 +7,4 @@ xga_output
 .vscode
 /xga.egg-info/
 __pycache__
+/docs/build

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 10:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -56,7 +56,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         extra_info = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -66,7 +66,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
             # once the SAS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="ccf"))
-            
+
             # then we can continue with the rest of the sources
             continue
 
@@ -93,7 +93,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
             dest_dir = "{out}xmm/{obs}/".format(out=OUTPUT, obs=obs_id)
-            temp_name = "tempdir_{}".format(randint(0, 1e+8))
+            temp_name = "tempdir_{}".format(randint(0, int(1e+8)))
             temp_dir = dest_dir + temp_name + "/"
 
             final_path = dest_dir + "ccf.cif"

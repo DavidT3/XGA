@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 12:54. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -109,8 +109,22 @@ def sas_call(sas_func):
                     """
                     nonlocal raised_errors
                     nonlocal gen
+                    nonlocal src_lookup
+                    nonlocal sources
 
                     if err is not None:
+                        # We used a memory address laden source name representation when we adjusted the error
+                        #  message in execute_cmd, so we'll replace it with an actual name here
+                        # Again it matters how many arguments the error has
+                        if len(err.args) == 1:
+                            err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
+                            act_src_name = sources[src_lookup[err_src_rep]].name
+                            err.args = (err.args[0].replace(err_src_rep, act_src_name),)
+                        else:
+                            err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
+                            act_src_name = sources[src_lookup[err_src_rep]].name
+                            err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
+
                         # Rather than throwing an error straight away I append them all to a list for later.
                         raised_errors.append(err)
                     gen.update(1)
@@ -169,8 +183,10 @@ def sas_call(sas_func):
                 # In case they are components of an annular spectrum but they are either none or not usable
                 elif prod_type_str == "annular spectrum set components":
                     warn("An annular spectrum component ({a}) for {o}{i} has not been generated properly, contact "
-                         "the development team if a SAS error is not "
-                         "shown.".format(a=product.storage_key, o=product.obs_id, i=product.instrument), stacklevel=2)
+                         "the development team if a SAS error is not shown. The std_err entry is:\n\n "
+                         "{se}\n\n The std_out entry is:\n\n "
+                         "{so}".format(a=product.storage_key, o=product.obs_id, i=product.instrument,
+                                       se=product.unprocessed_stderr, so=product.unprocessed_stdout), stacklevel=2)
                 # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
                 #  object that already exists in our source
                 elif prod_type_str == "cross arfs":
@@ -199,8 +215,8 @@ def sas_call(sas_func):
                 sources[ind].update_products(ann_spec)
 
         # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
-        for error in raised_errors:
-            raise error
+        if len(raised_errors) != 0:
+            raise Exception(raised_errors)
 
         # And here are all the errors during SAS generation, if any
         if len(all_to_raise) != 0:

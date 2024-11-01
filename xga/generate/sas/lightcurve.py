@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/01/2024, 10:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -120,7 +120,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
         extra_info = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -130,7 +130,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             # once the SAS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="light curve"))
-            
+
             # then we can continue with the rest of the sources
             continue
 
@@ -248,7 +248,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             evt_list = pack[-1]
             # Sets up the file names of the output files, adding a random number
             dest_dir = OUTPUT + "{t}/{o}/{i}_{n}_temp_{r}/".format(t='xmm', o=obs_id, i=inst, n=source_name,
-                                                                   r=randint(0, 1e+8))
+                                                                   r=randint(0, int(1e+8)))
 
             # We know that this is where the calibration index file lives
             ccf = dest_dir + "ccf.cif"

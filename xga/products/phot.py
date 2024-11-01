@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/10/2024, 14:28. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
 from matplotlib.widgets import Button, RangeSlider, Slider
-from regions import read_ds9, PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord, write_ds9
+from regions import PixelRegion, SkyRegion, EllipsePixelRegion, CirclePixelRegion, PixCoord, Regions
 from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
@@ -288,7 +288,7 @@ class Image(BaseProduct):
 
         # The behaviour here depends on whether regions or a path have been passed
         if path is not None:
-            ds9_regs = read_ds9(path)
+            ds9_regs = Regions.read(path, format='ds9').regions
         else:
             ds9_regs = deepcopy(reg_objs)
 
@@ -872,7 +872,10 @@ class Image(BaseProduct):
             # These go between degrees and pixels
             if input_unit == "deg" and out_name == "pix":
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
-                out_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
+                # We define an interim variable, in case the result is NaN - this now causes a warning that we
+                #  wish to avoid, so we replace NaN with a negative number that will cause a failure further down
+                inter_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0)
+                out_coord = np.nan_to_num(inter_coord, nan=Quantity(-100, 'pix')).astype(int)
             elif input_unit == "pix" and out_name == "deg":
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
@@ -1130,7 +1133,8 @@ class Image(BaseProduct):
                  manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                 ch_thickness: float = 0.8) -> Axes:
+                 ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None,
+                 custom_title: str = None) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -1168,6 +1172,14 @@ class Image(BaseProduct):
             the 'regions' property setter, should they be displayed. Default is False.
         :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
             certain circumstances. Default is 0.8.
+        :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
+            not None, upp_val_lim must be as well.
+        :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
+            not None, low_val_lim must be as well.
+        :param str custom_title: If set, this will overwrite the automatically generated title for this
+            visualisation. Default is None.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -1179,6 +1191,17 @@ class Image(BaseProduct):
             plot_data = self.data * mask
         else:
             plot_data = self.data
+
+        # We check that the values that set manual value limits are legal, otherwise we throw an error
+        check_lim_arg = [low_val_lim is None, upp_val_lim is None]
+        if any(check_lim_arg) and not all(check_lim_arg):
+            raise ValueError("Either 'low_val_lim' and 'upp_val_lim' are both None, or both have values.")
+        elif not all(check_lim_arg) and low_val_lim >= upp_val_lim:
+            raise ValueError("The 'low_val_lim' argument must be lower than 'upp_val_lim'.")
+        elif not all(check_lim_arg):
+            interval = ManualInterval(low_val_lim, upp_val_lim)
+        else:
+            interval = MinMaxInterval()
 
         # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
         #  pixels that we can - it makes the view look better
@@ -1199,27 +1222,32 @@ class Image(BaseProduct):
         if self.telescope is not None:
             ident = PRETTY_TELESCOPE_NAMES[self.telescope] + ' ' + ident
 
-        if self.src_name is not None:
-            title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
-                                                      l=self._energy_bounds[0].to("keV").value,
-                                                      u=self._energy_bounds[1].to("keV").value, t=self.type)
+        # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
+        #  title - otherwise we use the custom title and don't add anything to it
+        if custom_title is None:
+            if self.src_name is not None:
+                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
+                                                          l=self._energy_bounds[0].to("keV").value,
+                                                          u=self._energy_bounds[1].to("keV").value, t=self.type)
+            else:
+                title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
+                                                    u=self._energy_bounds[1].to("keV").value, t=self.type)
+
+            # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
+            if self.psf_corrected:
+                title += ' - PSF Corrected'
+
+            # And smoothed as well
+            if self.smoothed:
+                title += ' - Smoothed'
         else:
-            title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
-                                                u=self._energy_bounds[1].to("keV").value, t=self.type)
-
-        # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
-        if self.psf_corrected:
-            title += ' - PSF Corrected'
-
-        # And smoothed as well
-        if self.smoothed:
-            title += ' - Smoothed'
+            title = custom_title
 
         ax.set_title(title)
 
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=plot_data, interval=MinMaxInterval(), stretch=stretch)
+        norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
         # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
         # If we want to plot point clusters on the image, then we go here
@@ -1320,7 +1348,7 @@ class Image(BaseProduct):
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
              stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-             ch_thickness: float = 0.8):
+             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None, custom_title: str = None):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -1356,6 +1384,14 @@ class Image(BaseProduct):
             the 'regions' property setter, should they be displayed. Default is False.
         :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
             certain circumstances. Default is 0.8.
+        :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
+            not None, upp_val_lim must be as well.
+        :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
+            not None, low_val_lim must be as well.
+        :param str custom_title: If set, this will overwrite the automatically generated title for this
+            visualisation. Default is None.
         """
 
         # Create figure object
@@ -1364,7 +1400,7 @@ class Image(BaseProduct):
         ax = plt.gca()
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness)
+                           ch_thickness, low_val_lim, upp_val_lim, custom_title)
         cbar = plt.colorbar(ax.images[0])
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
@@ -1379,7 +1415,8 @@ class Image(BaseProduct):
                   zoom_in: bool = False, manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
                   radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
                   stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                  ch_thickness: float = 0.8):
+                  ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None,
+                  custom_title: str = None):
         """
         This is entirely equivalent to the view() method, but instead of displaying the view it will save it to
         a path of your choosing.
@@ -1416,6 +1453,14 @@ class Image(BaseProduct):
             the 'regions' property setter, should they be displayed. Default is False.
         :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
             certain circumstances. Default is 0.8.
+        :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
+            not None, upp_val_lim must be as well.
+        :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
+            not None, low_val_lim must be as well.
+        :param str custom_title: If set, this will overwrite the automatically generated title for this
+            visualisation. Default is None.
         """
 
         # Create figure object
@@ -1426,7 +1471,7 @@ class Image(BaseProduct):
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness)
+                           ch_thickness, low_val_lim, upp_val_lim, custom_title)
         cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string('latex'))
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
@@ -1616,7 +1661,7 @@ class Image(BaseProduct):
             #  dictionary for reference
             for region in [r for o, rl in self._regions.items() for r in rl]:
                 art_reg = region.as_artist()
-                self._colour_convert[art_reg.get_edgecolor()] = region.visual["color"]
+                self._colour_convert[art_reg.get_edgecolor()] = region.visual["edgecolor"]
 
             # This just provides a conversion between name and colour tuple, the inverse of colour_convert
             self._inv_colour_convert = {v: k for k, v in self._colour_convert.items()}
@@ -1677,7 +1722,7 @@ class Image(BaseProduct):
             #  as upper and lower boundaries and starting points for the sliders.
             init_range = self._interval.get_limits(self._plot_data)
             # Define the RangeSlider instance, set the value text to invisible, and connect to the method it activates
-            self._vrange_slider = RangeSlider(ax_slid, 'DATA INTERVAL', *init_range, init_range)
+            self._vrange_slider = RangeSlider(ax_slid, 'DATA INTERVAL', *init_range, valinit=init_range)
             # We move the RangeSlider label so that is sits within the bar
             self._vrange_slider.label.set_x(0.6)
             self._vrange_slider.label.set_y(0.45)
@@ -1716,7 +1761,7 @@ class Image(BaseProduct):
             # Hides the ticks to make it look nicer
             ax_smooth_slid.set_xticks([])
             # Define the Slider instance, add and position a label, and connect to the method it activates
-            self._smooth_slider = Slider(ax_smooth_slid, 'KERNEL RADIUS', 0.5, 5, 1, valstep=0.5,
+            self._smooth_slider = Slider(ax_smooth_slid, 'KERNEL RADIUS', 0.5, 5, valinit=1, valstep=0.5,
                                          orientation='vertical')
             # Remove the annoying line representing initial value that is automatically added
             self._smooth_slider.hline.remove()
@@ -1918,12 +1963,14 @@ class Image(BaseProduct):
             # These artists are the ones that represent regions, the ones in self._ignore_arts are there
             #  just for visualisation (for instance showing an analysis/background region) and can't be
             #  turned on or off, can't be edited, and shouldn't be saved.
-            rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+            # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+            rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
 
             # This will trigger in initial cases where there ARE regions associated with the photometric product
             #  that has spawned this InteractiveView, but they haven't been added as artists yet. ALSO, this will
             #  always run prior to any artists being added that are just there to indicate analysis regions, see
             #  toward the end of the __init__ for what I mean.
+
             if len(rel_artists) == 0 and len([r for o, rl in self._regions.items() for r in rl]) != 0:
                 for o in self._regions:
                     for region in self._regions[o]:
@@ -1955,7 +2002,8 @@ class Image(BaseProduct):
                         self._artist_region[art_reg] = region
 
                 # Need to update this in this case
-                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
 
             # This chunk controls which regions will be drawn when this method is called. The _cur_act_reg_type
             #  dictionary has keys representing the four toggle buttons, and their values are True or False. This
@@ -2038,7 +2086,7 @@ class Image(BaseProduct):
 
         def _change_interval(self, boundaries: Tuple):
             """
-            This method is called when a change is made to the RangeSlider that controls the inverval range
+            This method is called when a change is made to the RangeSlider that controls the interval range
             of the data that is displayed.
 
             :param Tuple boundaries: The lower and upper boundary currently selected by the RangeSlider
@@ -2441,8 +2489,8 @@ class Image(BaseProduct):
                 # These artists are the ones that represent regions, the ones in self._ignore_arts are there
                 #  just for visualisation (for instance showing an analysis/background region) and can't be
                 #  turned on or off, can't be edited, and shouldn't be saved.
-                rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
-
+                # rel_artists = [arty for arty in self._im_ax.artists if arty not in self._ignore_arts]
+                rel_artists = [arty for arty in self._im_ax.patches if arty not in self._ignore_arts]
                 for artist in rel_artists:
                     # Fetches the boolean variable that describes if the region was edited
                     altered = self._edited_dict[artist]
@@ -2455,13 +2503,15 @@ class Image(BaseProduct):
                         # Creating the equivalent region object from the artist
                         new_reg = EllipsePixelRegion(cen, artist.width, artist.height, Quantity(artist.angle, 'deg'))
                         # Fetches and sets the colour of the region, converting from matplotlib colour
-                        new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['edgecolor'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['facecolor'] = self._colour_convert[artist.get_edgecolor()]
                     elif altered and type(artist) == Circle:
                         cen = PixCoord(x=artist.center[0], y=artist.center[1])
                         # Creating the equivalent region object from the artist
                         new_reg = CirclePixelRegion(cen, artist.radius)
                         # Fetches and sets the colour of the region, converting from matplotlib colour
-                        new_reg.visual['color'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['edgecolor'] = self._colour_convert[artist.get_edgecolor()]
+                        new_reg.visual['facecolor'] = self._colour_convert[artist.get_edgecolor()]
                     else:
                         # Looking up the region because if we get to this point we know its an original region that
                         #  hasn't been altered
@@ -2508,7 +2558,7 @@ class Image(BaseProduct):
                     # write_ds9(rel_regs, rel_save_path, 'image', radunit='')
                     # This function is a part of the regions module, and will write out a region file.
                     #  Specifically RA-Dec coordinate system in units of degrees.
-                    write_ds9(rel_regs, rel_save_path)
+                    Regions(rel_regs).write(rel_save_path, format='ds9')
 
             else:
                 raise ValueError('No save path was passed, so region files cannot be output.')
@@ -3005,20 +3055,20 @@ class RateMap(Image):
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
                         allow_negative: bool = False):
         """
-        A signal to noise calculation method which takes information on source and background regions, then uses
-        that to calculate a signal to noise for the source. This was primarily motivated by the desire to produce
+        A signal-to-noise calculation method which takes information on source and background regions, then uses
+        that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
         valid SNR values for combined data, where uneven exposure times across the combined field of view could
         cause issues with the usual approach of just summing the counts in the region images and scaling by area.
         This method can also measure signal to noises without exposure time correction.
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
-        :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+        :param bool exp_corr: Should signal-to-noise be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-            zero, which results in a lower signal to noise (and can result in a negative signal to noise).
-        :return: A signal to noise value for the source region.
+            zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+        :return: A signal-to-noise value for the source region.
         :rtype: float
         """
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap

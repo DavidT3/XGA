@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2024, 12:37. Copyright (c) The Contributors
+
 
 from typing import Tuple
 
@@ -147,14 +148,19 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
     rad = np.ceil(rad)
 
-    # So I'm adding a safety feature here, and ensuring the the central circle is a minimum radius
-    if pix_step < 3 and start_pix_rad == 0:
-        central_circ = np.array([0, min_central_pix_rad], dtype=int)
-        ann_rads = np.arange(min_central_pix_rad+pix_step, rad.value + 1, pix_step).astype(int)
-        rads = np.concatenate([central_circ, ann_rads])
-    else:
-        # By this point, the rad should be in pixels
-        rads = np.arange(start_pix_rad, rad.value + 1, pix_step).astype(int)
+    # I'M LEAVING THIS HERE IN CASE I DECIDE TO RESTORE IT IN THE FUTURE - it was intended as a sort of
+    #  safety feature, to ensure that the central was big enough that it wasn't going to be zero valued. Unfortunately
+    #  it really screws over inverse abel transforming the data, because many of the techniques implemented in PyAbel
+    #  require uniform radial (in my case) sampling - that can't be true if this feature is in unless the pix_step
+    #  is set to at least 3 - enforcing that as a minimum may well be useful, but for now I'm disabling this
+
+    # if pix_step < 3 and start_pix_rad == 0:
+    #     central_circ = np.array([0, min_central_pix_rad], dtype=int)
+    #     ann_rads = np.arange(min_central_pix_rad+pix_step, rad.value + 1, pix_step).astype(int)
+    #     rads = np.concatenate([central_circ, ann_rads])
+
+    # By this point, the rad should be in pixels
+    rads = np.arange(start_pix_rad, rad.value + 1, pix_step).astype(int)
 
     inn_rads = rads[:len(rads) - 1]
     out_rads = rads[1:len(rads)]
@@ -218,8 +224,8 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         :rtype:
         """
         # These are annular masks with interloper sources removed, sensor and edge masks applied
-        corr_ann_masks = annulus_masks * interloper_mask[..., None] * rt.sensor_mask[..., None] \
-                         * rt.edge_mask[..., None]
+        corr_ann_masks = (annulus_masks * interloper_mask[..., None] * rt.sensor_mask[..., None]
+                          * rt.edge_mask[..., None])
 
         # This calculates the area of each annulus mask
         num_pix = np.sum(corr_ann_masks, axis=(0, 1))
@@ -235,10 +241,10 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         # And the uncertainties on the profiles. Adding pixels in quadrature
         bright_profile_errors = np.sqrt(np.sum(masked_countrate_error_data**2, axis=(0, 1))) / ann_areas
 
-        # We want to check if all parts of the profile are above the defined minimum signal to noise
+        # We want to check if all parts of the profile are above the defined minimum signal-to-noise
         snr_prof = bright_profile / countrate_bg_per_area
 
-        # Checking if we are below the minimum signal to noise anywhere
+        # Checking if we are below the minimum signal-to-noise anywhere
         below = np.argwhere(snr_prof < min_snr).flatten()
         if below.shape != (0,) and below[0] != (bright_profile.shape[0] - 1):
             annulus_masks[:, :, below[0]] = annulus_masks[:, :, below[0]] + annulus_masks[:, :, below[0] + 1]
@@ -336,7 +342,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         inn_rads = init_inn
         out_rads = init_out
         ann_masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape)
-        # Set the min_snr to 0 to get an non-rebinned profile
+        # Set the min_snr to 0 to get a non-rebinned profile
         min_snr = 0
         prof_results = _iterative_profile(ann_masks, inn_rads, out_rads)
         br_prof, br_errs = prof_results[1:3]
@@ -355,9 +361,6 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
 
     cen_rads = (final_inn_rads + final_out_rads) / 2
     deg_cen_rads = (deg_inn_rads + deg_out_rads) / 2
-    if final_inn_rads[0].value == 0:
-        cen_rads[0] = Quantity(0, cen_rads.unit)
-        deg_cen_rads[0] = Quantity(0, 'deg')
     rad_err = (final_out_rads-final_inn_rads) / 2
 
     if not outer_rad.unit.is_equivalent('deg'):
@@ -370,7 +373,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
                                   deg_outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
                                   Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
-                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, rt.telescope)
+                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, True, rt.telescope)
 
     return br_prof, succeeded
 

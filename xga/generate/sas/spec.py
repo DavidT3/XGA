@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/02/2024, 12:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -145,7 +145,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         extra_info = []
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -155,7 +155,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # once the SAS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
-            
+
             # then we can continue with the rest of the sources
             continue
 
@@ -313,7 +313,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             evt_list = pack[-1]
             # Sets up the file names of the output files, adding a random number so that the
             #  function for generating annular spectra doesn't clash and try to use the same folder
-            dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name, r=randint(0, 1e+8))
+            dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
+                                                                   r=randint(0, int(1e+8)))
 
             # Sets up something very similar to the extra name variable above, but for the file names
             #  Stores some information about grouping in the file names
@@ -618,7 +619,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
@@ -633,7 +634,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             continue
 
         # This generates a random integer ID for this set of spectra
-        set_id = randint(0, 1e+8)
+        set_id = randint(0, int(1e+8))
 
         # I want to be sure that this configuration doesn't already exist
         if group_spec and min_counts is not None:
@@ -843,7 +844,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
         src_extras = np.array([])
 
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the sas_call wrapper
         if 'xmm' not in src.telescopes:
@@ -858,7 +859,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
             continue
 
         try:
-            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample, 
+            ann_spec = src.get_annular_spectra(radii, group_spec, min_counts, min_sn, over_sample,
                                                set_id[src_ind], telescope='xmm')
         except NoProductAvailableError:
             # We make our own version of this error
@@ -874,7 +875,8 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 inst = sp_comb[0].instrument
                 evt_list = src.get_products('events', obs_id, inst, telescope='xmm')[0]
 
-                dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name, r=randint(0, 1e+8))
+                dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name,
+                                                                       r=randint(0, int(1e+8)))
 
                 if not os.path.exists(dest_dir):
                     os.makedirs(dest_dir)

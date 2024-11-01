@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/02/2024, 11:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:07. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import TABLEAU_COLORS, BASE_COLORS, Colormap, CSS4_COLORS, Normalize
 from matplotlib.ticker import FuncFormatter
 
-from ..models import MODEL_PUBLICATION_NAMES
+from ..models import MODEL_PUBLICATION_NAMES, power_law
 
 # This is the default colour cycle for the AggregateScalingRelation view method
 PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateblue', 'goldenrod']
@@ -104,8 +104,8 @@ class ScalingRelation:
         """
         # These will always be passed in, and are assumed to be in the order required by the model_func that is also
         #  passed in by the user.
-        self._fit_pars = fit_pars
-        self._fit_par_errs = fit_par_errs
+        self._fit_pars = np.array(fit_pars)
+        self._fit_par_errs = np.array(fit_par_errs)
 
         # This should be a Python function of the model which was fit to create this relation, and which will take the
         #  passed fit parameters as arguments
@@ -708,7 +708,7 @@ class ScalingRelation:
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
                     colour: str = None, save_path: str = None):
-        """
+        r"""
         A convenient view method to examine the corner plot of the parameter posterior distributions.
 
         :param tuple figsize: The size of the figure.
@@ -756,26 +756,49 @@ class ScalingRelation:
         plt.show()
 
     def predict(self, x_values: Quantity, redshift: Union[float, np.ndarray] = None,
-                cosmo: Cosmology = None) -> Quantity:
+                cosmo: Cosmology = None, x_errors: Quantity = None) -> Quantity:
         """
         This method allows for the prediction of y values from this scaling relation, you just need to pass in an
-        appropriate set of x values. If a power of E(z) was applied to the y-axis data before fitting, and that
+        appropriate set of x value(s). If a power of E(z) was applied to the y-axis data before fitting, and that
         information was passed on declaration (using 'dim_hubb_ind'), then a redshift and cosmology are required
         to remove out the E(z) contribution.
 
-        :param Quantity x_values: The x values to predict y values for.
+        :param Quantity x_values: The x value(s) to predict y value(s) for.
         :param float/np.ndarray redshift: The redshift(s) of the objects for which we wish to predict values. This is
             only necessary if the 'dim_hubb_ind' argument was set on declaration. Default is None.
         :param Cosmology cosmo: The cosmology in which we wish to predict values. This is only necessary if the
             'dim_hubb_ind' argument was set on declaration. Default is None.
-        :return: The predicted y values.
+        :param Quantity x_errors: The uncertainties for passed x-values. Default is None. If this argument is not None
+            then uncertainties in x-value and the model fit will be propagated to a final prediction uncertainty. If
+            minus and plus uncertainties are passed then they will be averaged before propagation.
+        :return: The predicted y values (and predicted uncertainties if x-errors were passed).
         :rtype: Quantity
         """
+        # Ensure no floats are being passed in, as we need units!
+        if type(x_values) is not Quantity:
+            raise TypeError("The 'x_values' argument must be an astropy quantity.")
         # Got to check that people aren't passing any nonsense x quantities in
-        if not x_values.unit.is_equivalent(self.x_unit):
+        elif not x_values.unit.is_equivalent(self.x_unit):
             raise UnitConversionError('Values of x passed to the predict method ({xp}) must be convertible '
                                       'to the x-axis units of this scaling relation '
                                       '({xr}).'.format(xp=x_values.unit.to_string(), xr=self.x_unit.to_string()))
+
+        # Check that if x errors have been passed, they're in the right units
+        if x_errors is not None and x_errors.unit != x_values.unit:
+            raise UnitConversionError("The x errors are not in the same units as 'x_values'.")
+        elif (x_errors is not None and not x_errors.isscalar and not x_values.isscalar and
+              len(x_errors) != len(x_values)):
+            raise ValueError("The length of the 'x_errors' argument ({xe}) should be the same as the 'x_values' "
+                             "argument({xv}).".format(xe=len(x_errors), xv=len(x_values)))
+        elif x_errors is not None and x_errors.isscalar and not x_values.isscalar:
+            raise ValueError("Pass either a non-scalar set of 'x_values' and 'x_errors', a scalar value for both, or a "
+                             "scalar value for 'x_values' and a two-entry value for 'x_errors' (for plus and minus).")
+
+        # We average the uncertainties if there are minus and plus values (bad I know)
+        if x_errors is not None and x_errors.ndim == 2:
+            x_errors = x_errors.mean(axis=1)
+        elif x_errors is not None and x_values.isscalar and not x_errors.isscalar and len(x_errors) == 2:
+            x_errors = x_errors.mean()
 
         # This is a check that all passed x values are within the validity limits of this relation (if the
         #  user passed those on init) - if they aren't a warning will be issued
@@ -797,14 +820,51 @@ class ScalingRelation:
 
         # Units that are convertible to the x-units of this relation are allowed, so we make sure we convert
         #  to the exact units the fit was done in. This includes dividing by the x_norm value
-        x_values = x_values.to(self.x_unit) / self.x_norm
+        x_values = x_values.to(self.x_unit)
         # Then we just pass the x_values into the model, along with fit parameters. Then multiply by
         #  the y normalisation
-        predicted_y = self._model_func(x_values.value, *self.pars[:, 0]) * self.y_norm
+        predicted_y = self._model_func((x_values / self.x_norm).value, *self.pars[:, 0]) * self.y_norm
 
         # If there was a power of E(z) applied to the data, we undo it for the prediction.
         if self._ez_power is not None:
-            predicted_y /= (cosmo.efunc(redshift)**self._ez_power)
+            # We store this so that error propogation can use it later
+            ez = (cosmo.efunc(redshift)**self._ez_power)
+            predicted_y /= ez
+        elif not x_values.isscalar:
+            # This means that error propagation doesn't need to keep checking whether there is an ez power stored
+            ez = np.ones(len(predicted_y))
+        elif x_values.isscalar:
+            # And handles the case where the input x_values are scalar, in which case the 'len' call above would
+            #  cause them to get stroppy and error
+            ez = 1.
+
+        # Now we propagate the uncertainties on the input parameters, if they have them (and if the model is a
+        #  power law) - would be nice to generalise this somehow
+        if x_errors is not None and self.model_func == power_law:
+            # This is just the error propagation for a powerlaw - the standard form of a scaling relation
+            term_one = ((self.y_norm.value * (1/ez) * (x_values.value/self.x_norm.value)**self.pars[0, 0]) *
+                        self.pars[1, 1])**2
+
+            term_two = (((self.y_norm.value * (1/ez) * self.pars[1, 0] * self.pars[0, 0] *
+                          ((1/self.x_norm.value)**self.pars[0, 0]) *
+                          x_values.value**(self.pars[0, 0] - 1)))*x_errors.value)**2
+
+            term_three = ((self.y_norm.value*(1/ez)*self.pars[1, 0] *
+                           ((x_values.value/self.x_norm.value)**self.pars[0, 0]) *
+                           np.log(x_values.value/self.x_norm.value))*self.pars[0, 1])**2
+
+            predicted_y_errs = Quantity(np.sqrt(term_one + term_two + term_three), self.y_unit)
+
+            # We use a slightly different method of combining the predicted value and uncertainty depending on whether
+            #  a single x-value was passed, or a set of them.
+            if x_values.isscalar:
+                predicted_y = Quantity([predicted_y, predicted_y_errs])
+            else:
+                predicted_y = np.vstack([predicted_y, predicted_y_errs]).T
+
+        elif x_errors is not None and self.model_func != power_law:
+            raise NotImplementedError("Error propagation for scaling relation models other than 'power_law' is not "
+                                      "implemented yet.")
 
         return predicted_y
 
@@ -814,7 +874,7 @@ class ScalingRelation:
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
              point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None):
+             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -861,8 +921,10 @@ class ScalingRelation:
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
-        :param Quantity y_lims: If not set, this method will define appropriate limits from the y-data and/or model
-            associated with this relation.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
         """
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
@@ -977,7 +1039,7 @@ class ScalingRelation:
                     #  to data coordinates.
                     inv_tran = ax.transData.inverted()
                     lab_data_coord = inv_tran.transform((cur_fig_coord[0]+(point_label_offset[0]*x_size),
-                                                         cur_fig_coord[1]+(point_label_offset[0]*y_size)))
+                                                         cur_fig_coord[1]+(point_label_offset[1]*y_size)))
                     plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
                              color=point_label_colour)
 
@@ -1062,6 +1124,13 @@ class ScalingRelation:
         x_axis_lims = ax.get_xlim()
         y_axis_lims = ax.get_ylim()
 
+        # The user can request a one-to-one line be overplotted on the view (obviously not relevant to general
+        #  scaling relations, but great for comparisons)
+        if one_to_one:
+            min_from = min(min(x_axis_lims), min(y_axis_lims))
+            max_to = max(max(x_axis_lims), max(y_axis_lims))
+            plt.plot([min_from, max_to], [min_from, max_to], color='red', linestyle='dashed', label='1:1')
+
         # This dynamically changes how tick labels are formatted depending on the values displayed
         if max(x_axis_lims) < 1000:
             ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
@@ -1078,14 +1147,14 @@ class ScalingRelation:
         elif grid_on:
             ax.grid(which='major', axis='x', linestyle='dotted', color='grey')
         else:
-            ax.grid(which='both', axis='both', b=False)
+            ax.grid(False, which='both', axis='both')
 
         if grid_on and (max(y_axis_lims) / min(y_axis_lims)) < 10:
             ax.grid(which='minor', axis='y', linestyle='dotted', color='grey')
         elif grid_on:
             ax.grid(which='major', axis='y', linestyle='dotted', color='grey')
         else:
-            ax.grid(which='both', axis='both', b=False)
+            ax.grid(False, which='both', axis='both')
 
         # I change the lengths of the tick lines, to make it look nicer (imo)
         ax.tick_params(length=7)
@@ -1107,7 +1176,7 @@ class ScalingRelation:
 
         # If we did colour the data by a third dimension then we should add a colour-bar to the relation
         if show_third_dim:
-            cbar = plt.colorbar(cmap_mapper)
+            cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
             if self.third_dimension_data.unit.is_equivalent(''):
                 cbar_lab = self.third_dimension_name
             else:
@@ -1229,7 +1298,7 @@ class AggregateScalingRelation:
 
     def view_corner(self, figsize: tuple = (10, 10), cust_par_names: List[str] = None,
                     contour_colours: List[str] = None, save_path: str = None):
-        """
+        r"""
         A corner plot viewing method that will combine chains from all the relations that make up this
         aggregate scaling relation and display them using getdist.
 
@@ -1317,7 +1386,7 @@ class AggregateScalingRelation:
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
              data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
-             y_lims: Quantity = None):
+             y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of the component scaling relations in this
         AggregateScalingRelation.
@@ -1352,8 +1421,10 @@ class AggregateScalingRelation:
             plot, including the unit string.
         :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
             plot, including the unit string.
-        :param Quantity y_lims: If not set, this method will define appropriate limits from the y-data and/or models
-            associated with this aggregate relation.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
         """
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up, so I think the duplication is justified.
@@ -1531,6 +1602,13 @@ class AggregateScalingRelation:
         x_axis_lims = ax.get_xlim()
         y_axis_lims = ax.get_ylim()
 
+        # The user can request a one-to-one line be overplotted on the view (obviously not relevant to general
+        #  scaling relations, but great for comparisons)
+        if one_to_one:
+            min_from = min(min(x_axis_lims), min(y_axis_lims))
+            max_to = max(max(x_axis_lims), max(y_axis_lims))
+            plt.plot([min_from, max_to], [min_from, max_to], color='red', linestyle='dashed', label='1:1')
+
         # This dynamically changes how tick labels are formatted depending on the values displayed
         if max(x_axis_lims) < 1000:
             ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
@@ -1547,14 +1625,14 @@ class AggregateScalingRelation:
         elif grid_on:
             ax.grid(which='major', axis='x', linestyle='dotted', color='grey')
         else:
-            ax.grid(which='both', axis='both', b=False)
+            ax.grid(False, which='both', axis='both')
 
         if grid_on and (max(y_axis_lims) / min(y_axis_lims)) < 10:
             ax.grid(which='minor', axis='y', linestyle='dotted', color='grey')
         elif grid_on:
             ax.grid(which='major', axis='y', linestyle='dotted', color='grey')
         else:
-            ax.grid(which='both', axis='both', b=False)
+            ax.grid(False, which='both', axis='both')
 
         # I change the lengths of the tick lines, to make it look nicer (imo)
         ax.tick_params(length=7)

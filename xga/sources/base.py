@@ -16,8 +16,8 @@ from astropy.cosmology.core import Cosmology
 from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
-from regions import SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion
-from regions import read_ds9, PixelRegion
+from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion, PixelRegion,
+                     Regions)
 
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, NoProductAvailableError, ModelNotAssociatedError, \
@@ -1187,7 +1187,7 @@ class BaseSource:
             then relevant information such as the set id and the annulus id is returned.
 
             :param pd.Series row: The inventory dataframe object:
-            :param bool combined_obs: 
+            :param bool combined_obs:
             """
             if combined_obs:
                 obs_id = 'combined'
@@ -1208,7 +1208,7 @@ class BaseSource:
 
             src_name = row['src_name']
 
-            # we will take the info key from the filename, instead of the actual info key in the 
+            # we will take the info key from the filename, instead of the actual info key in the
             # inventory. This is because annular spectrum need to be read in, and their info key
             # follows a different format to regular spectrum, so this is more general
             file_name = str(row['file_name'])
@@ -1254,15 +1254,15 @@ class BaseSource:
                 region = True
             else:
                 region = False
-            
-            # defining a standard product path that I can just suffixes to 
+
+            # defining a standard product path that I can just suffixes to
             if combined_obs:
                 indent_no = row['file_name'].split('_')[0]
-                # the info key actually needs to be used here
+                # The info key actually needs to be used here
                 prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(src_name) + '_' + info_key
             else:
                 prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
-            
+
             spec = prod_gen_path + '_spec.fits'
             arf = prod_gen_path + '.arf'
             back = prod_gen_path + '_backspec.fits'
@@ -1284,15 +1284,15 @@ class BaseSource:
             obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst,
                                 grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf,
                                 back_arf, telescope=tel)
-            
+
             if "ident" in info_key:
                 set_id = int(info_key.split('ident')[-1].split('_')[0])
                 ann_id = int(info_key.split('ident')[-1].split('_')[1])
-            
+
             else:
                 set_id = None
                 ann_id = None
-                
+
             return obj, set_id, ann_id
 
         # Just figure out where we are in the filesystem, we'll make sure to return to this location after all
@@ -1340,7 +1340,7 @@ class BaseSource:
                         self.update_products(parse_lightcurve(row, tel), update_inv=False)
 
                     if load_spectra:
-                        
+
                         spec_lines = inven[inven['type'] == 'spectrum']
                         for row_ind, row in spec_lines.iterrows():
                             obj, set_id, ann_id = parse_spectrum(row, False)
@@ -1358,7 +1358,6 @@ class BaseSource:
                                     self.update_products(obj, update_inv=False)
                                 except NotAssociatedError:
                                     pass
-                            
 
             os.chdir(og_dir)
 
@@ -1366,13 +1365,12 @@ class BaseSource:
             os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
             saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
             for pf in saved_profs:
-                # TODO CATCH THE ATTRIBUTE ERRORS WHICH COME FROM LOADING OLD STYLE PROFILES WITHOUT TELESCOPE INFO
                 try:
                     with open(pf, 'rb') as reado:
                         temp_prof = pickle.load(reado)
                         try:
                             self.update_products(temp_prof, update_inv=False)
-                        except NotAssociatedError:
+                        except (NotAssociatedError, AttributeError):
                             pass
                 except (EOFError, pickle.UnpicklingError, AttributeError):
                     warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
@@ -1409,7 +1407,7 @@ class BaseSource:
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
                                          update_inv=False)
-            
+
             # now assigning combined event lists
             rel_inven = inven[inven['type'] == 'events']
             for row_ind, row in rel_inven.iterrows():
@@ -1427,7 +1425,7 @@ class BaseSource:
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
                     self.update_products(evt_list, update_inv=False)
-            
+
             if load_spectra:
                 rel_inven = inven[inven['type'] == 'spectrum']
                 for row_ind, row in rel_inven.iterrows():
@@ -1483,12 +1481,9 @@ class BaseSource:
                                 self.update_products(obj, update_inv=False)
                             except NotAssociatedError:
                                 pass
-                    
+
                     else:
                         pass
-                         
-
-
 
             # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
             #  those objects and add them to the storage structure
@@ -1546,7 +1541,7 @@ class BaseSource:
                     try:
                         inst_lums = {}
                         obs_order = []
-                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):                            
+                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                             # We need to check if this spectrum is a combined_spectrum or not
                             # this can be done by seeing which directory it is stored in
                             directory = line["SPEC_PATH"].strip(" ").split("/")[-2]
@@ -1554,7 +1549,7 @@ class BaseSource:
                                 comb_spec = True
                             else:
                                 comb_spec = False
-                            
+
                             sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                             # Want to derive the spectra storage key from the file name, this strips off some
                             #  unnecessary info
@@ -1742,7 +1737,8 @@ class BaseSource:
                 # Read in the custom region file associated with this source - they are currently on a telescope
                 #  level due to the different observational characteristics that might be present for different
                 #  telescopes (e.g. different angular resolutions)
-                custom_regs = read_ds9(OUTPUT + "{t}/regions/{n}/{n}_custom.reg".format(t=tel, n=self.name))
+                custom_regs = Regions.read(OUTPUT + "{t}/regions/{n}/{n}_custom.reg".format(t=tel, n=self.name),
+                                           format='ds9').regions
 
                 if not all([isinstance(reg, SkyRegion) for reg in custom_regs]):
                     # What the error says really - we only want custom sources defined in ra-dec coords, not telescope
@@ -1750,7 +1746,15 @@ class BaseSource:
                     raise TypeError("Custom sources can only be defined in RA-Dec coordinates.")
 
                 if reg_file is not None:
-                    ds9_regs = read_ds9(reg_file)
+                    # With the newer versions of regions we're now using, there is an explicit check for width and
+                    #  height of regions being positive (definitely a good idea) - finding such a region in a file
+                    #  will trigger a ValueError, and I'd like to catch it and add more context
+                    try:
+                        ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
+                    except ValueError as err:
+                        err.args = (err.args[0] + "- {o} is the associated ObsID.".format(o=obs_id), )
+                        raise err
+
                     # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
                     #  where they were generated with different resolutions).
                     #  TODO see issue #908, figure out how to support different resolutions of image
@@ -1837,7 +1841,8 @@ class BaseSource:
                         # Give small angle (though won't make a difference as circular) to avoid problems with angle=0
                         #  that I've noticed previously
                         new_reg = EllipseSkyRegion(reg.center, reg.radius*2, reg.radius*2, Quantity(3, 'deg'))
-                        new_reg.visual['color'] = reg.visual['color']
+                        new_reg.visual['edgecolor'] = reg.visual['edgecolor']
+                        new_reg.visual['facecolor'] = reg.visual['facecolor']
                         reg_dict[tel][obs_id][reg_ind] = new_reg
 
                 # Hopefully this bodge doesn't have any unforeseen consequences
@@ -1907,6 +1912,7 @@ class BaseSource:
         # Goes through all the telescopes and ObsIDs associated with this source, and checks if they have regions
         #  If not then Nones are added to the various dictionaries, otherwise you end up with a list of regions
         #  with missing ObsIDs
+
         for tel in self.telescopes:
             for obs in self.obs_ids[tel]:
                 if obs in self._initial_regions[tel]:
@@ -1931,7 +1937,7 @@ class BaseSource:
                         #  is extended, red is point etc. - not ideal but I'll just explain in the documentation
                         # for entry in self._initial_regions[obs][self._initial_region_matches[obs]]:
                         for entry in init_region_matches:
-                            if entry.visual["color"] in allowed_colours:
+                            if entry.visual["edgecolor"] in allowed_colours:
                                 interim_reg.append(entry)
 
                         # Different matching possibilities
@@ -2074,17 +2080,17 @@ class BaseSource:
         conv_cen = im.coord_conv(cen, output_unit)
         # Have to divide the width by two, I need to know the half-width for SAS regions, then convert
         #  from degrees to XMM sky coordinates using the factor we calculated in the main function
-        w = reg.width.to('deg').value / 2 / sky_to_deg
+        w = (reg.width.to('deg').value / 2 / sky_to_deg).round(4)
         # We do the same for the height
-        h = reg.height.to('deg').value / 2 / sky_to_deg
+        h = (reg.height.to('deg').value / 2 / sky_to_deg).round(4)
         if w == h:
             shape_str = "(({t}) IN circle({cx},{cy},{r}))"
-            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].value, cy=conv_cen[1].value, r=h)
+            shape_str = shape_str.format(t=c_str, cx=conv_cen[0].round(4).value, cy=conv_cen[1].round(4).value, r=h)
         else:
             # The rotation angle from the region object is in degrees already
-            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].value,
-                                                                             cy=conv_cen[1].value, w=w, h=h,
-                                                                             rot=reg.angle.value)
+            shape_str = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))".format(t=c_str, cx=conv_cen[0].round(4).value,
+                                                                             cy=conv_cen[1].round(4).value, w=w, h=h,
+                                                                             rot=reg.angle.round(4).value)
         return shape_str
 
     def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
@@ -2534,7 +2540,7 @@ class BaseSource:
                     extra_key = po.model + "_" + str(po.num_bins)
                 else:
                     extra_key = None
-                
+
                 # All information about where to place it in our storage hierarchy can be pulled from the product
                 # object itself
                 obs_id = po.obs_id
@@ -2560,11 +2566,11 @@ class BaseSource:
                 for allowed_inst in ALLOWED_INST[tel]:
                     if allowed_inst not in self._products[tel]["combined"]:
                         self._products[tel]["combined"][allowed_inst] = {}
-                
+
                 # This is for combined obs and combined instrument
                 if "combined" not in self._products[tel]["combined"]:
                     self._products[tel]["combined"]["combined"] = {}
-                                
+
                 # TODO set up combined and all instrument names - needs to be generalised remember!
 
                 # The product gets the name of this source object added to it
@@ -2644,7 +2650,7 @@ class BaseSource:
                             new_rt = RateMap(im[-1], po)
                             new_rt.src_name = self.name
                             self._products[tel][obs_id][inst][im[-2]]["combined_ratemap"] = new_rt
-                
+
 
                 if isinstance(po, BaseProfile1D) and not os.path.exists(po.save_path):
                     po.save()
@@ -2681,7 +2687,7 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     # Saves the updated inventory file
                     inven.to_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=obs_id), index=False)
-                
+
                 elif isinstance(po, (BaseProduct)) and obs_id == 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
 
@@ -2719,14 +2725,14 @@ class BaseSource:
                     inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), index=False)
-                
+
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
                 elif isinstance(po, (AnnularSpectra)) and update_inv:                         # Don't want to store a None value as a string for the info_key
                     if extra_key is None:
                         info_key = ''
                     else:
-                        info_key = extra_key                    
+                        info_key = extra_key
                     # Adding each component product to the inventory
                     for comp_po in po.all_spectra:
                         if comp_po.obs_id == "combined":
@@ -2789,7 +2795,7 @@ class BaseSource:
                             inven.drop_duplicates(subset=None, keep='first', inplace=True)
                             # Saves the updated inventory file
                             inven.to_csv(OUTPUT + "{t}/{o}/inventory.csv".format(t=tel, o=comp_po.obs_id), index=False)
-                    
+
 
                 elif isinstance(po, BaseProfile1D) and obs_id != 'combined' and update_inv:
                     inven = pd.read_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(n=self.name, t=tel),
@@ -3154,9 +3160,9 @@ class BaseSource:
         return matched_prods
 
     def _get_spec_prod(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                       min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                       telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
         """
         A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
         Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
@@ -3176,7 +3182,7 @@ class BaseSource:
         :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
             the minimum number of counts?
         :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
-            the minimum signal to noise.
+            the minimum signal-to-noise.
         :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
             over sampling used?
         :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
@@ -3243,7 +3249,7 @@ class BaseSource:
         elif len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
-        return matched_prods   
+        return matched_prods
 
 
     def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
@@ -3278,7 +3284,7 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[Spectrum, List[Spectrum]]
         """
-        
+
         matched_prods = self._get_spec_prod(outer_radius, obs_id, inst, inner_radius, group_spec,
                                                min_counts, min_sn, over_sample, telescope)
 
@@ -3319,7 +3325,7 @@ class BaseSource:
 
         if telescope == 'xmm':
             raise NotImplementedError("Combined spectra are not implemented for XMM observations.")
-        
+
         matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
                                                min_counts, min_sn, over_sample, telescope)
 
@@ -4322,30 +4328,32 @@ class BaseSource:
         if inner_radius.isscalar and inner_radius.value != 0:
             # And we need to define a SAS string for the actual region of interest
             sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value, ri=inner_radius.value/sky_to_deg,
-                                                     ro=outer_radius.value/sky_to_deg)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     ri=(inner_radius.value/sky_to_deg).round(4),
+                                                     ro=(outer_radius.value/sky_to_deg).round(4))
         # If the inner radius is zero then we write a circle region, because it seems that's a LOT faster in SAS
         elif inner_radius.isscalar and inner_radius.value == 0:
             sas_source_area = "(({t}) IN circle({cx},{cy},{r}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value,
-                                                     r=outer_radius.value/sky_to_deg)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     r=(outer_radius.value/sky_to_deg).round(4))
         elif not inner_radius.isscalar and inner_radius[0].value != 0:
             sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value,
-                                                     wi=inner_radius[0].value/sky_to_deg,
-                                                     hi=inner_radius[1].value/sky_to_deg,
-                                                     wo=outer_radius[0].value/sky_to_deg,
-                                                     ho=outer_radius[1].value/sky_to_deg, rot=rot_angle.to('deg').value)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     wi=(inner_radius[0].value/sky_to_deg).round(4),
+                                                     hi=(inner_radius[1].value/sky_to_deg).round(4),
+                                                     wo=(outer_radius[0].value/sky_to_deg).round(4),
+                                                     ho=(outer_radius[1].value/sky_to_deg).round(4),
+                                                     rot=rot_angle.to('deg').round(4).value)
         elif not inner_radius.isscalar and inner_radius[0].value == 0:
             sas_source_area = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))"
-            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].value,
-                                                     cy=xmm_central_coord[1].value,
-                                                     w=outer_radius[0].value / sky_to_deg,
-                                                     h=outer_radius[1].value / sky_to_deg,
-                                                     rot=rot_angle.to('deg').value)
+            sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
+                                                     cy=xmm_central_coord[1].round(4).value,
+                                                     w=(outer_radius[0].value / sky_to_deg).round(4),
+                                                     h=(outer_radius[1].value / sky_to_deg).round(4),
+                                                     rot=rot_angle.to('deg').round(4).value)
 
         # Combining the source region with the regions we need to cut out
         if len(sas_interloper) == 0:
@@ -4467,19 +4475,11 @@ class BaseSource:
         if not stacked_spectra:
             # If the user doesn't want the stacked spectra result, then we retrieve the spec objects
             # from the get_spectra method
-            specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, 
+            specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
                                      min_sn, over_sample, telescope=telescope)
         else:
-            print(self.name)
-            print(outer_radius)
-            print(inner_radius)
-            print(group_spec)
-            print(min_counts)
-            print(min_sn)
-            print(over_sample)
-            print(telescope)
             # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
-            specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec, 
+            specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec,
                                               min_counts, min_sn, over_sample, telescope=telescope)
 
         # I just take the first spectrum in the list because the storage key will be the same for all of them
@@ -5044,7 +5044,7 @@ class BaseSource:
         """
         if telescope is None:
             telescope = self.telescopes
-        
+
         obs_inst_dict = {}
         snrs_dict = {}
 
@@ -5119,7 +5119,7 @@ class BaseSource:
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
-        This method calculates the separation between the user supplied ra_dec coordinates, and the peak
+        This method calculates the Haversine separation between the user supplied ra_dec coordinates, and the peak
         coordinates in the requested off_unit. If there is no peak attribute and error will be thrown, and if no
         peak has been calculated then the result will be 0.
 
@@ -5131,10 +5131,13 @@ class BaseSource:
         if not hasattr(self, 'peak'):
             raise AttributeError("This source does not have a peak attribute, and so an offset cannot be calculated.")
 
-        # Calculate the euclidean distance between ra_dec and peak
-        sep = np.sqrt(abs(self.ra_dec[0] - self.peak[0]) ** 2 + abs(self.ra_dec[1] - self.peak[1]) ** 2)
+        # Calculate the Haversine distance between ra_dec and peak
+        hav_sep = 2 * np.arcsin(np.sqrt((np.sin((self.peak[1] - self.ra_dec[1]) / 2) ** 2) +
+                                        np.cos(self.ra_dec[1]) * np.cos(self.peak[1]) *
+                                        np.sin((self.peak[0] - self.ra_dec[0]) / 2) ** 2))
+
         # Convert the separation to the requested unit - this will throw an error if the unit is stupid
-        conv_sep = self.convert_radius(sep, off_unit)
+        conv_sep = self.convert_radius(hav_sep, off_unit)
 
         # Return the converted separation
         return conv_sep

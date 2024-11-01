@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 16:54. Copyright (c) The Contributors
 
 from os import path
 
@@ -17,16 +17,19 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 setup(name='xga',
       packages=find_packages(),
       version=versioneer.get_version(),
-      description='Python package to easily generate and analyse XMM data products',
+      cmdclass=versioneer.get_cmdclass(),
+      description='Python package to easily generate and analyse X-ray astronomy data products, ideal for '
+                  'investigating large samples.',
       long_description=long_description,
       long_description_content_type='text/markdown',
-      author='David Turner',
-      author_email='david.turner@sussex.ac.uk',
+      author='David J Turner',
+      author_email='turne540@msu.edu',
       url='http://github.com/DavidT3/XGA',
       setup_requires=[],
-      install_requires=["astropy>=4.0", "numpy<=1.23.4", "tqdm>=4.45", "regions==0.4", "pandas>=1.0.3",
-                        "fitsio>=1.1.2", "matplotlib>=3.4.3", "scipy>=1.4.1", "pyabel>=0.8.3", "corner>=2.1.0",
-                        "emcee>=3.0.2", "tabulate>=0.8.9", "getdist>=1.1.3", "docutils==0.17", "exceptiongroup>=1.1.0"],
+      install_requires=["astropy>=6.1.2", "numpy>=1.26.4", "tqdm>=4.66.4", "regions>=0.9", "pandas>=2.2.2",
+                        "fitsio>=1.2.1", "matplotlib>=3.9.0", "scipy>=1.14.0", "pyabel>=0.9", "corner>=2.2.2",
+                        "emcee>=3.1.6", "tabulate>=0.9.0", "getdist>=1.4.7", "exceptiongroup>=1.0.4"],
       include_package_data=True,
-      python_requires='>=3')
+      python_requires='>=3.10')
+
 

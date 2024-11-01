@@ -1,6 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 12:45. Copyright (c) The Contributors
-
+#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:56. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -13,7 +12,7 @@ from astropy.coordinates import SkyCoord
 from astropy.units.quantity import Quantity
 from exceptiongroup import ExceptionGroup
 from pandas import DataFrame
-from regions import read_ds9, PixelRegion, SkyRegion
+from regions import PixelRegion, Regions, SkyRegion
 from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST
@@ -191,7 +190,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
         #               "search.".format(obs_id))
 
         # Reading in the region file using the Regions module
-        og_ds9_regs = read_ds9(reg_path)
+        og_ds9_regs = Regions.read(reg_path, format='ds9').regions
 
         # There's nothing for us to do if there are no regions in the region file, so we continue onto the next
         #  possible ObsID match (if there is one) - same deal if there is no WCS information in the image
@@ -233,7 +232,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
                 else:
                     match_within = np.array([])
 
-                match_within = [r for r in match_within if r.visual['color'] in allowed_colours]
+                match_within = [r for r in match_within if r.visual['edgecolor'] in allowed_colours]
                 if len(match_within) != 0:
                     matched[cur_repr] = match_within
 

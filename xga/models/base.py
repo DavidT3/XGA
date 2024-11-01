@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 10:14. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -323,9 +323,9 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Sets up the resolution of the radial spatial sampling
         force_change = False
-        if len(set(np.diff(x))) != 1:
+        if len(set(np.diff(x.value).round(5))) != 1:
             warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                 "the method to 'direct'")
+                 "the method to 'direct'", stacklevel=2)
             method = 'direct'
             force_change = True
         else:
@@ -334,21 +334,25 @@ class BaseModel1D(metaclass=ABCMeta):
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
             if method == 'direct' and force_change:
-                transform_res = direct_transform(self(x).value, r=x.value, backend='python')
+                to_trans = np.concatenate([self(x).value, np.array([0.0])])
+                temp_dr = (x[-1] - x[-2]).value
+                mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
+                transform_res = direct_transform(to_trans, r=mod_rad, backend='python', verbose=False)[:-1]
             elif method == 'direct' and not force_change:
-                transform_res = direct_transform(self(x).value, dr=dr)
+                to_trans = np.concatenate([self(x).value, np.array([0.0])])
+                transform_res = direct_transform(to_trans, dr=dr, backend='python', verbose=False)
             elif method == 'basex':
-                transform_res = basex_transform(self(x).value, dr=dr)
+                transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'hansenlaw':
-                transform_res = hansenlaw_transform(self(x).value, dr=dr)
+                transform_res = hansenlaw_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'onion_bordas':
-                transform_res = onion_bordas_transform(self(x).value, dr=dr)
+                transform_res = onion_bordas_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'onion_peeling':
-                transform_res = onion_peeling_transform(self(x).value, dr=dr)
+                transform_res = onion_peeling_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'two_point':
-                transform_res = two_point_transform(self(x).value, dr=dr)
+                transform_res = two_point_transform(self(x).value, dr=dr, verbose=False)
             elif method == 'three_point':
-                transform_res = three_point_transform(self(x).value, dr=dr)
+                transform_res = three_point_transform(self(x).value, dr=dr, verbose=False)
             else:
                 raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 
@@ -358,21 +362,28 @@ class BaseModel1D(metaclass=ABCMeta):
             transform_res = np.zeros(realisations.shape)
             for t_ind in range(0, realisations.shape[1]):
                 if method == 'direct' and force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], r=x.value, backend='python')
+                    to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
+                    temp_dr = (x[-1] - x[-2]).value
+                    mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
+                    transform_res[:, t_ind] = direct_transform(to_trans, r=mod_rad, backend='python',
+                                                               verbose=False)[:-1]
                 elif method == 'direct' and not force_change:
-                    transform_res[:, t_ind] = direct_transform(realisations[:, t_ind], dr=dr)
+                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
+                    #  zero - one of the PyAbel authors suggested padding out the data.
+                    to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
+                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, backend='python', verbose=False)[:-1]
                 elif method == 'basex':
-                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'hansenlaw':
-                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'onion_bordas':
-                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'onion_peeling':
-                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'two_point':
-                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 elif method == 'three_point':
-                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr)
+                    transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 else:
                     raise ValueError("{} is not a recognised inverse abel transform type".format(method))
 

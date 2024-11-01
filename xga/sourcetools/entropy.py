@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/06/2023, 23:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:14. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -32,8 +32,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                      temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                                      group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                                      over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                                     show_warn: bool = True,
-                                     psf_bins: int = 4,
+                                     show_warn: bool = True, psf_bins: int = 4,
                                      stacked_spectra: bool = False) -> Union[List[SpecificEntropy], SpecificEntropy]:
     """
     A convenience function that should allow the user to easily measure specific entropy profiles for a sample of
@@ -116,7 +115,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
     :param int psf_bins: The number of bins per side when generating a grid of PSFs for image correction prior
         to surface brightness profile (and thus density) measurements.
-    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be 
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
         used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
         supported, this function will instead use individual spectra for an ObsID. The default is
         False.
@@ -134,9 +133,9 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                                           temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
                                                           temp_use_worst, freeze_met, abund_table, temp_lo_en,
                                                           temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
-                                                          over_sample, one_rmf, num_cores, show_warn, psf_bins, 
+                                                          over_sample, one_rmf, num_cores, show_warn, psf_bins,
                                                           stacked_spectra)
-    # need to import here to avoid circular import errors
+    # Need to import here to avoid circular import errors
     from ..sourcetools._common import _get_all_telescopes
     # collecting all the associated telescopes to loop over later
     all_tels = _get_all_telescopes(sources)
@@ -151,7 +150,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                 if tel not in src.telescopes:
                     final_entropy_profs[tel].append(None)
                     continue
-                
+
                 # If every stage of this analysis has worked then we setup the entropy profile
                 if str(src) in dens_prof_dict and dens_prof_dict[str(src)][tel] is not None:
                     # This fetches out the correct density and temperature profiles
@@ -169,7 +168,8 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                         rad_errs = t_prof.radii_err.copy()[1:]
                         deg_rads = src.convert_radius(rads, 'deg')
                         entropy = SpecificEntropy(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
-                                                num_walkers, num_steps, show_warn=show_warn, progress=False, telescope=tel)
+                                                num_walkers, num_steps, show_warn=show_warn, progress=False,
+                                                  auto_save=True, telescope=tel)
                         # Add the profile to the source storage structure
                         src.update_products(entropy)
                         # Also put it into a list for returning
@@ -194,5 +194,5 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     if len(final_entropy_profs) == 1:
         # this will select the inner nested dictionary
         final_entropy_profs = next(iter(final_entropy_profs.values()))
-    
+
     return final_entropy_profs

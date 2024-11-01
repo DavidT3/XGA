@@ -1,11 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 14:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 23:28. Copyright (c) The Contributors
 
 import os
 import warnings
 from functools import wraps
 # from multiprocessing.dummy import Pool
 from multiprocessing import Pool
+from random import randint
+from shutil import rmtree
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
 
@@ -43,11 +45,21 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # We assume the output will be usable to start with
     usable = True
 
-    cmd = "xspec - {}".format(x_script)
+    # We're going to make a temporary pfiles directory which is a) local to the XGA directory, and thus sure to
+    #  be on the same filesystem (can be a performance issue for HPCs I think), and b) is unique to a particular
+    #  fit process, so there shouldn't be any clashes. The temporary file name is randomly generated
+    tmp_ident = str(randint(0, int(1e+8)))
+    tmp_hea_dir = os.path.join(os.path.dirname(out_file), tmp_ident, 'pfiles/')
+    os.makedirs(tmp_hea_dir)
+
     # I add exec to the beginning to make sure that the command inherits the same process ID as the shell, which
     #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
     #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
-    xspec_proc = Popen("exec " + cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    cmd = 'export PFILES="{};$HEADAS/syspfiles";'.format(tmp_hea_dir) + "exec xspec - {}".format(x_script)
+    xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+
+    # Remove the temporary directory
+    rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
 
     # This makes sure the process is killed if it does timeout
     try:
@@ -63,7 +75,11 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
-    err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line]
+    # We ignore that particular string in the errors identified from stdout because if we don't just it being
+    #  present in the if statement in the executed script is enough to make XGA think that the fit failed, even if
+    #  that error message was never printed at all
+    err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line
+                     if "No acceptable spectra are left after the cleaning step" not in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
     warn_err_lines = [line.split("***Warning: ")[-1] for line in err if "***Warning" in line]
@@ -75,7 +91,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
 
     error = err_out_lines + err_err_lines
     warn = warn_out_lines + warn_err_lines
-    if os.path.exists(out_file + "_info.csv") and run_type == "fit":
+    if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
         #  a Jupyter Notebook. So now I'm going to smoosh all the csv outputs into one fits.
@@ -109,7 +125,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
                 usable = False
         # I'm going to try returning the file path as that should be pickleable
         res_tables = out_file + ".fits"
-    elif os.path.exists(out_file) and run_type == "conv_factors":
+    elif os.path.exists(out_file) and run_type == "conv_factors" and usable:
         res_tables = out_file
         usable = True
     else:
@@ -233,7 +249,7 @@ def xspec_call(xspec_func):
                                 comb_spec = True
                             else:
                                 comb_spec = False
-                            
+
                             sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
 
                             # Want to derive the spectra storage key from the file name, this strips off some
@@ -271,7 +287,7 @@ def xspec_call(xspec_func):
                                     # comb_spec here refers to whether the obs_id is combined
                                     if not comb_spec:
                                         spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
-                                    
+
                                     else:
                                         spec = ann_spec.get_spectra(ann_id, inst=sp_info[1])
 
@@ -349,14 +365,13 @@ def xspec_call(xspec_func):
                     #  the last spectra that was opened in the loop
                     ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
                     try:
-                        ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel], 
+                        ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                 ann_obs_order[tel])
 
                         # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                         #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
                         #  generate a Tx profile automatically
                         if model == "constant*tbabs*apec":
-                            print(f'here for {tel}')
                             temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
                             s.update_products(temp_prof)
 
@@ -369,10 +384,11 @@ def xspec_call(xspec_func):
                                 s.update_products(met_prof)
 
                         else:
-                            raise NotImplementedError("How have you even managed to fit this model to a profile?! Its not"
-                                                    " supported yet.")
+                            raise NotImplementedError("How have you even managed to fit this model to a "
+                                                      "profile?! It's not supported yet.")
                     except ValueError:
-                        warnings.warn("{src} annular spectra profile fit was not successful for the {t} telescope.".format(src=ann_spec.src_name, t=tel),
+                        warnings.warn("{src} annular spectra profile fit was not successful for the {t} "
+                                      "telescope.".format(src=ann_spec.src_name, t=tel),
                                     stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/10/2024, 19:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -29,7 +29,8 @@ class GalaxyCluster(ExtendedSource):
     This class is for the declaration and analysis of GalaxyCluster sources, and is a subclass of ExtendedSource.
     Using this source for cluster analysis gives you access to many more analyses than an ExtendedSource, and due
     to the passing of overdensity radii it has a more physically based idea of the size of the object. There are
-    also extra source matching steps to deal with the possible detection of cool cores as point sources.
+    also extra source matching steps to deal with the possible detection of cool cores as point sources, which can
+    be turned on and off.
 
     :param float ra: The right-ascension of the cluster, in degrees.
     :param float dec: The declination of the cluster, in degrees.
@@ -77,6 +78,9 @@ class GalaxyCluster(ExtendedSource):
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
+    :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
+        (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
+        sources will NOT be included in masks, in case they are a bright cool core.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -85,7 +89,8 @@ class GalaxyCluster(ExtendedSource):
                  back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
-                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
+                 include_core_pnt_srcs: bool = True):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
 
@@ -131,11 +136,20 @@ class GalaxyCluster(ExtendedSource):
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
         :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
-            is None in which case standard search distances for different telescopes are used. The user may pass a
-            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
-            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
-            specified in a distance dictionary, the default XGA values will be used for any that are missing.
+                is None in which case standard search distances for different telescopes are used. The user may pass a
+                single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+                telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+                specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
+            (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
+            sources will NOT be included in masks, in case they are a bright cool core.
         """
+        # Store the passed value of 'include_core_pnt_srcs' in an attribute now, before we run the super-class init,
+        #  as we want the GalaxyCluster _source_type_match method to be able to use it to determine if point
+        #  sources that might be a bright cool-core are included or not
+        self._include_core_pnt = include_core_pnt_srcs
+
+        # Set up the radii dictionary, also before the superclass init call.
         self._radii = {}
         if r200 is None and r500 is None and r2500 is None:
             raise ValueError("You must set at least one overdensity radius")
@@ -231,7 +245,10 @@ class GalaxyCluster(ExtendedSource):
             check_rad = self.convert_radius(self._radii['r2500'] * 2.25 * 0.15, 'deg')
 
         # Here we scrub the anti-results dictionary (I don't know why I called it that...) to make sure cool cores
-        #  aren't accidentally removed, and that chunks of cluster emission aren't removed
+        #  aren't accidentally removed, and that chunks of cluster emission aren't removed.
+        # However, the initialization of a GalaxyCluster lets the user control whether point sources near the core
+        #  should be left in (the default behaviour) or still removed. This is a tiny little refinement I've been
+        #  meaning to add for literally years...
         new_anti_results = {}
         for tel in self.telescopes:
             new_anti_results[tel] = {}
@@ -246,9 +263,10 @@ class GalaxyCluster(ExtendedSource):
 
                     # If the current interloper source is a point source/a PSF sized extended source and is within the
                     #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
-                    #  cool core and allow it to stay in the analysis
+                    #  cool core and allow it to stay in the analysis - OR THE USER CAN JUST HAVE TURNED THIS BEHAVIOUR
+                    #  OFF WITH include_core_pnt
                     # TODO this will need to be change when I allow for user-defined region colour meanings
-                    if reg_obj.visual["color"] == 'red' and dist < check_rad:
+                    if self._include_core_pnt and reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
                         warn_text = "A point source has been detected in {o} and is very close to the user " \
                                     "supplied coordinates of {s}. It will not be excluded from analysis due to the " \
                                     "possibility of a mis-identified cool core".format(s=self.name, o=obs)
@@ -258,7 +276,7 @@ class GalaxyCluster(ExtendedSource):
                         else:
                             self._supp_warn.append(warn_text)
 
-                    elif reg_obj.visual["color"] == "magenta" and dist < check_rad:
+                    elif self._include_core_pnt and reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
                         warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
                                     "user supplied coordinates of {s}. It will not be excluded from analysis due " \
                                     "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
@@ -287,18 +305,22 @@ class GalaxyCluster(ExtendedSource):
                         within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, tel, centre,
                                                                  new_anti_results[tel][obs])
                         # Make sure to only select extended (green) sources
-                        within_width = [reg for reg in within_width if reg.visual['color'] == 'green']
+                        within_width = [reg for reg in within_width if reg.visual['edgecolor'] == 'green']
 
                         # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
                         #  then it would intersect with the ellipse of the current chosen region.
                         rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
                         within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, tel, centre,
                                                                   new_anti_results[tel][obs])
-                        within_height = [reg for reg in within_height if reg.visual['color'] == 'green']
+                        within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
 
                         # This finds which regions are present in both lists and makes sure if they are in both
-                        #  then they are NOT removed from the analysis
-                        intersect_regions = list(set(within_width) & set(within_height))
+                        #  then they are NOT removed from the analysis- AS OF regions v0.9 THIS NO LONGER WORKS AS
+                        #  REGIONS ARE NOT HASHABLE - THE LIST COMPREHENSION BELOW IS A QUICK FIX BUT LESS EFFICIENT
+                        # intersect_regions = list(set(within_width) & set(within_height))
+
+                        # This should do what the above set intersection did, but slower
+                        intersect_regions = [r for r in within_height if r in within_width]
                         for inter_reg in intersect_regions:
                             inter_reg_ind = new_anti_results[tel][obs].index(inter_reg)
                             new_anti_results[tel][obs].pop(inter_reg_ind)
@@ -843,7 +865,7 @@ class GalaxyCluster(ExtendedSource):
         return matched_prods
 
     def get_entropy_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
-                             dens_prof: GasDensity3D = None, dens_model_name: str = None, 
+                             dens_prof: GasDensity3D = None, dens_model_name: str = None,
                              radii: Quantity = None,
                              telescope: str = None) -> Union[SpecificEntropy, List[SpecificEntropy]]:
         """
