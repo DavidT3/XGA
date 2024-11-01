@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 31/10/2024, 12:37. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -241,10 +241,10 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         # And the uncertainties on the profiles. Adding pixels in quadrature
         bright_profile_errors = np.sqrt(np.sum(masked_countrate_error_data**2, axis=(0, 1))) / ann_areas
 
-        # We want to check if all parts of the profile are above the defined minimum signal to noise
+        # We want to check if all parts of the profile are above the defined minimum signal-to-noise
         snr_prof = bright_profile / countrate_bg_per_area
 
-        # Checking if we are below the minimum signal to noise anywhere
+        # Checking if we are below the minimum signal-to-noise anywhere
         below = np.argwhere(snr_prof < min_snr).flatten()
         if below.shape != (0,) and below[0] != (bright_profile.shape[0] - 1):
             annulus_masks[:, :, below[0]] = annulus_masks[:, :, below[0]] + annulus_masks[:, :, below[0] + 1]
@@ -342,7 +342,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         inn_rads = init_inn
         out_rads = init_out
         ann_masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape)
-        # Set the min_snr to 0 to get an non-rebinned profile
+        # Set the min_snr to 0 to get a non-rebinned profile
         min_snr = 0
         prof_results = _iterative_profile(ann_masks, inn_rads, out_rads)
         br_prof, br_errs = prof_results[1:3]
@@ -373,7 +373,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
                                   deg_outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
                                   Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
-                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, True)
+                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, True, rt.telescope)
 
     return br_prof, succeeded
 

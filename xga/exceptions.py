@@ -1,5 +1,46 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
+
+
+class eROSITAImplentationError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised for when the user tries to use XGA for functions that have not been
+        fully implemented for eROSITA yet.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eROSITAImplementationError has been raised'
+
+
+class eSASSInputInvalid(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when a user provides an invalid input to an eSASS function.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSInputInvalid has been raised'
 
 
 class HeasoftError(Exception):
@@ -42,6 +83,27 @@ class SASNotFoundError(Exception):
             return 'SASNotFoundError has been raised'
 
 
+class eSASSNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the eROSITA Science Analysis Software
+        System can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSNotFoundError has been raised'
+
+
 class XSPECNotFoundError(Exception):
     def __init__(self, *args):
         """
@@ -62,13 +124,11 @@ class XSPECNotFoundError(Exception):
             return 'XSPECNotFoundError has been raised'
 
 
-# I do not know if I will keep this as is or expand out into different errors
-# The trouble is there are many hundreds of possible SAS errors, and I don't know if I
-# want a class for all of them
-class SASGenerationError(Exception):
+class ProductGenerationError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if an error is found to have occured during a run of a part of the SAS software.
+        Exception raised if an error is found to have occurred during a run of backend software that generates
+        products for a telescope supported by XGA - equivalent to the now-removed SASGenerationError, but more general.
 
         :param expression:
         :param message:
@@ -104,6 +164,27 @@ class UnknownCommandlineError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'A generic UnknownCommandlineError has been raised'
+
+
+class TelescopeNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the user tries to run a telescope specific function (e.g. a SAS function for XMM, or an
+        eSASS function for eROSITA) and the source or sample has no data for that telescope associated with it.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'SourceNotFoundError has been raised'
 
 
 class FailedProductError(Exception):
@@ -170,7 +251,7 @@ class NoMatchFoundError(Exception):
 class NotAssociatedError(Exception):
     def __init__(self, *args):
         """
-        Error raised when a given ObsID is not associated with a source object.
+        Error raised when a given telescope or ObsID is not associated with a source object.
 
         :param expression:
         :param message:
@@ -613,3 +694,41 @@ class NotSampleMemberError(Exception):
         else:
             return 'NotSampleMemberError has been raised'
 
+
+class NoTelescopeDataError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a part of XGA that directly accesses telescope data is used, but there are no relevant
+        telescopes setup in the configuration file.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'NoTelescopeDataError has been raised'
+
+
+class InvalidTelescopeError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when the name of a telescope has been passed to a function, but it is not recognised or supported.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'InvalidTelescopeError has been raised'

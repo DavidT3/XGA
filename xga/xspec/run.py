@@ -23,7 +23,7 @@ from ..sources import BaseSource
 
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
-        -> Tuple[Union[FITS, str], str, bool, list, list]:
+        -> Tuple[Union[FITS, str], str, bool, list, list, str]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then check
     parse the output for errors and check that the expected output file has been created.
@@ -35,8 +35,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     :param float timeout: The length of time (in seconds) which the XSPEC script is allowed to run for before being
         killed.
     :return: FITS object of the results, string repr of the source associated with this fit, boolean variable
-        describing if this fit can be used, list of any errors found, list of any warnings found.
-    :rtype: Tuple[Union[FITS, str], str, bool, list, list]
+        describing if this fit can be used, list of any errors found, list of any warnings found, and the telescope
+        that this script is related to.
+    :rtype: Tuple[Union[FITS, str], str, bool, list, list, str]
     """
     if XSPEC_VERSION is None:
         raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
@@ -105,7 +106,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         fitsio.write(out_file + ".fits", spec_info.to_records(index=False), extname="spec_info")
         del spec_info
 
-        # This finds all of the matching spectrum plot csvs were generated
+        # This finds all the matching spectrum plot csvs were generated
         rel_path = "/".join(out_file.split('/')[0:-1])
         # This is mostly just used to find how many files there are
         spec_tabs = [rel_path + "/" + sp for sp in os.listdir(rel_path)
@@ -131,7 +132,15 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         res_tables = None
         usable = False
 
-    return res_tables, src, usable, error, warn
+    # This uses outfile name (which has a structure set by XGA, so this is reliable) to figure out which telescope
+    #  this script was run for - this isn't necessarily how I would have designed it from the beginning, but is a
+    #  good solution to get the telescope which doesn't require adding stuff to all the user-facing XSPEC functions
+    if run_type ==  "conv_factors":
+        tel = out_file.split('_')[-3]
+    else:
+        tel = out_file.split('_')[-1].split('.')[0]
+
+    return res_tables, src, usable, error, warn, tel
 
 
 def xspec_call(xspec_func):
@@ -187,8 +196,8 @@ def xspec_call(xspec_func):
                         fit.update(1)
                         return
                     else:
-                        res_fits, rel_src, successful, err_list, warn_list = results_in
-                        results[rel_src].append([res_fits, successful, err_list, warn_list])
+                        res_fits, rel_src, successful, err_list, warn_list, tel = results_in
+                        results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
                         fit.update(1)
 
                 for s_ind, s in enumerate(script_list):
@@ -210,11 +219,14 @@ def xspec_call(xspec_func):
 
             # This flag tells this method if the current set of fits are part of an annular spectra or not
             ann_fit = False
-            ann_results = {}
-            ann_lums = {}
-            ann_obs_order = {}
+            ann_results = {tel : {} for tel in s.telescopes}
+            ann_lums = {tel : {} for tel in s.telescopes}
+            ann_obs_order = {tel : {} for tel in s.telescopes}
+            set_ident = {}
 
             for res_set in results[src_repr]:
+                # Extract the telescope from the information passed back by the running of the fit
+                tel = res_set[-1]
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
                         global_results = res_table["RESULTS"][0]
@@ -229,27 +241,41 @@ def xspec_call(xspec_func):
                         inst_lums = {}
                         obs_order = []
                         for line_ind, line in enumerate(res_table["SPEC_INFO"]):
+                            # We need to check if this spectrum is a combined_spectrum or not
+                            # this can be done by seeing which directory it is stored in
+                            directory = line["SPEC_PATH"].strip(" ").split("/")[-2]
+
+                            if directory == 'combined':
+                                comb_spec = True
+                            else:
+                                comb_spec = False
+
                             sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+
                             # Want to derive the spectra storage key from the file name, this strips off some
                             #  unnecessary info
                             sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
 
-                            # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
+                            # If it's not an AnnularSpectra fit then we can just fetch the spectrum from the source
                             #  the normal way
                             if not ann_fit:
                                 # This adds ra back on, and removes any ident information if it is there
                                 sp_key = 'ra' + sp_key
-                                # Finds the appropriate matching spectrum object for the current table line
-                                spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
+
+                                if not comb_spec:
+                                    # Finds the appropriate matching spectrum object for the current table line
+                                    spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
+                                                        telescope=tel)[0]
+                                else:
+                                    spec = s.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0]
                             else:
                                 obs_order.append([sp_info[0], sp_info[1]])
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 first_part = sp_key.split('ri')[0]
                                 second_part = "_" + "_".join(sp_key.split('ro')[-1].split("_")[1:])
-
-                                ann_sp_key = first_part + "ar" + "_".join(radii[ind].value.astype(str)) + second_part
-                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key)
+                                ann_sp_key = first_part + "ar" + "_".join(radii[src_repr][tel].value.astype(str)) + second_part
+                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key, telescope=tel)
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
                                                              "this is the developers fault, not yours.")
@@ -258,10 +284,15 @@ def xspec_call(xspec_func):
                                                             "fitted, this is the developers fault, not yours")
                                 else:
                                     ann_spec = ann_specs[0]
-                                    spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+                                    # comb_spec here refers to whether the obs_id is combined
+                                    if not comb_spec:
+                                        spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
+
+                                    else:
+                                        spec = ann_spec.get_spectra(ann_id, inst=sp_info[1])
 
                             # Adds information from this fit to the spectrum object.
-                            spec.add_fit_data(str(model), line, res_table["PLOT"+str(line_ind+1)])
+                            spec.add_fit_data(str(model), line, res_table["PLOT" + str(line_ind + 1)])
 
                             # The add_fit_data method formats the luminosities nicely, so we grab them back out
                             #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
@@ -269,30 +300,35 @@ def xspec_call(xspec_func):
                             if spec.instrument not in inst_lums:
                                 inst_lums[spec.instrument] = processed_lums
 
-                        # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
-                        #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
-                        #  consistent
-                        if "pn" in inst_lums:
-                            chosen_lums = inst_lums["pn"]
-                        # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                        elif "mos2" in inst_lums:
-                            chosen_lums = inst_lums["mos2"]
+                        if tel == 'xmm':
+                            # Ideally the luminosity reported in the source object will be a PN lum, but it's
+                            #  not impossible that a PN value won't be available. - it shouldn't matter much, lums
+                            #  across the cameras are consistent
+                            if "pn" in inst_lums:
+                                chosen_lums = inst_lums["pn"]
+                            # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                            elif "mos2" in inst_lums:
+                                chosen_lums = inst_lums["mos2"]
+                            else:
+                                chosen_lums = inst_lums["mos1"]
                         else:
-                            chosen_lums = inst_lums["mos1"]
+                            # TODO THIS ISN'T NECESSARILY THE WAY I WANT TO DO THIS
+                            chosen_lums = processed_lums
 
                         if ann_fit:
-                            ann_results[spec.annulus_ident] = global_results
-                            ann_lums[spec.annulus_ident] = chosen_lums
-                            ann_obs_order[spec.annulus_ident] = obs_order
+                            set_ident[tel] = spec.set_ident
+                            ann_results[tel][spec.annulus_ident] = global_results
+                            ann_lums[tel][spec.annulus_ident] = chosen_lums
+                            ann_obs_order[tel][spec.annulus_ident] = obs_order
 
                         elif not ann_fit:
                             # Push global fit results, luminosities etc. into the corresponding source object.
-                            s.add_fit_data(model, global_results, chosen_lums, sp_key)
+                            s.add_fit_data(model, global_results, chosen_lums, sp_key, tel)
 
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
-                    model = res_set[0].split("_")[-3]
+                    model = res_set[0].split("_")[-4]
 
                     # We can infer the storage key from the name of the results table, just makes it easier to
                     #  grab the correct spectra
@@ -303,44 +339,57 @@ def xspec_call(xspec_func):
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and lums
+                    # TODO this could be neater and better generalised
                     for comb in combos:
-                        spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                        if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
+                            spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                                                telescope=tel)[0]
+                        elif tel == 'erosita':
+                            spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                                                telescope=tel)[0]
+                        else:
+                            spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
+                                            telescope=tel)[0]
+
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
-                                              res_table["Lx_{}".format(comb)].values, model)
+                                              res_table["Lx_{}".format(comb)].values, model, tel)
 
                 elif len(res_set) != 0 and not res_set[1]:
                     for err in res_set[2]:
                         raise XSPECFitError(err)
 
             if ann_fit:
-                # We fetch the annular spectra object that we just fitted, searching by using the set ID of
-                #  the last spectra that was opened in the loop
-                ann_spec = s.get_annular_spectra(set_id=spec.set_ident)
-                try:
-                    ann_spec.add_fit_data(model, ann_results, ann_lums, ann_obs_order)
+                for tel in ann_results:
+                    # We fetch the annular spectra object that we just fitted, searching by using the set ID of
+                    #  the last spectra that was opened in the loop
+                    ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
+                    try:
+                        ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
+                                                ann_obs_order[tel])
 
-                    # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
-                    #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
-                    #  generate a Tx profile automatically
-                    if model == "constant*tbabs*apec":
-                        temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
-                        s.update_products(temp_prof)
+                        # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
+                        #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
+                        #  generate a Tx profile automatically
+                        if model == "constant*tbabs*apec":
+                            temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
+                            s.update_products(temp_prof)
 
-                        # Normalisation profiles can be useful for many things, so we generate them too
-                        norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                        s.update_products(norm_prof)
+                            # Normalisation profiles can be useful for many things, so we generate them too
+                            norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                            s.update_products(norm_prof)
 
-                        if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
-                            met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
-                            s.update_products(met_prof)
+                            if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
+                                met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
+                                s.update_products(met_prof)
 
-                    else:
-                        raise NotImplementedError("How have you even managed to fit this model to a profile?! Its not"
-                                                  " supported yet.")
-                except ValueError:
-                    warnings.warn("{src} annular spectra profile fit was not "
-                                  "successful".format(src=ann_spec.src_name), stacklevel=2)
+                        else:
+                            raise NotImplementedError("How have you even managed to fit this model to a "
+                                                      "profile?! It's not supported yet.")
+                    except ValueError:
+                        warnings.warn("{src} annular spectra profile fit was not successful for the {t} "
+                                      "telescope.".format(src=ann_spec.src_name, t=tel),
+                                    stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.

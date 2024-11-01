@@ -259,6 +259,8 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
 
+    raise NotImplementedError("This has not been implemented yet.")
+
     def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) \
             -> Tuple[Quantity, int]:
         """
@@ -293,7 +295,7 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
 
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
-        int_mask = src_obj.get_interloper_mask()
+        int_mask = src_obj.get_interloper_mask('xmm')
 
         # Tells the source object to give us the requested scale radius in units of kpc
         rad = src_obj.get_radius(scale_radius, kpc)
@@ -443,7 +445,7 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
                 pix_peak = rt.coord_conv(cur_src.peak, pix)
             else:
                 pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
-            inter_mask = cur_src.get_interloper_mask()
+            inter_mask = cur_src.get_interloper_mask('xmm')
             rad = cur_src.get_radius(scale_radius, kpc)
 
             prof_prods = cur_src.get_products("combined_brightness_profile", )
@@ -524,6 +526,8 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
         covariance matrix. I also return a list of source names that WERE included in the stack.
     :rtype: Tuple[ndarray, ndarray, ndarray, ndarray, ndarray, list]
     """
+    raise NotImplementedError("This has not been implemented yet.")
+
 
     def construct_profile(src_obj: GalaxyCluster, src_id: int, lower: Quantity, upper: Quantity) \
             -> Tuple[Quantity, int]:
@@ -559,7 +563,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
 
         # We obviously want to remove point sources from the profiles we make, so get the mask that removes
         #  interlopers
-        int_mask = src_obj.get_interloper_mask()
+        int_mask = src_obj.get_interloper_mask('xmm')
 
         # Tells the source object to give us the requested scale radius in units of kpc
         rad = src_obj.get_radius(scale_radius, kpc)
@@ -711,7 +715,7 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
                 pix_peak = rt.coord_conv(cur_src.peak, pix)
             else:
                 pix_peak = rt.coord_conv(cur_src.ra_dec, pix)
-            inter_mask = cur_src.get_interloper_mask()
+            inter_mask = cur_src.get_interloper_mask('xmm')
             rad = cur_src.get_radius(scale_radius, kpc)
 
             prof_prods = cur_src.get_products("combined_brightness_profile")

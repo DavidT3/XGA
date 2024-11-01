@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:07. Copyright (c) The Contributors
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union, List
 
 import numpy as np
 from astropy.cosmology import Cosmology
@@ -45,12 +45,26 @@ class Star(PointSource):
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_products: Whether existing products should be loaded from disk.
     :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for
+        analysis, default is 0.9.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
         True. This option is here so that sample objects can regenerate all merged products at once, which is
         more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: float, dec: float, distance: Quantity = None, name: str = None,
                  proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
@@ -58,7 +72,9 @@ class Star(PointSource):
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 regen_merged: bool = True, in_sample: bool = False):
+                 clean_obs: bool = True, clean_obs_threshold: float = 0.9, regen_merged: bool = True,
+                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
         """
         An init of the XGA Star source class.
 
@@ -87,12 +103,26 @@ class Star(PointSource):
         :param cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for
+            analysis, default is 0.9.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is
             True. This option is here so that sample objects can regenerate all merged products at once, which is
             more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
             to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
             is False. User should only set to True to remove warnings.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
 
         # This is before the super init call so that the changed _source_type_match method has a matching radius
@@ -110,7 +140,8 @@ class Star(PointSource):
 
         # Run the init of the PointSource superclass
         super().__init__(ra, dec, None, name, point_radius, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                         back_out_rad_factor, cosmology, load_products, load_fits, regen_merged, in_sample)
+                         back_out_rad_factor, cosmology, load_products, load_fits, clean_obs, clean_obs_threshold,
+                         regen_merged, in_sample, telescope, search_distance)
 
         # Checking that the distance argument (as redshift isn't really valid for objects within our galaxy) is
         #  in a unit that we understand and approve of
@@ -154,28 +185,30 @@ class Star(PointSource):
         # Then I run through the anti-results dictionary (no idea why I called it that originally but
         #  I'm running with it), here is where the extra checks occur. This for loop iterates through the
         #  different ObsIDs in the directory.
-        for k, v in anti_results_dict.items():
-            # We only want to check regions that are point sources, so in this instance we select red ones
-            recheck = [r for r in v if r.visual['edgecolor'] == 'red']
-            # Then we use the handy function I wrote ages ago to find if any of those regions lie within
-            #  match_radius of the ra_dec of the source. This will return regions that have ANY PART of
-            #  themselves within our search radius.
-            within = self.regions_within_radii(Quantity(0, 'arcsec'), self._match_radius, self.ra_dec, recheck)
+        for tel in anti_results_dict:
+            for k, v in anti_results_dict[tel].items():
+                # We only want to check regions that are point sources, so in this instance we select red ones
+                recheck = [r for r in v if r.visual['edgecolor'] == 'red']
+                # Then we use the handy function I wrote ages ago to find if any of those regions lie within
+                #  match_radius of the ra_dec of the source. This will return regions that have ANY PART of
+                #  themselves within our search radius.
+                within = self.regions_within_radii(Quantity(0, 'arcsec'), self._match_radius, tel, self.ra_dec,
+                                                   recheck)
 
-            # Make a copy of the current ObsID's non matched regions
-            reg_copy = np.array(v).copy()
+                # Make a copy of the current ObsID's non matched regions
+                reg_copy = np.array(v).copy()
 
-            # Find which of those regions are now considered to be extra matches, but as indexes
-            ex_matches = np.argwhere(np.isin(v, within)).flatten()
-            # And the inverse information, which should be kept as non-matches
-            inv_ex_matches = np.argwhere(~np.isin(v, within)).flatten()
+                # Find which of those regions are now considered to be extra matches, but as indexes
+                ex_matches = np.argwhere(np.isin(v, within)).flatten()
+                # And the inverse information, which should be kept as non-matches
+                inv_ex_matches = np.argwhere(~np.isin(v, within)).flatten()
 
-            # As for some reason I stored these as lists of regions, we have to convert back to a list, which is
-            #  unfortunate but oh well got to be consistent. Then the regions that are kept as non-matches are made
-            #  the new anti-results entry for that ObsID
-            anti_results_dict[k] = list(reg_copy[inv_ex_matches])
-            # This concatenates the new (if there are any) extra matches to the existing alternative matches list
-            alt_match_dict[k] += list(reg_copy[ex_matches])
+                # As for some reason I stored these as lists of regions, we have to convert back to a list, which is
+                #  unfortunate but oh well got to be consistent. Then the regions that are kept as non-matches are made
+                #  the new anti-results entry for that ObsID
+                anti_results_dict[tel][k] = list(reg_copy[inv_ex_matches])
+                # This concatenates the new (if there are any) extra matches to the existing alternative matches list
+                alt_match_dict[tel][k] += list(reg_copy[ex_matches])
 
         return results_dict, alt_match_dict, anti_results_dict
 

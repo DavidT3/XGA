@@ -50,16 +50,18 @@ class Spectrum(BaseProduct):
         generates these by default, as XSPEC does not make use of them).
     :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
         generates these by default, as XSPEC does not make use of them).
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
                  grouped: bool, min_counts: int, min_sn: float, over_sample: int, stdout_str: str,
-                 stderr_str: str, gen_cmd: str, region: bool = False, b_rmf_path: str = '', b_arf_path: str = ''):
+                 stderr_str: str, gen_cmd: str, region: bool = False, b_rmf_path: str = '', b_arf_path: str = '',
+                 telescope: str = None):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "spectrum"
 
         if os.path.exists(rmf_path):
@@ -291,7 +293,13 @@ class Spectrum(BaseProduct):
                     # If the spectrum has not been grouped it may not have this column
                     if "GROUPING" in all_dat.dtype.names:
                         self._spec_group = all_dat['GROUPING']
-                    self._spec_quality = all_dat['QUALITY']
+
+                    if "QUALITY" in all_dat.dtype.names:
+                        self._spec_quality = all_dat['QUALITY']
+                    else:
+                        # If there is no quality information then we just have to assume every channel is okay
+                        #  to use - otherwise the get_grouped_data method will fall over
+                        self._spec_quality = np.zeros(len(self._spec_channels))
 
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
@@ -1184,7 +1192,7 @@ class Spectrum(BaseProduct):
 
     # TODO Should this take parameter values as arguments too? - It definitely should
     def add_conv_factors(self, lo_ens: np.ndarray, hi_ens: np.ndarray, rates: np.ndarray,
-                         lums: np.ndarray, model: str):
+                         lums: np.ndarray, model: str, tel: str):
         """
         Method used to store countrate to luminosity conversion factors derived from fakeit spectra, as well as
         the actual countrate and luminosity measured in case the user wants to create a combined factor for multiple
@@ -1199,7 +1207,8 @@ class Spectrum(BaseProduct):
         :param np.ndarray lums: A numpy array of the luminosities measured for this arf/rmf combination
             for the energy ranges specified in lo_ens and hi_end.
         :param str model: The name of the model used to calculate this factor.
-        """
+        :param str tel: The name of the telescope from which the rates were measured.
+         """
         for row_ind, lo_en in enumerate(lo_ens):
             # Define the key with energy information under which to store this information
             hi_en = hi_ens[row_ind]
@@ -1212,12 +1221,16 @@ class Spectrum(BaseProduct):
             # Will be storing the individual components, but will also store the factor for this spectrum
             factor = lum / rate
 
-            if model not in self._conv_factors:
-                self._conv_factors[model] = {}
+            if tel not in self._conv_factors:
+                self._conv_factors[tel] = {}
+            if model not in self._conv_factors[tel]:
+                self._conv_factors[tel][model] = {}
 
-            self._conv_factors[model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
+            self._conv_factors[tel][model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
 
-    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str) -> Tuple[Quantity, Quantity, Quantity]:
+
+
+    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str, tel: str) -> Tuple[Quantity, Quantity, Quantity]:
         """
         Retrieves a conversion factor between count rate and luminosity for a given energy range, if one
         has been calculated.
@@ -1225,20 +1238,25 @@ class Spectrum(BaseProduct):
         :param Quantity lo_en: The lower energy bound for the desired conversion factor.
         :param Quantity hi_en: The upper energy bound for the desired conversion factor.
         :param str model: The model used to generate the desired conversion factor.
+        :param str tel: The telescope used to generate the desired conversion factor.
         :return: The conversion factor, luminosity, and rate for the supplied model-energy combination.
         :rtype: Tuple[Quantity, Quantity, Quantity]
         """
         en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
-        if model not in self._conv_factors:
-            mods = ", ".join(list(self._conv_factors.keys()))
+
+        if tel not in self._conv_factors.keys():
+            raise ModelNotAssociatedError("{0} is not associated with this spectrum".format(tel))
+
+        if model not in self._conv_factors[tel]:
+            mods = ", ".join(list(self._conv_factors[tel].keys()))
             raise ModelNotAssociatedError("{0} is not associated with this spectrum, only {1} "
                                           "are available.".format(model, mods))
-        elif en_key not in self._conv_factors[model]:
+        elif en_key not in self._conv_factors[tel][model]:
             raise ParameterNotAssociatedError("The conversion factor for {m} in {l}-{u}keV has not been "
                                               "calculated".format(m=model, l=lo_en.to("keV").value,
                                                                   u=hi_en.to("keV").value))
 
-        rel_vals = self._conv_factors[model][en_key]
+        rel_vals = self._conv_factors[tel][model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
     def get_plot_data(self, model: str) -> dict:
@@ -1744,7 +1762,15 @@ class AnnularSpectra(BaseAggregateProduct):
         The init method for the AnnularSpectrum class, performs checks and organises the spectra which
         have been passed in, for easy retrieval.
         """
-        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
+        if len(set([s.telescope for s in spectra])) != 1:
+            raise NotImplementedError("AnnularSpectra comprised of spectra from multiple telescopes are not "
+                                      "supported yet.")
+        else:
+            # Given the check above, we know that all the spectra are from the same telescope, so we just take
+            #  the telescope name from the first one
+            telescope = spectra[0].telescope
+
+        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined", telescope=telescope)
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
         #  have the same set ID
@@ -2770,24 +2796,25 @@ class AnnularSpectra(BaseAggregateProduct):
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, associated_set_id=self.set_ident,
                                                          set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
-                                                         auto_save=True)
+                                                         auto_save=True, telescope=self.telescope)
                 elif par == 'kT' and upper_limit is not None:
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True)
+                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True,
+                                                         telescope=self.telescope)
                 elif par == 'Abundanc':
                     new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                         mid_radii_deg, auto_save=True)
+                                                         mid_radii_deg, auto_save=True, telescope=self.telescope)
                 elif par == 'norm':
                     new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
                                                    rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                   mid_radii_deg, auto_save=True)
+                                                   mid_radii_deg, auto_save=True, telescope=self.telescope)
                 else:
                     prof_type = "1d_proj_{}"
                     new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
                                          prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                         mid_radii_deg, auto_save=True)
+                                         mid_radii_deg, auto_save=True, telescope=self.telescope)
 
                 profs.append(new_prof)
 

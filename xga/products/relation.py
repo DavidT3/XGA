@@ -804,7 +804,8 @@ class ScalingRelation:
         #  user passed those on init) - if they aren't a warning will be issued
         if self.x_lims is not None and len(x_values[(x_values < self.x_lims[0]) | (x_values > self.x_lims[1])]) != 0:
             warn("Some of the x values you have passed are outside the validity range of this relation "
-                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()))
+                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()),
+                 stacklevel=2)
 
         # Need to check if any power of E(z) was applied to the y-axis data before fitting, if so (and no
         #  cosmo/redshift was passed) then it's time to throw an error.
@@ -867,7 +868,7 @@ class ScalingRelation:
 
         return predicted_y
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = None,
              data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
@@ -882,7 +883,8 @@ class ScalingRelation:
             this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-        :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+        :param tuple figsize: A custom figure size for the plot, default is (8, 8) if NO third data axis is being
+            shown, and (10, 8) if there is one.
         :param str data_colour: The colour to use for the data points in the plot, default is black.
         :param str model_colour: The colour to use for the model in the plot. Default is None in which case
             the value of the model_colour property of the relation is used.
@@ -909,6 +911,9 @@ class ScalingRelation:
             property to retrieve the source name for a point. Default is False.
         :param str point_label_colour: The colour of the label text.
         :param int point_label_size: The fontsize of the label text.
+        :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
+            data point coordinates to determine the location a label should be added. You can use this to fine-tune
+            the label positions relative to their data point.
         :param bool show_third_dim: Colour the data points by the third dimension data passed in on creation of this
             scaling relation, with a colour bar to communicate values. Only possible if data were passed to
             'third_dim_info' on initialization. Default is None, which automatically gets converted to True if there
@@ -916,9 +921,6 @@ class ScalingRelation:
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
-        :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
-            data point coordinates to determine the location a label should be added. You can use this to fine-tune
-            the label positions relative to their data point.
         :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
             relation line - setting any value other than None will override that.
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
@@ -947,6 +949,30 @@ class ScalingRelation:
         if model_colour is None:
             model_colour = self.model_colour
 
+        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
+        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
+        #  don't have to worry about/see that warning.
+        if show_third_dim is None and self.third_dimension_data is None:
+            show_third_dim = False
+        elif show_third_dim is None and self.third_dimension_data is not None:
+            show_third_dim = True
+
+        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
+        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
+        #  have set show_third_dim=True, we set it back to False
+        if show_third_dim and self.third_dimension_data is None:
+            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
+                 "the creation of this scaling relation. Setting 'show_third_dim' to False.", stacklevel=2)
+            show_third_dim = False
+
+        # We then set the default figure size (assuming the user hasn't passed one they want to replace it) with
+        #  (8, 8) or (9, 8) - it is variable because with a third data dimension a color-bar gets added, so we want
+        #  the x-size to be longer to accommodate it
+        if not show_third_dim and figsize is None:
+            figsize = (8, 8)
+        elif show_third_dim and figsize is None:
+            figsize = (10, 8)
+
         # Setting up the matplotlib figure
         fig = plt.figure(figsize=figsize)
         fig.tight_layout()
@@ -963,22 +989,6 @@ class ScalingRelation:
         # Setup the aesthetics of the axis
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
-
-        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
-        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
-        #  don't have to worry about/see that warning.
-        if show_third_dim is None and self.third_dimension_data is None:
-            show_third_dim = False
-        elif show_third_dim is None and self.third_dimension_data is not None:
-            show_third_dim = True
-
-        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
-        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
-        #  have set show_third_dim=True, we set it back to False
-        if show_third_dim and self.third_dimension_data is None:
-            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
-                 "the creation of this scaling relation. Setting 'show_third_dim' to False.")
-            show_third_dim = False
 
         # Plot the data with uncertainties, if any data is present in this scaling relation.
         if len(self.x_data) != 0 and not show_third_dim:
@@ -1067,16 +1077,15 @@ class ScalingRelation:
         ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
                         facecolor=model_colour, alpha=0.6, interpolate=True)
 
-        # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
-        #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
-        #  appropriate, if there was one
+        # Here we check to see if the user has some manually defined y-axis limits that they want to impose, and we
+        #  also make sure that their units are correct
         if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
-            raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
-                                      'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
-                                                                        yr=self.y_unit.to_string()))
+            raise UnitConversionError("Manually specified y-limits have units ({mu}) that are not compatible with "
+                                      "the y-axis unit of this scaling relation "
+                                      "({su}).".format(mu=y_lims.unit.to_string(), su=self.y_unit.to_string()))
         elif y_lims is not None:
-            # Setting the axis limits
-            ax.set_ylim(y_lims.value)
+            y_lims = y_lims.to(self.y_unit)
+            plt.ylim(*y_lims.value)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
@@ -1240,14 +1249,14 @@ class AggregateScalingRelation:
         x_names = [sr.x_name for sr in relations]
         if len(set(x_names)) != 1:
             self._x_name = " or ".join(list(set(x_names)))
-            warn('Not all of these ScalingRelations have the same x-axis names.')
+            warn('Not all of these ScalingRelations have the same x-axis names.', stacklevel=2)
         else:
             self._x_name = relations[0].x_name
 
         y_names = [sr.y_name for sr in relations]
         if len(set(y_names)) != 1:
             self._y_name = " or ".join(list(set(y_names)))
-            warn('Not all of these ScalingRelations have the same y-axis names.')
+            warn('Not all of these ScalingRelations have the same y-axis names.', stacklevel=2)
         else:
             self._y_name = relations[0].y_name
 
@@ -1372,7 +1381,7 @@ class AggregateScalingRelation:
 
         plt.show()
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (8, 8),
              colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
              fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
              y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
@@ -1546,16 +1555,15 @@ class AggregateScalingRelation:
             ax.fill_between(model_x * rel.x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
                             facecolor=m_colour, alpha=0.6, interpolate=True)
 
-        # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
-        #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
-        #  appropriate, if there was one
+        # Here we check to see if the user has some manually defined y-axis limits that they want to impose, and we
+        #  also make sure that their units are correct
         if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
-            raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
-                                      'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
-                                                                        yr=self.y_unit.to_string()))
+            raise UnitConversionError("Manually specified y-limits have units ({mu}) that are not compatible with "
+                                      "the y-axis unit of this scaling relation "
+                                      "({su}).".format(mu=y_lims.unit.to_string(), su=self.y_unit.to_string()))
         elif y_lims is not None:
-            # Setting the axis limits
-            ax.set_ylim(y_lims.value)
+            y_lims = y_lims.to(self.y_unit)
+            plt.ylim(*y_lims.value)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier

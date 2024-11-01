@@ -22,7 +22,7 @@ from scipy.optimize import curve_fit, minimize
 from scipy.stats import truncnorm
 from tabulate import tabulate
 
-from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
+from ..exceptions import ProductGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
@@ -31,8 +31,8 @@ from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
 
 class BaseProduct:
     """
-    The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
-    output of the generation process, and stores the instrument and ObsID that the product was generated for.
+    The super class for all products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
+    It can also parse the std_err output of some generation processes into specific errors.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str obs_id: The ObsID related to the product being declared.
@@ -43,13 +43,14 @@ class BaseProduct:
     :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
         object for later use by another processing step. It isn't intended for use by a user and will only be
         accessible when defining a BaseProduct.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None):
+                 extra_info: dict = None, telescope: str = None):
         """
-        The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
-        Stores relevant file path information, parses the std_err output of the generation process, and stores the
-        instrument and ObsID that the product was generated for.
+        The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
+        relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
+        of some generation processes into specific errors.
 
         :param str path: The path to where the product file SHOULD be located.
         :param str obs_id: The ObsID related to the product being declared.
@@ -60,6 +61,7 @@ class BaseProduct:
         :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
             object for later use by another processing step. It isn't intended for use by a user and will only be
             accessible when defining a BaseProduct.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
@@ -75,13 +77,21 @@ class BaseProduct:
         # Saving this in attributes for future reference
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
-        self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
+
+        # The base attributes for products - they let it know which telescope it came from, which instrument, and
+        #  which specific observation - amongst other things
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._og_cmd = gen_cmd
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
+
+        # This is now telescope aware, and will look for errors formatted in the way expected for a particular
+        #  backend software for the telescope - to help with legacy support I am going to have it check for XMM
+        #  formatted errors if telescope was set to None on declaration
+        self._gen_error, self._gen_warn, self._other_error = self.parse_stderr()
 
         # Any extra information which a processing step might want to store in this base product - generally only
         #  used when a product has been generated that doesn't need its only product class, but is being put in
@@ -127,18 +137,19 @@ class BaseProduct:
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
-        come from SAS, and other unidentifiable errors. The SAS errors are returned with the actual error
-        name, the error message, and the SAS routine that caused the error.
+        come from a telescope-specific software package (e.g. SAS, or eSASS), and other unidentifiable errors. The
+        telescope-specific errors are returned with the error name, the error message, and the routine that
+        caused the error.
 
-        :return: A list of dictionaries containing parsed, confirmed SAS errors, another containing SAS warnings,
-            and another list of unidentifiable errors that occured in the stderr.
+        :return: A list of dictionaries containing parsed, confirmed telescope-specific errors, another containing
+            telescope-specific warnings, and another list of unidentifiable errors that occurred in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
         def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
-            Function to search for and parse SAS errors and warnings.
+            Function to search for and parse SAS (XMM software) errors and warnings.
 
-            :param list split_stderr: The stderr string split on line endings.
+            :param list split_stderr: The stderr string splits on line breaks.
             :param str err_type: Should this look for errors or warnings?
             :return: Returns the dictionary of parsed errors/warnings, as well as all lines
                 with SAS errors/warnings in.
@@ -177,66 +188,140 @@ class BaseProduct:
                 parsed_sas.append({"originator": originator, "name": err_ident, "message": err_body})
             return parsed_sas, sas_lines
 
+        def find_esass(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+            """
+            Function to search for and parse eSASS (eROSITA software) errors and warnings.
+
+            :param list split_stderr: The stderr string split on line endings.
+            :param str err_type: Should this look for errors or warnings?
+            :return: Returns the dictionary of parsed errors/warnings, as well as all lines
+                with eSASS errors/warnings in.
+            :rtype: Tuple[List[dict], List[str]]
+            """
+            parsed_esass = []
+            # This is a crude way of looking for eSASS error/warning strings ONLY
+            if err_type == 'error':
+                esass_lines = [line for line in split_stderr if "**ERROR" in line or '**STOP' in line]
+            elif err_type == 'warning':
+                esass_lines = [line for line in split_stderr if "**WARN" in line]
+
+            for err in esass_lines:
+                try:
+                    # This tries to split out the eSASS task that produced the error
+                    originator = err.split(" **")[0].split(":")[0].replace(" ", "")
+                    # The eROSITA errors don't seem to have specific names, so this will be the same for all
+                    err_ident = "eROSITAError"
+                    # Actual error message
+                    err_body = err.split(" **")[-1].split("** ")[-1]
+
+                except IndexError:
+                    originator = ""
+                    err_ident = ""
+                    err_body = ""
+
+                parsed_esass.append({"originator": originator, "name": err_ident, "message": err_body})
+            return parsed_esass, esass_lines
+
+        # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
+
         # Defined as empty as they are returned by this method
-        sas_errs_msgs = []
-        parsed_sas_warns = []
+        tel_errs_msgs = []
+        parsed_tel_warns = []
         other_err_lines = []
-        # err_str being "" is ideal, hopefully means that nothing has gone wrong
-        if self.unprocessed_stderr != "":
-            # Errors will be added to the error summary, then raised later
-            # That way if people try except the error away the object will have been constructed properly
-            err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
-            # Fingers crossed each line is a separate error
-            parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
-            parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-            sas_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                             for e in parsed_sas_errs]
+        if self.telescope is None or self.telescope == 'xmm':
+            # err_str being "" is ideal, hopefully means that nothing has gone wrong
+            if self.unprocessed_stderr != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
+                parsed_tel_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-            # These are impossible to predict the form of, so they won't be parsed
-            other_err_lines = [line for line in err_lines if line not in sas_err_lines
-                               and line not in sas_warn_lines and line != "" and "warn" not in line]
-            # Adding some advice
-            for e_ind, e in enumerate(other_err_lines):
-                if 'seg' in e.lower() and 'fault' in e.lower():
-                    other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
-                                              'and have a look at where your coordinate lies.'
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_sas_errs]
 
-        if len(sas_errs_msgs) > 0:
-            self._usable = False
-            self._why_unusable.append("SASErrorPresent")
-        if len(other_err_lines) > 0:
-            self._usable = False
-            self._why_unusable.append("OtherErrorPresent")
+                # These are impossible to predict the form of, so they won't be parsed
+                other_err_lines = [line for line in err_lines if line not in sas_err_lines
+                                   and line not in sas_warn_lines and line != "" and "warn" not in line]
+                # Adding some advice
+                for e_ind, e in enumerate(other_err_lines):
+                    if 'seg' in e.lower() and 'fault' in e.lower():
+                        other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                                                  'and have a look at where your coordinate lies.'
 
-        return sas_errs_msgs, parsed_sas_warns, other_err_lines
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("SASErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.telescope == 'erosita':
+            # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
+            #  than stderr
+            # err_str being "" is ideal, hopefully means that nothing has gone wrong
+            if self.unprocessed_stdout != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stdout.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
+                parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
+
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_esass_errs]
+
+                # These are impossible to predict the form of, so they won't be parsed
+                # other_err_lines = [line for line in err_lines if line not in parsed_esass_errs
+                #                    and line not in esass_warn_lines and line != "" and "warn" not in line]
+
+                # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
+                #  they should), it is incredibly difficult to search for non-eSASS errors - thus I do not right now
+                other_err_lines = []
+
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("eSASSErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.unprocessed_stderr == "":
+            # This should only trigger if the telescope is not XMM or eROSITa AND there was a non-empty string passed
+            #  for the stderr
+            warn("We do not currently support checking {t}-specific backend software stderr for issues - feel free to "
+                 "contact the developer team and request this feature.", stacklevel=2)
+
+        return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
     @property
-    def sas_errors(self) -> List[str]:
+    def gen_errors(self) -> List[str]:
         """
-        Property getter for the confirmed SAS errors associated with a product.
+        Property getter for the confirmed generation errors associated with a product.
 
-        :return: The list of confirmed SAS errors.
+        :return: The list of confirmed generation errors.
         :rtype: List[Dict]
         """
-        return self._sas_error
+        return self._gen_error
 
     @property
-    def sas_warnings(self) -> List[Dict]:
+    def gen_warnings(self) -> List[Dict]:
         """
-        Property getter for the confirmed SAS warnings associated with a product.
+        Property getter for the confirmed generation warnings associated with a product.
 
-        :return: The list of confirmed SAS warnings.
+        :return: The list of confirmed generation warnings.
         :rtype: List[Dict]
         """
-        return self._sas_warn
+        return self._gen_warn
 
     def raise_errors(self):
         """
         Method to raise the errors parsed from std_err string.
         """
-        for error in self._sas_error:
-            raise SASGenerationError(error)
+        for error in self._gen_error:
+            raise ProductGenerationError(error)
 
         # This is for any unresolved errors.
         for error in self._other_error:
@@ -246,22 +331,29 @@ class BaseProduct:
     @property
     def obs_id(self) -> str:
         """
-        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
-        this object is stored in a source object, but I think it worth storing directly as a property as well.
+        Property getter for the ObsID of the observation that this product was derived from.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this product.
         :rtype: str
         """
         return self._obs_id
 
     @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
+
+    @property
     def instrument(self) -> str:
         """
-        Property getter for the instrument used to take this image. Admittedly this information is implicit
-        in the location this object is stored in a source object, but I think it worth storing
-        directly as a property as well.
+        Property getter for the name of the instrument that this product was derived from.
 
-        :return: The XMM instrument used to take this image.
+        :return: The instrument name of this product.
         :rtype: str
         """
         return self._inst
@@ -280,9 +372,10 @@ class BaseProduct:
     @property
     def errors(self) -> List[str]:
         """
-        Property getter for non-SAS errors detected during the generation of a product.
+        Property getter for non-parsed errors detected during the generation of a product.
 
-        :return: A list of errors that aren't related to SAS.
+        :return: A list of errors that haven't been successfully linked to a generation process specific to a
+            telescope.
         :rtype: List[str]
         """
         return self._other_error
@@ -345,15 +438,16 @@ class BaseProduct:
 
 class BaseAggregateProduct:
     """
-    A base class for any XGA products that are an aggregate of an XGA SAS product, for instance this is sub-classed
+    A base class for any XGA products that are an aggregate of a set of XGA products, for instance this is sub-classed
     to make the AnnularSpectra class. Users really shouldn't be instantiating these for themselves.
 
     :param list file_paths: The file paths of the main files for a given aggregate product.
     :param str prod_type: The product type of the individual elements.
     :param str obs_id: The ObsID related to the product.
     :param str instrument: The instrument related to the product.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
         """
         The init method for the BaseAggregateProduct class
         """
@@ -361,6 +455,7 @@ class BaseAggregateProduct:
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._prod_type = prod_type
         self._src_name = None
 
@@ -413,10 +508,20 @@ class BaseAggregateProduct:
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
 
-        :return: The ObsID of this AggregateProduct.
+        :return: The instrument of this AggregateProduct.
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def type(self) -> str:
@@ -452,26 +557,26 @@ class BaseAggregateProduct:
         return self._energy_bounds
 
     @property
-    def sas_errors(self) -> List:
+    def gen_errors(self) -> List[List[str]]:
         """
-        Equivelant to the BaseProduct sas_errors property, but reports any SAS errors stored in the component products.
+        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the component products.
 
-        :return: A list of SAS errors related to component products.
+        :return: A list of telescope software errors related to component products.
         :rtype: List
         """
-        sas_err_list = []
+        tel_soft_err_list = []
         for p in self._component_products:
             prod = self._component_products[p]
-            sas_err_list += prod.sas_errors
-        return sas_err_list
+            tel_soft_err_list += prod.gen_errors
+        return tel_soft_err_list
 
     @property
-    def errors(self) -> List:
+    def errors(self) -> List[List[str]]:
         """
-        Equivelant to the BaseProduct errors property, but reports any non-SAS errors stored in the
+        Equivelant to the BaseProduct errors property, but reports any non-telescope software errors stored in the
         component products.
 
-        :return: A list of non-SAS errors related to component products.
+        :return: A list of non-telescope software errors related to component products.
         :rtype: List
         """
         err_list = []
@@ -483,7 +588,7 @@ class BaseAggregateProduct:
     @property
     def unprocessed_stderr(self) -> List:
         """
-        Equivelant to the BaseProduct sas_errors unprocessed_stderr, but returns a list of all the unprocessed
+        Equivelant to the BaseProduct gen_errors unprocessed_stderr, but returns a list of all the unprocessed
         standard error outputs.
 
         :return: List of stderr outputs.
@@ -552,11 +657,12 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False):
+                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, telescope: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -677,14 +783,11 @@ class BaseProfile1D:
         else:
             self._rad_ann_bounds = None
 
-        # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
-        if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
-            raise ValueError("If ObsID or inst is set to combined, then both must be set to combined.")
-
         # Storing the passed source name in an attribute, as well as the ObsID and instrument
         self._src_name = source_name
         self._obs_id = obs_id
         self._inst = inst
+        self._tele = telescope
 
         # Going to have this convenient attribute for profile classes, I could just use the type() command
         #  when I wanted to know but this is easier.
@@ -2030,12 +2133,15 @@ class BaseProfile1D:
         :return: The default XGA save path for this profile.
         :rtype: str
         """
-        if self._save_path is None and self._prof_type != "base":
-            temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
+        if self._save_path is None and self._prof_type != "base" and self._tele is not None:
+            temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
             rand_prof_id = randint(0, int(1e+8))
-            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
+            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
                 rand_prof_id = randint(0, int(1e+8))
-            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
+            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
+        elif self._tele is None:
+            raise ValueError("Cannot create an XGA save path for this profile when it does not have "
+                             "telescope information.")
 
         return self._save_path
 
@@ -2251,6 +2357,16 @@ class BaseProfile1D:
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this profile was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
