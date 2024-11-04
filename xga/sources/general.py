@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 14:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 11:08. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -196,6 +196,19 @@ class ExtendedSource(BaseSource):
         elif all(flat_det) and self._custom_region_radius is None and "GalaxyCluster" not in repr(self):
             raise NoRegionsError("{n} has not been detected in ANY region files, and no custom region or "
                                  "overdensity radius has been passed. No analysis is possible.".format(n=self.name))
+
+        # Makes sure that merged ratemaps (so images and exposure maps as well) are generated for this source, but
+        #  only if this source is not a member of a sample - if so then more efficient mass generation will be done
+        #  later
+        if not in_sample:
+            # There isn't a single method to generate images etc. from every associated telescope yet, so we have
+            #  to go the long way around
+            if 'xmm' in self.telescopes:
+                from ..generate.sas import emosaic
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+            if 'erosita' in self.telescopes:
+                from ..generate.esass import
 
         if clean_obs and clean_obs_reg in self._radii:
             # Use this method to figure out what data to throw away
