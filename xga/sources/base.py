@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/10/2024, 11:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1750,7 +1750,7 @@ class BaseSource:
                     #  height of regions being positive (definitely a good idea) - finding such a region in a file
                     #  will trigger a ValueError, and I'd like to catch it and add more context
                     try:
-                        ds9_regs = Regions.read(reg_paths[obs_id], format='ds9').regions
+                        ds9_regs = Regions.read(reg_paths[tel][obs_id], format='ds9').regions
                     except ValueError as err:
                         err.args = (err.args[0] + "- {o} is the associated ObsID.".format(o=obs_id), )
                         raise err
