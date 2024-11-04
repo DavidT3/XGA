@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:50. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -15,9 +15,9 @@ from pandas import DataFrame
 from regions import PixelRegion, Regions, SkyRegion
 from tqdm import tqdm
 
-from .. import CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST
+from .. import (CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST, SRC_REGION_COLOURS,
+                check_telescope_choices, PRETTY_TELESCOPE_NAMES)
 from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableError
-from ..utils import SRC_REGION_COLOURS, check_telescope_choices, PRETTY_TELESCOPE_NAMES
 
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
