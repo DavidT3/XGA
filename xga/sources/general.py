@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 11:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 11:22. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -208,7 +208,9 @@ class ExtendedSource(BaseSource):
                 emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                 emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
             if 'erosita' in self.telescopes:
-                from ..generate.esass import
+                from ..generate.esass import combine_phot_prod
+                combine_phot_prod(self, 'image')
+                combine_phot_prod(self, 'expmap')
 
         if clean_obs and clean_obs_reg in self._radii:
             # Use this method to figure out what data to throw away
