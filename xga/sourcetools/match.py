@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:32. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from .. import CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST
 from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableError
-from ..utils import SRC_REGION_COLOURS, check_telescope_choices
+from ..utils import SRC_REGION_COLOURS, check_telescope_choices, PRETTY_TELESCOPE_NAMES
 
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
@@ -502,8 +502,8 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     if num_cores == 1:
         for tel in telescope:
             # Set up the tqdm instance in a with environment
-            with tqdm(desc='Searching for {} observations near source coordinates'.format(tel), total=len(src_ra),
-                      disable=prog_dis) as onwards:
+            with tqdm(desc='Searching for {} observations near source coordinates'.format(PRETTY_TELESCOPE_NAMES[tel]),
+                      total=len(src_ra), disable=prog_dis) as onwards:
                 # Simple enough, just iterates through the RAs and Decs calling the search function and stores the
                 #  results in the dictionary
                 for ra_ind, r in enumerate(src_ra):
@@ -527,8 +527,8 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     else:
         for tel in telescope:
             # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
-            with tqdm(desc="Searching for {} observations near source coordinates".format(tel), total=len(src_ra)) \
-                    as onwards, Pool(num_cores) as pool:
+            with tqdm(desc="Searching for {} observations near source coordinates".format(PRETTY_TELESCOPE_NAMES[tel]),
+                      total=len(src_ra)) as onwards, Pool(num_cores) as pool:
                 def match_loop_callback(match_info):
                     nonlocal onwards  # The progress bar will need updating
                     nonlocal c_matches
@@ -676,8 +676,8 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     if num_cores == 1:
         for tel in obs_src.telescopes:
             # Set up the tqdm instance in a with environment
-            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(tel), total=len(rel_ra[tel]),
-                      disable=prog_dis) as onwards:
+            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(PRETTY_TELESCOPE_NAMES[tel]),
+                      total=len(rel_ra[tel]), disable=prog_dis) as onwards:
                 # Simple enough, just iterates through the RAs and Decs calling the search function and stores the
                 #  results in the dictionary
                 for ra_ind, r in enumerate(rel_ra[tel]):
@@ -711,8 +711,8 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     else:
         for tel in obs_src.telescopes:
             # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
-            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(tel), total=len(rel_ra[tel])) \
-                    as onwards, Pool(num_cores) as pool:
+            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(PRETTY_TELESCOPE_NAMES[tel]),
+                      total=len(rel_ra[tel])) as onwards, Pool(num_cores) as pool:
                 def match_loop_callback(match_info):
                     nonlocal onwards  # The progress bar will need updating
                     nonlocal e_matches
@@ -861,7 +861,7 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     # If the user only wants us to use one core, then we don't make a Pool because that would just add overhead
     if num_cores == 1:
         for tel in obs_src.telescopes:
-            with tqdm(desc="Searching for {t} ObsID region matches".format(t=tel),
+            with tqdm(desc="Searching for {t} ObsID region matches".format(t=PRETTY_TELESCOPE_NAMES[tel]),
                       total=len(uniq_obs_ids[tel])) as onwards:
                 # Here we iterate through the ObsIDs that the initial match found to possibly have sources on - I
                 #  considered this more efficient than iterating through the sources and possibly reading in WCS
@@ -899,8 +899,8 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
             # This is to store exceptions that are raised in separate processes, so they can all be raised at the end.
             search_errors = []
             # We setup a Pool with the number of cores the user specified (or the default).
-            with tqdm(desc="Searching for {t} ObsID region matches".format(t=tel), total=len(uniq_obs_ids[tel])) \
-                  as onwards, Pool(num_cores) as pool:
+            with tqdm(desc="Searching for {t} ObsID region matches".format(t=PRETTY_TELESCOPE_NAMES[tel]),
+                      total=len(uniq_obs_ids[tel])) as onwards, Pool(num_cores) as pool:
                 # This is called when a match process finished successfully, and the results need storing
                 def match_loop_callback(match_info):
                     nonlocal onwards  # The progress bar will need updating
