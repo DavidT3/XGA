@@ -442,7 +442,8 @@ BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format
 
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
-                "erosita": ['CALIB', 'CLOSED']}
+                "erosita": ['CALIB', 'CLOSED'],
+                "chandra": []}
 # ----------------------------------------------------------------------------
 
 
@@ -493,8 +494,18 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
                  "erosita_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_expmap.fits",
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
+# The information required to use Chandra data
+CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
+                 "clean_acis_evts": "/this/is/required/{obs_id}/events/{obs_id}-instACIS-subexpE001-en-cleanevents.fits",
+                 "attitude_file": "/this/is/required/{obs_id}/misc/{obs_id}-instACIS-subexpE001-aspectsolution.fits",
+                 "lo_en": ['0.50', '2.00'],
+                 "hi_en": ['2.00', '10.00'],
+                 "acis_image": "/this/is/optional/{obs_id}/image/{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
+                 "acis_expmap": "/this/is/optional/{obs_id}/image/{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
+                 "region_file": "/this/is/optional/chandra_obs/regions/{obs_id}/regions.reg"}
+
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
-tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES}
+tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'chandra': CHANDRA_FILES}
 # -------------------------------------------------------------------------------
 
 
