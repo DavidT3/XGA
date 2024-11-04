@@ -407,14 +407,15 @@ if not os.path.exists(CONFIG_PATH):
 # This dictionary both defines the telescopes that XGA is compatible with, and their allowed instruments. These mission
 #  and instrument names should all be lowercase, that will be the general storage convention throughout XGA
 ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
-                "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"]}
+                "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"],
+                "chandra": ["acis"]}
 # TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
 XMM_INST = ALLOWED_INST['xmm']
 # I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())
 # This dictionary won't be used much, but it's just so we have access to some properly formatted telescope names
-PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA'}
+PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA', 'chandra': 'Chandra'}
 # This dictionary is an important one, it will be set during the course of the setup process in this file, and
 #  defines whether a particular telescope that XGA supports seems to have the files necessary to be used by sources
 #  and samples. The default is False, and if we find otherwise during this process then that will be changed
@@ -423,7 +424,7 @@ USABLE = {tele: False for tele in TELESCOPES}
 # Here we define regular expressions that will allow use to verify the structure of an ObsID for a particular
 #  telescope - this functionality is also in DAXA mission classes, so we may just switch to using them in the
 #  future to avoid features duplication
-OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$'}
+OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "chandra": '^[0-9]{1,5}'}
 
 # This is another sort of duplication of a DAXA feature, and stores the default search distances to be used for
 #  each telescope in the xga.match.separation_match function. These are loosely based on the field of view of
