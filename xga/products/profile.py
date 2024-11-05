@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 14:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 14:36. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -319,7 +319,7 @@ class GasMass1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this gas mass profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
@@ -345,7 +345,7 @@ class GasMass1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-            :param str telescope: The telescope that this spectrum is derived from. Default is None.
+            :param str telescope: The telescope that this gas mass profile is derived from. Default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii,
                          auto_save=auto_save, telescope=telescope)
@@ -417,7 +417,7 @@ class GasDensity3D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this gas density profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
@@ -449,7 +449,7 @@ class GasDensity3D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this gas density profile is derived from. Default is None.
         """
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -815,7 +815,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this projected temperature profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
@@ -843,7 +843,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this projected temperature profile is derived from. Default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
                          set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope)
@@ -894,7 +894,7 @@ class APECNormalisation1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this APEC normalisation profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
@@ -920,7 +920,7 @@ class APECNormalisation1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this APEC normalisation profile is derived from. Default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
                          set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope)
@@ -1106,7 +1106,7 @@ class EmissionMeasure1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this emission measure profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
@@ -1172,7 +1172,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this emission measure profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
@@ -1242,7 +1242,7 @@ class GasTemperature3D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this 3D temperature profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
@@ -1268,7 +1268,7 @@ class GasTemperature3D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this 3D temperature profile is derived from. Default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
                          set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope)
@@ -1309,7 +1309,7 @@ class BaryonFraction(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this baryon fraction profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
@@ -1335,7 +1335,7 @@ class BaryonFraction(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this baryon fraction profile is derived from. Default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
                          set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope)
@@ -1381,7 +1381,7 @@ class HydrostaticMass(BaseProfile1D):
     :param bool progress: Should fit progress bars be shown.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this hydrostatic mass profile is derived from. Default is None.
     """
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
@@ -1414,7 +1414,7 @@ class HydrostaticMass(BaseProfile1D):
         :param bool progress: Should fit progress bars be shown.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this hydrostatic mass profile is derived from. Default is None.
         """
         # We check whether the temperature profile passed is actually the type of profile we need
         if type(temperature_profile) != GasTemperature3D:
@@ -2265,7 +2265,7 @@ class SpecificEntropy(BaseProfile1D):
         are in (the default).
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this specific entropy profile is derived from. Default is None.
     """
 
     def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
@@ -2327,7 +2327,7 @@ class SpecificEntropy(BaseProfile1D):
             are in (the default).
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this specific entropy profile is derived from. Default is None.
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
@@ -2788,7 +2788,7 @@ class Generic1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
@@ -2816,7 +2816,7 @@ class Generic1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this profile is derived from. Default is None.
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
