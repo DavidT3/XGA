@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 09:09. Copyright (c) The Contributors
 
 from typing import List
 
@@ -138,13 +138,13 @@ class ClusterSample(BaseSample):
         from ..generate.esass import evtool_image, expmap
 
         # We do a quick check on the length of certain arguments (if they are not just a single value)
-        if include_core_pnt_srcs is not bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
+        if type(include_core_pnt_srcs) != bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
             if len(include_core_pnt_srcs) != len(ra):
                 raise ValueError("If passing a non-scalar value for 'include_core_pnt_srcs', there must be an "
                                  "entry for each source.")
             elif any([en is not bool for en in include_core_pnt_srcs]):
                 raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
-        elif include_core_pnt_srcs is not bool:
+        elif type(include_core_pnt_srcs) != bool:
             # If we get to this point then someone has passed something illegal
             raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
 
