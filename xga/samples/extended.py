@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 09:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 09:10. Copyright (c) The Contributors
 
 from typing import List
 
@@ -142,7 +142,7 @@ class ClusterSample(BaseSample):
             if len(include_core_pnt_srcs) != len(ra):
                 raise ValueError("If passing a non-scalar value for 'include_core_pnt_srcs', there must be an "
                                  "entry for each source.")
-            elif any([en is not bool for en in include_core_pnt_srcs]):
+            elif any([type(en) != bool for en in include_core_pnt_srcs]):
                 raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
         elif type(include_core_pnt_srcs) != bool:
             # If we get to this point then someone has passed something illegal
