@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 09:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 09:28. Copyright (c) The Contributors
 
 from typing import List
 
@@ -246,7 +246,7 @@ class ClusterSample(BaseSample):
                     #  or lists/arrays of bools can be passed, so we just need to disentangle that
                     # If we get here then the preceding code has already made sure that the type is correct, and that
                     #  (if a non-scalar value was passed) every cluster has an entry
-                    if include_core_pnt_srcs is bool:
+                    if type(include_core_pnt_srcs) == bool:
                         cur_inc_core_pnt_src = include_core_pnt_srcs
                     else:
                         cur_inc_core_pnt_src = include_core_pnt_srcs[ind]
