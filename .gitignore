@@ -8,3 +8,4 @@ xga_output
 /xga.egg-info/
 __pycache__
 /docs/build
+*noupload*
