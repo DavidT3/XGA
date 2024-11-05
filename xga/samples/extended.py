@@ -116,13 +116,13 @@ class ClusterSample(BaseSample):
         from xga.sas import evselect_image, eexpmap, emosaic
 
         # We do a quick check on the length of certain arguments (if they are not just a single value)
-        if include_core_pnt_srcs is not bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
+        if type(include_core_pnt_srcs) != bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
             if len(include_core_pnt_srcs) != len(ra):
                 raise ValueError("If passing a non-scalar value for 'include_core_pnt_srcs', there must be an "
                                  "entry for each source.")
-            elif any([en is not bool for en in include_core_pnt_srcs]):
+            elif any([type(en) != bool for en in include_core_pnt_srcs]):
                 raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
-        elif include_core_pnt_srcs is not bool:
+        elif type(include_core_pnt_srcs) != bool:
             # If we get to this point then someone has passed something illegal
             raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
 
