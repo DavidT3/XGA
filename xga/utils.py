@@ -496,13 +496,13 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
 
 # The information required to use Chandra data
 CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
-                 "clean_acis_evts": "/this/is/required/{obs_id}/events/{obs_id}-instACIS-subexpE001-en-cleanevents.fits",
-                 "attitude_file": "/this/is/required/{obs_id}/misc/{obs_id}-instACIS-subexpE001-aspectsolution.fits",
+                 "clean_acis_evts": "/this/is/required/{obs_id}/events/obsid{obs_id}-instACIS-subexpE001-en-cleanevents.fits",
+                 "attitude_file": "/this/is/required/{obs_id}/misc/obsid{obs_id}-instACIS-subexpE001-aspectsolution.fits",
                  "lo_en": ['0.50', '2.00'],
                  "hi_en": ['2.00', '10.00'],
-                 "acis_image": "/this/is/optional/{obs_id}/image/{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
-                 "acis_expmap": "/this/is/optional/{obs_id}/image/{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
-                 "region_file": "/this/is/optional/chandra_obs/regions/{obs_id}/regions.reg"}
+                 "acis_image": "/this/is/optional/{obs_id}/image/obsid{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
+                 "acis_expmap": "/this/is/optional/{obs_id}/image/obsid{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
+                 "region_file": "/this/is/optional/chandra_obs/regions/obsid{obs_id}/regions.reg"}
 
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
 tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'chandra': CHANDRA_FILES}
