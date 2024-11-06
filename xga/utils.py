@@ -206,7 +206,10 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
                         # We check that the filter value isn't in the list of unacceptable filters for the
                         #  current telescope
-                        good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
+                        if 'FILTER' in evts_header:
+                            good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
+                        else:
+                            good_filt = True
 
                         # If we determined further up in this process that the current telescope's event lists are
                         #  actually combined from multiple instruments, and we need to determine which of the
