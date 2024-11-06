@@ -591,7 +591,7 @@ try:
 except ValueError:
     # Adding the unit instances we created to the astropy pool of units - means we can do things like just defining
     #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
-    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandray_det])
+    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandra_det])
 # ---------------------------------------------------------------
 
 
