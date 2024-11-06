@@ -172,7 +172,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                     if os.path.exists(evt_path):
                         # Just read in the header of the events file - want to avoid reading a big old table of
                         #  events into memory, as we might be doing this a bunch of times
-                        evts_header = read_header(evt_path)
+                        evts_header = read_header(evt_path, ext="EVENTS")
 
                         # For the eRASS fields it seems that RA_CEN and DEC_CEN are the best ways of defining where
                         #  the data is located on the sky. Non-survey modes however should use the RA_PNT and DEC_PNT
