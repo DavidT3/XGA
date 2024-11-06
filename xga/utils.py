@@ -664,11 +664,16 @@ if shutil.which("evtool") is None:
 else:
     eSASS_AVAIL = True
 
+# TODO THIS WILL BE FLESHED OUT INTO A SECTION FOR Chandra CIAO
+CIAO_VERSION = None
+# This checks for an installation of Ciao
+CIAO_AVAIL = False
+
 # We set up a mapping from telescope name to software version constant
 # Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
 #  file. Previously a warning for missing software would be shown at the time of checking, but now we wait to see
 #  which telescopes are configured in the XGA config file before warning that telescope software is missing
-tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
+tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION, 'chandra': CIAO_VERSION}
 # --------------------------------------------------------------------------
 
 
