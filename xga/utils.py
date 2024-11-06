@@ -582,6 +582,8 @@ xmm_sky = def_unit("xmm_sky")
 xmm_det = def_unit("xmm_det")
 erosita_sky = def_unit("erosita_sky")
 erosita_det = def_unit("erosita_det")
+chandra_sky = def_unit("chandra_sky")
+chandra_det = def_unit("chandra_det")
 
 # This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
 try:
@@ -589,7 +591,7 @@ try:
 except ValueError:
     # Adding the unit instances we created to the astropy pool of units - means we can do things like just defining
     #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
-    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det])
+    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandray_det])
 # ---------------------------------------------------------------
 
 
