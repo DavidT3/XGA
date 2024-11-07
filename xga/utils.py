@@ -664,7 +664,8 @@ if shutil.which("evtool") is None:
 else:
     eSASS_AVAIL = True
 
-# TODO THIS WILL BE FLESHED OUT INTO A SECTION FOR Chandra CIAO
+# Then, we check to see what version of CIAO (if any) is installed - for the Chandra mission
+# Here we check to see whether CIAO is installed (along with all the necessary paths)
 CIAO_VERSION = None
 # This checks for an installation of Ciao
 CIAO_AVAIL = False
@@ -684,6 +685,20 @@ else:
     # Strip the CIAO version out of the ciaover output
     CIAO_VERSION = split_out[1].split(':')[-1].split('CIAO')[-1].strip(' ').split(' ')[0]
     CIAO_AVAIL = True
+
+# Finally, we check to see what version of CALDB (if any) is installed - for the Chandra mission
+# Here we check to see whether CALDB is installed (along with all the necessary paths)
+CALDB_VERSION = None
+# This checks for an installation of Ciao
+CALDB_AVAIL = False
+
+if 'not installed' in split_out[5].lower():
+    warn("A Chandra CALDB installation cannot be identified on your system, and as such "
+         "Chandra data cannot be processed.")
+else:
+    # Strip out the CALDB version
+    CALDB_VERSION = Version(split_out[5].split(':')[-1].strip())
+    CALDB_AVAIL = True
 
 # We set up a mapping from telescope name to software version constant
 # Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
