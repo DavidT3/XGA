@@ -669,6 +669,22 @@ CIAO_VERSION = None
 # This checks for an installation of Ciao
 CIAO_AVAIL = False
 
+ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+# Just turn those pesky byte outputs into strings
+ciao_out = ciao_out.decode("UTF-8")
+ciao_err = ciao_err.decode("UTF-8")
+
+if "ciaover: command not found" in ciao_err:
+        warn("CIAO cannot be identified on your system, and Chandra data cannot be processed.")
+else:
+    # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
+    #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
+    #  the ciao version
+    split_out = [en.strip(' ') for en in ciao_out.split('\n')]
+    # Strip the CIAO version out of the ciaover output
+    CIAO_VERSION = split_out[1].split(':')[-1].split('CIAO')[-1].strip(' ').split(' ')[0]
+    CIAO_AVAIL = True
+
 # We set up a mapping from telescope name to software version constant
 # Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
 #  file. Previously a warning for missing software would be shown at the time of checking, but now we wait to see
