@@ -697,7 +697,7 @@ if 'not installed' in split_out[5].lower():
          "Chandra data cannot be processed.")
 else:
     # Strip out the CALDB version
-    CALDB_VERSION = Version(split_out[5].split(':')[-1].strip())
+    CALDB_VERSION = split_out[5].split(':')[-1].strip()
     CALDB_AVAIL = True
 
 # We set up a mapping from telescope name to software version constant
