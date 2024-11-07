@@ -503,7 +503,7 @@ CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
                  "attitude_file": "/this/is/required/{obs_id}/misc/obsid{obs_id}-instACIS-subexpE001-aspectsolution.fits",
                  "lo_en": ['0.50', '2.00'],
                  "hi_en": ['2.00', '10.00'],
-                 "acis_image": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
+                 "acis_image": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-image.fits",
                  "acis_expmap": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}-{hi_en}keV-expmap.fits",
                  "region_file": "/this/is/optional/chandra_obs/regions/obsid{obs_id}/regions.reg"}
 
