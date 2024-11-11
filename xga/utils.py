@@ -205,7 +205,8 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                             info['DEC_PNT'] = evts_header["DEC_PNT"]
 
                         # We check that the filter value isn't in the list of unacceptable filters for the
-                        #  current telescope
+                        #  current telescope.
+                        #  We do this because not all telescopes have a filter header to check.
                         if 'FILTER' in evts_header:
                             good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
                         else:
@@ -676,7 +677,8 @@ ciao_out = ciao_out.decode("UTF-8")
 ciao_err = ciao_err.decode("UTF-8")
 
 if "ciaover: command not found" in ciao_err:
-        warn("CIAO cannot be identified on your system, and Chandra data cannot be processed.")
+        warn("No CIAO installation detected on system, "
+             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
 else:
     # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
     #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
@@ -694,7 +696,7 @@ CALDB_AVAIL = False
 
 if 'not installed' in split_out[5].lower():
     warn("A Chandra CALDB installation cannot be identified on your system, and as such "
-         "Chandra data cannot be processed.")
+         "Chandra data cannot be processed.", stacklevel=2)
 else:
     # Strip out the CALDB version
     CALDB_VERSION = split_out[5].split(':')[-1].strip()
