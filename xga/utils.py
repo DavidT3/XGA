@@ -143,7 +143,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         # If new telescope sections have been implemented like I specified they should be, the structure of these keys
         #  should be predictable - whatever is being counted as an 'instrument' should be in the middle. I put
         #  'instrument' in quotes because it is possible (as it may be with eROSITA) that the different instruments
-        #  are all contained in the same event list.
+        #  are all contained in the same event list
         evt_path_insts = [e_key.split('_')[1] for e_key in evt_path_keys]
 
         # If the number of instruments specified in the configuration file headers doesn't match the number of
