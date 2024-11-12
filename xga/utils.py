@@ -106,7 +106,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
     #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected.
     # THIS WON'T CAUSE ANY PROBLEMS WITH THE MULTI-TELESCOPE XGA BECAUSE ANY BLACKLIST WITH ONLY ONE COLUMN *MUST*
-    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPE
+    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPES
     if len(blacklist.columns) == 1:
         # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
         #  will have the same behaviour as before, all instruments for the ObsID are excluded
@@ -143,7 +143,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         # If new telescope sections have been implemented like I specified they should be, the structure of these keys
         #  should be predictable - whatever is being counted as an 'instrument' should be in the middle. I put
         #  'instrument' in quotes because it is possible (as it may be with eROSITA) that the different instruments
-        #  are all contained in the same event list.
+        #  are all contained in the same event list
         evt_path_insts = [e_key.split('_')[1] for e_key in evt_path_keys]
 
         # If the number of instruments specified in the configuration file headers doesn't match the number of
@@ -172,7 +172,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                     if os.path.exists(evt_path):
                         # Just read in the header of the events file - want to avoid reading a big old table of
                         #  events into memory, as we might be doing this a bunch of times
-                        evts_header = read_header(evt_path)
+                        evts_header = read_header(evt_path, ext="EVENTS")
 
                         # For the eRASS fields it seems that RA_CEN and DEC_CEN are the best ways of defining where
                         #  the data is located on the sky. Non-survey modes however should use the RA_PNT and DEC_PNT
@@ -205,8 +205,12 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                             info['DEC_PNT'] = evts_header["DEC_PNT"]
 
                         # We check that the filter value isn't in the list of unacceptable filters for the
-                        #  current telescope
-                        good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
+                        #  current telescope.
+                        #  We do this because not all telescopes have a filter header to check.
+                        if 'FILTER' in evts_header:
+                            good_filt = evts_header['FILTER'] not in BANNED_FILTS[tel]
+                        else:
+                            good_filt = True
 
                         # If we determined further up in this process that the current telescope's event lists are
                         #  actually combined from multiple instruments, and we need to determine which of the
@@ -407,14 +411,15 @@ if not os.path.exists(CONFIG_PATH):
 # This dictionary both defines the telescopes that XGA is compatible with, and their allowed instruments. These mission
 #  and instrument names should all be lowercase, that will be the general storage convention throughout XGA
 ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
-                "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"]}
+                "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"],
+                "chandra": ["acis"]}
 # TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
 XMM_INST = ALLOWED_INST['xmm']
 # I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())
 # This dictionary won't be used much, but it's just so we have access to some properly formatted telescope names
-PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA'}
+PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA', 'chandra': 'Chandra'}
 # This dictionary is an important one, it will be set during the course of the setup process in this file, and
 #  defines whether a particular telescope that XGA supports seems to have the files necessary to be used by sources
 #  and samples. The default is False, and if we find otherwise during this process then that will be changed
@@ -423,7 +428,7 @@ USABLE = {tele: False for tele in TELESCOPES}
 # Here we define regular expressions that will allow use to verify the structure of an ObsID for a particular
 #  telescope - this functionality is also in DAXA mission classes, so we may just switch to using them in the
 #  future to avoid features duplication
-OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$'}
+OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "chandra": '^[0-9]{1,5}'}
 
 # This is another sort of duplication of a DAXA feature, and stores the default search distances to be used for
 #  each telescope in the xga.match.separation_match function. These are loosely based on the field of view of
@@ -431,7 +436,7 @@ OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$'}
 #  there may be multi-level dictionaries
 # TODO when I chuck ROSAT in here add an entry like 'rosat': {'PSPCB': Quantity(60, 'arcmin'),
 #  'PSPCC': Quantity(60, 'arcmin'), 'HRI': Quantity(19, 'arcmin'), 'RASS': Quantity(3, 'deg')}}
-DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'), 'erosita': Quantity(60, 'arcmin')}
+DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'), 'erosita': Quantity(60, 'arcmin'), 'chandra': Quantity(30, 'arcmin')}
 
 # This defines where the observation census files would be located for each of the allowed telescopes (the top level
 #  keys of ALLOWED_INST are telescope/mission names) - not every telescope is guaranteed to have a file created, it
@@ -441,7 +446,8 @@ BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format
 
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
-                "erosita": ['CALIB', 'CLOSED']}
+                "erosita": ['CALIB', 'CLOSED'],
+                "chandra": []}
 # ----------------------------------------------------------------------------
 
 
@@ -492,8 +498,18 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
                  "erosita_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_expmap.fits",
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
+# The information required to use Chandra data
+CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
+                 "clean_acis_evts": "/this/is/required/{obs_id}/events/obsid{obs_id}-instACIS-subexpE001-en-cleanevents.fits",
+                 "attitude_file": "/this/is/required/{obs_id}/misc/obsid{obs_id}-instACIS-subexpE001-aspectsolution.fits",
+                 "lo_en": ['0.50', '2.00'],
+                 "hi_en": ['2.00', '10.00'],
+                 "acis_image": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-image.fits",
+                 "acis_expmap": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-expmap.fits",
+                 "region_file": "/this/is/optional/chandra_obs/regions/obsid{obs_id}/regions.reg"}
+
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
-tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES}
+tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'chandra': CHANDRA_FILES}
 # -------------------------------------------------------------------------------
 
 
@@ -570,6 +586,8 @@ xmm_sky = def_unit("xmm_sky")
 xmm_det = def_unit("xmm_det")
 erosita_sky = def_unit("erosita_sky")
 erosita_det = def_unit("erosita_det")
+chandra_sky = def_unit("chandra_sky")
+chandra_det = def_unit("chandra_det")
 
 # This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
 try:
@@ -577,7 +595,7 @@ try:
 except ValueError:
     # Adding the unit instances we created to the astropy pool of units - means we can do things like just defining
     #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
-    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det])
+    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandra_det])
 # ---------------------------------------------------------------
 
 
@@ -647,11 +665,48 @@ if shutil.which("evtool") is None:
 else:
     eSASS_AVAIL = True
 
+# Then, we check to see what version of CIAO (if any) is installed - for the Chandra mission
+# Here we check to see whether CIAO is installed (along with all the necessary paths)
+CIAO_VERSION = None
+# This checks for an installation of Ciao
+CIAO_AVAIL = False
+
+ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+# Just turn those pesky byte outputs into strings
+ciao_out = ciao_out.decode("UTF-8")
+ciao_err = ciao_err.decode("UTF-8")
+
+if "ciaover: command not found" in ciao_err:
+        warn("No CIAO installation detected on system, "
+             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
+else:
+    # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
+    #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
+    #  the ciao version
+    split_out = [en.strip(' ') for en in ciao_out.split('\n')]
+    # Strip the CIAO version out of the ciaover output
+    CIAO_VERSION = split_out[1].split(':')[-1].split('CIAO')[-1].strip(' ').split(' ')[0]
+    CIAO_AVAIL = True
+
+# Finally, we check to see what version of CALDB (if any) is installed - for the Chandra mission
+# Here we check to see whether CALDB is installed (along with all the necessary paths)
+CALDB_VERSION = None
+# This checks for an installation of Ciao
+CALDB_AVAIL = False
+
+if 'not installed' in split_out[5].lower():
+    warn("A Chandra CALDB installation cannot be identified on your system, and as such "
+         "Chandra data cannot be processed.", stacklevel=2)
+else:
+    # Strip out the CALDB version
+    CALDB_VERSION = split_out[5].split(':')[-1].strip()
+    CALDB_AVAIL = True
+
 # We set up a mapping from telescope name to software version constant
 # Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
 #  file. Previously a warning for missing software would be shown at the time of checking, but now we wait to see
 #  which telescopes are configured in the XGA config file before warning that telescope software is missing
-tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION}
+tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION, 'chandra': CIAO_VERSION}
 # --------------------------------------------------------------------------
 
 
