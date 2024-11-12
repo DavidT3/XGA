@@ -106,7 +106,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     # This part here is to support blacklists used by older versions of XGA, where only a full ObsID was excluded.
     #  Now we support individual instruments of ObsIDs being excluded from use, so there are extra columns expected.
     # THIS WON'T CAUSE ANY PROBLEMS WITH THE MULTI-TELESCOPE XGA BECAUSE ANY BLACKLIST WITH ONLY ONE COLUMN *MUST*
-    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPE
+    #  BELONG TO XMM, AS IT PRE-DATED OUR ADDING SUPPORT FOR MULTIPLE TELESCOPES
     if len(blacklist.columns) == 1:
         # Adds the four new columns, all with a default value of True. So any ObsID already in the blacklist
         #  will have the same behaviour as before, all instruments for the ObsID are excluded
