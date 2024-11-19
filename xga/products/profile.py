@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 13:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 14:02. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2502,6 +2502,11 @@ class NewHydrostaticMass(BaseProfile1D):
         else:
             already_run = False
 
+        # If we have to do any numerical differentiation, which we will if we're not using smooth models that have
+        #  analytical solutions to their first order derivative, then we need a 'dx' value. We'll choose a very
+        #  small one, dividing the outermost radius of this profile be 1e+6
+        dx = self.radii.max()/1e+6
+
         # Here we prepare the radius uncertainties for use (if they've been passed) - the goal here is to end up
         #  with a set of radius samples (either just the one, or M if there are M radii passed) that can be used for
         #  the extraction of the temperature, density, temperature gradient, and density gradient values that we need
@@ -2530,8 +2535,6 @@ class NewHydrostaticMass(BaseProfile1D):
             else:
                 calc_rad = radius
 
-        print(calc_rad.shape)
-
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
         #  ways of calculating the profile that we now support (using smooth models, using data points, using
@@ -2544,8 +2547,9 @@ class NewHydrostaticMass(BaseProfile1D):
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model) - the radii errors are included if supplied.
             dens = self._dens_model.get_realisations(calc_rad)
-            print(dens.shape)
-            print(dens)
+            dens_der = self._dens_model.derivative(calc_rad, dx, True)
+            print(dens_der.shape)
+            print(dens_der)
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we just get
         #  some realizations
@@ -2564,17 +2568,9 @@ class NewHydrostaticMass(BaseProfile1D):
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
             dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
-            print(dens_interp)
-            # Restore the interpolated density profile realizations to an astropy quantity array - this should also
-            #  take into account radius errors (if they have been passed), as we're using the 'calc_rad' variable.
+            # TODO I don't know if I can include the radius distribution here, but if I can then I should
+            # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
-            print(dens.shape)
-            print(dens)
-
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
-            print(dens.shape)
-            print(dens)
-            stop
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -2603,7 +2599,7 @@ class NewHydrostaticMass(BaseProfile1D):
                                   "using a smooth temperature model.")
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            temp = self._temp_model.get_realisations(radius)
+            temp = self._temp_model.get_realisations(calc_rad)
 
         # In this rare case temperature and density profiles are identical, and so we just get some realizations
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
@@ -2639,17 +2635,6 @@ class NewHydrostaticMass(BaseProfile1D):
         if not already_run and not temp.unit.is_equivalent('keV'):
             temp = (temp * k_B).to('keV')
 
-
-        raise NotImplementedError("The method is not complete beyond this point")
-
-        # TODO DON'T KNOW IF THIS IS REALLY THE PLACE FOR THIS OR HOW I'M GOING TO HANDLE THIS AT ALL
-        # If the models don't have analytical solutions to their derivative then the derivative method will need
-        #  a dx to assume, so I will set one equal to radius/1e+6 (or the max radius if non-scalar), should be
-        #  small enough.
-        if radius.isscalar:
-            dx = radius/1e+6
-        else:
-            dx = radius.max()/1e+6
 
         # And now we do the actual mass calculation
         if not already_run:
