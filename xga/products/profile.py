@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 11:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 12:39. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2496,13 +2496,42 @@ class NewHydrostaticMass(BaseProfile1D):
 
         # If a particular radius+radius error (if passed) already has a result in the profiles storage structure
         #  then we'll just grab that rather than redoing a calculation unnecessarily.
-
-        # Check to see whether the calculation has to be run again
         if radius.isscalar and stor_key in self._masses:
             already_run = True
             mass_dist = self._masses[stor_key]
         else:
             already_run = False
+
+        # Here we prepare the radius uncertainties for use (if they've been passed) - the goal here is to end up
+        #  with a set of radius samples (either just the one, or M if there are M radii passed) that can be used for
+        #  the extraction of the temperature, density, temperature gradient, and density gradient values that we need
+        # We make sure to have the number of samples that was set for this profile
+        if not already_run:
+            # Declaring this allows us to randomly draw from Gaussian dists, if the user has given us radius error
+            #  information
+            rng = np.random.default_rng()
+            # In this case a single radius value, and a radius uncertainty has been passed
+            if radius.isscalar and radius_err is not None:
+                # We just want a single distribution of radius here (as one radius value was passed), but make
+                #  sure that it is in a (1, N) shaped array as some downstream tasks in model classes, such as
+                #  get_realisations and derivative, want radius DISTRIBUTIONS to be 2dim arrays, and multiple radius
+                #  VALUES (e.g. [1, 2, 3, 4]) to be 1dim arrays
+                calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (1, self._num_samples)),
+                                    radius_err.unit)
+            # In this case multiple radius values have been passed, each with an uncertainty
+            elif not radius.isscalar and radius_err is not None:
+                # So here we're setting up M radius distributions, where M is the number of input radii. So this radius
+                #  array ends up being shape (M, N), where M is the number of radii, and M is the number of samples in
+                #  the model posterior distributions
+                calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (self._num_samples, len(radius))),
+                                    radius_err.unit).T
+            # This is the simplest case, just a radius (or a set of radii) with no uncertainty information
+            #  has been passed
+            else:
+                calc_rad = radius
+
+        print(calc_rad)
+        stop
 
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
@@ -2603,27 +2632,49 @@ class NewHydrostaticMass(BaseProfile1D):
 
         raise NotImplementedError("The method is not complete beyond this point")
 
+        # TODO DON'T KNOW IF THIS IS REALLY THE PLACE FOR THIS OR HOW I'M GOING TO HANDLE THIS AT ALL
+        # If the models don't have analytical solutions to their derivative then the derivative method will need
+        #  a dx to assume, so I will set one equal to radius/1e+6 (or the max radius if non-scalar), should be
+        #  small enough.
+        if radius.isscalar:
+            dx = radius/1e+6
+        else:
+            dx = radius.max()/1e+6
 
-        # And now we do the actual entropy calculation
+        # And now we do the actual mass calculation
         if not already_run:
-            ent_dist = (temp / dens**(2/3)).T
+
+            # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
+            #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
+            #  quantities that way.
+            mass_dist = (((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G))
+                            * ((dens * temp_der) + (temp * dens_der)))
+
+            # Just converts the mass/masses to the unit we normally use for them
+            # TODO DID HAVE A .T HERE TO TRANSPOSE THE RESULT - NEED TO CHECK IF THAT WILL BE NECESSARY FOR THIS
+            #  NEW SET UP
+            mass_dist = mass_dist.to('Msun')
+
             # Storing the result if it is for a single radius
             if radius.isscalar:
-                self._entropies[radius] = ent_dist
+                self._masses[stor_key] = mass_dist
 
-        # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
-        #  call, we use the distribution to calculate median and confidence limit values
-        ent_med = np.nanpercentile(ent_dist, 50, axis=0)
-        ent_lower = ent_med - np.nanpercentile(ent_dist, lower, axis=0)
-        ent_upper = np.nanpercentile(ent_dist, upper, axis=0) - ent_med
+        # Whether we just calculated the hydrostatic mass, or we fetched it from storage at the beginning of this
+        #  method call, we use the distribution to calculate median and confidence limit values
+        mass_med = np.nanpercentile(mass_dist, 50, axis=0)
+        mass_lower = mass_med - np.nanpercentile(mass_dist, lower, axis=0)
+        mass_upper = np.nanpercentile(mass_dist, upper, axis=0) - mass_med
 
         # Set up the result to return as an astropy quantity.
-        ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
+        mass_res = Quantity(np.array([mass_med.value, mass_lower.value, mass_upper.value]), mass_dist.unit)
 
-        if np.any(ent_res[0] < 0):
-            raise ValueError("A specific entropy of less than zero has been measured, which is not physical.")
+        # We check to see if any of the upper limits (i.e. measured value plus +ve error) are below zero, and if so
+        #  then we throw an exception up
+        if np.any((mass_res[0] + mass_res[1]) < 0):
+            raise ValueError("A mass upper limit (i.e. measured value plus +ve error) of less than zero has been "
+                             "measured, which is not physical.")
 
-        return ent_res, ent_dist
+        return mass_res, mass_dist
 
     def annular_mass(self, outer_radius: Quantity, inner_radius: Quantity, conf_level: float = 68.2):
         """
