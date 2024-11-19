@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 09:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 09:57. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2629,8 +2629,8 @@ class NewHydrostaticMass(BaseProfile1D):
         # This PROBABLY NOT AT ALL valid because they're just posterior distributions of mass
         return outer_mass_dist - inner_mass_dist
 
-    def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8), bins: Union[str, int] = 'auto',
-                       colour: str = "lightslategrey"):
+    def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize: Tuple[float, float] = (8, 8),
+                       bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
         """
         A method which will generate a histogram of the mass distribution that resulted from the mass calculation
         at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
@@ -2642,7 +2642,7 @@ class NewHydrostaticMass(BaseProfile1D):
         :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
             algorithm name.
         :param str colour: The desired colour of the histogram.
-        :param tuple figsize: The desired size of the histogram figure.
+        :param Tuple[float, float] figsize: The desired size of the histogram figure.
         """
         if not radius.isscalar:
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
@@ -2716,8 +2716,9 @@ class NewHydrostaticMass(BaseProfile1D):
 
         return bar_frac_res, bar_frac_dist
 
-    def view_baryon_fraction_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
-                                  bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
+    def view_baryon_fraction_dist(self, radius: Quantity, conf_level: float = 68.2,
+                                  figsize: Tuple[float, float] = (8, 8), bins: Union[str, int] = 'auto',
+                                  colour: str = "lightslategrey"):
         """
         A method which will generate a histogram of the baryon fraction distribution that resulted from the mass
         calculation at the supplied radius. If the baryon fraction for the passed radius has already been
@@ -2729,7 +2730,7 @@ class NewHydrostaticMass(BaseProfile1D):
         :param float conf_level: The confidence level for the mass uncertainties, the default is 68.2% (~1σ).
         :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
             algorithm name.
-        :param tuple figsize: The desired size of the histogram figure.
+        :param Tuple[float, float] figsize: The desired size of the histogram figure.
         :param str colour: The desired colour of the histogram.
         """
         if not radius.isscalar:
@@ -3010,7 +3011,7 @@ class NewHydrostaticMass(BaseProfile1D):
 
         return ax_arr
 
-    def diagnostic_view(self, src=None, figsize: tuple = None):
+    def diagnostic_view(self, src=None, figsize: Tuple[float, float] = None):
         """
         This method produces a figure with the most important products that went into the creation of this
         HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
@@ -3019,8 +3020,8 @@ class NewHydrostaticMass(BaseProfile1D):
         was generated from is passed.
 
         :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
-        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
-            it is set automatically.
+        :param Tuple[float, float] figsize: A tuple that sets the size of the diagnostic plot, default is None in
+            which case it is set automatically.
         """
 
         # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
@@ -3042,7 +3043,7 @@ class NewHydrostaticMass(BaseProfile1D):
 
         plt.close('all')
 
-    def save_diagnostic_view(self, save_path: str, src=None, figsize: tuple = None):
+    def save_diagnostic_view(self, save_path: str, src=None, figsize: Tuple[float, float] = None):
         """
         This method saves a figure (without displaying) with the most important products that went into the creation
         of this HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
@@ -3052,8 +3053,8 @@ class NewHydrostaticMass(BaseProfile1D):
 
         :param str save_path: The path and filename where the diagnostic figure should be saved.
         :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
-        :param tuple figsize: A tuple that sets the size of the diagnostic plot, default is None in which case
-            it is set automatically.
+        :param Tuple[float, float] figsize: A tuple that sets the size of the diagnostic plot, default is None
+            in which case it is set automatically.
         """
         # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
         #  some common sense checks if a source has been passed.
