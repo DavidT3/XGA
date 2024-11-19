@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 13:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 13:32. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2564,8 +2564,12 @@ class NewHydrostaticMass(BaseProfile1D):
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
             dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
-            # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+            print(dens_interp)
+            # Restore the interpolated density profile realizations to an astropy quantity array - this should also
+            #  take into account radius errors (if they have been passed), as we're using the 'calc_rad' variable.
+            dens = Quantity(dens_interp(calc_rad).T, self.density_profile.values_unit)
+            print(dens.shape)
+            print(dens)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
