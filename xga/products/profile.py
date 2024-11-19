@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 12:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 12:44. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2408,12 +2408,12 @@ class NewHydrostaticMass(BaseProfile1D):
         #  hydrostatic mass profile rather than model derived.
         self._num_samples = num_samples
 
-        ent, ent_dist = self.entropy(radii, conf_level=68)
-        ent_vals = ent[0, :]
-        ent_errs = np.mean(ent[1:, :], axis=0)
+        mass, mass_dist = self.mass(radii, conf_level=68, radius_err=radii_err)
+        mass_vals = mass[0, :]
+        mass_errs = np.mean(mass[1:, :], axis=0)
 
-        super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
+        super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
+                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
                          auto_save=auto_save)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
