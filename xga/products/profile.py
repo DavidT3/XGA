@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 14:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2024, 22:49. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2127,10 +2127,327 @@ class HydrostaticMass(BaseProfile1D):
                  "you will be extrapolating based on the model fits.", stacklevel=2)
 
 
+
+
+
+
+class NewHydrostaticMass(BaseProfile1D):
+    """
+    A profile product which uses input temperature and density profiles to calculate a cumulative hydrostatic mass
+    profile - used in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2024arXiv240307982T/abstract
+    for instance). Similar in function to the SpecificEntropy profile class, in that hydrostatic mass values are
+    calculated during the declaration of this class from multiple other profiles, rather than being passed in directly.
+
+    The hydrostatic mass profile can be used with several different kinds of input profiles, reflecting some of
+    the different ways that they are calculated in the literature, and the practical limitations of
+    generating 'de-projected' profiles. In short, this profile can be used in the following different ways:
+
+    * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
+      density profiles also do not need to both be projected or both be de-projected. Clearly, from a purely physical
+      point of view, it would be better to pass 3D profiles, but practically de-projection processes often cause a lot
+      of problems, so the choice is left to the user.
+    * The hydrostatic mass values can be calculated either from models fit to the input profiles, or from the data
+      points of the input profiles. This means that the user can choose between a 'cleaner' profile from generated
+      from smooth models, or a data-driven profile that might better represent the intricacies of the particular
+      galaxy cluster.
+    * If data points are being used rather than models, and the radial binning is different between the temperature
+      and density profiles, then the data points on the profile with wider bins can either be interpolated, or matched
+      to the data points of the other profile that they cover.
+
+    :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+        temperature profile to take temperature information from.
+    :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
+        be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA temperature
+        model class. Default is None, in which case this class will use profile data points to calculate
+        hydrostatic mass.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+    :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
+        be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA density model class.
+        Default is None, in which case this class will use profile data points to calculate hydrostatic mass.
+    :param Quantity radii: The radii at which to measure the hydrostatic mass - this is only necessary if model fits
+        are being used to calculate hydrostatic mass, otherwise profile radii will be used.
+    :param Quantity radii_err: The uncertainties on the radii - this is only necessary if model fits are
+        being used to calculate hydrostatic mass, otherwise profile radii errors will be used.
+    :param Quantity deg_radii: The radii values, but in units of degrees  - this is only necessary if model
+        fits are  being used to calculate hydrostatic mass, otherwise profile radii will be used.
+    :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+    :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+        sampler to set up.
+    :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler
+        to take. If a single number is passed then that number of steps is used for both profiles, otherwise
+        if a list is passed the first entry is used for the temperature fit, and the second for the
+        density fit.
+    :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+    :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
+    :param bool progress:  Controls whether fit progress bars are displayed.
+    :param bool interp_data: If the hydrostatic mass profile is to be derived from data points rather than fitted
+        models, this controls whether the data profile with the coarser bins is interpolated, or whether the other
+        profile's data points are matched with the value that was measured for the radial region they
+        are in (the default).
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    """
+
+    def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
+                 density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
+                 density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
+                 deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 progress: bool = True, interp_data: bool = False, auto_save: bool = False):
+        """
+        A profile product which uses input temperature and density profiles to calculate a cumulative hydrostatic mass
+        profile - used in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2024arXiv240307982T/abstract
+        for instance). Similar in function to the SpecificEntropy profile class, in that hydrostatic mass values are
+        calculated during the declaration of this class from multiple other profiles, rather than being passed in
+        directly.
+
+        The hydrostatic mass profile can be used with several different kinds of input profiles, reflecting some of
+        the different ways that they are calculated in the literature, and the practical limitations of
+        generating 'de-projected' profiles. In short, this profile can be used in the following different ways:
+
+        * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
+          density profiles also do not need to both be projected or both be de-projected. Clearly, from a purely
+          physical point of view, it would be better to pass 3D profiles, but practically de-projection processes
+          often cause a lot of problems, so the choice is left to the user.
+        * The hydrostatic mass values can be calculated either from models fit to the input profiles, or from the data
+          points of the input profiles. This means that the user can choose between a 'cleaner' profile from generated
+          from smooth models, or a data-driven profile that might better represent the intricacies of the particular
+          galaxy cluster.
+        * If data points are being used rather than models, and the radial binning is different between the temperature
+          and density profiles, then the data points on the profile with wider bins can either be interpolated, or
+          matched to the data points of the other profile that they cover.
+
+        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+            temperature profile to take temperature information from.
+        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
+            be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA temperature
+            model class. Default is None, in which case this class will use profile data points to calculate
+            hydrostatic mass.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+        :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
+            be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA density
+            model class. Default is None, in which case this class will use profile data points to calculate
+            hydrostatic mass.
+        :param Quantity radii: The radii at which to measure the hydrostatic mass - this is only necessary if
+            model fits are being used to calculate hydrostatic mass, otherwise profile radii will be used.
+        :param Quantity radii_err: The uncertainties on the radii - this is only necessary if model fits are
+            being used to calculate hydrostatic mass, otherwise profile radii errors will be used.
+        :param Quantity deg_radii: The radii values, but in units of degrees  - this is only necessary if model
+            fits are  being used to calculate hydrostatic mass, otherwise profile radii will be used.
+        :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+        :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+            sampler to set up.
+        :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler
+            to take. If a single number is passed then that number of steps is used for both profiles, otherwise
+            if a list is passed the first entry is used for the temperature fit, and the second for the
+            density fit.
+        :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+        :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
+        :param bool progress:  Controls whether fit progress bars are displayed.
+        :param bool interp_data: If the hydrostatic mass profile is to be derived from data points rather than
+            fitted models, this controls whether the data profile with the coarser bins is interpolated, or whether
+            the other profile's data points are matched with the value that was measured for the radial region they
+            are in (the default).
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The
+            default is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        """
+        # This init and the SpecificEntropy init share the same DNA - lots of duplicated code unfortunately
+
+        # We check whether the temperature profile passed is actually the type of profile we need
+        if not isinstance(temperature_profile, (GasTemperature3D, ProjectedGasTemperature1D)):
+            raise TypeError("The {} class is not an accepted input for 'temperature_profile'; only a GasTemperature3D "
+                            "or ProjectedGasTemperature1D instance may be "
+                            "passed.".format(str(type(temperature_profile))))
+
+        # We repeat this process with the density profile
+        # TODO Add a check for projected density, if I ever implement such a thing
+        if not isinstance(density_profile, GasDensity3D):
+            raise TypeError("The {} class is not an accepted input for 'density_profile'; only a GasDensity3D "
+                            "instance may be passed.".format(str(type(density_profile))))
+
+        # We also need to check that someone hasn't done something dumb like pass profiles from two different
+        #  clusters, so we'll compare source names.
+        if temperature_profile.src_name != density_profile.src_name:
+            raise ValueError("You have passed temperature and density profiles from two different "
+                             "sources, any resulting hydrostatic mass measurements would not be valid, so this is not "
+                             "allowed.")
+        # And check they were generated with the same central coordinate, otherwise they may not be valid. I
+        #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
+        elif np.any(temperature_profile.centre != density_profile.centre):
+            raise ValueError("The temperature and density profiles do not have the same central coordinate.")
+        # Same reasoning with the ObsID and instrument
+        elif temperature_profile.obs_id != density_profile.obs_id:
+            warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
+        elif temperature_profile.instrument != density_profile.instrument:
+            warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
+
+        # Now we check whether the right combination of information has been passed depending on whether we are
+        #  going to be using model fits or not (we need passed radii if a model is to be used).
+        if ((temperature_model is not None or density_model is not None) and
+                (radii is None or radii_err is None or deg_radii is None)):
+            raise ValueError("Radii at which to calculate hydrostatic mass (the 'radii', 'radii_err', and "
+                             "'deg_radii' arguments) must be passed if 'temperature_model' or 'density_model' is set.")
+        else:
+            if len(temperature_profile) > len(density_profile):
+                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
+                if not interp_data:
+                    within_bnds = np.where((temperature_profile.radii >= density_profile.annulus_bounds.min()) &
+                                           (temperature_profile.radii <= density_profile.annulus_bounds.max()))[0]
+                else:
+                    within_bnds = np.arange(0, len(temperature_profile.radii))
+
+                if len(within_bnds) != len(temperature_profile.radii):
+                    warn("The radii extracted from the temperature profile for the creation of the hydrostatic mass "
+                         "profile have been truncated to match the radius range of the density "
+                         "profile.", stacklevel=2)
+                radii = temperature_profile.radii[within_bnds]
+                radii_err = temperature_profile.radii_err[within_bnds]
+                deg_radii = temperature_profile.deg_radii[within_bnds]
+            else:
+                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
+                if not interp_data:
+                    within_bnds = np.where((density_profile.radii >= temperature_profile.annulus_bounds.min()) &
+                                           (density_profile.radii <= temperature_profile.annulus_bounds.max()))[0]
+                else:
+                    within_bnds = np.arange(0, len(density_profile.radii))
+
+                if len(within_bnds) != len(density_profile.radii):
+                    warn("The radii extracted from the density profile for the creation of the hydrostatic mass "
+                         "profile have been truncated to match the radius range of the temperature "
+                         "profile.", stacklevel=2)
+
+                radii = density_profile.radii[within_bnds]
+                radii_err = density_profile.radii_err[within_bnds]
+                deg_radii = density_profile.deg_radii[within_bnds]
+
+        # Set the attribute which lets the entropy calculation method know whether to interpolate any data points
+        #  or not, if smooth fitted models are not going to be used
+        self._interp_data = interp_data
+
+        # We see if either of the profiles have an associated spectrum
+        if temperature_profile.set_ident is None and density_profile.set_ident is None:
+            set_id = None
+            set_store = None
+        elif temperature_profile.set_ident is None and density_profile.set_ident is not None:
+            set_id = density_profile.set_ident
+            set_store = density_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is None:
+            set_id = temperature_profile.set_ident
+            set_store = temperature_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
+            if temperature_profile.set_ident != density_profile.set_ident:
+                warn("The temperature and density profile you passed were generated from different sets of annular"
+                     " spectra, the hydrostatic mass profile's associated set ident will be set to None.", stacklevel=2)
+                set_id = None
+                set_store = None
+            else:
+                set_id = temperature_profile.set_ident
+                set_store = temperature_profile.associated_set_storage_key
+
+        self._temp_prof = temperature_profile
+        self._dens_prof = density_profile
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+        else:
+            radii = radii.to('kpc')
+            radii_err = radii_err.to('kpc')
+        # This will be overwritten by the super() init call, but it allows rad_check to work
+        self._radii = radii
+
+        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
+        #  measure entropy from the models, but I do need to check that the passed radii are within the radii of the
+        #  and warn the user if they aren't
+        self.rad_check(radii)
+
+        if isinstance(num_steps, int):
+            temp_steps = num_steps
+            dens_steps = num_steps
+        elif isinstance(num_steps, list) and len(num_steps) == 2:
+            temp_steps = num_steps[0]
+            dens_steps = num_steps[1]
+        else:
+            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
+                             "temperature profile fit and the second for the density profile fit")
+
+        # If models are passed then we're going to make sure that they're fit here - starting with temperature. We'll
+        #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
+        #  one model and not another, using a combination of model and datapoints to calculate entropy
+        if temperature_model is not None:
+            temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
+                                                        num_walkers, progress, show_warn)
+            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            # Have to check whether the fits were actually successful, as the fit method will return a model instance
+            #  either way
+            if not temperature_model.success:
+                raise XGAFitError("The fit to the temperature was unsuccessful, cannot define hydrostatic mass "
+                                  "profile.")
+        elif interp_data:
+            key_temp_mod_part = "tmdatainterp"
+        else:
+            key_temp_mod_part = "tmdata"
+
+        if density_model is not None:
+            density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers,
+                                                progress, show_warn)
+            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            # Have to check whether the fits were actually successful, as the fit method will return a model instance
+            #  either way
+            if not density_model.success:
+                raise XGAFitError("The fit to the density was unsuccessful, cannot define hydrostatic mass profile.")
+        elif interp_data:
+            key_dens_mod_part = "dmdatainterp"
+        else:
+            key_dens_mod_part = "dmdata"
+
+        self._temp_model = temperature_model
+        self._dens_model = density_model
+
+        # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already but
+        #  we also use that value for the number of data realisations if the user has opted for a data point derived
+        #  entropy profile rather than model derived.
+        self._num_samples = num_samples
+
+        ent, ent_dist = self.entropy(radii, conf_level=68)
+        ent_vals = ent[0, :]
+        ent_errs = np.mean(ent[1:, :], axis=0)
+
+        super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
+                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
+                         auto_save=auto_save)
+
+        # Need a custom storage key for this entropy profile, incorporating all the information we have about what
+        #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
+        #  the form used by HydrostaticMass profiles.
+        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
+        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        cur_part = self.storage_key
+
+        whole_new = "{ntm}_{ndm}_{c}_{t}_{d}".format(ntm=key_temp_mod_part, ndm=key_dens_mod_part, c=cur_part,
+                                                     t=temp_part, d=dens_part)
+        self._storage_key = whole_new
+
+        # Setting the type
+        self._prof_type = "hydrostatic_mass"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = r"M$_{\rm{hydro}}$"
+
+        # Setting up a dictionary to store mass results in.
+        self._masses = {}
+
+
+
+
+
+
+
+
+
 class SpecificEntropy(BaseProfile1D):
     """
     A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
-    the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
+    the kind often used in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
     for instance). Somewhat similar in function to the HydrostaticMass profile class, in that entropy values are
     calculated during the declaration of this class, rather than being passed in.
 
@@ -2161,7 +2478,7 @@ class SpecificEntropy(BaseProfile1D):
     :param Quantity radii: The radii at which to measure the entropy - this is only necessary if model fits are
         being used to calculate entropy, otherwise profile radii will be used.
     :param Quantity radii_err: The uncertainties on the radii - this is only necessary if model fits are
-        being used to calculate entropy, otherwise profile radii will be used.
+        being used to calculate entropy, otherwise profile radii errors will be used.
     :param Quantity deg_radii: The radii values, but in units of degrees  - this is only necessary if model
         fits are  being used to calculate entropy, otherwise profile radii will be used.
     :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
