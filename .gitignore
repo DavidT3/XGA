@@ -9,3 +9,4 @@ xga_output
 __pycache__
 /docs/build
 *noupload*
+.DS_Store
