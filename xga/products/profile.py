@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 12:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 13:18. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2530,8 +2530,7 @@ class NewHydrostaticMass(BaseProfile1D):
             else:
                 calc_rad = radius
 
-        print(calc_rad)
-        stop
+        print(calc_rad.shape)
 
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
@@ -2543,8 +2542,10 @@ class NewHydrostaticMass(BaseProfile1D):
                 raise XGAFitError("The density model fit was not successful, as such we cannot calculate "
                                   "hydrostatic mass using a smooth density model.")
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
-            #  the definition of this source of the model.
-            dens = self._dens_model.get_realisations(radius)
+            #  the definition of this source of the model) - the radii errors are included if supplied.
+            dens = self._dens_model.get_realisations(calc_rad)
+            print(dens.shape)
+            print(dens)
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we just get
         #  some realizations
