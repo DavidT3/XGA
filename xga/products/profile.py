@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:28. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2556,7 +2556,7 @@ class NewHydrostaticMass(BaseProfile1D):
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
-            dens_der = np.gradient(dens, calc_rad, axis=0)
+            dens_der = np.gradient(dens, self.radii, axis=0)
             print(dens_der)
 
         elif not already_run and self._interp_data:
@@ -2573,7 +2573,7 @@ class NewHydrostaticMass(BaseProfile1D):
             # TODO I don't know if I can include the radius distribution here, but if I can then I should
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
-            dens_der = np.gradient(dens, calc_rad, axis=0)
+            dens_der = np.gradient(dens, self.radii, axis=0)
             print(dens_der)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
@@ -2581,7 +2581,10 @@ class NewHydrostaticMass(BaseProfile1D):
         #  just read out the density data points (and make N realizations of them) with no funny business required
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
+            dens_der = np.gradient(dens, self.radii, axis=0)
+
         else:
+            # TODO NO DERIVATIVE HERE YET!!!
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
                                 self.density_profile.annulus_bounds[1:]]).T
 
@@ -2596,6 +2599,8 @@ class NewHydrostaticMass(BaseProfile1D):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
             dens_der = dens_der / (MEAN_MOL_WEIGHT * m_p)
 
+        # --------------------------- DEALING WITH THE TEMPERATURE INFO ---------------------------
+
         # We now essentially repeat the process we just did with the density profiles, constructing the temperature
         #  values that we are going to use in our hydrostatic mass measurements; from models, data points, or
         #  interpolating from data points
@@ -2606,11 +2611,13 @@ class NewHydrostaticMass(BaseProfile1D):
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
             temp = self._temp_model.get_realisations(calc_rad)
+            temp_der = self._temp_model.derivative(calc_rad, dx, True)
 
         # In this rare case temperature and density profiles are identical, and so we just get some realizations
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
+            temp_der = np.gradient(temp, self.radii, axis=0)
 
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realizations of the
@@ -2619,16 +2626,19 @@ class NewHydrostaticMass(BaseProfile1D):
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+            temp_der = np.gradient(temp, self.radii, axis=0)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
         elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
+            temp_der = np.gradient(temp, self.radii, axis=0)
         # And here, the final option, we're doing a data-point based profile without interpolation, and we need
         #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
         #  temperature value - in practise this means that each density will be paired with the temperature
         #  realizations whose radial coverage they fall within.
         else:
+            # TODO NO TEMP DERIVATIVE HERE YET!!!
             t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
                                 self.temperature_profile.annulus_bounds[1:]]).T
 
@@ -2641,10 +2651,8 @@ class NewHydrostaticMass(BaseProfile1D):
         if not already_run and not temp.unit.is_equivalent('keV'):
             temp = (temp * k_B).to('keV')
 
-
         # And now we do the actual mass calculation
         if not already_run:
-
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
             #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
             #  quantities that way.
