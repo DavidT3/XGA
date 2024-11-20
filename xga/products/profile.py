@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 20:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:01. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2556,7 +2556,7 @@ class NewHydrostaticMass(BaseProfile1D):
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
-            dens_der = np.gradient(dens, self.radii, axis=1)
+            dens_der = np.gradient(dens, calc_rad, axis=0)
             print(dens_der)
 
         elif not already_run and self._interp_data:
@@ -2573,7 +2573,7 @@ class NewHydrostaticMass(BaseProfile1D):
             # TODO I don't know if I can include the radius distribution here, but if I can then I should
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
-            dens_der = np.gradient(dens, self.radii, axis=1)
+            dens_der = np.gradient(dens, calc_rad, axis=0)
             print(dens_der)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
