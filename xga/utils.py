@@ -660,10 +660,17 @@ SASWARNING_LIST = warnings["WarnName"].values
 ESASS_VERSION = None
 # This checks for an installation of eSASS
 eSASS_AVAIL = False
+which_evtool = shutil.which("evtool")
 if shutil.which("evtool") is None:
     warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.")
 else:
     eSASS_AVAIL = True
+    if 'ESASS4EDR' in which_evtool.upper():
+        ESASS_VERSION = 'ESASS4EDR'
+    elif 'ESASS4DR1' in which_evtool.upper():
+        ESASS_VERSION = 'ESASS4DR1'
+    else:
+        warn("Unknown eSASS installation detected on system, as such some functions in xga.generate.esass may not work.")
 
 # Then, we check to see what version of CIAO (if any) is installed - for the Chandra mission
 # Here we check to see whether CIAO is installed (along with all the necessary paths)
