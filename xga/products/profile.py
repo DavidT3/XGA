@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 20:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 20:53. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2573,6 +2573,8 @@ class NewHydrostaticMass(BaseProfile1D):
             # TODO I don't know if I can include the radius distribution here, but if I can then I should
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+            dens_der = np.gradient(dens, self.radii, axis=1)
+            print(dens_der)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
