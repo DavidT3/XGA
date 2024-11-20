@@ -677,7 +677,7 @@ ciao_out = ciao_out.decode("UTF-8")
 ciao_err = ciao_err.decode("UTF-8")
 
 if "ciaover: command not found" in ciao_err:
-    split_out = [en.strip(' ') for en in ciao_out.split('\n')]
+    split_out = ''
     warn("No CIAO installation detected on system, "
             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
 else:
@@ -695,7 +695,10 @@ CALDB_VERSION = None
 # This checks for an installation of Ciao
 CALDB_AVAIL = False
 
-if 'not installed' in split_out[5].lower():
+if split_out == '':
+    warn("A Chandra CALDB installation cannot be identified on your system, and as such "
+         "Chandra data cannot be processed.", stacklevel=2)
+elif 'not installed' in split_out[5].lower():
     warn("A Chandra CALDB installation cannot be identified on your system, and as such "
          "Chandra data cannot be processed.", stacklevel=2)
 else:
