@@ -677,8 +677,9 @@ ciao_out = ciao_out.decode("UTF-8")
 ciao_err = ciao_err.decode("UTF-8")
 
 if "ciaover: command not found" in ciao_err:
-        warn("No CIAO installation detected on system, "
-             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
+    split_out = [en.strip(' ') for en in ciao_out.split('\n')]
+    warn("No CIAO installation detected on system, "
+            "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
 else:
     # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
     #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
