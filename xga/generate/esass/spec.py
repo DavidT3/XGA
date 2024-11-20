@@ -16,7 +16,7 @@ from .phot import evtool_image
 from .run import esass_call
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
-from ... import OUTPUT, NUM_CORES
+from ... import OUTPUT, NUM_CORES, ESASS_VERSION
 from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProductAvailableError, \
     TelescopeNotAssociatedError
 from ...samples.base import BaseSample
