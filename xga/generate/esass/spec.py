@@ -322,6 +322,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                     remove_all_but_merged_cmd])
             else:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
+                # Add handling for DR1 produced merged files
+                if ESASS_VERSION == "ESASS4DR1":
+                    # Remove "TM9" output if the instrument number is 5 or 7
+                    if inst_no in ['5', '7']:
+                        cmd_str += f";{remove_merged_dr1_9}"
+                    else:
+                        # Remove "TM8" output otherwise
+                        cmd_str += f";{remove_merged_dr1_8}"
+
 
             # If the user wants to group the spectra then this command should be added
             if group_spec:
