@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 14:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 19/11/2024, 20:49. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2556,6 +2556,8 @@ class NewHydrostaticMass(BaseProfile1D):
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
+            dens_der = np.gradient(dens, self.radii, axis=1)
+            print(dens_der)
 
         elif not already_run and self._interp_data:
             # This uses the density profile y-axis values (and their uncertainties) to draw N realizations of the
@@ -2586,9 +2588,11 @@ class NewHydrostaticMass(BaseProfile1D):
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
 
-        # Finally, whatever way we got the densities, we make sure they are in the right unit
+        # Finally, whatever way we got the densities, we make sure they are in the right unit (also their 1st
+        #  derivatives).
         if not already_run and not dens.unit.is_equivalent('1/cm^3'):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
+            dens_der = dens_der / (MEAN_MOL_WEIGHT * m_p)
 
         # We now essentially repeat the process we just did with the density profiles, constructing the temperature
         #  values that we are going to use in our hydrostatic mass measurements; from models, data points, or
