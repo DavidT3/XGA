@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 10:11. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -2448,18 +2448,14 @@ class BaseAggregateProfile1D:
         """
         The init for the BaseAggregateProfile1D class.
         """
-        # This checks that all types of profiles in the profiles list are the same
-        types = [type(p) for p in profiles]
-        if len(set(types)) != 1:
-            raise TypeError("All component profiles must be of the same type")
 
-        # This checks that all profiles have the same x units
+        # This checks that all profiles have the same x units - we used to explicitly check for Python instance
+        #  type, but actually we do want profiles to be plottable on the same axis if they have the same units
         x_units = [p.radii_unit.to_string() for p in profiles]
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
-        # THis checks that they all have the same y units. This is likely to be true if they are the same
-        #  type, but you never know
+        # THis checks that they all have the same y units.
         y_units = [p.values_unit.to_string() for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
