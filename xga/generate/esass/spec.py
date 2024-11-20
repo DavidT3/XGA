@@ -451,6 +451,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
     remove_merged_cmd = 'rm *srctoolout_0*'
+    # Commands to remove the merged files from eSASS4DR1. Will depend on instrument number. Insts 1, 2, 3, 4, 6 will use
+    #   remove merged dr1_8; insts 5 and 7 will use remove_merged_dr1_9. Run in addition to remove_merged_cmd above.
+    remove_merged_dr1_8 = 'rm *srctoolout_8*'
+    remove_merged_dr1_9 = 'rm *srctoolout_9*'
     # We also set up a command that will remove all spectra BUT the combined one, for when that is all the user wants
     #  (though honestly it seems wasteful to generate them all and not use them, this might change later
     remove_all_but_merged_cmd = "rm *srctoolout_*"
