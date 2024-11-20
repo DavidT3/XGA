@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:48. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2655,6 +2655,12 @@ class NewHydrostaticMass(BaseProfile1D):
 
         # And now we do the actual mass calculation
         if not already_run:
+
+            print(dens.shape)
+            print(dens_der.shape)
+            print(temp.shape)
+            print(temp_der.shape)
+
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
             #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
             #  quantities that way.
@@ -2664,7 +2670,7 @@ class NewHydrostaticMass(BaseProfile1D):
             # Just converts the mass/masses to the unit we normally use for them
             # TODO DID HAVE A .T HERE TO TRANSPOSE THE RESULT - NEED TO CHECK IF THAT WILL BE NECESSARY FOR THIS
             #  NEW SET UP
-            mass_dist = mass_dist.to('Msun')
+            mass_dist = mass_dist.to('Msun').T
 
             # Storing the result if it is for a single radius
             if radius.isscalar:
