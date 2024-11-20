@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 09:32. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2650,6 +2650,7 @@ class NewHydrostaticMass(BaseProfile1D):
         # We ensure the temperatures are in the right unit
         if not already_run and not temp.unit.is_equivalent('keV'):
             temp = (temp * k_B).to('keV')
+            temp_der = (temp_der * k_B).to('keV')
 
         # And now we do the actual mass calculation
         if not already_run:
