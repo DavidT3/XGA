@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 11:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 12:04. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -75,7 +75,7 @@ class NFW(BaseModel1D):
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
         norm_priors = [{'prior': Quantity([1e+12, 1e+16], 'Msun/Mpc^3'), 'type': 'uniform'}]
 
-        priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
+        priors = [r_core_priors[xu_ind], norm_priors[yu_ind]]
 
         nice_pars = [r"R$_{\rm{s}}$", r"\rho$_{0}$"]
         info_dict = {'author': 'Navarro J, Frenk C, White S', 'year': '1997',
