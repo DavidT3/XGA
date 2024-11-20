@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 12:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 15:44. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -77,7 +77,7 @@ class NFW(BaseModel1D):
 
         priors = [r_core_priors[xu_ind], norm_priors[yu_ind]]
 
-        nice_pars = [r"R$_{\rm{s}}$", r"\rho$_{0}$"]
+        nice_pars = [r"R$_{\rm{s}}$", r"$\rho_{0}$"]
         info_dict = {'author': 'Navarro J, Frenk C, White S', 'year': '1997',
                      'reference': 'https://ui.adsabs.harvard.edu/abs/1997ApJ...490..493N/abstract',
                      'general': 'The cumulative mass version of the NFW mass-density profile for galaxy \n'
