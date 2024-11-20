@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 17:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 17:34. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -99,7 +99,7 @@ class NFW(BaseModel1D):
         """
 
         norm_rad = x / r_scale
-        print((4*np.pi*rho_zero*np.power(r_scale, 3)*(np.log(1 + norm_rad) - (norm_rad / (1 + norm_rad)))).unit)
+        print((4*np.pi*rho_zero*np.power(r_scale, 3)*(np.log(1 + norm_rad) - (norm_rad / (1 + norm_rad))))[0].unit)
         stop
         return 4*np.pi*rho_zero*np.power(r_scale, 3)*(np.log(1 + norm_rad) - (norm_rad / (1 + norm_rad)))
 
