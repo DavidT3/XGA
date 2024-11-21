@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:32. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -826,10 +826,13 @@ class BaseProfile1D:
 
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).to(model(self.radii[0]).unit).value
-        y_errs = self.values_err.copy().value
+        y_errs = self.values_err.copy().to(model(self.radii[0]).unit).value
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
+
+        print(y_data)
+        print(y_errs)
 
         for prior in model.par_priors:
             if prior['type'] != 'uniform':

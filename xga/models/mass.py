@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:32. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -21,7 +21,7 @@ class NFW(BaseModel1D):
 
     :param Unit/str x_unit: The unit of the x-axis of this model, kpc for instance. May be passed as a string
         representation or an astropy unit object.
-    :param Unit/str y_unit: The unit of the output of this model, keV for instance. May be passed as a string
+    :param Unit/str y_unit: The unit of the output of this model, Msun for instance. May be passed as a string
         representation or an astropy unit object.
     :param List[Quantity] cust_start_pars: The start values of the model parameters for any fitting function that
         used start values. The units are checked against default start values.
