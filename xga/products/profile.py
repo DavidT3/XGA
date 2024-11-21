@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 12:10. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2759,7 +2759,7 @@ class NewHydrostaticMass(BaseProfile1D):
 
         # Plot the histogram and set up labels
         plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + r" \left[M$_{\odot}\right]$", fontsize=14)
+        plt.xlabel(self._y_axis_name + r" $\left[\rm{M}_{\odot}\right]$", fontsize=14)
         plt.title("Mass Distribution at {}".format(radius.to_string()))
 
         lab_hy_mass = hy_mass.to("10^14Msun")
