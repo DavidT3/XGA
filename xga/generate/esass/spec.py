@@ -311,6 +311,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_all_but_merged_cmd])
             else:
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
+                # Add handling for DR1 produced merged files
+                if ESASS_VERSION == "ESASS4DR1":
+                    # Remove "TM9" output if the instrument number is 5 or 7
+                    if inst_no in ['5', '7']:
+                        cmd_str += f";{remove_merged_dr1_9}"
+                    else:
+                        # Remove "TM8" output otherwise
+                        cmd_str += f";{remove_merged_dr1_8}"
 
             # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
             #  we'll neaten it up at some point
