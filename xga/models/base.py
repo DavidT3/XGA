@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 23:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:58. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -660,13 +660,13 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             warn("You have not added parameter distributions to this model")
 
-    def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
+    def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
         """
         Very simple method that allows you to view the parameter distributions that have been added to this
         model. The model parameter and uncertainties are indicated with red lines, highlighting the value
         and enclosing the 1sigma confidence region.
 
-        :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
+        :param Union[str, int] bins: Equivalent to the plt.hist bins argument, set either the number of bins
             or the algorithm to decide on the number of bins.
         :param str colour: Set the colour of the histogram.
         """
@@ -700,7 +700,7 @@ class BaseModel1D(metaclass=ABCMeta):
                 else:
                     par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
 
-                ax.set_xlabel(self.par_publication_names[ax_ind] + par_unit_name)
+                ax.set_xlabel(self.par_publication_names[ax_ind] + par_unit_name, fontsize=14)
 
             # And show the plot
             plt.tight_layout()
