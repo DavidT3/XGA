@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:31. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1467,8 +1467,13 @@ class BaseProfile1D:
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
 
+        # Setting up parameter label name and unit pairs - will strip them of '$' in the next line - didn't do it
+        #  here to make it a little easier to read
+        labels = [[par_name, model_obj.par_units[par_ind].to_string('latex')] for par_ind, par_name
+                  in enumerate(model_obj.par_publication_names)]
+
         # Need to remove $ from the labels because getdist adds them itself
-        stripped_labels = [n.replace('$', '') for n in model_obj.par_publication_names]
+        stripped_labels = [(lab_pair[0] + " " + lab_pair[1]).replace('$', '') for lab_pair in labels]
 
         # Setup the getdist sample object
         gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
