@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 12:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 13:19. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2483,6 +2483,12 @@ class NewHydrostaticMass(BaseProfile1D):
             raise ValueError("Cannot measure a mass distribution for a custom radius when the hydrostatic mass "
                              "profile is set to use non-interpolated temperature and density data points - instead "
                              "please fit a mass model and use that to predict a mass.")
+        # These will be useful further down, to help properly setup the if-elif-else statements that decide how
+        #  exactly the temp/dens profile data are treated
+        elif radius.isscalar or len(radius) == 1:
+            one_rad = True
+        else:
+            one_rad = False
 
         # We need check that, if the user has passed uncertainty information on radii, it is how we expect it to be.
         #  First off, are there the right number of entries?
@@ -2552,8 +2558,6 @@ class NewHydrostaticMass(BaseProfile1D):
             else:
                 calc_rad = radius
 
-        print(calc_rad)
-
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
         #  ways of calculating the profile that we now support (using smooth models, using data points, using
@@ -2570,7 +2574,7 @@ class NewHydrostaticMass(BaseProfile1D):
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we just get
         #  some realizations
-        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
+        elif (not already_run and not one_rad and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
             dens_der = np.gradient(dens, self.radii, axis=0)
@@ -2587,8 +2591,8 @@ class NewHydrostaticMass(BaseProfile1D):
             dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
             # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
-            dens_der = np.gradient(dens, self.radii, axis=0)
+            dens = Quantity(dens_interp(radius[..., None]).T, self.density_profile.values_unit)
+            dens_der = np.gradient(dens, radius[..., None], axis=0)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -2629,7 +2633,7 @@ class NewHydrostaticMass(BaseProfile1D):
             temp_der = self._temp_model.derivative(calc_rad, dx, True)
 
         # In this rare case temperature and density profiles are identical, and so we just get some realizations
-        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
+        elif (not already_run and not one_rad and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
             temp_der = np.gradient(temp, self.radii, axis=0)
@@ -2640,8 +2644,8 @@ class NewHydrostaticMass(BaseProfile1D):
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
-            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
-            temp_der = np.gradient(temp, self.radii, axis=0)
+            temp = Quantity(temp_interp(radius[..., None]).T, self.temperature_profile.values_unit)
+            temp_der = np.gradient(temp, radius[..., None], axis=0)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
