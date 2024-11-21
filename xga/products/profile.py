@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 12:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 12:31. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2469,8 +2469,20 @@ class NewHydrostaticMass(BaseProfile1D):
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
 
-        # Prints a warning if the radius at which to calculate the entropy is outside the range of the data
+        # Prints a warning if the radius at which to calculate the mass is outside the range of the data
         self.rad_check(radius)
+
+        # This is quite a specific check - different ways of calculating mass points have been now been
+        #  included (other than using the smooth temperature and density models), and we will have to stop
+        #  the profile making mass predictions (in this method) for single (user input most likely) radius
+        #  values for one of the modes.
+        # If we're using data points, and interpolation is TURNED OFF, then we can't in good conscience try
+        #  to predict a mass for a generic radius that most likely will not match any of the data points we have. In
+        #  that case we'll encourage them to fit a model and use that to predict the mass
+        if (radius.isscalar or len(radius) == 1) and self._temp_model is None and not self._interp_data:
+            raise ValueError("Cannot measure a mass distribution for a custom radius when the hydrostatic mass "
+                             "profile is set to use non-interpolated temperature and density data points - instead "
+                             "please fit a mass model and use that to predict a mass.")
 
         # We need check that, if the user has passed uncertainty information on radii, it is how we expect it to be.
         #  First off, are there the right number of entries?
@@ -2539,6 +2551,8 @@ class NewHydrostaticMass(BaseProfile1D):
             #  has been passed
             else:
                 calc_rad = radius
+
+        print(calc_rad)
 
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
@@ -2765,7 +2779,7 @@ class NewHydrostaticMass(BaseProfile1D):
         lab_hy_mass = hy_mass.to("10^14Msun")
         vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
                      "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
-        res_label = r"$\rm{M_{hydro}} = " + vals_label + r"10^{14}M_{\odot}$"
+        res_label = r"$\rm{M_{hydro}} = " + vals_label + r"\times 10^{14}M_{\odot}$"
 
         # And this just plots the 'result' on the distribution as a series of vertical lines
         plt.axvline(hy_mass[0].value, color='red', label=res_label)
