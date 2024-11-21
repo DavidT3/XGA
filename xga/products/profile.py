@@ -2758,7 +2758,7 @@ class NewHydrostaticMass(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         # Plot the histogram and set up labels
-        plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False, histtype='step')
+        plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
         plt.xlabel(self._y_axis_name + r" \left[M$_{\odot}\right]$", fontsize=14)
         plt.title("Mass Distribution at {}".format(radius.to_string()))
 
