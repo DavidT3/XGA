@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 16:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 17:03. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2909,18 +2909,34 @@ class NewHydrostaticMass(BaseProfile1D):
         plt.tight_layout()
         plt.show()
 
-    def baryon_fraction_profile(self) -> BaryonFraction:
+    def baryon_fraction_profile(self, radii: Quantity = None, deg_radii: Quantity = None) -> BaryonFraction:
         """
-        A method which uses the baryon_fraction method to construct a baryon fraction profile at the radii of
-        this HydrostaticMass profile. The uncertainties on the baryon fraction are calculated at the 1σ level.
+        A method which uses the baryon_fraction method to construct a baryon fraction profile - either at the radii
+        of this HydrostaticMass profile or at custom radii. The uncertainties on the baryon fraction are calculated
+        at the 1σ level.
 
+        :param Quantity radii: Custom radii to generate the points of the profile at, default is None in which case
+            the radii of this hydrostatic mass profile are used.
+        :param Quantity deg_radii: The equivalent values to 'radii', but in degrees.
         :return: An XGA BaryonFraction object.
         :rtype: BaryonFraction
         """
+        # Check the input radii, if they have been passed (and are valid) we'll use them
+        if radii is None:
+            radii = self.radii
+            radii_err = self.radii_err
+            deg_radii = self.deg_radii
+        elif radii is not None and deg_radii is None:
+            raise ValueError("If the 'radii' argument is passed, then the 'deg_radii' argument must be populated "
+                             "with equivalent values.")
+        else:
+            self.rad_check(radii)
+            radii_err = None
+
         frac = []
         frac_err = []
         # Step through the radii of this profile
-        for rad in self.radii:
+        for rad in radii:
             # Grabs the baryon fraction for the current radius
             b_frac = self.baryon_fraction(rad)[0]
 
@@ -2933,9 +2949,9 @@ class NewHydrostaticMass(BaseProfile1D):
         frac = Quantity(frac, '')
         frac_err = Quantity(frac_err, '')
 
-        return BaryonFraction(self.radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
-                              self.radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
-                              self.deg_radii, auto_save=self.auto_save)
+        return BaryonFraction(radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
+                              radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
+                              deg_radii, auto_save=self.auto_save)
 
     def overdensity_radius(self, delta: int, redshift: float, cosmo, init_lo_rad: Quantity = Quantity(100, 'kpc'),
                            init_hi_rad: Quantity = Quantity(3500, 'kpc'), init_step: Quantity = Quantity(100, 'kpc'),
