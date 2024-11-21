@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 13:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 13:52. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2597,7 +2597,11 @@ class NewHydrostaticMass(BaseProfile1D):
                                    fill_value='extrapolate', bounds_error=False)
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(radius).T, self.density_profile.values_unit)
-            dens_der = np.gradient(dens, radius, axis=0)
+            dens_der_interp = interp1d(self.density_profile.radii,
+                                       np.gradient(dens_data_real, self.density_profile.radii, axis=0), axis=1,
+                                       assume_sorted=True, fill_value='extrapolate', bounds_error=False)
+            dens_der = Quantity(dens_der_interp(radius).T,
+                                self.density_profile.values_unit/self.density_profile.radii_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -2650,7 +2654,12 @@ class NewHydrostaticMass(BaseProfile1D):
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
             temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
-            temp_der = np.gradient(temp, radius, axis=0)
+
+            temp_der_interp = interp1d(self.temperature_profile.radii,
+                                       np.gradient(temp_data_real, self.temperature_profile.radii, axis=0), axis=1,
+                                       assume_sorted=True, fill_value='extrapolate', bounds_error=False)
+            temp_der = Quantity(temp_der_interp(radius).T,
+                                self.temperature_profile.values_unit / self.temperature_profile.radii_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
@@ -2686,6 +2695,10 @@ class NewHydrostaticMass(BaseProfile1D):
             #  quantities that way.
             mass_dist = (((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G))
                             * ((dens * temp_der) + (temp * dens_der)))
+
+            # Returning to the expected shape of array for single radii passed in
+            if one_rad:
+                mass_dist = mass_dist[0]
 
             # Just converts the mass/masses to the unit we normally use for them
             mass_dist = mass_dist.to('Msun').T
