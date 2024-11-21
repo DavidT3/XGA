@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:20. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -825,7 +825,7 @@ class BaseProfile1D:
             self._model_allegiance(model)
 
         # I'm just defining these here so that the lines don't get too long for PEP standards
-        y_data = (self.values.copy() - self._background).value
+        y_data = (self.values.copy() - self._background).to(model(self.radii[0]).unit).value
         y_errs = self.values_err.copy().value
         rads = self.fit_radii.copy().value
         success = True
@@ -837,7 +837,6 @@ class BaseProfile1D:
 
         prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
-        print(prior_arr)
 
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
@@ -856,7 +855,6 @@ class BaseProfile1D:
             # I'm now adding this checking step, which will revert to the default start parameters of the model if the
             #  maximum likelihood estimate produced insane results.
             base_start_pars = max_like_res.x
-        print(base_start_pars)
 
         # So if any of the max likelihood pars are outside their prior, we just revert back to the original
         #  start parameters of the model. This step may make the checks performed later for instances where all
@@ -914,8 +912,6 @@ class BaseProfile1D:
         # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
         #  from the prior
         pos[to_replace] = rand_uniform_pos[to_replace]
-
-        print(pos)
 
         # This instantiates an Ensemble sampler with the number of walkers specified by the user,
         #  with the log probability as defined in the functions above
