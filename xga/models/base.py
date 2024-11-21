@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 11:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 11:20. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -696,8 +696,8 @@ class BaseModel1D(metaclass=ABCMeta):
                     ax.axvline(self.model_pars[ax_ind].value + err.value, color='red', linestyle='dashed')
                 elif not err.isscalar and len(err) == 2:
                     # Set up the label that will accompany the vertical lines to indicate parameter value and error
-                    vals_label = (str(self.model_pars[ax_ind].round(2).value) + "^{+" + str(err[2].round(2).value) +
-                                  "}_{-" + str(err[1].round(2).value) + "}")
+                    vals_label = (str(self.model_pars[ax_ind].round(2).value) + "^{+" + str(err[1].round(2).value) +
+                                  "}_{-" + str(err[0].round(2).value) + "}")
 
                     ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
