@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 16:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 16:47. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2859,9 +2859,9 @@ class NewHydrostaticMass(BaseProfile1D):
         else:
             bar_frac_dist = gas_mass_dist / hy_mass_dist
 
-        bfrac_med = np.percentile(bar_frac_dist, 50, axis=0)
-        bfrac_lower = bfrac_med - np.percentile(bar_frac_dist, lower, axis=0)
-        bfrac_upper = np.percentile(bar_frac_dist, upper, axis=0) - bfrac_med
+        bfrac_med = np.nanpercentile(bar_frac_dist, 50, axis=0)
+        bfrac_lower = bfrac_med - np.nanpercentile(bar_frac_dist, lower, axis=0)
+        bfrac_upper = np.nanpercentile(bar_frac_dist, upper, axis=0) - bfrac_med
         bar_frac_res = Quantity([bfrac_med.value, bfrac_lower.value, bfrac_upper.value])
 
         return bar_frac_res, bar_frac_dist
