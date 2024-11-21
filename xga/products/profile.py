@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 16:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 16:31. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -524,6 +524,10 @@ class GasDensity3D(BaseProfile1D):
             the entire mass distribution from the whole realisation.
         :rtype: Tuple[Quantity, Quantity]
         """
+        if model is None:
+            raise NotImplementedError("Gas mass calculation without a fitted model is not yet implemented - see "
+                                      "issue #1271.")
+
         # First of all we have to find the model that has been fit to this gas density profile.
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             raise XGAInvalidModelError("{m} is not a valid model for a gas density profile".format(m=model))
@@ -2833,8 +2837,18 @@ class NewHydrostaticMass(BaseProfile1D):
 
         # Grab out the hydrostatic mass distribution, and the gas mass distribution
         hy_mass, hy_mass_dist = self.mass(radius, conf_level)
-        gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level=conf_level,
-                                                           fit_method=self._dens_model.fit_method)
+
+        # With this new version of the hydrostatic mass profile, we don't have a guarantee that there is a smooth
+        #  model fit to the density profile. In fact as in the data-driven mode we don't use smooth density models
+        #  it wouldn't be fully correct to use a fitted model to calculate the gas mass in that scenario, so we
+        #  have to make a distinction.
+        if self._dens_model is not None:
+            # The case where we have used a density profile model
+            gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level=conf_level,
+                                                               fit_method=self._dens_model.fit_method)
+        else:
+            # The case where we are data-driven
+            gas_mass, gas_mass_dist = self._dens_prof.gas_mass(model=None, outer_rad=radius, conf_level=conf_level)
 
         # If the distributions don't have the same number of entries (though as far I can recall they always should),
         #  then we just make sure we have two equal length distributions to divide
