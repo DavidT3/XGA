@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 10:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:03. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -833,10 +833,11 @@ class BaseProfile1D:
 
         for prior in model.par_priors:
             if prior['type'] != 'uniform':
-                raise NotImplementedError("Sorry but I don't yet support non-uniform priors for profile fitting!")
+                raise NotImplementedError("Sorry but we don't yet support non-uniform priors for profile fitting!")
 
         prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
+        print(prior_arr)
 
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
         #  we try maximum likelihood, and if that fails then we fall back on the default start parameters in the
@@ -855,13 +856,15 @@ class BaseProfile1D:
             # I'm now adding this checking step, which will revert to the default start parameters of the model if the
             #  maximum likelihood estimate produced insane results.
             base_start_pars = max_like_res.x
+        print(base_start_pars)
 
         # So if any of the max likelihood pars are outside their prior, we just revert back to the original
         #  start parameters of the model. This step may make the checks performed later for instances where all
         #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
         if find_to_replace(base_start_pars, prior_arr).any():
             warn("Maximum likelihood estimator has produced at least one start parameter that is outside"
-                 " the allowed values defined by the prior, reverting to default start parameters for this model.")
+                 " the allowed values defined by the prior, reverting to default start parameters for this model.",
+                 stacklevel=2)
             base_start_pars = model.unitless_start_pars
 
         # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
@@ -889,7 +892,7 @@ class BaseProfile1D:
         if any(all_bad):
             warn("All walker starting parameters for one or more of the model parameters are outside the priors, which"
                  "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
-                 " drawn from the priors directly.")
+                 " drawn from the priors directly.", stacklevel=2)
             # This replacement only affects those parameters for which ALL start positions are outside the
             #  prior range
             all_bad_inds = np.argwhere(all_bad).T[0]
@@ -911,6 +914,8 @@ class BaseProfile1D:
         # So any start values that fall outside the allowed range will be swapped out with a value randomly drawn
         #  from the prior
         pos[to_replace] = rand_uniform_pos[to_replace]
+
+        print(pos)
 
         # This instantiates an Ensemble sampler with the number of walkers specified by the user,
         #  with the log probability as defined in the functions above
@@ -1196,11 +1201,11 @@ class BaseProfile1D:
         #  XGA model objects generate from their name and their start parameters
         if model.name in self._good_model_fits[method]:
             warn("{m} already has a successful fit result for this profile using {me}, with those start "
-                 "parameters".format(m=model.name, me=method))
+                 "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = True
         elif model.name in self._bad_model_fits[method]:
             warn("{m} already has a failed fit result for this profile using {me} with those start "
-                 "parameters".format(m=model.name, me=method))
+                 "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = False
         else:
             already_done = False
