@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 10:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 21:09. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2676,9 +2676,10 @@ class NewHydrostaticMass(BaseProfile1D):
             mass_dist = (((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G))
                             * ((dens * temp_der) + (temp * dens_der)))
 
+            # TODO THIS IS A TEST OF A THOUGHT I HAD - MAYBE REMOVE?
+            mass_dist[mass_dist < 0] = np.nan
             # Just converts the mass/masses to the unit we normally use for them
-            # TODO DID HAVE A .T HERE TO TRANSPOSE THE RESULT - NEED TO CHECK IF THAT WILL BE NECESSARY FOR THIS
-            #  NEW SET UP
+
             mass_dist = mass_dist.to('Msun').T
 
             # Storing the result if it is for a single radius
