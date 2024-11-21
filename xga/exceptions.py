@@ -104,6 +104,46 @@ class eSASSNotFoundError(Exception):
             return 'eSASSNotFoundError has been raised'
 
 
+class CIAONotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the Chandra Scientific Analysis Software CIAO can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'CIAONotFoundError has been raised'
+
+
+class CALDBNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the Chandra Calibration files CALDB can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'CALDBNotFoundError has been raised'
+
+
 class XSPECNotFoundError(Exception):
     def __init__(self, *args):
         """
