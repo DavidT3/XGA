@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 09:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 09:50. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2557,8 +2557,6 @@ class NewHydrostaticMass(BaseProfile1D):
             #  the definition of this source of the model) - the radii errors are included if supplied.
             dens = self._dens_model.get_realisations(calc_rad)
             dens_der = self._dens_model.derivative(calc_rad, dx, True)
-            print(dens_der.shape)
-            print(dens_der)
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we just get
         #  some realizations
@@ -2566,7 +2564,6 @@ class NewHydrostaticMass(BaseProfile1D):
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
             dens_der = np.gradient(dens, self.radii, axis=0)
-            print(dens_der)
 
         elif not already_run and self._interp_data:
             # This uses the density profile y-axis values (and their uncertainties) to draw N realizations of the
@@ -2583,7 +2580,6 @@ class NewHydrostaticMass(BaseProfile1D):
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
             dens_der = np.gradient(dens, self.radii, axis=0)
-            print(dens_der)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
