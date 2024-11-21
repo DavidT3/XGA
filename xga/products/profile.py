@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 09:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 09:57. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2598,7 +2598,7 @@ class NewHydrostaticMass(BaseProfile1D):
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
             # Calculating density gradient # TODO DON'T KNOW IF THIS WILL WORK
-            dens_der = np.gradient(dens_data_real, self.radii, axis=0)[:, d_inds].T
+            dens_der = np.gradient(dens_data_real.T, self.radii, axis=0).T[:, d_inds].T
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit (also their 1st
         #  derivatives).
@@ -2654,7 +2654,7 @@ class NewHydrostaticMass(BaseProfile1D):
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp = temp_data_real[:, t_inds].T
             # Calculating temperature gradient # TODO DON'T KNOW IF THIS WILL WORK
-            temp_der = np.gradient(temp_data_real, self.radii, axis=0)[:, t_inds].T
+            temp_der = np.gradient(temp_data_real.T, self.radii, axis=0).T[:, t_inds].T
 
 
         # We ensure the temperatures are in the right unit - we want Kelvin for this, as compared to the entropy
