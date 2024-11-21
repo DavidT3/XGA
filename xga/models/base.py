@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 21:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 23:35. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -222,7 +222,8 @@ class BaseModel1D(metaclass=ABCMeta):
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
-            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
+            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.",
+                 stacklevel=2)
 
         if x.isscalar or (not x.isscalar and x.ndim == 1):
             realisations = self.model(x[..., None], *self._par_dists)
@@ -234,7 +235,7 @@ class BaseModel1D(metaclass=ABCMeta):
             #  statement
             realisations = self.model(x, *self._par_dists)
 
-        return realisations
+        return realisations.to(self._y_unit)
 
     @staticmethod
     @abstractmethod
