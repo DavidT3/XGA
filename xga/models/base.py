@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 10:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 21:32. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -564,7 +564,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param List[Quantity] good_pars: The second list of parameters, these are taken as having 'correct'
             units.
         :return: Only if the check pars pass the tests. We return the check pars list but with all elements
-            converted to EXACTLY the same units as good_pars, not just equivelant.
+            converted to EXACTLY the same units as good_pars, not just equivalent.
         :rtype: List[Quantity]
         """
         if len(check_pars) != len(good_pars):
