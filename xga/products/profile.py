@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 13:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 14:02. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2655,8 +2655,10 @@ class NewHydrostaticMass(BaseProfile1D):
                                    fill_value='extrapolate', bounds_error=False)
             temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
 
+            print(np.gradient(temp_data_real.T, self.temperature_profile.radii, axis=1).shape)
+
             temp_der_interp = interp1d(self.temperature_profile.radii,
-                                       np.gradient(temp_data_real.T, self.temperature_profile.radii, axis=0), axis=1,
+                                       np.gradient(temp_data_real.T, self.temperature_profile.radii, axis=1), axis=1,
                                        assume_sorted=True, fill_value='extrapolate', bounds_error=False)
             temp_der = Quantity(temp_der_interp(radius).T,
                                 self.temperature_profile.values_unit / self.temperature_profile.radii_unit)
