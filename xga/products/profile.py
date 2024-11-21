@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:57. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -700,7 +700,7 @@ class GasDensity3D(BaseProfile1D):
         return self._gen_prof
 
     def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: float = 68.2, figsize=(8, 8),
-                           bins: Union[str, int] = 'auto', colour: str = "lightslategrey", fit_method: str = 'mcmc'):
+                           bins: Union[str, int] = 'auto', colour: str = "lightseagreen", fit_method: str = 'mcmc'):
         """
         A method which will generate a histogram of the gas mass distribution that resulted from the gas mass
         calculation at the supplied radius. If the mass for the passed radius has already been measured it, and the
@@ -728,7 +728,7 @@ class GasDensity3D(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         plt.hist(gas_mass_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(r"Gas Mass [M$_{\odot}$]")
+        plt.xlabel(r"Gas Mass \left[M$_{\odot}\right]$", fontsize=14)
         plt.title("Gas Mass Distribution at {}".format(outer_rad.to_string()))
 
         mass_label = gas_mass.to("10^13Msun")
@@ -2729,7 +2729,7 @@ class NewHydrostaticMass(BaseProfile1D):
         return outer_mass_dist - inner_mass_dist
 
     def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize: Tuple[float, float] = (8, 8),
-                       bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
+                       bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
         """
         A method which will generate a histogram of the mass distribution that resulted from the mass calculation
         at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
@@ -2758,8 +2758,8 @@ class NewHydrostaticMass(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         # Plot the histogram and set up labels
-        plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + r" M$_{\odot}$")
+        plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False, histtype='step')
+        plt.xlabel(self._y_axis_name + r" \left[M$_{\odot}\right]$", fontsize=14)
         plt.title("Mass Distribution at {}".format(radius.to_string()))
 
         lab_hy_mass = hy_mass.to("10^14Msun")
@@ -2817,7 +2817,7 @@ class NewHydrostaticMass(BaseProfile1D):
 
     def view_baryon_fraction_dist(self, radius: Quantity, conf_level: float = 68.2,
                                   figsize: Tuple[float, float] = (8, 8), bins: Union[str, int] = 'auto',
-                                  colour: str = "lightslategrey"):
+                                  colour: str = "lightseagreen"):
         """
         A method which will generate a histogram of the baryon fraction distribution that resulted from the mass
         calculation at the supplied radius. If the baryon fraction for the passed radius has already been
@@ -2843,7 +2843,7 @@ class NewHydrostaticMass(BaseProfile1D):
         ax.yaxis.set_ticklabels([])
 
         plt.hist(bar_frac_dist.value, bins=bins, color=colour, alpha=0.7)
-        plt.xlabel("Baryon Fraction")
+        plt.xlabel("Baryon Fraction", fontsize=14)
         plt.title("Baryon Fraction Distribution at {}".format(radius.to_string()))
 
         vals_label = str(bar_frac[0].round(2).value) + "^{+" + str(bar_frac[2].round(2).value) + "}" + \
