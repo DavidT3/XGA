@@ -1,3 +1,6 @@
+# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+# Last modified by Ray Wang (wangru46@msu.edu) 21/11/2024, 12:21. Copyright (c) The Contributors
+
 from functools import wraps
 from multiprocessing.dummy import Pool
 from typing import Tuple
@@ -25,10 +28,10 @@ def ciao_call(ciao_func):
     def wrapper(*args, **kwargs):
         # This has to be here to let autodoc do its noble work without falling foul of these errors
         if not CIAO_AVAIL:
-            raise CIAONotFoundError("No CIAO installation has been found on this machine")
+            raise CIAONotFoundError("No CIAO installation has been found on this machine.")
         
         if not CALDB_AVAIL:
-            raise CALDBNotFoundError("No CALDB installation has been found on this machine")
+            raise CALDBNotFoundError("No CALDB installation has been found on this machine.")
 
         # The first argument of all of these CIAO functions will be the source object (or a list of),
         # so rather than return them from the ciao function I'll just access them like this.

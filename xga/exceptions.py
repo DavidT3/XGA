@@ -107,7 +107,7 @@ class eSASSNotFoundError(Exception):
 class CIAONotFoundError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if the Chandra Scientific Analysis Software CIAO can not be found on the system.
+        Exception raised if the Chandra CIAO can not be found on the system.
 
         :param expression:
         :param message:
@@ -127,7 +127,7 @@ class CIAONotFoundError(Exception):
 class CALDBNotFoundError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if the Chandra Calibration files CALDB can not be found on the system.
+        Exception raised if the Calibration files CALDB can not be found on the system.
 
         :param expression:
         :param message:
