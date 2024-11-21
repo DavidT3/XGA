@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:38. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -831,8 +831,9 @@ class BaseProfile1D:
         success = True
         warning_str = ""
 
-        print(y_data)
-        print(y_errs)
+        print(model(self.radii[0]))
+        print((self.values.copy() - self._background).to(model(self.radii[0]).unit))
+        print(self.values_err.copy().to(model(self.radii[0]).unit))
 
         for prior in model.par_priors:
             if prior['type'] != 'uniform':
@@ -851,6 +852,7 @@ class BaseProfile1D:
         curve_fit_model, success = self.nlls_fit(curve_fit_model, 10, show_warn=False)
         if success or curve_fit_model.fit_warning == "Very large parameter uncertainties":
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
+            print(base_start_pars)
         else:
             # This finds maximum likelihood parameter values for the model+data
             max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
