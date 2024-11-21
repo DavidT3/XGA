@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 17:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 19:51. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -61,7 +61,8 @@ class NFW(BaseModel1D):
                          Quantity(0.5, r2500)]
         # We will implement the NFW mass profile with a rho_0 normalization parameter, a density - and leave in the
         #  volume integration terms - rather than fitting for some mass normalization
-        norm_starts = [Quantity(1e+13, 'Msun/Mpc^3')]
+        # norm_starts = [Quantity(1e+13, 'Msun/Mpc^3')]
+        norm_starts = [Quantity(1e+6, 'Msun/kpc^3')]
         start_pars = [r_scale_starts[xu_ind], norm_starts[yu_ind]]
         if cust_start_pars is not None:
             # If the custom start parameters can run this gauntlet without tripping an error then we're all good
@@ -73,7 +74,8 @@ class NFW(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        norm_priors = [{'prior': Quantity([1e+12, 1e+16], 'Msun/Mpc^3'), 'type': 'uniform'}]
+        # norm_priors = [{'prior': Quantity([1e+12, 1e+16], 'Msun/Mpc^3'), 'type': 'uniform'}]
+        norm_priors = [{"prior": Quantity([1000, 1e+9], 'Msun/kpc^3'), "type": 'uniform'}]
 
         priors = [r_core_priors[xu_ind], norm_priors[yu_ind]]
 
