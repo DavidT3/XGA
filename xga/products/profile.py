@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 15:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 16:08. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -3255,7 +3255,8 @@ class NewHydrostaticMass(BaseProfile1D):
     def rad_check(self, rad: Quantity):
         """
         Very simple method that prints a warning if the radius is outside the range of data covered by the
-        density or temperature profiles.
+        density or temperature profiles - will actually throw an error if the hydrostatic mass profile was set up
+        in a data-driven mode, because we aren't going to let anyone extrapolate the data points.
 
         :param Quantity rad: The radius to check.
         """
@@ -3265,8 +3266,18 @@ class NewHydrostaticMass(BaseProfile1D):
 
         if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
                 or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
-            warn("Some radii are outside the data range covered by the temperature or density profiles, as such "
-                 "you will be extrapolating based on the model fits.", stacklevel=2)
+
+            # If we're using smooth fitted models for temperature and density then this is allowable, but still
+            #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
+            #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
+            if self._temp_model is None:
+                raise ValueError("Some radii are outside the radius range covered by the temperature or density "
+                                 "profiles, and it is not possible to extrapolate when using a data-point driven "
+                                 "mass profile; please fit a mass model and extrapolate that, or set up a mass profile "
+                                 "that uses temperature and density model fits.")
+            else:
+                warn("Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                     "you will be extrapolating based on the model fits.", stacklevel=2)
 
 
 
