@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 13:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 13:55. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2598,7 +2598,7 @@ class NewHydrostaticMass(BaseProfile1D):
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(radius).T, self.density_profile.values_unit)
             dens_der_interp = interp1d(self.density_profile.radii,
-                                       np.gradient(dens_data_real, self.density_profile.radii, axis=0), axis=1,
+                                       np.gradient(dens_data_real.T, self.density_profile.radii, axis=0), axis=1,
                                        assume_sorted=True, fill_value='extrapolate', bounds_error=False)
             dens_der = Quantity(dens_der_interp(radius).T,
                                 self.density_profile.values_unit/self.density_profile.radii_unit)
@@ -2656,7 +2656,7 @@ class NewHydrostaticMass(BaseProfile1D):
             temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
 
             temp_der_interp = interp1d(self.temperature_profile.radii,
-                                       np.gradient(temp_data_real, self.temperature_profile.radii, axis=0), axis=1,
+                                       np.gradient(temp_data_real.T, self.temperature_profile.radii, axis=0), axis=1,
                                        assume_sorted=True, fill_value='extrapolate', bounds_error=False)
             temp_der = Quantity(temp_der_interp(radius).T,
                                 self.temperature_profile.values_unit / self.temperature_profile.radii_unit)
