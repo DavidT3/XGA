@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 20/11/2024, 22:56. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -826,7 +826,7 @@ class BaseProfile1D:
 
         # Trying to read out the raw output unit of the model with current start parameters, rather than the
         #  final unit set by each model - this is to make sure we're doing regression on data of the right unit
-        raw_mod_unit = model.model(self.radii[0], model.start_pars).unit
+        raw_mod_unit = model.model(self.radii[0], *model.start_pars).unit
 
         # I'm just defining these here so that the lines don't get too long for PEP standards
         y_data = (self.values.copy() - self._background).to(raw_mod_unit).value
@@ -1032,7 +1032,7 @@ class BaseProfile1D:
 
         # Trying to read out the raw output unit of the model with current start parameters, rather than the
         #  final unit set by each model - this is to make sure we're doing regression on data of the right unit
-        raw_mod_unit = model.model(self.radii[0], model.start_pars).unit
+        raw_mod_unit = model.model(self.radii[0], *model.start_pars).unit
 
         y_data = (self.values.copy() - self._background).to(raw_mod_unit).value
         y_errs = self.values_err.copy().to(raw_mod_unit).value
