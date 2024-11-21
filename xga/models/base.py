@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 11:11. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -680,27 +680,45 @@ class BaseModel1D(metaclass=ABCMeta):
             for ax_ind, ax in enumerate(ax_arr):
                 # Add histogram
                 ax.hist(self.par_dists[ax_ind].value, bins=bins, color=colour)
-                # Add parameter value as a solid red line
-                ax.axvline(self.model_pars[ax_ind].value, color='red')
+
                 # Read out the errors
                 err = self.model_par_errs[ax_ind]
-                # Depending how many entries there are per parameter in the error quantity depends how we plot them
+
+                # Define the unit of this parameter
+                cur_unit = err.unit
+
+                # Change how we plot depending on how many entries there are per parameter in the error quantity
                 if err.isscalar:
+                    # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                    vals_label = str(self.model_pars[ax_ind].round(2).value) + r"\pm" + str(err.round(2).value)
+
                     ax.axvline(self.model_pars[ax_ind].value - err.value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err.value, color='red', linestyle='dashed')
                 elif not err.isscalar and len(err) == 2:
+                    # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                    vals_label = (str(self.model_pars[ax_ind].round(2).value) + "^{+" + str(err[2].round(2).value) +
+                                  "}_{-" + str(err[1].round(2).value) + "}")
+
                     ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
                 else:
                     raise ValueError("Parameter error has three elements in it!")
 
-                cur_unit = err.unit
+                # The full label for the vertical line that indicates the parameter value
+                res_label = (r"$" + self.par_publication_names[ax_ind].replace('$', '') + "= "
+                             + vals_label + cur_unit.to_string("latex").strip("$") + '$')
+
+                # Add parameter value as a solid red line
+                ax.axvline(self.model_pars[ax_ind].value, color='red', label=res_label)
+
                 if cur_unit == Unit(''):
                     par_unit_name = ""
                 else:
                     par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
 
                 ax.set_xlabel(self.par_publication_names[ax_ind] + par_unit_name, fontsize=14)
+                ax.legend(loc='best')
+
 
             # And show the plot
             plt.tight_layout()
