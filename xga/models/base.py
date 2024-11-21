@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 11:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 11:58. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -691,8 +691,9 @@ class BaseModel1D(metaclass=ABCMeta):
                 if err.isscalar:
                     # Change how we format the value label depending on how big the number is effectively
                     if (self.model_pars[ax_ind].value / 1000) > 1:
-                        cur_v_str = "{:.2e}".format(self.model_pars[ax_ind].value)
-                        cur_e_str = "{:.2e}".format(err.value)
+                        v_ord = len(str(self.model_pars[ax_ind].value).split('.')[0]) - 1
+                        cur_v_str = str((self.model_pars[ax_ind].value / (10**v_ord)).round(2))
+                        cur_e_str = str((err.value / (10**v_ord)).round(2)) + r"\times 10^{" + str(v_ord) + "}"
                     else:
                         cur_v_str = str(self.model_pars[ax_ind].round(2).value)
                         cur_e_str = str(err.round(2).value)
@@ -706,16 +707,20 @@ class BaseModel1D(metaclass=ABCMeta):
 
                     # Change how we format the value label depending on how big the number is effectively
                     if (self.model_pars[ax_ind].value / 1000) > 1:
-                        cur_v_str = "{:.2e}".format(self.model_pars[ax_ind].value)
-                        cur_em_str = "{:.2e}".format(err[0].value)
-                        cur_ep_str = "{:.2e}".format(err[1].value)
+                        v_ord = len(str(self.model_pars[ax_ind].value).split('.')[0]) - 1
+
+                        cur_v_str = str((self.model_pars[ax_ind].value / (10 ** v_ord)).round(2))
+                        cur_em_str = str((err[0].value / (10 ** v_ord)).round(2))
+                        cur_ep_str = str((err[1].value / (10 ** v_ord)).round(2))
+                        # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                        vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "} " +
+                                      r"\times 10^{" + str(v_ord) + "}")
                     else:
                         cur_v_str = str(self.model_pars[ax_ind].round(2).value)
                         cur_em_str = str(err[0].round(2).value)
                         cur_ep_str = str(err[1].round(2).value)
-
-                    # Set up the label that will accompany the vertical lines to indicate parameter value and error
-                    vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "}")
+                        # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                        vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "}")
 
                     ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
