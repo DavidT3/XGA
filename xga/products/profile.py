@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:13. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2397,8 +2397,7 @@ class NewHydrostaticMass(BaseProfile1D):
             #  aren't the same then the fit will have to be re-run
             in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
 
-            if in_mod_names and len(temperature_profile.get_model_fit(temperature_model.name,
-                                                                      fit_method).par_dists[0]) != num_samples:
+            if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
             elif not in_mod_names:
@@ -2421,8 +2420,7 @@ class NewHydrostaticMass(BaseProfile1D):
             #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
             #  aren't the same then the fit will have to be re-run
             in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
-            if in_mod_names and len(density_profile.get_model_fit(density_model.name,
-                                                                      fit_method).par_dists[0]) != num_samples:
+            if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
             elif not in_mod_names:
