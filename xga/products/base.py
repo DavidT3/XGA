@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:54. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1141,7 +1141,7 @@ class BaseProfile1D:
 
     def fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
             num_steps: int = 30000, num_walkers: int = 20, progress_bar: bool = True,
-            show_warn: bool = True) -> BaseModel1D:
+            show_warn: bool = True, force_refit: bool = False) -> BaseModel1D:
         """
         Method to fit a model to this profile's data, then store the resulting model parameter results. Each
         profile can store one instance of a type of model per fit method. So for instance you could fit both
@@ -1162,6 +1162,8 @@ class BaseProfile1D:
         :param bool progress_bar: Only applicable if using MCMC fitting, should a progress bar be shown.
         :param bool show_warn: Should warnings be printed out, otherwise they are just stored in the model
             instance (this also happens if show_warn is True).
+        :param bool force_refit: Controls whether the profile will re-run the fit of a model that already has a good
+            model fit stored. The default is False.
         :return: The fitted model object. The fitted model is also stored within the profile object.
         :rtype: BaseModel1D
         """
@@ -1203,7 +1205,7 @@ class BaseProfile1D:
 
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
-        if model.name in self._good_model_fits[method]:
+        if not force_refit and model.name in self._good_model_fits[method]:
             warn("{m} already has a successful fit result for this profile using {me}, with those start "
                  "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = True
