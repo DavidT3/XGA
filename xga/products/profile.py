@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 10:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 11:19. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -3429,7 +3429,7 @@ class ThermalPressure(BaseProfile1D):
             if not self.density_model.success:
                 raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
                                   "using a smooth density model.")
-            # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
+            # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
             dens = self._dens_model.get_realisations(radius)
 
