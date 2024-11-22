@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 10:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:49. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1347,6 +1347,35 @@ class BaseProfile1D:
         if self.auto_save:
             # This method means that a change has happened to the model, so it should be re-saved
             self.save()
+
+    def remove_model_fit(self, model: Union[str, BaseModel1D], method: str):
+        """
+        This will remove an existing model fit for a particular fit method.
+
+        :param str/BaseModel1D model: The model fit to delete.
+        :param str method: The method used to fit the model.
+        """
+        # Making sure we have a string model name
+        if isinstance(model, BaseModel1D):
+            model = model.name
+
+        # Checking the input model is valid for this profile
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} "
+                                       "profile.".format(m=model, p=self._y_axis_name.lower()))
+
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, the following are allowed; "
+                              "{a}".format(me=method, a=allowed))
+
+        if model not in self._good_model_fits[method]:
+            raise XGAInvalidModelError("{m} is valid for this profile, but cannot be removed as it has not been "
+                                       "fit.".format(m=model))
+        else:
+            # Finally remove the model
+            del self._good_model_fits[method][model]
 
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
