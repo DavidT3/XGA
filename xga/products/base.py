@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 14:34. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1504,8 +1504,8 @@ class BaseProfile1D:
                   in enumerate(model_obj.par_publication_names)]
 
         # Need to remove $ from the labels because getdist adds them itself
-        stripped_labels = [(lab_pair[0] + r"\: \left[" + lab_pair[1] + r'\right]').replace('$', '')
-                           for lab_pair in labels]
+        stripped_labels = [(lab_pair[0] + (r"\: \left[" + lab_pair[1] + r'\right]').replace('$', ''))
+                           if lab_pair[1] != '' else '' for lab_pair in labels]
 
         # Setup the getdist sample object
         gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
