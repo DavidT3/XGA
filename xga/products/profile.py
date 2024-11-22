@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:10. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2391,10 +2391,11 @@ class NewHydrostaticMass(BaseProfile1D):
         #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
         #  one model and not another, using a combination of model and datapoints to calculate hydrostatic mass
         if temperature_model is not None:
+            t_mn = temperature_model.name if isinstance(temperature_model, BaseModel1D) else temperature_model
             # If the passed model has already been fit then yay! however, we make sure the number of samples is the
             #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
             #  aren't the same then the fit will have to be re-run
-            in_mod_names = temperature_model.name in [m for m in temperature_profile._good_model_fits[fit_method]]
+            in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
 
             if in_mod_names and len(temperature_profile.get_model_fit(temperature_model.name,
                                                                       fit_method).par_dists[0]) != num_samples:
@@ -2415,16 +2416,17 @@ class NewHydrostaticMass(BaseProfile1D):
             key_temp_mod_part = "tmdata"
 
         if density_model is not None:
+            d_mn = density_model.name if isinstance(density_model, BaseModel1D) else density_model
             # If the passed model has already been fit then yay! however, we make sure the number of samples is the
             #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
             #  aren't the same then the fit will have to be re-run
-            in_mod_names = density_model.name in [m for m in density_profile._good_model_fits[fit_method]]
+            in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
             if in_mod_names and len(density_profile.get_model_fit(density_model.name,
                                                                       fit_method).par_dists[0]) != num_samples:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, temp_steps,
+                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
             elif not in_mod_names:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, temp_steps,
+                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
 
             key_dens_mod_part = "dm{d}".format(d=density_model.name)
