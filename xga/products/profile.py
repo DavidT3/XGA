@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:56. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -3384,7 +3384,7 @@ class ThermalPressure(BaseProfile1D):
         self._storage_key = whole_new
 
         # Setting the type
-        self._prof_type = "thermal pressure"
+        self._prof_type = "thermal_pressure"
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = r"P$_{\rm{X}}$"
