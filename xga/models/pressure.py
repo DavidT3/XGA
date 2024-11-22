@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 14:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 15:45. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -72,8 +72,8 @@ class SimpleGNFWThermalPressure(BaseModel1D):
                          {'prior': Quantity([0, 1], r200), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r500), 'type': 'uniform'},
                          {'prior': Quantity([0, 1], r2500), 'type': 'uniform'}]
-        alpha_priors = {'prior': Quantity([-4, 4], ''), 'type': 'uniform'}
-        beta_priors = {'prior': Quantity([-4, 4], ''), 'type': 'uniform'}
+        alpha_priors = {'prior': Quantity([0, 10], ''), 'type': 'uniform'}
+        beta_priors = {'prior': Quantity([0, 10], ''), 'type': 'uniform'}
 
         priors = [pz_priors[yu_ind], r_scale_priors[xu_ind], alpha_priors, beta_priors]
 
