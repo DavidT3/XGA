@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 10:18. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -3405,7 +3405,6 @@ class ThermalPressure(BaseProfile1D):
             containing the thermal pressure realization distribution.
         :rtype: Union[Quantity, Quantity]
         """
-        raise NotImplementedError("The calculation of pressure is not yet implemented")
         # Setting the upper and lower confidence limits
         upper = 50 + (conf_level / 2)
         lower = 50 - (conf_level / 2)
@@ -3415,15 +3414,15 @@ class ThermalPressure(BaseProfile1D):
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
-        if radius.isscalar and radius in self._entropies:
+        if radius.isscalar and radius in self._pressures:
             already_run = True
-            ent_dist = self._entropies[radius]
+            press_dist = self._pressures[radius]
         else:
             already_run = False
 
-        # Here, if we haven't already identified a previously calculated entropy for the radius, we start to
+        # Here, if we haven't already identified a previously calculated pressure for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
-        #  ways of calculating entropy we support (using smooth models, using data points, using interpolated data
+        #  ways of calculating pressure we support (using smooth models, using data points, using interpolated data
         #  points). First of all we deal with the case of there being a density model to draw from
         if not already_run and self.density_model is not None:
             # If the density model fit didn't work then we give up and throw an error
@@ -3434,15 +3433,15 @@ class ThermalPressure(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self._dens_model.get_realisations(radius)
 
-        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
-        #  temperature and density profiles are identical, and so we just get some realisations
+        # In this rare case the radii for the temperature and density profiles are identical, and so we just
+        #  get some realisations
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
-            # This uses the density profile y-axis values (and their uncertainties) to draw N realisations of the
-            #  data points - we'll use this to create N realisations of the interpolations as well
+            # This uses the density profile y-axis values (and their uncertainties) to draw N realizations of the
+            #  data points - we'll use this to create N realizations of the interpolations as well
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             # TODO This unfortunately may be removed from scipy soon, but the np.interp linear interpolation method
             #  doesn't currently support interpolating along a particular axis. Also considering more sophisticated
@@ -3451,12 +3450,12 @@ class ThermalPressure(BaseProfile1D):
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
             dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
-            # Restore the interpolated density profile realisations to an astropy quantity array
+            # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
-        #  just read out the density data points (and make N realisations of them) with no funny business required
+        #  just read out the density data points (and make N realizations of them) with no funny business required
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
         else:
@@ -3483,15 +3482,15 @@ class ThermalPressure(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self._temp_model.get_realisations(radius)
 
-        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
-        #  temperature and density profiles are identical, and so we just get some realisations
+        # In this rare case the radii for the temperature and density profiles are identical, and so we
+        #  just get some realizations
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
-            #  data points - we'll use this to create N realisations of the interpolations as well
+            #  data points - we'll use this to create N realizations of the interpolations as well
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
@@ -3504,7 +3503,7 @@ class ThermalPressure(BaseProfile1D):
         # And here, the final option, we're doing a data-point based profile without interpolation, and we need
         #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
         #  temperature value - in practise this means that each density will be paired with the temperature
-        #  realisations whose radial coverage they fall within.
+        #  realizations whose radial coverage they fall within.
         else:
             t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
                                 self.temperature_profile.annulus_bounds[1:]]).T
@@ -3518,26 +3517,26 @@ class ThermalPressure(BaseProfile1D):
         if not already_run and not temp.unit.is_equivalent('keV'):
             temp = (temp * k_B).to('keV')
 
-        # And now we do the actual entropy calculation
+        # And now we do the actual pressure calculation
         if not already_run:
-            ent_dist = (temp / dens ** (2 / 3)).T
+            press_dist = (temp * dens).T
             # Storing the result if it is for a single radius
             if radius.isscalar:
-                self._entropies[radius] = ent_dist
+                self._pressures[radius] = press_dist
 
         # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
         #  call, we use the distribution to calculate median and confidence limit values
-        ent_med = np.nanpercentile(ent_dist, 50, axis=0)
-        ent_lower = ent_med - np.nanpercentile(ent_dist, lower, axis=0)
-        ent_upper = np.nanpercentile(ent_dist, upper, axis=0) - ent_med
+        press_med = np.nanpercentile(press_dist, 50, axis=0)
+        press_lower = press_med - np.nanpercentile(press_dist, lower, axis=0)
+        press_upper = np.nanpercentile(press_dist, upper, axis=0) - press_med
 
         # Set up the result to return as an astropy quantity.
-        ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
+        press_res = Quantity(np.array([press_med.value, press_lower.value, press_upper.value]), press_dist.unit)
 
-        if not self._allow_unphysical and np.any(ent_res[0] < 0):
-            raise ValueError("A specific entropy of less than zero has been measured, which is not physical.")
+        # if not self._allow_unphysical and np.any(press_res[0] < 0):
+        #     raise ValueError("A thermal pressure of less than zero has been measured, which is not physical.")
 
-        return ent_res, ent_dist
+        return press_res, press_dist
 
     def view_pressure_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
                            bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
