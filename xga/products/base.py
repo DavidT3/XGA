@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:54. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -824,16 +824,20 @@ class BaseProfile1D:
         else:
             self._model_allegiance(model)
 
+        # Trying to read out the raw output unit of the model with current start parameters, rather than the
+        #  final unit set by each model - this is to make sure we're doing regression on data of the right unit
+        raw_mod_unit = model.model(self.radii[0], *model.start_pars).unit
+
         # I'm just defining these here so that the lines don't get too long for PEP standards
-        y_data = (self.values.copy() - self._background).value
-        y_errs = self.values_err.copy().value
+        y_data = (self.values.copy() - self._background).to(raw_mod_unit).value
+        y_errs = self.values_err.copy().to(raw_mod_unit).value
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
 
         for prior in model.par_priors:
             if prior['type'] != 'uniform':
-                raise NotImplementedError("Sorry but I don't yet support non-uniform priors for profile fitting!")
+                raise NotImplementedError("Sorry but we don't yet support non-uniform priors for profile fitting!")
 
         prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
@@ -861,7 +865,8 @@ class BaseProfile1D:
         #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
         if find_to_replace(base_start_pars, prior_arr).any():
             warn("Maximum likelihood estimator has produced at least one start parameter that is outside"
-                 " the allowed values defined by the prior, reverting to default start parameters for this model.")
+                 " the allowed values defined by the prior, reverting to default start parameters for this model.",
+                 stacklevel=2)
             base_start_pars = model.unitless_start_pars
 
         # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
@@ -889,7 +894,7 @@ class BaseProfile1D:
         if any(all_bad):
             warn("All walker starting parameters for one or more of the model parameters are outside the priors, which"
                  "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
-                 " drawn from the priors directly.")
+                 " drawn from the priors directly.", stacklevel=2)
             # This replacement only affects those parameters for which ALL start positions are outside the
             #  prior range
             all_bad_inds = np.argwhere(all_bad).T[0]
@@ -1025,8 +1030,12 @@ class BaseProfile1D:
         else:
             self._model_allegiance(model)
 
-        y_data = (self.values.copy() - self._background).value
-        y_errs = self.values_err.copy().value
+        # Trying to read out the raw output unit of the model with current start parameters, rather than the
+        #  final unit set by each model - this is to make sure we're doing regression on data of the right unit
+        raw_mod_unit = model.model(self.radii[0], *model.start_pars).unit
+
+        y_data = (self.values.copy() - self._background).to(raw_mod_unit).value
+        y_errs = self.values_err.copy().to(raw_mod_unit).value
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
@@ -1132,7 +1141,7 @@ class BaseProfile1D:
 
     def fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
             num_steps: int = 30000, num_walkers: int = 20, progress_bar: bool = True,
-            show_warn: bool = True) -> BaseModel1D:
+            show_warn: bool = True, force_refit: bool = False) -> BaseModel1D:
         """
         Method to fit a model to this profile's data, then store the resulting model parameter results. Each
         profile can store one instance of a type of model per fit method. So for instance you could fit both
@@ -1153,6 +1162,8 @@ class BaseProfile1D:
         :param bool progress_bar: Only applicable if using MCMC fitting, should a progress bar be shown.
         :param bool show_warn: Should warnings be printed out, otherwise they are just stored in the model
             instance (this also happens if show_warn is True).
+        :param bool force_refit: Controls whether the profile will re-run the fit of a model that already has a good
+            model fit stored. The default is False.
         :return: The fitted model object. The fitted model is also stored within the profile object.
         :rtype: BaseModel1D
         """
@@ -1194,13 +1205,13 @@ class BaseProfile1D:
 
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
-        if model.name in self._good_model_fits[method]:
+        if not force_refit and model.name in self._good_model_fits[method]:
             warn("{m} already has a successful fit result for this profile using {me}, with those start "
-                 "parameters".format(m=model.name, me=method))
+                 "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = True
         elif model.name in self._bad_model_fits[method]:
             warn("{m} already has a failed fit result for this profile using {me} with those start "
-                 "parameters".format(m=model.name, me=method))
+                 "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = False
         else:
             already_done = False
@@ -1339,6 +1350,35 @@ class BaseProfile1D:
             # This method means that a change has happened to the model, so it should be re-saved
             self.save()
 
+    def remove_model_fit(self, model: Union[str, BaseModel1D], method: str):
+        """
+        This will remove an existing model fit for a particular fit method.
+
+        :param str/BaseModel1D model: The model fit to delete.
+        :param str method: The method used to fit the model.
+        """
+        # Making sure we have a string model name
+        if isinstance(model, BaseModel1D):
+            model = model.name
+
+        # Checking the input model is valid for this profile
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} "
+                                       "profile.".format(m=model, p=self._y_axis_name.lower()))
+
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, the following are allowed; "
+                              "{a}".format(me=method, a=allowed))
+
+        if model not in self._good_model_fits[method]:
+            raise XGAInvalidModelError("{m} is valid for this profile, but cannot be removed as it has not been "
+                                       "fit.".format(m=model))
+        else:
+            # Finally remove the model
+            del self._good_model_fits[method][model]
+
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
         A get method meant to retrieve the MCMC ensemble sampler used to fit a particular
@@ -1458,8 +1498,14 @@ class BaseProfile1D:
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
 
+        # Setting up parameter label name and unit pairs - will strip them of '$' in the next line - didn't do it
+        #  here to make it a little easier to read
+        labels = [[par_name, model_obj.par_units[par_ind].to_string('latex')] for par_ind, par_name
+                  in enumerate(model_obj.par_publication_names)]
+
         # Need to remove $ from the labels because getdist adds them itself
-        stripped_labels = [n.replace('$', '') for n in model_obj.par_publication_names]
+        stripped_labels = [(lab_pair[0] + r"\: \left[" + lab_pair[1] + r'\right]').replace('$', '')
+                           for lab_pair in labels]
 
         # Setup the getdist sample object
         gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
@@ -2448,18 +2494,14 @@ class BaseAggregateProfile1D:
         """
         The init for the BaseAggregateProfile1D class.
         """
-        # This checks that all types of profiles in the profiles list are the same
-        types = [type(p) for p in profiles]
-        if len(set(types)) != 1:
-            raise TypeError("All component profiles must be of the same type")
 
-        # This checks that all profiles have the same x units
+        # This checks that all profiles have the same x units - we used to explicitly check for Python instance
+        #  type, but actually we do want profiles to be plottable on the same axis if they have the same units
         x_units = [p.radii_unit.to_string() for p in profiles]
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
-        # THis checks that they all have the same y units. This is likely to be true if they are the same
-        #  type, but you never know
+        # THis checks that they all have the same y units.
         y_units = [p.values_unit.to_string() for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
