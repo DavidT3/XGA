@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 22:52. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -2722,8 +2722,18 @@ class SpecificEntropy(BaseProfile1D):
         #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
         #  one model and not another, using a combination of model and datapoints to calculate entropy
         if temperature_model is not None:
-            temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                        num_walkers, progress, show_warn)
+            t_mn = temperature_model.name if isinstance(temperature_model, BaseModel1D) else temperature_model
+            # If the passed model has already been fit then yay! however, we make sure the number of samples is the
+            #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
+            #  aren't the same then the fit will have to be re-run
+            in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
+
+            if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
+                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
+                                                            num_walkers, progress, show_warn, force_refit=True)
+            elif not in_mod_names:
+                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
+                                                            num_walkers, progress, show_warn, force_refit=False)
             key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
@@ -2735,8 +2745,17 @@ class SpecificEntropy(BaseProfile1D):
             key_temp_mod_part = "tmdata"
 
         if density_model is not None:
-            density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps, num_walkers,
-                                                progress, show_warn)
+            d_mn = density_model.name if isinstance(density_model, BaseModel1D) else density_model
+            # If the passed model has already been fit then yay! however, we make sure the number of samples is the
+            #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
+            #  aren't the same then the fit will have to be re-run
+            in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
+            if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
+                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
+                                                    num_walkers, progress, show_warn, force_refit=True)
+            elif not in_mod_names:
+                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
+                                                    num_walkers, progress, show_warn, force_refit=False)
             key_dens_mod_part = "dm{d}".format(d=density_model.name)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
@@ -2792,15 +2811,11 @@ class SpecificEntropy(BaseProfile1D):
         A method which will measure a specific entropy and specific entropy uncertainty within the given
         radius/radii.
 
-        If the models for temperature and density have analytical solutions to their derivative wrt to radius then
-        those will be used to calculate the gradients at radius, but if not then a numerical method will be used for
-        which dx will be set to radius/1e+6.
-
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
             mass within.
         :param float conf_level: The confidence level for the entropy uncertainties, the default is 68.2% (~1σ).
         :return: An astropy quantity containing the entropy/entropies, lower and upper uncertainties, and another
-            containing the mass realisation distribution.
+            containing the entropy realization distribution.
         :rtype: Union[Quantity, Quantity]
         """
         # Setting the upper and lower confidence limits
@@ -2937,7 +2952,7 @@ class SpecificEntropy(BaseProfile1D):
         return ent_res, ent_dist
 
     def view_entropy_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
-                          bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
+                          bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
         """
         A method which will generate a histogram of the entropy distribution that resulted from the entropy calculation
         at the supplied radius. If the entropy for the passed radius has already been measured it, and the entropy
@@ -2955,7 +2970,7 @@ class SpecificEntropy(BaseProfile1D):
             raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
                              "arrays of radii are not supported.")
 
-        # Grabbing out the mass distribution, as well as the single result that describes the entropy distribution.
+        # Grabbing out the entropy distribution, as well as the single result that describes the entropy distribution.
         ent, ent_dist = self.entropy(radius, conf_level)
         # Setting up the figure
         plt.figure(figsize=figsize)
@@ -2967,7 +2982,7 @@ class SpecificEntropy(BaseProfile1D):
 
         # Plot the histogram and set up labels
         plt.hist(ent_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string('latex') + ']')
+        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string('latex') + ']', fontsize=14)
         plt.title("Entropy Distribution at {}".format(radius.to_string()))
 
         vals_label = '$' + str(ent[0].round(2).value) + "^{+" + str(ent[2].round(2).value) + "}" + \
@@ -3031,12 +3046,610 @@ class SpecificEntropy(BaseProfile1D):
         """
         if not rad.unit.is_equivalent(self.radii_unit):
             raise UnitConversionError("You can only check radii in units convertible to the radius units of "
-                                      "the profile ({})".format(self.radii_unit.to_string()))
+                                      "the profile ({}).".format(self.radii_unit.to_string()))
 
         if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
                 or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
-            warn("Some radii are outside the data range covered by the temperature or density profiles, as such "
-                 "you will be extrapolating based on the model fits.", stacklevel=2)
+
+            # If we're using smooth fitted models for temperature and density then this is allowable, but still
+            #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
+            #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
+            if self._temp_model is None:
+                raise ValueError("Some radii are outside the radius range covered by the temperature or density "
+                                 "profiles, and it is not possible to extrapolate when using a data-point driven "
+                                 "entropy profile; please fit an entropy model and extrapolate that, or set up an "
+                                 "entropy profile that uses temperature and density model fits.")
+            else:
+                warn("Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                     "you will be extrapolating based on the model fits.", stacklevel=2)
+
+class ThermalPressure(BaseProfile1D):
+    """
+    A profile product which uses input temperature and density profiles to calculate a thermal pressure profile of
+    the kind often used in galaxy cluster analyses. Very similar in function to the SpecificEntropy profile class, in
+    that pressure values are calculated during the declaration of this class, rather than being passed in.
+
+    The thermal pressure profile can be used with several different kinds of input profiles, reflecting some of the
+    different ways that they are calculated in the literature, and the practical limitations of
+    generating 'de-projected' profiles. In short, this profile can be used in the following different ways:
+
+    * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
+      density profiles also do not need to both be projected or both be de-projected. Clearly, from a purely physical
+      point of view, it would be better to pass 3D profiles, but practically de-projection processes often cause a lot
+      of problems, so the choice is left to the user.
+    * The thermal pressure values can be calculated either from models fit to the input profiles, or from the data
+      points of the input profiles. This means that the user can choose between a 'cleaner' profile from generated
+      from smooth models, or a data-driven profile that might better represent the intricacies of the particular
+      galaxy cluster.
+    * If data points are being used rather than models, and the radial binning is different between the temperature
+      and density profiles, then the data points on the profile with wider bins can either be interpolated, or matched
+      to the data points of the other profile that they cover.
+
+    :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+        temperature profile to take temperature information from.
+    :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
+        be used to calculate the thermal pressure profile), either a name or an instance of an XGA temperature model
+        class. Default is None, in which case this class will use profile data points to calculate thermal pressure.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+    :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
+        be used to calculate the thermal pressure profile), either a name or an instance of an XGA density model class.
+        Default is None, in which case this class will use profile data points to calculate thermal pressure.
+    :param Quantity radii: The radii at which to measure the thermal pressure - this is only necessary if model fits are
+        being used to calculate thermal pressure, otherwise profile radii will be used.
+    :param Quantity radii_err: The uncertainties on the radii - this is only necessary if model fits are
+        being used to calculate thermal pressure, otherwise profile radii errors will be used.
+    :param Quantity deg_radii: The radii values, but in units of degrees  - this is only necessary if model
+        fits are being used to calculate thermal pressure, otherwise profile radii will be used.
+    :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+    :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+        sampler to set up.
+    :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler
+        to take. If a single number is passed then that number of steps is used for both profiles, otherwise
+        if a list is passed the first entry is used for the temperature fit, and the second for the
+        density fit.
+    :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+    :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
+    :param bool progress:  Controls whether fit progress bars are displayed.
+    :param bool interp_data: If the thermal pressure profile is to be derived from data points rather than fitted
+        models, this controls whether the data profile with the coarser bins is interpolated, or whether the other
+        profile's data points are matched with the value that was measured for the radial region they
+        are in (the default).
+    :param bool allow_unphysical: This controls whether unphysical thermal pressure results are 'allowed' without an
+        exception being raised (e.g. if a calculated thermal pressure value is negative). Default is False.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    """
+
+    def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
+                 density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
+                 density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
+                 deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
+                 auto_save: bool = False):
+        """
+        A profile product which uses input temperature and density profiles to calculate a thermal pressure profile of
+        the kind often used in galaxy cluster analyses. Very similar in function to the SpecificEntropy profile
+        class, in that pressure values are calculated during the declaration of this class, rather than being passed in.
+
+        The thermal pressure profile can be used with several different kinds of input profiles, reflecting some of the
+        different ways that they are calculated in the literature, and the practical limitations of
+        generating 'de-projected' profiles. In short, this profile can be used in the following different ways:
+
+        * Either projected, or de-projected (inferred 3D profiles) can be passed to this profile; the temperature and
+          density profiles also do not need to both be projected or both be de-projected. Clearly, from a purely
+          physical point of view, it would be better to pass 3D profiles, but practically de-projection processes
+          often cause a lot of problems, so the choice is left to the user.
+        * The thermal pressure values can be calculated either from models fit to the input profiles, or from the data
+          points of the input profiles. This means that the user can choose between a 'cleaner' profile from generated
+          from smooth models, or a data-driven profile that might better represent the intricacies of the particular
+          galaxy cluster.
+        * If data points are being used rather than models, and the radial binning is different between the temperature
+          and density profiles, then the data points on the profile with wider bins can either be interpolated, or
+          matched to the data points of the other profile that they cover.
+
+        :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+            temperature profile to take temperature information from.
+        :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
+            be used to calculate the thermal pressure profile), either a name or an instance of an XGA temperature
+            model class. Default is None, in which case this class will use profile data points to calculate
+            thermal pressure.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
+        :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
+            be used to calculate the thermal pressure profile), either a name or an instance of an XGA density
+            model class. Default is None, in which case this class will use profile data points to calculate thermal
+            pressure.
+        :param Quantity radii: The radii at which to measure the thermal pressure - this is only necessary if model
+            fits are being used to calculate thermal pressure, otherwise profile radii will be used.
+        :param Quantity radii_err: The uncertainties on the radii - this is only necessary if model fits are
+            being used to calculate thermal pressure, otherwise profile radii errors will be used.
+        :param Quantity deg_radii: The radii values, but in units of degrees  - this is only necessary if model
+            fits are being used to calculate thermal pressure, otherwise profile radii will be used.
+        :param str fit_method: The name of the fit method to use for the fitting of the profiles, default is 'mcmc'.
+        :param int num_walkers: If the fit method is 'mcmc' then this will set the number of walkers for the emcee
+            sampler to set up.
+        :param list/int num_steps: If the fit method is 'mcmc' this will set the number of steps for each sampler
+            to take. If a single number is passed then that number of steps is used for both profiles, otherwise
+            if a list is passed the first entry is used for the temperature fit, and the second for the
+            density fit.
+        :param int num_samples: The number of random samples to be drawn from the posteriors of the fit results.
+        :param bool show_warn: Controls whether warnings produced the fitting processes are displayed.
+        :param bool progress:  Controls whether fit progress bars are displayed.
+        :param bool interp_data: If the thermal pressure profile is to be derived from data points rather than fitted
+            models, this controls whether the data profile with the coarser bins is interpolated, or whether the other
+            profile's data points are matched with the value that was measured for the radial region they
+            are in (the default).
+        :param bool allow_unphysical: This controls whether unphysical thermal pressure results are 'allowed' without
+            an exception being raised (e.g. if a calculated thermal pressure value is negative). Default is False.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
+            is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        """
+        # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
+
+        # We check whether the temperature profile passed is actually the type of profile we need
+        if not isinstance(temperature_profile, (GasTemperature3D, ProjectedGasTemperature1D)):
+            raise TypeError("The {} class is not an accepted input for 'temperature_profile'; only a GasTemperature3D "
+                            "or ProjectedGasTemperature1D instance may be "
+                            "passed.".format(str(type(temperature_profile))))
+
+        # We repeat this process with the density profile
+        # TODO Add a check for projected density, if I ever implement such a thing
+        if not isinstance(density_profile, GasDensity3D):
+            raise TypeError("The {} class is not an accepted input for 'density_profile'; only a GasDensity3D "
+                            "instance may be passed.".format(str(type(density_profile))))
+
+        # We also need to check that someone hasn't done something dumb like pass profiles from two different
+        #  clusters, so we'll compare source names.
+        if temperature_profile.src_name != density_profile.src_name:
+            raise ValueError("You have passed temperature and density profiles from two different "
+                             "sources, any resulting thermal pressure measurements would not be valid, so this is not "
+                             "allowed.")
+        # And check they were generated with the same central coordinate, otherwise they may not be valid. I
+        #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
+        elif np.any(temperature_profile.centre != density_profile.centre):
+            raise ValueError("The temperature and density profiles do not have the same central coordinate.")
+        # Same reasoning with the ObsID and instrument
+        elif temperature_profile.obs_id != density_profile.obs_id:
+            warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
+        elif temperature_profile.instrument != density_profile.instrument:
+            warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
+
+        # Now we check whether the right combination of information has been passed depending on whether we are
+        #  going to be using model fits or not (we need passed radii if a model is to be used).
+        if ((temperature_model is not None or density_model is not None) and
+                (radii is None or radii_err is None or deg_radii is None)):
+            raise ValueError("Radii at which to calculate thermal pressure (the 'radii', 'radii_err', and 'deg_radii' "
+                             "arguments) must be passed if 'temperature_model' or 'density_model' is set.")
+        else:
+            if len(temperature_profile) > len(density_profile):
+                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
+                if not interp_data:
+                    within_bnds = np.where((temperature_profile.radii >= density_profile.annulus_bounds.min()) &
+                                           (temperature_profile.radii <= density_profile.annulus_bounds.max()))[0]
+                else:
+                    within_bnds = np.arange(0, len(temperature_profile.radii))
+
+                if len(within_bnds) != len(temperature_profile.radii):
+                    warn("The radii extracted from the temperature profile for the creation of the thermal pressure "
+                         "profile have been truncated to match the radius range of the density "
+                         "profile.", stacklevel=2)
+                radii = temperature_profile.radii[within_bnds]
+                radii_err = temperature_profile.radii_err[within_bnds]
+                deg_radii = temperature_profile.deg_radii[within_bnds]
+            else:
+                # We restrict the radii to being within the bounds of the other profile if we are not interpolating
+                if not interp_data:
+                    within_bnds = np.where((density_profile.radii >= temperature_profile.annulus_bounds.min()) &
+                                           (density_profile.radii <= temperature_profile.annulus_bounds.max()))[0]
+                else:
+                    within_bnds = np.arange(0, len(density_profile.radii))
+
+                if len(within_bnds) != len(density_profile.radii):
+                    warn("The radii extracted from the density profile for the creation of the thermal pressure "
+                         "profile have been truncated to match the radius range of the temperature "
+                         "profile.", stacklevel=2)
+
+                radii = density_profile.radii[within_bnds]
+                radii_err = density_profile.radii_err[within_bnds]
+                deg_radii = density_profile.deg_radii[within_bnds]
+
+        # Set the attribute which lets the thermal pressure calculation method know whether to interpolate any
+        #  data points or not, if smooth fitted models are not going to be used
+        self._interp_data = interp_data
+
+        # We see if either of the profiles have an associated spectrum
+        if temperature_profile.set_ident is None and density_profile.set_ident is None:
+            set_id = None
+            set_store = None
+        elif temperature_profile.set_ident is None and density_profile.set_ident is not None:
+            set_id = density_profile.set_ident
+            set_store = density_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is None:
+            set_id = temperature_profile.set_ident
+            set_store = temperature_profile.associated_set_storage_key
+        elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
+            if temperature_profile.set_ident != density_profile.set_ident:
+                warn("The temperature and density profile you passed were generated from different sets of annular"
+                     " spectra, the thermal pressure profile's associated set ident will be set to "
+                     "None.", stacklevel=2)
+                set_id = None
+                set_store = None
+            else:
+                set_id = temperature_profile.set_ident
+                set_store = temperature_profile.associated_set_storage_key
+
+        self._temp_prof = temperature_profile
+        self._dens_prof = density_profile
+
+        if not radii.unit.is_equivalent("kpc"):
+            raise UnitConversionError("Radii unit cannot be converted to kpc")
+        else:
+            radii = radii.to('kpc')
+            radii_err = radii_err.to('kpc')
+        # This will be overwritten by the super() init call, but it allows rad_check to work
+        self._radii = radii
+
+        # We won't REQUIRE that the profiles have data point generated at the same radii, as we're gonna
+        #  measure thermal pressure from the models, but I do need to check that the passed radii are within the
+        #  radii of the and warn the user if they aren't
+        self.rad_check(radii)
+
+        if isinstance(num_steps, int):
+            temp_steps = num_steps
+            dens_steps = num_steps
+        elif isinstance(num_steps, list) and len(num_steps) == 2:
+            temp_steps = num_steps[0]
+            dens_steps = num_steps[1]
+        else:
+            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
+                             "temperature profile fit and the second for the density profile fit")
+
+        # If models are passed then we're going to make sure that they're fit here - starting with temperature. We'll
+        #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
+        #  one model and not another, using a combination of model and datapoints to calculate thermal pressure
+        if temperature_model is not None:
+            t_mn = temperature_model.name if isinstance(temperature_model, BaseModel1D) else temperature_model
+            # If the passed model has already been fit then yay! however, we make sure the number of samples is the
+            #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
+            #  aren't the same then the fit will have to be re-run
+            in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
+
+            if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
+                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
+                                                            num_walkers, progress, show_warn, force_refit=True)
+            elif not in_mod_names:
+                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
+                                                            num_walkers, progress, show_warn, force_refit=False)
+            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            # Have to check whether the fits were actually successful, as the fit method will return a model instance
+            #  either way
+            if not temperature_model.success:
+                raise XGAFitError("The fit to the temperature was unsuccessful, cannot define thermal pressure "
+                                  "profile.")
+        elif interp_data:
+            key_temp_mod_part = "tmdatainterp"
+        else:
+            key_temp_mod_part = "tmdata"
+
+        if density_model is not None:
+            d_mn = density_model.name if isinstance(density_model, BaseModel1D) else density_model
+            # If the passed model has already been fit then yay! however, we make sure the number of samples is the
+            #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
+            #  aren't the same then the fit will have to be re-run
+            in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
+            if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
+                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
+                                                    num_walkers, progress, show_warn, force_refit=True)
+            elif not in_mod_names:
+                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
+                                                    num_walkers, progress, show_warn, force_refit=False)
+            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            # Have to check whether the fits were actually successful, as the fit method will return a model instance
+            #  either way
+            if not density_model.success:
+                raise XGAFitError("The fit to the density was unsuccessful, cannot define thermal pressure profile.")
+        elif interp_data:
+            key_dens_mod_part = "dmdatainterp"
+        else:
+            key_dens_mod_part = "dmdata"
+
+        self._temp_model = temperature_model
+        self._dens_model = density_model
+
+        # We set an attribute with the 'num_samples' parameter - it has been passed into the model fits already, but
+        #  we also use that value for the number of data realizations if the user has opted for a data point derived
+        #  thermal pressure profile rather than model derived.
+        self._num_samples = num_samples
+
+        # A simple flag that controls whether the 'mass()' method will raise an exception if an unphysical mass is
+        #  calculated, or if it will let it go through without an exception
+        self._allow_unphysical = allow_unphysical
+
+        press, press_dist = self.pressure(radii, conf_level=68)
+        press_vals = press[0, :]
+        press_errs = np.mean(press[1:, :], axis=0)
+
+        super().__init__(radii, press_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
+                         self._temp_prof.instrument, radii_err, press_errs, set_id, set_store, deg_radii,
+                         auto_save=auto_save)
+
+        # Need a custom storage key for this pressure profile, incorporating all the information we have about what
+        #  went into it, density profile, temperature profile, radii, density and temperature models
+        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
+        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        cur_part = self.storage_key
+
+        whole_new = "{ntm}_{ndm}_{c}_{t}_{d}".format(ntm=key_temp_mod_part, ndm=key_dens_mod_part, c=cur_part,
+                                                     t=temp_part, d=dens_part)
+        self._storage_key = whole_new
+
+        # Setting the type
+        self._prof_type = "thermal pressure"
+
+        # This is what the y-axis is labelled as during plotting
+        self._y_axis_name = r"P$_{\rm{X}}$"
+
+        # Setting up a dictionary to store pressure results in.
+        self._pressures = {}
+
+    def pressure(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
+        """
+        A method which will measure a thermal pressure and thermal pressure uncertainty within the given
+        radius/radii.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            thermal pressure within.
+        :param float conf_level: The confidence level for the thermal pressure uncertainties, the default
+            is 68.2% (~1σ).
+        :return: An astropy quantity containing the thermal pressure(s), lower and upper uncertainties, and another
+            containing the thermal pressure realization distribution.
+        :rtype: Union[Quantity, Quantity]
+        """
+        raise NotImplementedError("The calculation of pressure is not yet implemented")
+        # Setting the upper and lower confidence limits
+        upper = 50 + (conf_level / 2)
+        lower = 50 - (conf_level / 2)
+
+        # Prints a warning if the radius at which to calculate the entropy is outside the range of the data
+        self.rad_check(radius)
+
+        # If a particular radius already has a result in the profiles storage structure then we'll just grab that
+        #  rather than redoing a calculation unnecessarily.
+        if radius.isscalar and radius in self._entropies:
+            already_run = True
+            ent_dist = self._entropies[radius]
+        else:
+            already_run = False
+
+        # Here, if we haven't already identified a previously calculated entropy for the radius, we start to
+        #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
+        #  ways of calculating entropy we support (using smooth models, using data points, using interpolated data
+        #  points). First of all we deal with the case of there being a density model to draw from
+        if not already_run and self.density_model is not None:
+            # If the density model fit didn't work then we give up and throw an error
+            if not self.density_model.success:
+                raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
+                                  "using a smooth density model.")
+            # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
+            #  the definition of this source of the model.
+            dens = self._dens_model.get_realisations(radius)
+
+        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
+        #  temperature and density profiles are identical, and so we just get some realisations
+        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
+              (self.density_profile.radii == self.temperature_profile.radii).all()):
+            dens = self.density_profile.generate_data_realisations(self._num_samples).T
+
+        elif not already_run and self._interp_data:
+            # This uses the density profile y-axis values (and their uncertainties) to draw N realisations of the
+            #  data points - we'll use this to create N realisations of the interpolations as well
+            dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
+            # TODO This unfortunately may be removed from scipy soon, but the np.interp linear interpolation method
+            #  doesn't currently support interpolating along a particular axis. Also considering more sophisticated
+            #  scipy interpolation methods (see issue #1168) but cubic splines don't seem to behave amazingly well
+            #  for temperature profiles with larger uncertainties on then outskirts, so we're doing this for now
+            # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
+            dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
+                                   fill_value='extrapolate', bounds_error=False)
+            # Restore the interpolated density profile realisations to an astropy quantity array
+            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+
+        # This particular combination means that we are doing a data-point based profile, but without interpolation,
+        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
+        #  just read out the density data points (and make N realisations of them) with no funny business required
+        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
+            dens = self.density_profile.generate_data_realisations(self._num_samples).T
+        else:
+            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
+                                self.density_profile.annulus_bounds[1:]]).T
+
+            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+
+            dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
+            dens = dens_data_real[:, d_inds].T
+
+        # Finally, whatever way we got the densities, we make sure they are in the right unit
+        if not already_run and not dens.unit.is_equivalent('1/cm^3'):
+            dens = dens / (MEAN_MOL_WEIGHT * m_p)
+
+        # We now essentially repeat the process we just did with the density profiles, constructing the temperature
+        #  values that we are going to use in our entropy measurements; from models, data points, or interpolating
+        #  from data points
+        if not already_run and self.temperature_model is not None:
+            if not self.temperature_model.success:
+                raise XGAFitError("The temperature model fit was not successful, as such we cannot calculate entropy "
+                                  "using a smooth temperature model.")
+            # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
+            #  the definition of this source of the model.
+            temp = self._temp_model.get_realisations(radius)
+
+        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
+        #  temperature and density profiles are identical, and so we just get some realisations
+        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
+              (self.density_profile.radii == self.temperature_profile.radii).all()):
+            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
+
+        elif not already_run and self._interp_data:
+            # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
+            #  data points - we'll use this to create N realisations of the interpolations as well
+            temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
+            temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
+                                   fill_value='extrapolate', bounds_error=False)
+            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+
+        # This particular combination means that we are doing a data-point based profile, but without interpolation,
+        #  and that the temperature profile has more bins than the density (not going to happen often)
+        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
+            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
+        # And here, the final option, we're doing a data-point based profile without interpolation, and we need
+        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
+        #  temperature value - in practise this means that each density will be paired with the temperature
+        #  realisations whose radial coverage they fall within.
+        else:
+            t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
+                                self.temperature_profile.annulus_bounds[1:]]).T
+
+            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+
+            temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
+            temp = temp_data_real[:, t_inds].T
+
+        # We ensure the temperatures are in the right unit
+        if not already_run and not temp.unit.is_equivalent('keV'):
+            temp = (temp * k_B).to('keV')
+
+        # And now we do the actual entropy calculation
+        if not already_run:
+            ent_dist = (temp / dens ** (2 / 3)).T
+            # Storing the result if it is for a single radius
+            if radius.isscalar:
+                self._entropies[radius] = ent_dist
+
+        # Whether we just calculated the entropy, or we fetched it from storage at the beginning of this method
+        #  call, we use the distribution to calculate median and confidence limit values
+        ent_med = np.nanpercentile(ent_dist, 50, axis=0)
+        ent_lower = ent_med - np.nanpercentile(ent_dist, lower, axis=0)
+        ent_upper = np.nanpercentile(ent_dist, upper, axis=0) - ent_med
+
+        # Set up the result to return as an astropy quantity.
+        ent_res = Quantity(np.array([ent_med.value, ent_lower.value, ent_upper.value]), ent_dist.unit)
+
+        if not self._allow_unphysical and np.any(ent_res[0] < 0):
+            raise ValueError("A specific entropy of less than zero has been measured, which is not physical.")
+
+        return ent_res, ent_dist
+
+    def view_pressure_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
+                           bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
+        """
+        A method which will generate a histogram of the thermal pressure distribution that resulted from the
+        pressure calculation at the supplied radius. If the entropy for the passed radius has already been measured
+        it, and the pressure distribution, will be retrieved from the storage of this product rather than re-calculated.
+
+        :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
+            pressure at.
+        :param float conf_level: The confidence level for the pressure uncertainties, the default is 68.2% (~1σ).
+        :param int/str bins: The argument to be passed to plt.hist, either a number of bins or a binning
+            algorithm name.
+        :param str colour: The desired colour of the histogram.
+        :param tuple figsize: The desired size of the histogram figure.
+        """
+        if not radius.isscalar:
+            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
+                             "arrays of radii are not supported.")
+
+        # Grabbing out the pressure distribution, as well as the single result that describes the pressure distribution.
+        press, press_dist = self.pressure(radius, conf_level)
+        # Setting up the figure
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        # Includes nicer ticks
+        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        # And removing the yaxis tick labels as it's just a number of values per bin
+        ax.yaxis.set_ticklabels([])
+
+        # Plot the histogram and set up labels
+        plt.hist(press_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
+        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string('latex') + ']', fontsize=14)
+        plt.title("Thermal Pressure Distribution at {}".format(radius.to_string()))
+
+        vals_label = '$' + str(press[0].round(2).value) + "^{+" + str(press[2].round(2).value) + "}" + \
+                     "_{-" + str(press[1].round(2).value) + "}$"
+        res_label = r"$P_{\rm{X}}$ = " + vals_label + '[' + self.values_unit.to_string('latex') + ']'
+
+        # And this just plots the 'result' on the distribution as a series of vertical lines
+        plt.axvline(press[0].value, color='red', label=res_label)
+        plt.axvline(press[0].value - press[1].value, color='red', linestyle='dashed')
+        plt.axvline(press[0].value + press[2].value, color='red', linestyle='dashed')
+        plt.legend(loc='best', prop={'size': 12})
+        plt.tight_layout()
+        plt.show()
+
+    @property
+    def temperature_profile(self) -> Union[GasTemperature3D, ProjectedGasTemperature1D]:
+        """
+        A method to provide access to the 3D or projected temperature profile used to generate this pressure profile.
+
+        :return: The input temperature profile.
+        :rtype: GasTemperature3D
+        """
+        return self._temp_prof
+
+    @property
+    def density_profile(self) -> GasDensity3D:
+        """
+        A method to provide access to the 3D density profile used to generate this pressure profile.
+
+        :return: The input density profile.
+        :rtype: GasDensity3D
+        """
+        return self._dens_prof
+
+    @property
+    def temperature_model(self) -> BaseModel1D:
+        """
+        A method to provide access to the model that may have been fit to the temperature profile.
+
+        :return: The fit temperature model.
+        :rtype: BaseModel1D
+        """
+        return self._temp_model
+
+    @property
+    def density_model(self) -> BaseModel1D:
+        """
+        A method to provide access to the model that may have been fit to the density profile.
+
+        :return: The fit density profile.
+        :rtype: BaseModel1D
+        """
+        return self._dens_model
+
+    def rad_check(self, rad: Quantity):
+        """
+        Very simple method that prints a warning if the radius is outside the range of data covered by the
+        density or temperature profiles.
+
+        :param Quantity rad: The radius to check.
+        """
+        if not rad.unit.is_equivalent(self.radii_unit):
+            raise UnitConversionError("You can only check radii in units convertible to the radius units of "
+                                      "the profile ({}).".format(self.radii_unit.to_string()))
+
+        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
+                or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
+
+            # If we're using smooth fitted models for temperature and density then this is allowable, but still
+            #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
+            #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
+            if self._temp_model is None:
+                raise ValueError("Some radii are outside the radius range covered by the temperature or density "
+                                 "profiles, and it is not possible to extrapolate when using a data-point driven "
+                                 "pressure profile; please fit an pressure model and extrapolate that, or set up an "
+                                 "pressure profile that uses temperature and density model fits.")
+            else:
+                warn("Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                     "you will be extrapolating based on the model fits.", stacklevel=2)
 
 
 class Generic1D(BaseProfile1D):
