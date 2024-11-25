@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 21:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/11/2024, 12:23. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -976,10 +976,10 @@ class BaseProfile1D:
                     # Store the current unit
                     u = p_dist.unit
                     # Measure the 50th percentile value of the current parameter distribution
-                    fiftieth = np.percentile(p_dist, 50).value
+                    fiftieth = np.nanpercentile(p_dist, 50).value
                     # Find the upper and lower bounds of the 1sigma region of the distribution
-                    upper = np.percentile(p_dist, 84.1).value
-                    lower = np.percentile(p_dist, 15.9).value
+                    upper = np.nanpercentile(p_dist, 84.1).value
+                    lower = np.nanpercentile(p_dist, 15.9).value
                     # Store the upper and lower uncertainties with the correct units
                     model_par_errs.append(Quantity([fiftieth-lower, upper-fiftieth], u))
 
@@ -1504,9 +1504,8 @@ class BaseProfile1D:
                   in enumerate(model_obj.par_publication_names)]
 
         # Need to remove $ from the labels because getdist adds them itself
-        stripped_labels = [(lab_pair[0] + r"\: \left[" + lab_pair[1] + r'\right]').replace('$', '')
-                           for lab_pair in labels]
-
+        stripped_labels = [(lab_pair[0] + ((r"\: \left[" + lab_pair[1] + r'\right]')
+                            if lab_pair[1] != '$\\mathrm{}$' else '')).replace('$', '') for lab_pair in labels]
         # Setup the getdist sample object
         gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
                             settings=settings)
@@ -1726,17 +1725,17 @@ class BaseProfile1D:
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
-            mod_rads = np.linspace(lo_rad, hi_rad, 100)
+            mod_rads = np.linspace(lo_rad, hi_rad, 500)
 
             for method in self._good_model_fits:
                 for model in self._good_model_fits[method]:
                     model_obj = self._good_model_fits[method][model]
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
-                    median_model = np.percentile(mod_reals, 50, axis=1)
+                    median_model = np.nanpercentile(mod_reals, 50, axis=1)
 
-                    upper_model = np.percentile(mod_reals, 84.1, axis=1)
-                    lower_model = np.percentile(mod_reals, 15.9, axis=1)
+                    upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
+                    lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
 
                     mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
                     main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm, label=mod_lab,
@@ -1756,7 +1755,7 @@ class BaseProfile1D:
                     if show_residual_ax:
                         # This calculates and plots the residuals between the model and the data on the extra
                         #  axis we added near the beginning of this method
-                        res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
+                        res = np.nanpercentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
                               - (plot_y_vals * y_norm)
                         res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
 
@@ -2828,12 +2827,12 @@ class BaseAggregateProfile1D:
                         else:
                             lo_rad = p.fit_radii.min()
                             hi_rad = p.fit_radii.max()
-                        mod_rads = np.linspace(lo_rad, hi_rad, 100)
+                        mod_rads = np.linspace(lo_rad, hi_rad, 500)
                         mod_reals = model_obj.get_realisations(mod_rads)
-                        median_model = np.percentile(mod_reals, 50, axis=1)
+                        median_model = np.nanpercentile(mod_reals, 50, axis=1)
 
-                        upper_model = np.percentile(mod_reals, 84.1, axis=1)
-                        lower_model = np.percentile(mod_reals, 15.9, axis=1)
+                        upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
+                        lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
 
                         colour = line[0].get_color()
 
@@ -2853,7 +2852,7 @@ class BaseAggregateProfile1D:
                         if show_residual_ax:
                             # This calculates and plots the residuals between the model and the data on the extra
                             #  axis we added near the beginning of this method
-                            res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
+                            res = np.nanpercentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
                                   (plot_y_vals * y_norms[p_ind])
                             res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
 
