@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/11/2024, 10:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/11/2024, 12:23. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1725,7 +1725,7 @@ class BaseProfile1D:
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
-            mod_rads = np.linspace(lo_rad, hi_rad, 100)
+            mod_rads = np.linspace(lo_rad, hi_rad, 500)
 
             for method in self._good_model_fits:
                 for model in self._good_model_fits[method]:
@@ -2827,7 +2827,7 @@ class BaseAggregateProfile1D:
                         else:
                             lo_rad = p.fit_radii.min()
                             hi_rad = p.fit_radii.max()
-                        mod_rads = np.linspace(lo_rad, hi_rad, 100)
+                        mod_rads = np.linspace(lo_rad, hi_rad, 500)
                         mod_reals = model_obj.get_realisations(mod_rads)
                         median_model = np.nanpercentile(mod_reals, 50, axis=1)
 
