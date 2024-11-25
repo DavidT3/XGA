@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/11/2024, 09:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/11/2024, 09:53. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -176,7 +176,7 @@ class GNFWThermalPressure(BaseModel1D):
 
         priors = [pz_priors[yu_ind], r_scale_priors[xu_ind], alpha_priors, beta_priors, gamma_priors]
 
-        nice_pars = [r"P$_{0}$", r"$R_{s}$", r"$\alpha$", r"$\beta$"]
+        nice_pars = [r"P$_{0}$", r"$R_{s}$", r"$\alpha$", r"$\beta$", r"$\gamma"]
         info_dict = {'author': 'Arnaud et al.', 'year': 2010,
                      'reference': 'https://ui.adsabs.harvard.edu/abs/2007ApJ...668....1N/abstract',
                      'general': "A model to fit galaxy cluster radial thermal pressure profiles, \n"
