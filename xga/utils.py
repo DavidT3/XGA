@@ -661,7 +661,7 @@ ESASS_VERSION = None
 # This checks for an installation of eSASS
 eSASS_AVAIL = False
 which_evtool = shutil.which("evtool")
-if shutil.which("evtool") is None:
+if which_evtool is None:
     warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.")
 else:
     eSASS_AVAIL = True
