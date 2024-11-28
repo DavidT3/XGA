@@ -470,6 +470,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     remove_merged_cmd = 'rm *srctoolout_0*'
     # Commands to remove the merged files from eSASS4DR1. Will depend on instrument number. Insts 1, 2, 3, 4, 6 will use
     #   remove merged dr1_8; insts 5 and 7 will use remove_merged_dr1_9. Run in addition to remove_merged_cmd above.
+    # Needed because in eSASS4DR1 srctool will output additional files for "TM8" and "TM9" which are the combined
+    #   outputs of TMs 1, 2, 3, 4, 6 and TMs 5 & 7 respectively. This was done to supplement TM0 with a combined output
+    #   that does not include the light leak affecting TMs 5 & 7.
     remove_merged_dr1_8 = 'rm *srctoolout_8*'
     remove_merged_dr1_9 = 'rm *srctoolout_9*'
     # We also set up a command that will remove all spectra BUT the combined one, for when that is all the user wants
