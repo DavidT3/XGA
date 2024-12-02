@@ -400,7 +400,8 @@ class BaseSource:
         # The nh_lookup function returns average and weighted average values, so just take the first. If this is a
         #  BaseSource and part of a sample then we're going to avoid the call to nh_lookup, for efficiency
         if in_sample and type(self) == BaseSource:
-            self._nH = Quantity(np.NaN, 'cm^-2')
+            # FIXME: Compatability -- np.NaN deprecated and replaced by np.nan in numpy >= 2
+            self._nH = Quantity(np.nan, 'cm^-2')
         else:
             self._nH = nh_lookup(self.ra_dec)[0]
 

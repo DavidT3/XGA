@@ -98,18 +98,18 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                 #  function for generating annular spectra doesn't clash and try to use the same folder
                 # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
                 #  being removed) will be written to a different temporary folder using the same random identifier.
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
                 dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
                                                                                 r=rand_ident)
             else:
                 # The output files for combined observations have a different dir structure
                 # The files produced by this function will now be stored in the combined directory.
                 final_dest_dir = OUTPUT + "erosita/combined/"
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
                 # Makes absolutely sure that the random integer hasn't already been used
                 while len([f for f in os.listdir(final_dest_dir)
                         if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-                    rand_ident = randint(0, 1e+8)
+                    rand_ident = randint(0, 100_000_000)
 
                 dest_dir = os.path.join(final_dest_dir, "temp_srctool_{}".format(rand_ident))
 

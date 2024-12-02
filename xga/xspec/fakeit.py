@@ -200,7 +200,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
             script_file = dest_dir + source.name + "_" + spec_objs[0].storage_key + "_" + model + "_" + tel + "_conv_factors" + ".xcm"
 
             # Random ident to make sure no temporary spec files clash
-            rid = randint(0, int(1e+8))
+            rid = randint(0, int(100_000_000))
 
             # Populates the fakeit conversion factor template script
             script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,

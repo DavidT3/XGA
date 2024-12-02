@@ -124,11 +124,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                 # The files produced by this function will now be stored in the combined directory.
                 final_dest_dir = OUTPUT + "erosita/combined/"
-                rand_ident = randint(0, 1e+8)
+                # FIXME: randint doesn't like 100_000_000 because its a float, replacing with 100_000_000
+                rand_ident = randint(0, 100_000_000)  # 100_000_000)
                 # Makes absolutely sure that the random integer hasn't already been used
                 while len([f for f in os.listdir(final_dest_dir)
                         if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-                    rand_ident = randint(0, 1e+8)
+                    rand_ident = randint(0, 100_000_000)
 
                 dest_dir = os.path.join(final_dest_dir, "temp_srctool_{}".format(rand_ident))
 
@@ -137,7 +138,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  function for generating annular spectra doesn't clash and try to use the same folder
                 # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
                 #  being removed) will be written to a different temporary folder using the same random identifier.
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
                 dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
                                                                                 r=rand_ident)
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -574,6 +575,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
+    print(sources_cmds)
+
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
@@ -854,7 +857,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
             continue
 
         # This generates a random integer ID for this set of spectra
-        set_id = randint(0, 1e+8)
+        set_id = randint(0, 100_000_000)
 
         # I want to be sure that this configuration doesn't already exist
         if group_spec and min_counts is not None:

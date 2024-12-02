@@ -99,11 +99,11 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
 
         # The files produced by this function will now be stored in the combined directory.
         final_dest_dir = OUTPUT + "erosita/combined/"
-        rand_ident = randint(0, 1e+8)
+        rand_ident = randint(0, 100_000_000)
         # Makes absolutely sure that the random integer hasn't already been used
         while len([f for f in os.listdir(final_dest_dir)
                    if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-            rand_ident = randint(0, 1e+8)
+            rand_ident = randint(0, 100_000_000)
         
         dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
         os.mkdir(dest_dir)
