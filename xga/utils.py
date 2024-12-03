@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/12/2024, 13:24. Copyright (c) The Contributors
 
 import json
 import os
@@ -684,7 +684,6 @@ ciao_out = ciao_out.decode("UTF-8")
 ciao_err = ciao_err.decode("UTF-8")
 
 if "ciaover: command not found" in ciao_err:
-    split_out = ''
     warn("No CIAO installation detected on system, "
             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
 else:
@@ -702,13 +701,10 @@ CALDB_VERSION = None
 # This checks for an installation of Ciao
 CALDB_AVAIL = False
 
-if split_out == '':
+if CIAO_VERSION is not None and 'not installed' in split_out[5].lower():
     warn("A Chandra CALDB installation cannot be identified on your system, and as such "
          "Chandra data cannot be processed.", stacklevel=2)
-elif 'not installed' in split_out[5].lower():
-    warn("A Chandra CALDB installation cannot be identified on your system, and as such "
-         "Chandra data cannot be processed.", stacklevel=2)
-else:
+elif CIAO_VERSION is not None:
     # Strip out the CALDB version
     CALDB_VERSION = split_out[5].split(':')[-1].strip()
     CALDB_AVAIL = True
