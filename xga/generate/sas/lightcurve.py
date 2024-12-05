@@ -248,7 +248,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             evt_list = pack[-1]
             # Sets up the file names of the output files, adding a random number
             dest_dir = OUTPUT + "{t}/{o}/{i}_{n}_temp_{r}/".format(t='xmm', o=obs_id, i=inst, n=source_name,
-                                                                   r=randint(0, int(1e+8)))
+                                                                   r=randint(0, int(100_000_000)))
 
             # We know that this is where the calibration index file lives
             ccf = dest_dir + "ccf.cif"

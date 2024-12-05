@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/12/2024, 13:24. Copyright (c) The Contributors
 
 import json
 import os
@@ -660,10 +660,19 @@ SASWARNING_LIST = warnings["WarnName"].values
 ESASS_VERSION = None
 # This checks for an installation of eSASS
 eSASS_AVAIL = False
-if shutil.which("evtool") is None:
-    warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.")
+which_evtool = shutil.which("evtool")
+if which_evtool is None:
+    warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.",
+         stacklevel=2)
 else:
     eSASS_AVAIL = True
+    if 'ESASS4EDR' in which_evtool.upper():
+        ESASS_VERSION = 'ESASS4EDR'
+    elif 'ESASS4DR1' in which_evtool.upper():
+        ESASS_VERSION = 'ESASS4DR1'
+    else:
+        warn("Unknown eSASS installation detected on system, as such some functions in xga.generate.esass may not work.",
+             stacklevel=2)
 
 # Then, we check to see what version of CIAO (if any) is installed - for the Chandra mission
 # Here we check to see whether CIAO is installed (along with all the necessary paths)
@@ -677,8 +686,8 @@ ciao_out = ciao_out.decode("UTF-8")
 ciao_err = ciao_err.decode("UTF-8")
 
 if "ciaover: command not found" in ciao_err:
-        warn("No CIAO installation detected on system, "
-             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
+    warn("No CIAO installation detected on system, "
+            "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
 else:
     # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
     #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
@@ -694,10 +703,10 @@ CALDB_VERSION = None
 # This checks for an installation of Ciao
 CALDB_AVAIL = False
 
-if 'not installed' in split_out[5].lower():
+if CIAO_VERSION is not None and 'not installed' in split_out[5].lower():
     warn("A Chandra CALDB installation cannot be identified on your system, and as such "
          "Chandra data cannot be processed.", stacklevel=2)
-else:
+elif CIAO_VERSION is not None:
     # Strip out the CALDB version
     CALDB_VERSION = split_out[5].split(':')[-1].strip()
     CALDB_AVAIL = True

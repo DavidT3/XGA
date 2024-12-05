@@ -2135,9 +2135,9 @@ class BaseProfile1D:
         """
         if self._save_path is None and self._prof_type != "base" and self._tele is not None:
             temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
-            rand_prof_id = randint(0, int(1e+8))
+            rand_prof_id = randint(0, int(100_000_000))
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
-                rand_prof_id = randint(0, int(1e+8))
+                rand_prof_id = randint(0, int(100_000_000))
             self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
         elif self._tele is None:
             raise ValueError("Cannot create an XGA save path for this profile when it does not have "

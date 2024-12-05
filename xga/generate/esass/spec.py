@@ -16,7 +16,7 @@ from .phot import evtool_image
 from .run import esass_call
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
-from ... import OUTPUT, NUM_CORES
+from ... import OUTPUT, NUM_CORES, ESASS_VERSION
 from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProductAvailableError, \
     TelescopeNotAssociatedError
 from ...samples.base import BaseSample
@@ -124,11 +124,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                 # The files produced by this function will now be stored in the combined directory.
                 final_dest_dir = OUTPUT + "erosita/combined/"
-                rand_ident = randint(0, 1e+8)
+                # FIXME: randint doesn't like 100_000_000 because its a float, replacing with 100_000_000
+                rand_ident = randint(0, 100_000_000)  # 100_000_000)
                 # Makes absolutely sure that the random integer hasn't already been used
                 while len([f for f in os.listdir(final_dest_dir)
                         if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-                    rand_ident = randint(0, 1e+8)
+                    rand_ident = randint(0, 100_000_000)
 
                 dest_dir = os.path.join(final_dest_dir, "temp_srctool_{}".format(rand_ident))
 
@@ -137,7 +138,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  function for generating annular spectra doesn't clash and try to use the same folder
                 # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
                 #  being removed) will be written to a different temporary folder using the same random identifier.
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
                 dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
                                                                                 r=rand_ident)
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -311,6 +312,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_all_but_merged_cmd])
             else:
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
+                # Add handling for DR1 produced merged files
+                if ESASS_VERSION == "ESASS4DR1":
+                    # Remove "TM9" output if the instrument number is 5 or 7
+                    if inst_no in ['5', '7']:
+                        cmd_str += f";{remove_merged_dr1_9}"
+                    else:
+                        # Remove "TM8" output otherwise
+                        cmd_str += f";{remove_merged_dr1_8}"
 
             # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
             #  we'll neaten it up at some point
@@ -322,6 +331,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                     remove_all_but_merged_cmd])
             else:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
+                # Add handling for DR1 produced merged files
+                if ESASS_VERSION == "ESASS4DR1":
+                    # Remove "TM9" output if the instrument number is 5 or 7
+                    if inst_no in ['5', '7']:
+                        cmd_str += f";{remove_merged_dr1_9}"
+                    else:
+                        # Remove "TM8" output otherwise
+                        cmd_str += f";{remove_merged_dr1_8}"
+
 
             # If the user wants to group the spectra then this command should be added
             if group_spec:
@@ -451,6 +469,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
     remove_merged_cmd = 'rm *srctoolout_0*'
+    # Commands to remove the merged files from eSASS4DR1. Will depend on instrument number. Insts 1, 2, 3, 4, 6 will use
+    #   remove merged dr1_8; insts 5 and 7 will use remove_merged_dr1_9. Run in addition to remove_merged_cmd above.
+    # Needed because in eSASS4DR1 srctool will output additional files for "TM8" and "TM9" which are the combined
+    #   outputs of TMs 1, 2, 3, 4, 6 and TMs 5 & 7 respectively. This was done to supplement TM0 with a combined output
+    #   that does not include the light leak affecting TMs 5 & 7.
+    remove_merged_dr1_8 = 'rm *srctoolout_8*'
+    remove_merged_dr1_9 = 'rm *srctoolout_9*'
     # We also set up a command that will remove all spectra BUT the combined one, for when that is all the user wants
     #  (though honestly it seems wasteful to generate them all and not use them, this might change later
     remove_all_but_merged_cmd = "rm *srctoolout_*"
@@ -549,6 +574,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+
+    print(sources_cmds)
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
@@ -830,7 +857,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
             continue
 
         # This generates a random integer ID for this set of spectra
-        set_id = randint(0, 1e+8)
+        set_id = randint(0, 100_000_000)
 
         # I want to be sure that this configuration doesn't already exist
         if group_spec and min_counts is not None:

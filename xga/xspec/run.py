@@ -48,7 +48,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # We're going to make a temporary pfiles directory which is a) local to the XGA directory, and thus sure to
     #  be on the same filesystem (can be a performance issue for HPCs I think), and b) is unique to a particular
     #  fit process, so there shouldn't be any clashes. The temporary file name is randomly generated
-    tmp_ident = str(randint(0, int(1e+8)))
+    tmp_ident = str(randint(0, int(100_000_000)))
     tmp_hea_dir = os.path.join(os.path.dirname(out_file), tmp_ident, 'pfiles/')
     os.makedirs(tmp_hea_dir)
 
