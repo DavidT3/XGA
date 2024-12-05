@@ -1,5 +1,5 @@
-# This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-# Last modified by Ray Wang (wangru46@msu.edu) 21/11/2024, 12:21. Copyright (c) The Contributors
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by Ray Wang (wangru46@msu.edu) 21/11/2024, 12:21. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
