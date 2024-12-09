@@ -266,20 +266,18 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Fills out the srctool command to make the main and background spectra
             if isinstance(source, ExtendedSource):
-                try:
-                    if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
-                        im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
-                                                        telescope='erosita')
+                if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
+                    # We only need the extmap path for extended source generation 
+                    extmap_path = _ext_map_creation(source, outer_radii[src_ind], dest_dir, True)
 
-                    else:
-                        # We only need the image path for extended source generation 
-                        im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
-                            telescope='erosita')
-                    # We have a slightly different command for extended and point sources
-                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
-                                                    i=inst_no, ts=t_step, em=im.path, et=et)
-                except:
-                    raise ValueError(f"it was this sources {source.name}")
+                else:
+                    # We only need the extmap path for extended source generation 
+                    extmap_path = _ext_map_creation(source, outer_radii[src_ind], dest_dir, False)
+
+                # We have a slightly different command for extended and point sources
+                s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, 
+                                                   reg=src_reg_str, i=inst_no, ts=t_step, 
+                                                   em=extmap_path, et=et)
 
             else:
                 s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
