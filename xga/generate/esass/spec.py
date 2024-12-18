@@ -552,51 +552,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
-def _ext_map_creation(source, outer_radii, dest_dir, combined_obs):
-        """
-        Internal function to make ext_map images for extended sources, so that they can be corrected
-        for vignetting/ effective area correctly when spectra are generated in esass. This function
-        returns a path to the created ext_map that can be input into the EXTMAP argument in the 
-        srctool command.
-
-        :param BaseSource source: The source to generate an extmap for.
-        :param astropy.units.Quantity outer_radii: outer radius of the mask to be applied.
-        :param str dest_dir: The destination directory for the extmap to be written to.
-        :param bool combined_obs: Indictating whether or not to use combined obs for this source.
-
-        :return: The path of the created extmap.
-        :rtype: str
-        """
-        # Depending on combined obs, we need to retrieve either a combined image or a single image
-        if combined_obs:
-            im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
-                                        telescope='erosita')
-        else:
-            im = source.get_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
-                                        telescope='erosita')
-        
-        # Making the mask from the outer radii of the spectra, as parsed by the user into the 
-        # srctool_spectrum command
-        mask = source.get_custom_mask(outer_radii, telescope='erosita')
-        
-        im_data = im.data
-        masked_im = mask*im_data
-
-        # just trying to conserve memory
-        del(mask)
-        del(im_data)
-
-        # Writing the the wcs and masked image into a fits file
-        im_header = im.radec_wcs.to_header()
-        prim_hdu = PrimaryHDU()
-        img_hdu = ImageHDU(data=masked_im, header=im_header)
-        extensions = [prim_hdu, img_hdu]
-        hdulist = HDUList(extensions)
-        extmap_path = dest_dir + "extmap.fits"
-        hdulist.writeto(extmap_path)
-
-        return extmap_path
-
 # # TODO fix this function to use XGA in built function and I still need to debug
 # TODO DAVID - Actually don't think that this is necessary anymore
 # def _det_map_creation(outer_radius: Quantity, source: BaseSource, obs_id: str, inst: str,
