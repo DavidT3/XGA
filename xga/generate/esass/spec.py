@@ -278,6 +278,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                     i=inst_no, ts=t_step, em=im.path, et=et)
                 except:
                     raise ValueError(f"it was this sources {source.name}")
+            else:
+                s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
+                                                i=inst_no, ts=t_step)
 
             # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
             sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str, 
