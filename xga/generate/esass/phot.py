@@ -443,7 +443,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 os.makedirs(dest_dir)
                 # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
                 #  terminal, which causes 'device not available' errors
-                cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
+                cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em} "
+                            "withweights=yes withdetmaps=yes; "
                             "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
                             "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
                                                                 u=hi_en.value, em=exp_map, d=dest_dir))
