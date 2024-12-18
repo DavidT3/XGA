@@ -10,7 +10,6 @@ from shutil import rmtree
 
 import numpy as np
 from astropy.units import Quantity
-from astropy.io.fits import ImageHDU, HDUList, PrimaryHDU
 
 from .misc import evtool_combine_evts
 from .phot import evtool_image
