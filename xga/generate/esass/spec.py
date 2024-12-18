@@ -278,6 +278,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                     i=inst_no, ts=t_step, em=im.path, et=et)
                 except:
                     raise ValueError(f"it was this sources {source.name}")
+
             else:
                 s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
                                                 i=inst_no, ts=t_step)
@@ -550,6 +551,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
 
 # # TODO fix this function to use XGA in built function and I still need to debug
 # TODO DAVID - Actually don't think that this is necessary anymore
@@ -828,7 +830,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
             continue
 
         # This generates a random integer ID for this set of spectra
-        set_id = randint(0, int(1e+8))
+        set_id = randint(0, 1e+8)
 
         # I want to be sure that this configuration doesn't already exist
         if group_spec and min_counts is not None:
