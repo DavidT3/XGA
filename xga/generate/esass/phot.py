@@ -443,6 +443,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 os.makedirs(dest_dir)
                 # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
                 #  terminal, which causes 'device not available' errors
+                # withweights=yes will calculate the effective on axis exposure
+                # withdetmaps=yes will exclude bad pixels when calculating exposure
                 cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em} "
                             "withweights=yes withdetmaps=yes; "
                             "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
