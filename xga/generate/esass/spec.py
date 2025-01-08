@@ -271,7 +271,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                         im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'), 
                                                         telescope='erosita')
                     else:
-                        # We only need the image path for extended source generation 
+                        # We only need the image path for extended source generation 
                         im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
                             telescope='erosita')
                     # We have a slightly different command for extended and point sources
