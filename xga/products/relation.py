@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:53. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1028,7 +1028,6 @@ class ScalingRelation:
                     plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
                              color=point_label_colour)
 
-        print(ax.get_ylim())
         # Need to randomly sample from the fitted model
         num_rand = 10000
         model_pars = np.repeat(self._fit_pars[..., None], num_rand, axis=1).T
@@ -1037,7 +1036,6 @@ class ScalingRelation:
         model_par_dists = np.random.normal(model_pars, model_par_errs)
 
         model_x = np.linspace(*(x_lims / self.x_norm.value), 100)
-        print(model_x)
         model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
         upper = 50 + (conf_level / 2)
@@ -1056,12 +1054,12 @@ class ScalingRelation:
 
         relation_label = " ".join([self._author, self._year, '-', mod_name,
                                    "- {cf}% Confidence".format(cf=conf_level)])
-        plt.plot(model_x * self._x_norm.value, model_median, color=model_colour, label=relation_label)
-
-        plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
-        plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
-        ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
-                        facecolor=model_colour, alpha=0.6, interpolate=True)
+        # plt.plot(model_x * self._x_norm.value, model_median, color=model_colour, label=relation_label)
+        #
+        # plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
+        # plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
+        # ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
+        #                 facecolor=model_colour, alpha=0.6, interpolate=True)
 
         # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
         #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
@@ -1073,9 +1071,6 @@ class ScalingRelation:
         elif y_lims is not None:
             # Setting the axis limits
             ax.set_ylim(y_lims.value)
-
-        print(y_lims)
-        print(ax.get_ylim())
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
