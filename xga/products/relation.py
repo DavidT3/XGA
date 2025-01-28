@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:06. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1794,7 +1794,6 @@ class AggregateScalingRelation:
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
             False.
         """
-
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up, so I think the duplication is justified.
 
@@ -1849,8 +1848,8 @@ class AggregateScalingRelation:
         elif comb_x_lims is not None:
             x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
         elif x_lims is None and len(comb_x_data) != 0:
-            max_x_ind = np.argmax(comb_x_data[:, 0])
-            min_x_ind = np.argmin(comb_x_data[:, 0])
+            max_x_ind = np.nanargmax(comb_x_data[:, 0])
+            min_x_ind = np.nanargmin(comb_x_data[:, 0])
             x_lims = [0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
                       1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value)]
         elif x_lims is None and len(comb_x_data) == 0:
@@ -1860,11 +1859,6 @@ class AggregateScalingRelation:
 
         # Setting the axis limits
         ax.set_xlim(x_lims)
-
-        # Making the scale log if requested
-        if log_scale:
-            ax.set_xscale("log")
-            ax.set_yscale("log")
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
@@ -1930,6 +1924,11 @@ class AggregateScalingRelation:
         elif y_lims is not None:
             # Setting the axis limits
             ax.set_ylim(y_lims.value)
+
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
