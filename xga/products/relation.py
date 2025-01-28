@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:12. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -950,11 +950,6 @@ class ScalingRelation:
         # Setting the axis limits
         ax.set_xlim(x_lims)
 
-        # Making the scale log if requested
-        if log_scale:
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-
         # Setup the aesthetics of the axis
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
@@ -1054,12 +1049,12 @@ class ScalingRelation:
 
         relation_label = " ".join([self._author, self._year, '-', mod_name,
                                    "- {cf}% Confidence".format(cf=conf_level)])
-        # plt.plot(model_x * self._x_norm.value, model_median, color=model_colour, label=relation_label)
-        #
-        # plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
-        # plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
-        # ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
-        #                 facecolor=model_colour, alpha=0.6, interpolate=True)
+        plt.plot(model_x * self._x_norm.value, model_median, color=model_colour, label=relation_label)
+
+        plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
+        plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
+        ax.fill_between(model_x * self._x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
+                        facecolor=model_colour, alpha=0.6, interpolate=True)
 
         # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
         #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
@@ -1071,6 +1066,11 @@ class ScalingRelation:
         elif y_lims is not None:
             # Setting the axis limits
             ax.set_ylim(y_lims.value)
+
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
@@ -1860,11 +1860,6 @@ class AggregateScalingRelation:
         # Setting the axis limits
         ax.set_xlim(x_lims)
 
-        # Making the scale log if requested
-        if log_scale:
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-
         # Setup the aesthetics of the axis
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
@@ -1929,6 +1924,11 @@ class AggregateScalingRelation:
         elif y_lims is not None:
             # Setting the axis limits
             ax.set_ylim(y_lims.value)
+
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
