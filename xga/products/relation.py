@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:23. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -805,7 +805,8 @@ class ScalingRelation:
         #  user passed those on init) - if they aren't a warning will be issued
         if self.x_lims is not None and len(x_values[(x_values < self.x_lims[0]) | (x_values > self.x_lims[1])]) != 0:
             warn("Some of the x values you have passed are outside the validity range of this relation "
-                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()))
+                 "({l}-{h}{u}).".format(l=self.x_lims[0].value, h=self.x_lims[1].value, u=self.x_unit.to_string()),
+                 stacklevel=2)
 
         # Need to check if any power of E(z) was applied to the y-axis data before fitting, if so (and no
         #  cosmo/redshift was passed) then it's time to throw an error.
@@ -942,6 +943,8 @@ class ScalingRelation:
         elif x_lims is None and len(self._x_data) == 0:
             raise ValueError('There are no data available to infer suitable axis limits from, please pass x limits.')
 
+        print(x_lims)
+
         # Just grabs the model colour from the property if the user doesn't set a value for model_colour
         if model_colour is None:
             model_colour = self.model_colour
@@ -971,7 +974,7 @@ class ScalingRelation:
         #  have set show_third_dim=True, we set it back to False
         if show_third_dim and self.third_dimension_data is None:
             warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
-                 "the creation of this scaling relation. Setting 'show_third_dim' to False.")
+                 "the creation of this scaling relation. Setting 'show_third_dim' to False.", stacklevel=2)
             show_third_dim = False
 
         # Plot the data with uncertainties, if any data is present in this scaling relation.
