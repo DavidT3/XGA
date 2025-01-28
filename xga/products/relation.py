@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:14. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1892,9 +1892,9 @@ class AggregateScalingRelation:
             lower = 50 - (conf_level / 2)
 
             model_realisations = rel.model_func(model_xs, *model_par_dists.T) * rel._y_norm
-            model_mean = np.mean(model_realisations, axis=1)
-            model_lower = np.percentile(model_realisations, lower, axis=1)
-            model_upper = np.percentile(model_realisations, upper, axis=1)
+            model_median = np.nanmedian(model_realisations, axis=1)
+            model_lower = np.nanpercentile(model_realisations, lower, axis=1)
+            model_upper = np.nanpercentile(model_realisations, upper, axis=1)
 
             # I want the name of the function to include in labels and titles, but if its one defined in XGA then
             #  I can grab the publication version of the name - it'll be prettier
@@ -1906,8 +1906,7 @@ class AggregateScalingRelation:
                 relation_label = " ".join([rel.author, rel.year])
             else:
                 relation_label = rel.name + ' Scaling Relation'
-            plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
-                     color=m_colour, label=relation_label)
+            plt.plot(model_x * rel.x_norm.value, model_median, color=m_colour, label=relation_label)
 
             plt.plot(model_x * rel.x_norm.value, model_upper, color=m_colour, linestyle="--")
             plt.plot(model_x * rel.x_norm.value, model_lower, color=m_colour, linestyle="--")
