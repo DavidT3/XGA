@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:30. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -943,8 +943,6 @@ class ScalingRelation:
         elif x_lims is None and len(self._x_data) == 0:
             raise ValueError('There are no data available to infer suitable axis limits from, please pass x limits.')
 
-        print(x_lims)
-
         # Just grabs the model colour from the property if the user doesn't set a value for model_colour
         if model_colour is None:
             model_colour = self.model_colour
@@ -1038,6 +1036,7 @@ class ScalingRelation:
         model_par_dists = np.random.normal(model_pars, model_par_errs)
 
         model_x = np.linspace(*(x_lims / self.x_norm.value), 100)
+        print(model_x)
         model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
 
         upper = 50 + (conf_level / 2)
@@ -1074,6 +1073,8 @@ class ScalingRelation:
         elif y_lims is not None:
             # Setting the axis limits
             ax.set_ylim(y_lims.value)
+
+        print(y_lims)
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
