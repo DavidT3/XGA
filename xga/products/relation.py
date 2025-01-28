@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:00. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1752,28 +1752,27 @@ class AggregateScalingRelation:
 
         plt.show()
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
-             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
-             fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
-             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
-             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
-             y_lims: Quantity = None, one_to_one: bool = False):
+    def get_view(self, ax: Axes, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None,
+                 colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+                 fontsize: float = 15, x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None,
+                 y_minor_ticks: list = None, data_colour_list: list = None, data_shape_list: list = None,
+                 custom_x_label: str = None, custom_y_label: str = None, y_lims: Quantity = None,
+                 one_to_one: bool = False):
         """
-        A method that produces a high quality plot of the component scaling relations in this
-        AggregateScalingRelation.
+        A method that populates a passed matplotlib axis with a high quality plot of the component scaling
+        relations in this AggregateScalingRelation, and then returns it.
 
+        :param Axes ax: The matplotlib Axes object to draw on.
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
             this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-        :param tuple figsize: A custom figure size for the plot, default is (8, 8).
         :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
         :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
             confusing with multiple relations on one axis.
         :param float fontsize: The fontsize for axis labels.
-        :param float legend_fontsize: The fontsize for text in the legend.
         :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
             case they are determined automatically.
         :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
@@ -1782,8 +1781,6 @@ class AggregateScalingRelation:
             case they are determined automatically.
         :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
             None in which case they are determined automatically.
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
         :param list data_colour_list: A list of matplotlib colours to use as a colour cycle specifically for
             data points. This should be used when you want data points to be a different colour to their model.
         :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
@@ -1797,6 +1794,7 @@ class AggregateScalingRelation:
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
             False.
         """
+
         # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
         #  was the easiest way of setting this up, so I think the duplication is justified.
 
@@ -1858,10 +1856,6 @@ class AggregateScalingRelation:
         elif x_lims is None and len(comb_x_data) == 0:
             raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
 
-        # Setting up the matplotlib figure
-        fig = plt.figure(figsize=figsize)
-        fig.tight_layout()
-        ax = plt.gca()
         ax.set_prop_cycle(new_col_cycle)
 
         # Setting the axis limits
@@ -2024,6 +2018,62 @@ class AggregateScalingRelation:
             ax.set_xticks(y_minor_ticks, minor=True)
             ax.set_xticklabels(y_minor_ticks, minor=True)
 
+        return ax
+
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+             fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
+             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
+             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
+             y_lims: Quantity = None, one_to_one: bool = False):
+        """
+        A method that produces a high quality plot of the component scaling relations in this
+        AggregateScalingRelation.
+
+        :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
+            this relation is based upon, if that data is not available an error will be thrown.
+        :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+        :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+        :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+        :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
+        :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+        :param int conf_level: The confidence level to use when plotting the model.
+        :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
+            confusing with multiple relations on one axis.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
+        :param list data_colour_list: A list of matplotlib colours to use as a colour cycle specifically for
+            data points. This should be used when you want data points to be a different colour to their model.
+        :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
+            data points.
+        :param str custom_x_label: Passing a string to this variable will override the x-axis label of this
+            plot, including the unit string.
+        :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
+            plot, including the unit string.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
+        """
+        # Setting up the matplotlib figure
+        fig = plt.figure(figsize=figsize)
+        fig.tight_layout()
+        ax = plt.gca()
+
+        ax = self.get_view(ax, x_lims, log_scale, plot_title, colour_list, grid_on, conf_level, show_data, fontsize,
+                           x_ticks, x_minor_ticks, y_ticks, y_minor_ticks, data_colour_list, data_shape_list,
+                           custom_x_label, custom_y_label, y_lims, one_to_one)
+
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
 
@@ -2032,6 +2082,287 @@ class AggregateScalingRelation:
             plt.savefig(save_path)
 
         plt.show()
+
+    # def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (10, 8),
+    #          colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+    #          fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
+    #          y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
+    #          data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
+    #          y_lims: Quantity = None, one_to_one: bool = False):
+    #     """
+    #     A method that produces a high quality plot of the component scaling relations in this
+    #     AggregateScalingRelation.
+    #
+    #     :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
+    #         this relation is based upon, if that data is not available an error will be thrown.
+    #     :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+    #     :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+    #     :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+    #     :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
+    #     :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+    #     :param int conf_level: The confidence level to use when plotting the model.
+    #     :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
+    #         confusing with multiple relations on one axis.
+    #     :param float fontsize: The fontsize for axis labels.
+    #     :param float legend_fontsize: The fontsize for text in the legend.
+    #     :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+    #         case they are determined automatically.
+    #     :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+    #         None in which case they are determined automatically.
+    #     :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+    #         case they are determined automatically.
+    #     :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+    #         None in which case they are determined automatically.
+    #     :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+    #         which case the figure will not be saved.
+    #     :param list data_colour_list: A list of matplotlib colours to use as a colour cycle specifically for
+    #         data points. This should be used when you want data points to be a different colour to their model.
+    #     :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
+    #         data points.
+    #     :param str custom_x_label: Passing a string to this variable will override the x-axis label of this
+    #         plot, including the unit string.
+    #     :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
+    #         plot, including the unit string.
+    #     :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+    #         relation line - setting any value other than None will override that.
+    #     :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+    #         False.
+    #     """
+    #     # Very large chunks of this are almost direct copies of the view method of ScalingRelation, but this
+    #     #  was the easiest way of setting this up, so I think the duplication is justified.
+    #
+    #     # Grabs the colours that may have been set for each relation, uses a set to check that there are
+    #     #  no duplicates
+    #     set_mod_cols = list(set([r.model_colour for r in self._relations]))
+    #     # Set up the colour cycle, if the user hasn't passed a colour list we'll try to use colours set for the
+    #     #  individual relations, but if they haven't all been set then we'll use the predefined colour cycle
+    #     if colour_list is None and len(set_mod_cols) == len(self._relations):
+    #         # Don't use the set_mod_cols variable as its unordered due to the use of set
+    #         colour_list = [r.model_colour for r in self._relations]
+    #     elif colour_list is None and len(set_mod_cols) != len(self._relations):
+    #         colour_list = PRETTY_COLOUR_CYCLE
+    #     new_col_cycle = cycler(color=colour_list)
+    #
+    #     # If the user didn't pass their own list of DATA colours to use, then they will be the same as the
+    #     #  model colours.
+    #     if data_colour_list is None:
+    #         data_colour_list = deepcopy(colour_list)
+    #     elif data_colour_list is not None and len(data_colour_list) != len(self._relations):
+    #         raise ValueError('If a data_colour_list is passed, then it must have the same number of entries as there'
+    #                          ' are relations.')
+    #
+    #     if data_shape_list is None:
+    #         data_shape_list = ['x' for i in range(0, len(self._relations))]
+    #     elif data_shape_list is not None and len(data_shape_list) != len(self._relations):
+    #         raise ValueError('If a data_shape_list is passed, then it must have the same number of entries as there'
+    #                          ' are relations.')
+    #
+    #     # This part decides the x_lims of the plot, much the same as in the ScalingRelation view but it works
+    #     #  on a combined sets of x-data or combined built in validity ranges, though user limits passed to view
+    #     #  will still override everything else
+    #     comb_x_data = np.concatenate([sr.x_data for sr in self._relations])
+    #
+    #     # Combining any x_lims defined at init for these relations is slightly more complicated, as if they weren't
+    #     #  defined then they will be None, so I have different behaviours dependent on how many sets of built in
+    #     #  x_lims there are
+    #     existing_x_lims = [sr.x_lims for sr in self._relations if sr.x_lims is not None]
+    #     if len(existing_x_lims) == 0:
+    #         comb_x_lims = None
+    #     elif len(existing_x_lims) == 1:
+    #         comb_x_lims = existing_x_lims[0]
+    #     else:
+    #         comb_x_lims = np.concatenate(existing_x_lims)
+    #
+    #     if x_lims is not None and not x_lims.unit.is_equivalent(self.x_unit):
+    #         raise UnitConversionError('Limits on the x-axis ({xl}) must be convertible to the x-axis units of this '
+    #                                   'scaling relation ({xr}).'.format(xl=x_lims.unit.to_string(),
+    #                                                                     xr=self.x_unit.to_string()))
+    #     elif x_lims is not None and x_lims.unit.is_equivalent(self.x_unit):
+    #         x_lims = x_lims.to(self.x_unit).value
+    #     elif comb_x_lims is not None:
+    #         x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
+    #     elif x_lims is None and len(comb_x_data) != 0:
+    #         max_x_ind = np.argmax(comb_x_data[:, 0])
+    #         min_x_ind = np.argmin(comb_x_data[:, 0])
+    #         x_lims = [0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
+    #                   1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value)]
+    #     elif x_lims is None and len(comb_x_data) == 0:
+    #         raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
+    #
+    #     # Setting up the matplotlib figure
+    #     fig = plt.figure(figsize=figsize)
+    #     fig.tight_layout()
+    #     ax = plt.gca()
+    #     ax.set_prop_cycle(new_col_cycle)
+    #
+    #     # Setting the axis limits
+    #     ax.set_xlim(x_lims)
+    #
+    #     # Making the scale log if requested
+    #     if log_scale:
+    #         ax.set_xscale("log")
+    #         ax.set_yscale("log")
+    #
+    #     # Setup the aesthetics of the axis
+    #     ax.minorticks_on()
+    #     ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+    #
+    #     for rel_ind, rel in enumerate(self._relations):
+    #         # This is a horrifying bodge, but I do just want the colour out and I can't be bothered to figure out
+    #         #  how to use the colour cycle object properly
+    #         if len(rel.x_data.value[:, 0]) == 0 or not show_data:
+    #             # Sets up a null error bar instance for the colour basically
+    #             d_out = ax.errorbar(None, None, xerr=None, yerr=None, fmt=data_shape_list[rel_ind], capsize=2, label='',
+    #                                 color=data_colour_list[rel_ind])
+    #         else:
+    #             d_out = ax.errorbar(rel.x_data.value[:, 0], rel.y_data.value[:, 0], xerr=rel.x_data.value[:, 1],
+    #                                 yerr=rel.y_data.value[:, 1], fmt=data_shape_list[rel_ind], capsize=2,
+    #                                 color=data_colour_list[rel_ind], alpha=0.7)
+    #
+    #         m_colour = colour_list[rel_ind]
+    #
+    #         # Need to randomly sample from the fitted model
+    #         num_rand = 10000
+    #         model_pars = np.repeat(rel.pars[:, 0, None], num_rand, axis=1).T
+    #         model_par_errs = np.repeat(rel.pars[:, 1, None], num_rand, axis=1).T
+    #
+    #         model_par_dists = np.random.normal(model_pars, model_par_errs)
+    #
+    #         model_x = np.linspace(*(x_lims / rel.x_norm.value), 100)
+    #         model_xs = np.repeat(model_x[..., None], num_rand, axis=1)
+    #
+    #         upper = 50 + (conf_level / 2)
+    #         lower = 50 - (conf_level / 2)
+    #
+    #         model_realisations = rel.model_func(model_xs, *model_par_dists.T) * rel._y_norm
+    #         model_mean = np.mean(model_realisations, axis=1)
+    #         model_lower = np.percentile(model_realisations, lower, axis=1)
+    #         model_upper = np.percentile(model_realisations, upper, axis=1)
+    #
+    #         # I want the name of the function to include in labels and titles, but if its one defined in XGA then
+    #         #  I can grab the publication version of the name - it'll be prettier
+    #         mod_name = rel.model_func.__name__
+    #         for m_name in MODEL_PUBLICATION_NAMES:
+    #             mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
+    #
+    #         if rel.author != 'XGA':
+    #             relation_label = " ".join([rel.author, rel.year])
+    #         else:
+    #             relation_label = rel.name + ' Scaling Relation'
+    #         plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
+    #                  color=m_colour, label=relation_label)
+    #
+    #         plt.plot(model_x * rel.x_norm.value, model_upper, color=m_colour, linestyle="--")
+    #         plt.plot(model_x * rel.x_norm.value, model_lower, color=m_colour, linestyle="--")
+    #         ax.fill_between(model_x * rel.x_norm.value, model_lower, model_upper, where=model_upper >= model_lower,
+    #                         facecolor=m_colour, alpha=0.6, interpolate=True)
+    #
+    #     # Now the relation/data have been plotted, we'll see if the user wanted any custom y-axis limits. If not then
+    #     #  nothing will happen and we'll go with whatever matplotlib decided. Also check that the input was
+    #     #  appropriate, if there was one
+    #     if y_lims is not None and not y_lims.unit.is_equivalent(self.y_unit):
+    #         raise UnitConversionError('Limits on the y-axis ({yl}) must be convertible to the y-axis units of this '
+    #                                   'scaling relation ({yr}).'.format(yl=y_lims.unit.to_string(),
+    #                                                                     yr=self.y_unit.to_string()))
+    #     elif y_lims is not None:
+    #         # Setting the axis limits
+    #         ax.set_ylim(y_lims.value)
+    #
+    #     # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
+    #     #  However I've noticed specific instances where the units can be made prettier
+    #     # Parsing the astropy units so that if they are double height then the square brackets will adjust size
+    #     x_unit = r"$\left[" + self.x_unit.to_string("latex").strip("$") + r"\right]$"
+    #     y_unit = r"$\left[" + self.y_unit.to_string("latex").strip("$") + r"\right]$"
+    #
+    #     # Dimensionless quantities can be fitted too, and this make the axis label look nicer by not having empty
+    #     #  square brackets
+    #     if x_unit == r"$\left[\\mathrm{}\right]$" or x_unit == r'$\left[\mathrm{}\right]$':
+    #         x_unit = ''
+    #     if y_unit == r"$\left[\\mathrm{}\right]$" or y_unit == r'$\left[\mathrm{}\right]$':
+    #         y_unit = ''
+    #
+    #     # The user is allowed to define their own x and y axis labels if they want, otherwise we construct it
+    #     #  from the relations in this aggregate scaling relation.
+    #     if custom_x_label is None:
+    #         # The scaling relation object knows what its x-axis is called
+    #         plt.xlabel("{xn} {un}".format(xn=self._x_name, un=x_unit), fontsize=fontsize)
+    #     else:
+    #         plt.xlabel(custom_x_label, fontsize=fontsize)
+    #
+    #     if custom_y_label is None:
+    #         # The scaling relation object knows what its y-axis is called
+    #         plt.ylabel("{yn} {un}".format(yn=self._y_name, un=y_unit), fontsize=fontsize)
+    #     else:
+    #         plt.ylabel(custom_y_label, fontsize=fontsize)
+    #
+    #     # The user can also pass a plot title, but if they don't then I construct one automatically
+    #     if plot_title is None:
+    #         plot_title = 'Scaling Relation Comparison - {c}% Confidence Limits'.format(c=conf_level)
+    #
+    #     plt.title(plot_title, fontsize=13)
+    #
+    #     # Use the axis limits quite a lot in this next bit, so read them out into variables
+    #     x_axis_lims = ax.get_xlim()
+    #     y_axis_lims = ax.get_ylim()
+    #
+    #     # The user can request a one-to-one line be overplotted on the view (obviously not relevant to general
+    #     #  scaling relations, but great for comparisons)
+    #     if one_to_one:
+    #         min_from = min(min(x_axis_lims), min(y_axis_lims))
+    #         max_to = max(max(x_axis_lims), max(y_axis_lims))
+    #         plt.plot([min_from, max_to], [min_from, max_to], color='red', linestyle='dashed', label='1:1')
+    #
+    #     # This dynamically changes how tick labels are formatted depending on the values displayed
+    #     if max(x_axis_lims) < 1000:
+    #         ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+    #         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+    #     if max(y_axis_lims) < 1000:
+    #         ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+    #         ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+    #
+    #     # And this dynamically changes the grid depending on whether a whole order of magnitude is covered or not
+    #     #  Though as I don't much like the look of the grid it is off by default, and users can enable it if they
+    #     #  want to.
+    #     if grid_on and (max(x_axis_lims) / min(x_axis_lims)) < 10:
+    #         ax.grid(which='minor', axis='x', linestyle='dotted', color='grey')
+    #     elif grid_on:
+    #         ax.grid(which='major', axis='x', linestyle='dotted', color='grey')
+    #     else:
+    #         ax.grid(False, which='both', axis='both')
+    #
+    #     if grid_on and (max(y_axis_lims) / min(y_axis_lims)) < 10:
+    #         ax.grid(which='minor', axis='y', linestyle='dotted', color='grey')
+    #     elif grid_on:
+    #         ax.grid(which='major', axis='y', linestyle='dotted', color='grey')
+    #     else:
+    #         ax.grid(False, which='both', axis='both')
+    #
+    #     # I change the lengths of the tick lines, to make it look nicer (imo)
+    #     ax.tick_params(length=7)
+    #     ax.tick_params(which='minor', length=3)
+    #
+    #     # Here we check whether the user has manually set any of the ticks to be displayed (major or minor, either axis)
+    #     if x_ticks is not None:
+    #         ax.set_xticks(x_ticks)
+    #         ax.set_xticklabels(x_ticks)
+    #     if x_minor_ticks is not None:
+    #         ax.set_xticks(x_minor_ticks, minor=True)
+    #         ax.set_xticklabels(x_minor_ticks, minor=True)
+    #     if y_ticks is not None:
+    #         ax.set_yticks(y_ticks)
+    #         ax.set_yticklabels(y_ticks)
+    #     if y_minor_ticks is not None:
+    #         ax.set_xticks(y_minor_ticks, minor=True)
+    #         ax.set_xticklabels(y_minor_ticks, minor=True)
+    #
+    #     plt.legend(loc="best", fontsize=legend_fontsize)
+    #     plt.tight_layout()
+    #
+    #     # If the user passed a save_path value, then we assume they want to save the figure
+    #     if save_path is not None:
+    #         plt.savefig(save_path)
+    #
+    #     plt.show()
 
     def __len__(self) -> int:
         return len(self._relations)
