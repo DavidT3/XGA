@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 11:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:07. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -935,12 +935,12 @@ class ScalingRelation:
                                       'scaling relation ({xr}).'.format(xl=x_lims.unit.to_string(),
                                                                         xr=self.x_unit.to_string()))
         elif x_lims is None and len(self._x_data) != 0:
-            max_x_ind = np.argmax(self._x_data)
-            min_x_ind = np.argmin(self._x_data)
+            max_x_ind = np.nanargmax(self._x_data)
+            min_x_ind = np.nanargmin(self._x_data)
             x_lims = [0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
                       1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
         elif x_lims is None and len(self._x_data) == 0:
-            raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
+            raise ValueError('There are no data available to infer suitable axis limits from, please pass x limits.')
 
         # Just grabs the model colour from the property if the user doesn't set a value for model_colour
         if model_colour is None:
