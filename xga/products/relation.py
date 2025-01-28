@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 11:56. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -16,6 +16,7 @@ from cycler import cycler
 from getdist import plots, MCSamples
 from matplotlib import cm
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.colors import TABLEAU_COLORS, BASE_COLORS, Colormap, CSS4_COLORS, Normalize
 from matplotlib.ticker import FuncFormatter
 
@@ -878,6 +879,7 @@ class ScalingRelation:
         A get method that will populate a matplotlib axes with a high quality plot of this scaling relation (including
         the data it is based upon, if available), and then return it.
 
+        :param Axes ax: The axes on which to draw the plot.
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
             this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
