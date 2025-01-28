@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 12:49. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1028,6 +1028,7 @@ class ScalingRelation:
                     plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
                              color=point_label_colour)
 
+        print(ax.get_ylim())
         # Need to randomly sample from the fitted model
         num_rand = 10000
         model_pars = np.repeat(self._fit_pars[..., None], num_rand, axis=1).T
@@ -1074,6 +1075,7 @@ class ScalingRelation:
             ax.set_ylim(y_lims.value)
 
         print(y_lims)
+        print(ax.get_ylim())
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
