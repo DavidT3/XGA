@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:08. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1860,6 +1860,11 @@ class AggregateScalingRelation:
         # Setting the axis limits
         ax.set_xlim(x_lims)
 
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+
         # Setup the aesthetics of the axis
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
@@ -1924,11 +1929,6 @@ class AggregateScalingRelation:
         elif y_lims is not None:
             # Setting the axis limits
             ax.set_ylim(y_lims.value)
-
-        # Making the scale log if requested
-        if log_scale:
-            ax.set_xscale("log")
-            ax.set_yscale("log")
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
