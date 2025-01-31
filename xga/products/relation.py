@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/01/2025, 13:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 30/01/2025, 22:03. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -217,11 +217,9 @@ class ScalingRelation:
         else:
             self._chains = chains
 
-        # If the user hasn't passed the name of the relation then I'll generate one from what I know so far
-        if relation_name is None:
-            self._name = self._y_name + '-' + self._x_name + ' ' + self.fit_method
-        else:
-            self._name = relation_name
+        # If the user hasn't passed the name of the relation then the view method will generate one for itself, which
+        #  is the main place that it is used
+        self._name = relation_name
 
         # For relations from literature especially I need to give credit the author, and the original paper
         self._author = relation_author
@@ -1586,10 +1584,11 @@ class AggregateScalingRelation:
             for m_name in MODEL_PUBLICATION_NAMES:
                 mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
 
-            if rel.author != 'XGA':
+            if rel.name is None:
                 relation_label = " ".join([rel.author, rel.year])
             else:
                 relation_label = rel.name + ' Scaling Relation'
+
             plt.plot(model_x * rel.x_norm.value, model_median, color=m_colour, label=relation_label)
 
             plt.plot(model_x * rel.x_norm.value, model_upper, color=m_colour, linestyle="--")
