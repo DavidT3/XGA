@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/02/2025, 18:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/02/2025, 18:11. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1784,6 +1784,8 @@ class BaseProfile1D:
                         res = np.nanpercentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
                               - (plot_y_vals * y_norm)
                         res_ax.plot(rad_vals.value, res.value, 'D', color=cur_color)
+                # Move the colour on!
+                mod_col_ind += 1
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
