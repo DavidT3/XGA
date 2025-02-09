@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/02/2025, 18:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/02/2025, 18:08. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -1735,7 +1735,7 @@ class BaseProfile1D:
             elif isinstance(model_colour, str) and num_to_plot != 1:
                 model_colour = [None]*num_to_plot
             elif isinstance(model_colour, list) and len(model_colour) != num_to_plot:
-                raise ValueError("If the 'model_colour' argument is a list, it must have one entry per model-method"
+                raise ValueError("If the 'model_colour' argument is a list, it must have one entry per model-method "
                                  "combination. The passed list has {p} entries, and there are {mm} model-method "
                                  "combinations.".format(p=len(model_colour), mm=num_to_plot))
 
