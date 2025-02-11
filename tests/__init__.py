@@ -6,6 +6,9 @@ import shutil
 import sys
 
 from astropy.units import Quantity
+from astropy.coordinates import SkyCoord
+from daxa.mission import XMMPointed, eRASS1DE
+from daxa.archive import Archive
 
 #sys.path.append(os.path.abspath("..") + 'xga/')
 
@@ -82,6 +85,39 @@ def set_up_test_config():
     print('moving the test config file to the .config/xga dir')
     # Then move the test config file there
     shutil.move('./tests/test_data/xga.cfg', xga_config_path)
+
+def obtain_test_data(src_ra, src_dec):
+    # The user might have daxa installed already, so we will temporarily make a new cfg file if ythe
+    cwd = os.getcwd()
+    write_daxa_config(cwd)
+
+    # For some reason error where happening when I used the path '~/.config' so I need to use expanduser
+    # to return the absolute path to the home directory
+    home_dir = os.path.expanduser("~")
+    # xga_config_path is the absolute path to ~/.config/daxa
+    daxa_config_path = home_dir + "/.config/daxa"
+
+    # Now we need to move the original files that where in ~/.config/daxa elsewhere, because the testing
+    # files will have to go into ~/.config/daxa
+    if os.path.exists(daxa_config_path):
+        # this will move the original file to the tests directory
+        print('moving original /daxa to tests dir')
+        shutil.move(daxaconfig_path, './tests/')
+
+    print('remaking the xga dir')
+    # Then we want to remake the config/xga directory
+    os.makedirs(daxa_config_path)
+    print('moving the test config file to the .config/daxa dir')
+    # Then move the test config file there
+    shutil.move('./tests/test_data/daxa.cfg', daxa_config_path)
+
+    xm = XMMPointed()
+    er = eRASS1DE()
+    position = SkyCoord(src_ra, src_dec, unit='deg')
+    xm.filter_on_positions(position)
+    er.filter_on_positions(position, search_distance=Quantity(3.6, 'deg'))
+    arch = Archive('xga_tests', [er, xm])
+
 
 # This will be run in the tearDownClass method, which will happen even if tests fail
 def restore_og_cfg():
