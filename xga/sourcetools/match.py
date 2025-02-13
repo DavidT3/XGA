@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/02/2025, 14:44. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -600,6 +600,13 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
             xga_conf["XMM_FILES"]['mos2_image'] == "/this/is/optional/xmm_obs/regions/{obs_id}/regions.reg":
         raise XGAConfigError("This function requires at least one set of images (PN, MOS1, or MOS2) be referenced in "
                              "the XGA configuration file.")
+
+    # We ensure that the RA and Decs are in arrays, even if there is only one coordinate - also in the case of a
+    #  single coordinate we set the number of cores to one
+    if isinstance(src_ra, float) and isinstance(src_dec, float):
+        src_ra = np.array([src_ra])
+        src_dec = np.array([src_dec])
+        num_cores = 1
 
     # This runs the simple xmm match and gathers the results.
     s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
