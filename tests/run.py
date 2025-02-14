@@ -148,7 +148,7 @@ def clean_up_test_files():
     if os.path.exists("./tests/test_data/xga_tests"):
         shutil.rmtree("./tests/test_data/xga_tests")
 
-# TODO work out how to run this after all the tests have been run in different files
+#  TODO work out how to run this after all the tests have been run in different files
 def clean_up_tests():
     """
     Run after all tests have been run. This restores any original configuration files and if
@@ -161,12 +161,13 @@ def clean_up_tests():
         restore_og_cfg('daxa')
         clean_up_test_files()
 
+
 if __name__ == "__main__":
     set_up_tests()  # Run before any tests
 
     # Discover and run tests
     loader = unittest.TestLoader()
-    suite = loader.discover(start_dir="tests", pattern="*/test_*.py")
+    suite = loader.discover(start_dir="tests")
 
     runner = unittest.TextTestRunner()
     result = runner.run(suite)
