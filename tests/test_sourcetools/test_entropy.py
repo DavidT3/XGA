@@ -20,27 +20,19 @@ from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
 from xga.sourcetools.entropy import entropy_inv_abel_dens_onion_temp
 from xga.products.profile import SpecificEntropy
 
+from .. import SRC_INFO
+
 class TestSetupFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
         This is run once before all tests. Here we define class objects that we want to test.
         """
-        cls.test_src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    telescope='erosita',
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        cls.test_src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                                     name=SRC_INFO['name'], use_peak=False,
+                                     telescope='erosita',
+                                     search_distance={'erosita': Quantity(3.6, 'deg')})
 
-    @classmethod
-    def tearDownClass(cls):
-        """
-        This is run once after all the tests.
-        """
-        # This function restores the user's original config file and deletes the test one made
-        restore_og_cfg()
-        # Then we will delete all the products that xga has made so there aren't loads of big files
-        # in the package
-#        shutil.rmtree('tests/test_data/xga_output')
 
     def test_entropy_inv_abel_dens_onion_temp(self):
         res = entropy_inv_abel_dens_onion_temp(self.test_src, Quantity(600, 'kpc'), 'beta', 'king', 
