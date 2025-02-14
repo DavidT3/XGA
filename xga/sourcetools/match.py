@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2025, 09:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2025, 09:46. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -244,8 +244,6 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
     if isinstance(ra, float):
         ra = [ra]
         dec = [dec]
-
-    print(kaaaads)
 
     # From that ObsID construct a path to the relevant region file using the XGA config
     reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
@@ -680,7 +678,8 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
         # If any errors occurred during the matching process, they are all raised here as a grouped exception
         if len(search_errors) != 0:
-            ExceptionGroup("The following exceptions were raised in the multi-threaded region finder", search_errors)
+            raise ExceptionGroup("The following exceptions were raised in the multi-threaded "
+                                 "region finder", search_errors)
 
     # This formats the match and no-match information so that the output is the same length and order as the input
     #  source lists
