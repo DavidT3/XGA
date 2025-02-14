@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/02/2025, 14:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/02/2025, 09:41. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -244,6 +244,8 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
     if isinstance(ra, float):
         ra = [ra]
         dec = [dec]
+
+    print(kaaaads)
 
     # From that ObsID construct a path to the relevant region file using the XGA config
     reg_path = xga_conf["XMM_FILES"]["region_file"].format(obs_id=obs_id)
@@ -603,10 +605,15 @@ def xmm_region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
     # We ensure that the RA and Decs are in arrays, even if there is only one coordinate - also in the case of a
     #  single coordinate we set the number of cores to one
-    if isinstance(src_ra, float) and isinstance(src_dec, float):
+    if type(src_ra) != type(src_dec):
+        raise TypeError("'src_ra' and 'src_dec' arguments must be the same type; either floats or arrays.")
+    elif isinstance(src_ra, float):
         src_ra = np.array([src_ra])
         src_dec = np.array([src_dec])
         num_cores = 1
+    elif isinstance(src_ra, list):
+        src_ra = np.array(src_ra)
+        src_dec = np.array(src_dec)
 
     # This runs the simple xmm match and gathers the results.
     s_match, s_match_bl = simple_xmm_match(src_ra, src_dec, num_cores=num_cores)
