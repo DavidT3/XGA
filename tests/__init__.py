@@ -10,8 +10,8 @@ from daxa.process.simple import full_process_xmm, full_process_erosita
 # TEST_MODE = DEV, this assumes that the data to test on is already downloaded and in the right 
 # place, it will also not delete the xga_output folder in /tests/test_data
 # TEST_MODE = RUN, this assumes that no data has been downloaded and will delete the xga_output
-# folder after running the tests, and will delete all the data that has been downloaded
+# folder after running the tests, and will delete all the data that has been downloaded
 TEST_MODE = 'DEV'
 
-# This is the main source for running the tests on
+# This is the main source for running the tests on
 SRC_INFO = {'ra': 226.0318, 'dec': -2.8046, 'z': 0.2093, 'name': "1eRASS_J150407.6-024816"}
