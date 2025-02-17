@@ -72,7 +72,7 @@ def move_og_cfg(module):
     # expanduser to return the absolute path to the home directory
     home_dir = os.path.expanduser("~")
     # config_path is the absolute path to ~/.config/{module}
-    config_path = home_dir + "/.config/{module}"
+    config_path = home_dir + f"/.config/{module}"
 
     # Now we need to move the original files that where in ~/.config/{module} elsewhere, because the 
     # testing files will have to go into ~/.config/{module}
