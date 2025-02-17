@@ -51,8 +51,9 @@ def write_config(cwd, module):
         """
     elif module == 'daxa':
         config_content = f"""[DAXA_SETUP]
-        daxa_save_path = {cwd}/tests/test_data/
-        num_cores = 1"""
+        daxa_save_path = {cwd}/tests/test_data
+        num_cores = 1
+        """
     else:
         raise ValueError('Something has gone wrong')
 
