@@ -92,6 +92,9 @@ def obtain_test_data():
     """
     Uses DAXA to download the test data for the source. This processes the data too.
     """
+    # need to import here so it retrieves the new test config, instead of the user's config
+    import daxa
+
     xm = XMMPointed()
     er = eRASS1DE()
     position = SkyCoord(SRC_INFO['ra'], SRC_INFO['dec'], unit='deg')
