@@ -112,12 +112,12 @@ def set_up_tests():
     """
     cwd = os.getcwd()
 
-    move_og_cfg('xga')
     write_config(cwd, 'xga')
+    move_og_cfg('xga')
 
     if TEST_MODE == 'RUN':
-        move_og_cfg('daxa')
         write_config(cwd, 'daxa')
+        move_og_cfg('daxa')
         obtain_test_data()
 
 def restore_og_cfg(module):
