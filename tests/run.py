@@ -94,6 +94,9 @@ def obtain_test_data():
     """
     # need to import here so it retrieves the new test config, instead of the user's config
     import daxa
+    from daxa import daxa_conf
+
+    print(daxa_conf)
 
     xm = XMMPointed()
     er = eRASS1DE()
