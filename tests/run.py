@@ -99,7 +99,7 @@ def obtain_test_data():
     xm.filter_on_positions(position)
     er.filter_on_positions(position)
 
-    arch = Archive('xga_tests')
+    arch = Archive('xga_tests', [xm, er])
 
     full_process_erosita(arch)
     full_process_xmm(arch)
