@@ -38,7 +38,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
     :param bool disable_progress: Disable progress bar if True.
     :return: A tuple with commands, stack, execute, num_cores, product types, paths, metadata, and disable_progress flag.
     """
-    stack = False  # This tells the sas_call routine that this command won't be part of a stack.
+    stack = False  # This tells the ciao_call routine that this command won't be part of a stack.
     execute = True  # This should be executed immediately.
     # This function supports passing both individual sources and sets of sources.
     if isinstance(sources, (BaseSource, NullSource)):
