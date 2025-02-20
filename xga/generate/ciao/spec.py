@@ -90,6 +90,37 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Define output directory and create it if needed.
             dest_dir = os.path.join(OUTPUT, 'chandra', obs_id)
             os.makedirs(dest_dir, exist_ok=True)
+
+            # Create a temporary directory for region files.
+            temp_reg_dir = os.path.join(dest_dir, "cent_reg_temp")
+            os.makedirs(temp_reg_dir, exist_ok=True)
+            reg_file = os.path.join(temp_reg_dir, "cent_temp.reg")
+            bkg_reg_file = os.path.join(temp_reg_dir, "bkg_temp.reg")
+
+            # Define region file contents.
+            ra = source.default_coord[0].value
+            dec = source.default_coord[1].value
+            inner_rad = inner_radius.to('arcsec').value
+            outer_rad = outer_radius.to('arcsec').value
+
+            reg_content = (
+                "# Region file format: DS9\n"
+                "physical\n"
+                f"annulus({ra},{dec},{inner_rad},{outer_rad})\n"
+            )
+            
+            bkg_reg_content = (
+                "# Region file format: DS9\n"
+                "physical\n"
+                f"annulus({ra},{dec},{outer_rad},{outer_rad + (outer_rad - inner_rad)})"
+            )
+            
+            # Write the region file.
+            with open(reg_file, "w") as f:
+                f.write(reg_content)
+
+            with open(bkg_reg_file, "w") as f:
+                f.write(bkg_reg_content)
             
             # Define file paths for spectrum, response files, and background spectrum.
             spec_file = os.path.join(dest_dir, f"{obs_id}_{inst}_spectrum.pi")
@@ -107,8 +138,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # !!! Also, need to consider the binspec (Source spectrum grouping specification) 
             #  and grouptype (Source spectrum grouping type)
             specextract_cmd = (
-                f"specextract infile={evt_list.path} outroot={dest_dir}/{obs_id}_{inst} "
-                f"bkgfile={bkg_file} grouptype=NUM_CTS weight=yes clobber=yes binspec=5"
+                f"specextract infile="{evt_list.path}[@{reg_file}]" outroot={dest_dir}/{obs_id}_{inst} "
+                f"bkgfile="{evt_list.path}[@{bkg_reg_file}]" clobber=yes weight=no grouptype=NUM_CTS binspec=5"
             )
             cmds.append(specextract_cmd)
             final_paths.append(spec_file)
