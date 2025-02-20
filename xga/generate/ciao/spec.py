@@ -102,9 +102,13 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 continue
             
             # Construct the specextract command for spectrum extraction.
+            # !!! Maybe we need to change to 'weight=no' if we're not interested in the spatial variation of
+            # the effect area or for point-source analysis
+            # !!! Also, need to consider the binspec (Source spectrum grouping specification) 
+            #  and grouptype (Source spectrum grouping type)
             specextract_cmd = (
                 f"specextract infile={evt_list.path} outroot={dest_dir}/{obs_id}_{inst} "
-                f"bkgfile={bkg_file} weight=yes clobber=yes"
+                f"bkgfile={bkg_file} grouptype=NUM_CTS weight=yes clobber=yes binspec=5"
             )
             cmds.append(specextract_cmd)
             final_paths.append(spec_file)
