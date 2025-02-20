@@ -9,21 +9,12 @@ from xga.products.phot import Image
 from xga.products.spec import Spectrum
 from xga.generate.esass import srctool_spectrum
 
-from .. import SRC_INFO
+from .. import SRC_INFO, SRC_ALL_TELS
 
 
 class TestGalaxyCluster(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        """
-        This is run once before all tests. Here we define class objects that we want to test.
-        """
-        cls.test_src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
-
     def test_obs_ids_assigned(self):
-        obs = self.test_src.obs_ids
+        obs = SRC_ALL_TELS.obs_ids
 
         expected_xmm_obs = set(['0404910601', '0201901401', '0201903501'])
         expected_ero_obs = set(['147099', '148102', '151102', '150099'])
@@ -37,7 +28,7 @@ class TestGalaxyCluster(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for images.
         """
-        src = self.test_src
+        src = SRC_ALL_TELS
         evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'))
 
         del(src)
@@ -54,7 +45,7 @@ class TestGalaxyCluster(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for combined images.
         """
-        src = self.test_src
+        src = SRC_ALL_TELS
         evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'), combine_obs=True)
 
         del(src)
@@ -72,7 +63,7 @@ class TestGalaxyCluster(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for spectra.
         """
-        src = self.test_src
+        src = SRC_ALL_TELS
         srctool_spectrum(src, 'r500', combine_obs=False)
         
         del(src)
@@ -89,7 +80,7 @@ class TestGalaxyCluster(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
         """
-        src = self.test_src
+        src = SRC_ALL_TELS
         srctool_spectrum(src, 'r500', combine_obs=True)
         
         del(src)
@@ -106,7 +97,7 @@ class TestGalaxyCluster(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
         """
-        src = self.test_src
+        src = SRC_ALL_TELS
         srctool_spectrum(src, 'r500', combine_obs=True, combine_tm=False)
         
         del(src)
