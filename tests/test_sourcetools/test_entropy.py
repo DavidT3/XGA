@@ -16,22 +16,11 @@ from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
 from xga.sourcetools.entropy import entropy_inv_abel_dens_onion_temp
 from xga.products.profile import SpecificEntropy
 
-from .. import SRC_INFO
+from .. import SRC_ALL_TELS
 
 class TestSetupFuncs(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        """
-        This is run once before all tests. Here we define class objects that we want to test.
-        """
-        cls.test_src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     telescope='erosita',
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
-
-
     def test_entropy_inv_abel_dens_onion_temp(self):
-        res = entropy_inv_abel_dens_onion_temp(self.test_src, Quantity(600, 'kpc'), 'beta', 'king', 
+        res = entropy_inv_abel_dens_onion_temp(SRC_ALL_TELS, Quantity(600, 'kpc'), 'beta', 'king', 
                                                'vikhlinin_temp', Quantity(600, 'kpc'), 
                                                stacked_spectra=True)
 

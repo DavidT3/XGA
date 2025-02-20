@@ -6,19 +6,10 @@ import xga
 from xga.sources import GalaxyCluster
 from xga.xspec.fit import single_temp_apec_profile
 
-from .. import SRC_INFO
+from .. import SRC_ALL_TELS
 
 class TestSetupFuncs(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        """
-        This is run once before all tests. Here we define class objects that we want to test.
-        """
-        cls.test_src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
-
     def test_single_temp_apec_profile_stacked_spectra_false(self):
-        res = single_temp_apec_profile(self.test_src, Quantity([0, 150, 1000], 'kpc'))
+        res = single_temp_apec_profile(SRC_ALL_TELS, Quantity([0, 150, 1000], 'kpc'))
 
         assert type(res) == GalaxyCluster
