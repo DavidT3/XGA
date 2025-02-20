@@ -1,9 +1,5 @@
 import unittest
 
-import os
-import shutil
-import numpy as np
-
 from astropy.units import Quantity
 
 import xga

@@ -1,4 +1,3 @@
-import numpy as np
 import unittest
 
 from astropy.units import Quantity

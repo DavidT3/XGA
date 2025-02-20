@@ -1,6 +1,4 @@
 import unittest
-import os
-import shutil
 
 from astropy.units import Quantity
 

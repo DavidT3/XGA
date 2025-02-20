@@ -1,9 +1,5 @@
 import unittest
 
-import os
-import shutil
-import numpy as np
-
 from astropy.units import Quantity
 
 from .. import set_up_test_config, restore_og_cfg
