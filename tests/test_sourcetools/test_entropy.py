@@ -18,7 +18,7 @@ from xga.products.profile import SpecificEntropy
 
 from .. import SRC_ALL_TELS
 
-class TestSetupFuncs(unittest.TestCase):
+class TestEntropyFuncs(unittest.TestCase):
     def test_entropy_inv_abel_dens_onion_temp(self):
         res = entropy_inv_abel_dens_onion_temp(SRC_ALL_TELS, Quantity(600, 'kpc'), 'beta', 'king', 
                                                'vikhlinin_temp', Quantity(600, 'kpc'), 

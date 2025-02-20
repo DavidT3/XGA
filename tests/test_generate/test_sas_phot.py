@@ -10,7 +10,7 @@ from xga.products import Image, ExpMap
 
 from .. import SRC_ALL_TELS
 
-class TestPhotFuncs(unittest.TestCase):    
+class TestSasPhotFuncs(unittest.TestCase):    
     def test_evselect_image_no_tel_error(self):
         """
         Testing that TelescopeNotAssociatedError is raised when telescope isn't associated.

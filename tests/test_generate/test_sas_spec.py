@@ -9,7 +9,7 @@ from xga.products import Spectrum
 
 from .. import SRC_ALL_TELS
 
-class TestTempFuncs(unittest.TestCase):
+class TestSasSpecFuncs(unittest.TestCase):
     def test_evselect_spectrum(self):
         evselect_spectrum(SRC_ALL_TELS, 'r500')
 

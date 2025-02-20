@@ -8,7 +8,7 @@ from xga.generate.esass.misc import evtool_combine_evts
 
 from ..import SRC_ALL_TELS
 
-class TestPhotFuncs(unittest.TestCase):
+class TestEsassMiscFuncs(unittest.TestCase):
     def test_evtool_combine_evts(self):
         evtool_combine_evts(SRC_ALL_TELS)
 

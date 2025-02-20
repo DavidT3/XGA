@@ -9,7 +9,7 @@ from xga.products import Lightcurve
 
 from .. import SRC_ALL_TELS
 
-class TestLCFuncs(unittest.TestCase):    
+class TestSasLcFuncs(unittest.TestCase):    
     def test_evselect_lc(self):
         evselect_lightcurve(SRC_ALL_TELS, 'r500')
 

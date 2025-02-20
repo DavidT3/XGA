@@ -8,7 +8,7 @@ from xga.generate.esass.phot import evtool_image, expmap
 
 from .. import SRC_ALL_TELS
 
-class TestPhotFuncs(unittest.TestCase):
+class TestEsassPhotFuncs(unittest.TestCase):
     def test_evtool_image(self):
         evtool_image(SRC_ALL_TELS, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
 

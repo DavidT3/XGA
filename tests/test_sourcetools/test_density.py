@@ -12,7 +12,7 @@ from xga.products.profile import SurfaceBrightness1D, GasDensity3D
 
 from .. import SRC_ALL_TELS
 
-class TestSetupFuncs(unittest.TestCase):
+class TestDensityFuncs(unittest.TestCase):
     def test_dens_setup(self):
         res = _dens_setup(SRC_ALL_TELS, Quantity(600, 'kpc'), Quantity(100, 'kpc'), 'angr', 
                     Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)

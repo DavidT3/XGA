@@ -12,7 +12,7 @@ from xga.generate.esass import srctool_spectrum
 from .. import SRC_INFO, SRC_ALL_TELS
 
 
-class TestGalaxyCluster(unittest.TestCase):
+class TestBaseSource(unittest.TestCase):
     def test_obs_ids_assigned(self):
         obs = SRC_ALL_TELS.obs_ids
 

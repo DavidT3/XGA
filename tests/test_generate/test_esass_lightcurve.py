@@ -9,7 +9,7 @@ from xga.products import Lightcurve
 
 from .. import SRC_ALL_TELS
 
-class TestLCFuncs(unittest.TestCase):    
+class TestEsassLcFuncs(unittest.TestCase):    
     def test_srctool_lightcurve_combine_insts_f_combine_obs_f(self):
         """
         Testing srctool_lightcurve with the arguments combine_insts=False and combine_obs=False

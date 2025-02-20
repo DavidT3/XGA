@@ -9,7 +9,7 @@ from xga.products import Spectrum
 
 from .. import SRC_ALL_TELS
 
-class TestTempFuncs(unittest.TestCase):
+class TestEsassSpecFuncs(unittest.TestCase):
     def test_srctool_spectrum_combine_insts_f_combine_obs_f(self):
         """
         Testing srctool_spectrum with the arguments combine_insts=False and combine_obs=False

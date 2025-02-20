@@ -8,7 +8,7 @@ from xga.xspec.fit import single_temp_apec_profile
 
 from .. import SRC_ALL_TELS
 
-class TestSetupFuncs(unittest.TestCase):
+class TestFitProfileFuncs(unittest.TestCase):
     def test_single_temp_apec_profile_stacked_spectra_false(self):
         res = single_temp_apec_profile(SRC_ALL_TELS, Quantity([0, 150, 1000], 'kpc'))
 
