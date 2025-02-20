@@ -44,9 +44,9 @@ class TestGalaxyCluster(unittest.TestCase):
 
         del(src)
 
-        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                                     name=SRC_INFO['name'], use_peak=False,
+                                     search_distance={'erosita': Quantity(3.6, 'deg')})
         
         img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
 
@@ -61,9 +61,9 @@ class TestGalaxyCluster(unittest.TestCase):
 
         del(src)
 
-        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                                     name=SRC_INFO['name'], use_peak=False,
+                                     search_distance={'erosita': Quantity(3.6, 'deg')})
         
         img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
 
@@ -79,9 +79,9 @@ class TestGalaxyCluster(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                                     name=SRC_INFO['name'], use_peak=False,
+                                     search_distance={'erosita': Quantity(3.6, 'deg')})
         
         spec = src.get_spectra('r500', telescope='erosita')
 
@@ -96,9 +96,9 @@ class TestGalaxyCluster(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                                     name=SRC_INFO['name'], use_peak=False,
+                                     search_distance={'erosita': Quantity(3.6, 'deg')})
         
         spec = src.get_combined_spectra('r500', inst='combined', telescope='erosita')
 
@@ -113,9 +113,9 @@ class TestGalaxyCluster(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(226.0318, -2.8046, 0.2093, r500=Quantity(500, 'kpc'),
-                    name="1eRASS_J150407.6-024816", use_peak=False,
-                    search_distance={'erosita': Quantity(3.6, 'deg')})
+        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                                     name=SRC_INFO['name'], use_peak=False,
+                                     search_distance={'erosita': Quantity(3.6, 'deg')})
         
         spec = src.get_combined_spectra('r500', telescope='erosita', inst='tm1')
 
