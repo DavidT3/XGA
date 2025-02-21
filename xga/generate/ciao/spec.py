@@ -85,7 +85,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             obs_id = pack[1]
             inst = pack[2]
             evt_list = pack[-1]
-
             # Define output directory and create it if needed.
             dest_dir = os.path.join(OUTPUT, 'chandra', obs_id)
             os.makedirs(dest_dir, exist_ok=True)
@@ -140,6 +139,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"specextract infile=\"{evt_list.path}[@{reg_file}]\" outroot={dest_dir}/{obs_id}_{inst} "
                 f"bkgfile=\"{evt_list.path}[@{bkg_reg_file}]\" clobber=yes weight=no grouptype=NUM_CTS binspec=5"
             )
+            print(specextract_cmd)
             cmds.append(specextract_cmd)
             final_paths.append(spec_file)
             

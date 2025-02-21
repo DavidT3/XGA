@@ -68,7 +68,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=False):
             obs_id, inst = product[1], product[2]
-            evt_file, asol_file, badpix_file = product[-3], product[-2], product[-1]
+            evt_file, badpix_file = product[-3], product[-1]
             
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
