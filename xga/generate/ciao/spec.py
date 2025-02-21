@@ -85,7 +85,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             obs_id = pack[1]
             inst = pack[2]
             evt_list = pack[-1]
-            region_file = source.get_region_file(obs_id)
 
             # Define output directory and create it if needed.
             dest_dir = os.path.join(OUTPUT, 'chandra', obs_id)
