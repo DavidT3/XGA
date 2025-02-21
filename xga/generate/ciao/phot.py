@@ -16,7 +16,6 @@ from xga.imagetools import data_limits
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
-from .misc import cifbuild
 from .run import ciao_call
 
 

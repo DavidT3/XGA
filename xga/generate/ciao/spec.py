@@ -15,7 +15,6 @@ from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 from ._common import region_setup, _gen_detmap_cmd
-from .misc import cifbuild
 from .run import ciao_call
 
 
