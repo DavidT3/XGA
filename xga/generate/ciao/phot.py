@@ -70,6 +70,8 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             obs_id, inst = product[1], product[2]
             evt_file, asol_file, badpix_file = product[-3], product[-2], product[-1]
             
+            dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
+            
             # Define output filenames.
             image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_image.fits")
             expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
@@ -83,7 +85,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             if not all(os.path.exists(f) for f in [evt_file, asol_file, badpix_file]):
                 raise NoProductAvailableError(f"Missing required files for observation {obs_id}.")
             
-            dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
+
             # If something got interrupted and the temp directory still exists, this will remove it
             if os.path.exists(dest_dir):
                 rmtree(dest_dir)
