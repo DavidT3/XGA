@@ -71,7 +71,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             evt_file, asol_file, badpix_file = product[-3], product[-2], product[-1]
             
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
-            
+
             # Define output filenames.
             image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_image.fits")
             expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
@@ -97,7 +97,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
 
             # Build fluximage command.
             flux_cmd = (
-                f"cd {temp_dir}; fluximage infile={evt_file}[EVENTS] outroot={obs_id}_{inst} "
+                f"cd {temp_dir}; fluximage infile={evt_file} outroot={obs_id}_{inst} "
                 f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={asol_file} "
                 f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"

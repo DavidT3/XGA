@@ -136,8 +136,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # !!! Also, need to consider the binspec (Source spectrum grouping specification) 
             #  and grouptype (Source spectrum grouping type)
             specextract_cmd = (
-                f"specextract infile="{evt_list.path}[@{reg_file}]" outroot={dest_dir}/{obs_id}_{inst} "
-                f"bkgfile="{evt_list.path}[@{bkg_reg_file}]" clobber=yes weight=no grouptype=NUM_CTS binspec=5"
+                f"specextract infile=\"{evt_list.path}[@{reg_file}]\" outroot={dest_dir}/{obs_id}_{inst} "
+                f"bkgfile=\"{evt_list.path}[@{bkg_reg_file}]\" clobber=yes weight=no grouptype=NUM_CTS binspec=5"
             )
             cmds.append(specextract_cmd)
             final_paths.append(spec_file)
