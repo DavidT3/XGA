@@ -25,7 +25,7 @@ def write_config(cwd, module):
         num_cores = 1
 
         [XMM_FILES]
-        root_xmm_dir = {cwd}/tests/test_data/xga_tests/archives/processed_data/xmm_pointed/
+        root_xmm_dir = {cwd}/tests/test_data/daxa_out/archives/xga_tests/processed_data/xmm_pointed/
         clean_pn_evts = {{obs_id}}/events/obsid{{obs_id}}-instPN-subexpALL-en-finalevents.fits
         clean_mos1_evts = {{obs_id}}/obsid{{obs_id}}-instM1-subexpALL-en-finalevents.fits
         clean_mos2_evts = {{obs_id}}/obsid{{obs_id}}-instM2-subexpALL-en-finalevents.fits
@@ -41,7 +41,7 @@ def write_config(cwd, module):
         region_file = {cwd}/tests/test_data/src_regs/xmm/{{obs_id}}.reg
 
         [EROSITA_FILES]
-        root_erosita_dir = {cwd}/tests/test_data/xga_tests/archives/processed_data/erosita_all_sky_de_dr1/
+        root_erosita_dir = {cwd}/tests/test_data/daxa_out/archives/xga_tests/processed_data/erosita_all_sky_de_dr1/
         clean_erosita_evts = {{obs_id}}/events/obsid{{obs_id}}-instTM1_TM2_TM3_TM4_TM5_TM6_TM7-subexpALL-en0.2_10.0keV-finalevents.fits
         lo_en = ['0.5']
         hi_en = ['2.0']
@@ -51,7 +51,7 @@ def write_config(cwd, module):
         """
     elif module == 'daxa':
         config_content = f"""[DAXA_SETUP]
-        daxa_save_path = {cwd}/tests/test_data
+        daxa_save_path = {cwd}/tests/test_data/daxa_out
         num_cores = 1
         """
     else:
@@ -152,8 +152,8 @@ def clean_up_test_files():
     """
     if os.path.exists("./tests/xga_output"):
         shutil.rmtree("./tests/xga_output")
-    if os.path.exists("./tests/test_data/xga_tests"):
-        shutil.rmtree("./tests/test_data/xga_tests")
+    if os.path.exists("./tests/test_data/daxa_out"):
+        shutil.rmtree("./tests/test_data/daxa_out")
 
 #  TODO work out how to run this after all the tests have been run in different files
 def clean_up_tests():
