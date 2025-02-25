@@ -2,12 +2,6 @@ import unittest
 
 from astropy.units import Quantity
 
-from .. import set_up_test_config, restore_og_cfg
-
-# I know it is horrible to write code in the middle of importing modules, but this needs to 
-# happen before xga is imported, as we are moving config files
-set_up_test_config()
-
 # Now when xga is imported it will make a new census with the test_data
 import xga
 from xga.sources import GalaxyCluster
