@@ -8,7 +8,7 @@ from daxa.mission import XMMPointed, eRASS1DE
 from daxa.archive import Archive
 from daxa.process.simple import full_process_xmm, full_process_erosita
 
-from . import TEST_MODE, SRC_INFO
+from . import TEST_MODE, SRC_INFO, SUPP_SRC_INFO
 
 def write_config(cwd, module):
     """
@@ -101,10 +101,11 @@ def obtain_test_data():
 
     xm = XMMPointed()
     er = eRASS1DE()
-    position = SkyCoord(SRC_INFO['ra'], SRC_INFO['dec'], unit='deg')
 
-    xm.filter_on_positions(position)
-    er.filter_on_positions(position)
+    xm.filter_on_positions([[SRC_INFO['ra'], SRC_INFO['dec']], [SUPP_SRC_INFO['ra'], 
+                             SUPP_SRC_INFO['dec']]])
+    er.filter_on_positions([[SRC_INFO['ra'], SRC_INFO['dec']], [SUPP_SRC_INFO['ra'], 
+                             SUPP_SRC_INFO['dec']]], search_distance=Quantity(3.6, 'deg'))
 
     arch = Archive('xga_tests', [xm, er])
 
