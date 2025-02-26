@@ -22,3 +22,4 @@ SUPP_SRC_INFO = {'ra': 226.03181, 'dec': -2.80458, 'z': 0.209, 'name': '1eRASS J
 SRC_ALL_TELS = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
+
