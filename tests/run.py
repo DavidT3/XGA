@@ -1,6 +1,7 @@
 import os 
 import unittest
 import shutil 
+from subprocess import Popen, PIPE
 
 from astropy.units import Quantity
 from astropy.coordinates import SkyCoord
@@ -173,11 +174,20 @@ def clean_up_tests():
 if __name__ == "__main__":
     set_up_tests()  # Run before any tests
 
-    # Discover and run tests
-    loader = unittest.TestLoader()
-    suite = loader.discover(start_dir="tests")
+    if TEST_MODE == 'COV':
+        cmd = 'coverage run -m unittest discover'
+        out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+        out = out.decode("UTF-8", errors='ignore')
+        err = err.decode("UTF-8", errors='ignore')
+        with open("coverage.txt", "w") as text_file:
+            text_file.write(out + err)
+    
+    else:
+        # Discover and run tests
+        loader = unittest.TestLoader()
+        suite = loader.discover(start_dir="tests")
 
-    runner = unittest.TextTestRunner()
-    result = runner.run(suite)
+        runner = unittest.TextTestRunner()
+        result = runner.run(suite)
 
     clean_up_tests()  # Run after all tests

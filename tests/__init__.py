@@ -9,7 +9,9 @@ from xga.sources import GalaxyCluster
 # place, it will also not delete the xga_output folder in /tests/test_data
 # TEST_MODE = RUN, this assumes that no data has been downloaded and will delete the xga_output
 # folder after running the tests, and will delete all the data that has been downloaded
-TEST_MODE = 'RUN'
+# TEST_MODE = COV, this is identical to the assumption of TEST_MODE = DEV, but it also calculates
+# the coverage of the tests and appends the output to a coverage.txt file
+TEST_MODE = 'DEV'
 
 # This is the main source for running the tests on
 SRC_INFO = {'ra': 226.0318, 'dec': -2.8046, 'z': 0.2093, 'name': "1eRASS_J150407.6-024816"}
