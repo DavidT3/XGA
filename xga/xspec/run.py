@@ -169,6 +169,8 @@ def xspec_call(xspec_func):
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
         script_list, paths, cores, run_type, src_inds, radii, timeout = xspec_func(*args, **kwargs)
+        print("in xspec call after cr_cluster_conv ran")
+        print('script list', script_list)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
@@ -213,6 +215,8 @@ def xspec_call(xspec_func):
 
         # Now we assign the fit results to source objects
         for src_repr in results:
+            print("in here")
+            print("results", results)
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
             ind = src_lookup[src_repr]
