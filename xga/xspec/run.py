@@ -196,9 +196,11 @@ def xspec_call(xspec_func):
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
                     if results_in[0] is None:
+                        print("results in where results_in[0] is None", results_in)
                         fit.update(1)
                         return
                     else:
+                        print("results in", results_in)
                         res_fits, rel_src, successful, err_list, warn_list, tel = results_in
                         results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
                         fit.update(1)
