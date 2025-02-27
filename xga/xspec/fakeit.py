@@ -64,6 +64,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         stacking procedure for a particular telescope is not supported, this function will instead use individual
         spectra for an ObsID. The default is False.
     """
+    print("in cluster_cr_conv")
     # Need to import here to avoid circular import errors
     from ..sourcetools._common import _get_all_telescopes
     # collecting all the telescopes associated here for use later, use a function to account for
@@ -218,6 +219,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 #  is triggered and the scripts get added to the pile to run.
                 res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec", tel) for e_pair in conv_en for s in spec_objs]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
+                print('no conv factor found, should run xspec sims')
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(s_ind)

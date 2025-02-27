@@ -1183,6 +1183,8 @@ class GalaxyCluster(ExtendedSource):
             spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
                                     min_sn=min_sn, over_sample=over_sample, obs_id=obs_id, inst=inst, telescope=telescope)
 
+        print('in src.norm_conv_factor')
+        print('spec', spec)
         # Its just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):
             spec = [spec]
@@ -1202,6 +1204,7 @@ class GalaxyCluster(ExtendedSource):
             # And finds the mean effective area in that range
             mean_areas.append(rel_ars.mean().value)
 
+            print('spec path', spec.path)
             # Then we fetch the count rate for the fakeit run of the current spectrum
             rates.append(s.get_conv_factor(lo_en, hi_en, "tbabs*apec", telescope)[2].value)
 

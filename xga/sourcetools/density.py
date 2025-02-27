@@ -248,6 +248,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     cluster_cr_conv(sources, conv_outer_radius, inner_radius, temps, abund_table=abund_table,
                     num_cores=num_cores, group_spec=group_spec, min_counts=min_counts,
                     min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra)
+    
+    print('cluster_cr_conv run, back in _dens_setup')
 
     # This where the combined conversion factor that takes a count-rate/volume to a squared number
     # density of hydrogen

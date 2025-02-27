@@ -161,7 +161,8 @@ def xspec_call(xspec_func):
             sources = args[0]
         else:
             raise TypeError("Please pass a source object, or a list of source objects.")
-
+        
+        print("in xspec_call")
         # This is the output from whatever function this is a decorator for
         # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
         #  and 3rd is the number of cores to use.
@@ -340,6 +341,7 @@ def xspec_call(xspec_func):
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and lums
                     # TODO this could be neater and better generalised
+                    print('combos', combos)
                     for comb in combos:
                         if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
                             spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
@@ -350,10 +352,13 @@ def xspec_call(xspec_func):
                         else:
                             spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
                                             telescope=tel)[0]
-
+                        print('comb', comb)
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
                                               res_table["Lx_{}".format(comb)].values, model, tel)
+                        print('spec.add_conv_factors run')
+                        print('spec path', spec.path)
+                        print('spec._conv_factors', spec._conv_factors)
 
                 elif len(res_set) != 0 and not res_set[1]:
                     for err in res_set[2]:
