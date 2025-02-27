@@ -228,6 +228,10 @@ def xspec_call(xspec_func):
             for res_set in results[src_repr]:
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
+                print('res_set', res_set)
+                print('res_set[1]', res_set[1])
+                print('run_type', run_type)
+
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
                         global_results = res_table["RESULTS"][0]
