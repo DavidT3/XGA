@@ -1204,7 +1204,7 @@ class GalaxyCluster(ExtendedSource):
             # And finds the mean effective area in that range
             mean_areas.append(rel_ars.mean().value)
 
-            print('spec path', spec.path)
+            print('spec path', s.path)
             # Then we fetch the count rate for the fakeit run of the current spectrum
             rates.append(s.get_conv_factor(lo_en, hi_en, "tbabs*apec", telescope)[2].value)
 
