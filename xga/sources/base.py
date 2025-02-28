@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:55. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -243,7 +243,7 @@ class BaseSource:
         cur_obs_nums = {tel: len(obs[tel]) for tel in obs}
         if sum(cur_obs_nums.values()) == 0:
             raise NoValidObservationsError("All {t} observations identified for {s} are either unusable or "
-                                           "blacklisted.".format(s=self.name, t=', '.join(telescope)))
+                                           "blacklisted.".format(s=self.name, t=', '.join(list(obs.keys()))))
         # In this case one of the telescopes has no observations that are relevant, so we must remove the key
         #  in 'obs' that refers to it
         elif 0 in cur_obs_nums.values():
