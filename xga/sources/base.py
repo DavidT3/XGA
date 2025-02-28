@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:31. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -932,7 +932,7 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file"] +
+            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "badpix_file", "region_file"] +
                          [k for k in rel_sec if 'evts' in k])
 
             # Define the energy limits as astropy quantities, these have originally been retrieved from the
@@ -1028,14 +1028,14 @@ class BaseSource:
                 else:
                     att_prod = None
 
-                # # Some missions require a path to the badpixel file to be passed in whenever their backend-software
-                # #  product generation functions are called, and some just access that information from an event
-                # #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
-                # if 'badpix_file' in rel_sec:
-                #     badpix_prod = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
-                #                               telescope=tel)
-                # else:
-                #     badpix_prod = None
+                # Some missions require a path to the badpixel file to be passed in whenever their backend-software
+                #  product generation functions are called, and some just access that information from an event
+                #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
+                if 'badpix_file' in rel_sec:
+                    badpix_prod = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                              telescope=tel)
+                else:
+                    badpix_prod = None
 
                 if (att_prod is not None and att_prod.usable) or att_prod is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
@@ -1048,17 +1048,17 @@ class BaseSource:
                     # Start off with the events list going in
                     obs_dict[tel][obs_id][inst] = {"events": evt_list}
 
-                    # Now we'll do a couple of housekeeping files
-                    # if badpix_prod is not None:
-                    #     obs_dict[tel][obs_id][inst]['badpix'] = badpix_prod
-
-                    if att_prod is not None:
-                        obs_dict[tel][obs_id][inst]['attitude'] = att_prod
-
                     if load_products:
                         # Dictionary updated with derived product names
                         map_ret = map(read_default_products, en_comb)
                         obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+
+                    # Now we'll do a couple of housekeeping files
+                    if badpix_prod is not None:
+                        obs_dict[tel][obs_id][inst]['badpix'] = badpix_prod
+
+                    if att_prod is not None:
+                        obs_dict[tel][obs_id][inst]['attitude'] = att_prod
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
