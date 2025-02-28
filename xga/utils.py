@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 11:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:03. Copyright (c) The Contributors
 
 import json
 import os
@@ -271,6 +271,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # Adding in columns for the instruments
     rel_inst_cols = ["USE_{}".format(inst.upper()) for inst in rel_insts]
+    print(obs_lookup[rel_inst_cols])
     obs_lookup[rel_inst_cols] = obs_lookup[rel_inst_cols].astype(bool)
     # for inst in rel_insts:
     #     obs_lookup["USE_{}".format(inst.upper())].apply(lambda x: x.astype(bool))
