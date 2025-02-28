@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:33. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -932,7 +932,7 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "badpix_file", "region_file"] +
+            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file"] +
                          [k for k in rel_sec if 'evts' in k])
 
             # Define the energy limits as astropy quantities, these have originally been retrieved from the
@@ -945,11 +945,12 @@ class BaseSource:
             if not COMBINED_INSTS[tel]:
                 # Formats the generic paths given in the config file for this particular obs and energy range
                 files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
-                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these
-                         and inst in k}
+                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these and
+                         'badpix' not in k and inst in k}
             else:
                 files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
-                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these}
+                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these and
+                         'badpix' not in k}
 
             # It is not necessary to check that the files exist, as this happens when the product classes
             # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
