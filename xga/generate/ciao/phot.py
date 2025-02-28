@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 16:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 18:51. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -20,7 +20,11 @@ from .run import ciao_call
 from ...sources import BaseSource
 
 
-# @ciao_call
+# TODO TELL RAY ABOUT THE FACT HE CAN'T JUST ASSUME THAT HE CAN ADD MORE OUTPUT PRODUCT PATHS AND JUST EXPECT IT
+#  TO WORK WHERE THEY GET READ IN AS PRODUCT CLASSES - HE NEEDS TO CHECK
+
+
+@ciao_call
 def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample], 
                          lo_en: Quantity = Quantity(0.5, "keV"),
                          hi_en: Quantity = Quantity(2.0, "keV"),
@@ -134,8 +138,6 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
             #     continue
 
-            # TODO @Ray if this had been run as you had it written you would have immediately deleted the entire
-            #  XGA directory for the current Chandra ObsID
             # If something got interrupted and the temp directory still exists, this will remove it
             # if os.path.exists(dest_dir):
             #     rmtree(dest_dir)
@@ -145,11 +147,12 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
             os.makedirs(temp_dir, exist_ok=True)
 
-            # Build fluximage command.
+            # Build fluximage command - making sure to set parallel to no, seeing as we're doing our
+            #  own parallelization
             flux_cmd = (
                 f"cd {temp_dir}; fluximage infile={evt_file.path} outroot={obs_id}_{inst} "
                 f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={att_file} "
-                f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4; "
+                f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4 parallel=no; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
             cmds.append(flux_cmd)
