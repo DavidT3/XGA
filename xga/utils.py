@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 10:50. Copyright (c) The Contributors
 
 import json
 import os
@@ -500,13 +500,14 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
 
 # The information required to use Chandra data
 CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
-                 "clean_acis_evts": "/this/is/required/{obs_id}/events/obsid{obs_id}-instACIS-subexpE001-en-cleanevents.fits",
-                 "attitude_file": "/this/is/required/{obs_id}/misc/obsid{obs_id}-instACIS-subexpE001-aspectsolution.fits",
-                 "lo_en": ['0.50', '2.00'],
-                 "hi_en": ['2.00', '10.00'],
-                 "acis_image": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-image.fits",
-                 "acis_expmap": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-expmap.fits",
-                 "region_file": "/this/is/optional/chandra_obs/regions/obsid{obs_id}/regions.reg"}
+                 "clean_acis_evts": "/this/is/required/{obs_id}/{obs_id}_ACIS_evts.fits",
+                 "attitude_file": "/this/is/required/{obs_id}/{obs_id}_asol.fits",
+                 "badpix_file": "/this/is/required/{obs_id}/{obs_id}_badpix.fits",
+                 "lo_en": ['0.5'],
+                 "hi_en": ['7.0'],
+                 "acis_image": "/this/is/optional/{obs_id}/{obs_id}-ACIS-{lo_en}-{hi_en}keV_img.fits",
+                 "acis_expmap": "/this/is/optional/{obs_id}/{obs_id}-ACIS-{lo_en}-{hi_en}keV_expmap.fits",
+                 "region_file": "/this/is/optional/chandra_obs/regions/{obs_id}/regions.reg"}
 
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
 tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'chandra': CHANDRA_FILES}
@@ -584,8 +585,10 @@ r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
 #  they don't convert to anything, but they still let us work within the astropy coordinate framework
 xmm_sky = def_unit("xmm_sky")
 xmm_det = def_unit("xmm_det")
+#
 erosita_sky = def_unit("erosita_sky")
 erosita_det = def_unit("erosita_det")
+#
 chandra_sky = def_unit("chandra_sky")
 chandra_det = def_unit("chandra_det")
 
@@ -661,7 +664,8 @@ ESASS_VERSION = None
 # This checks for an installation of eSASS
 eSASS_AVAIL = False
 if shutil.which("evtool") is None:
-    warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.")
+    warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.",
+         stacklevel=2)
 else:
     eSASS_AVAIL = True
 
