@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 16:05. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -147,7 +147,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
 
             # Build fluximage command.
             flux_cmd = (
-                f"cd {temp_dir}; fluximage infile={evt_file} outroot={obs_id}_{inst} "
+                f"cd {temp_dir}; fluximage infile={evt_file.path} outroot={obs_id}_{inst} "
                 f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={att_file} "
                 f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"

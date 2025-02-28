@@ -1,6 +1,16 @@
 generate
 =======
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Instrument Specific:
+
+   xga.generate.sas <xga.sas.rst>
+
+   xga.generate.esass <xga.esass.rst>
+
+   xga.generate.ciao <xga.ciao.rst>
+
 .. automodule:: xga.generate.sas
    :members:
    :undoc-members:
@@ -11,10 +21,8 @@ generate
    :undoc-members:
    :show-inheritance:
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Instrument Specific:
-
-   xga.generate.sas <xga.sas.rst>
-   xga.generate.esass <xga.esass.rst>
+.. automodule:: xga.generate.ciao
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
