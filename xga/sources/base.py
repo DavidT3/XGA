@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:24. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -933,8 +933,8 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file"] + \
-                        [k for k in rel_sec if 'evts' in k]
+            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "badpix_file", "region_file"] +
+                         [k for k in rel_sec if 'evts' in k])
 
             # Define the energy limits as astropy quantities, these have originally been retrieved from the
             #  configuration file
@@ -958,7 +958,6 @@ class BaseSource:
             # This looks up the class which corresponds to the key (which is the product ID in this case
             #  e.g. image), then instantiates an object of that class
 
-            print(files)
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
                          for key, file in files.items() if os.path.exists(file)}
@@ -1045,6 +1044,9 @@ class BaseSource:
                         # Dictionary updated with derived product names
                         map_ret = map(read_default_products, en_comb)
                         obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+
+                    # TODO REMOVE THIS OR FORMALISE
+                    obs_dict[tel][obs_id]['badpix'] = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id))
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
