@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:48. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1027,8 +1027,21 @@ class BaseSource:
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
                 if 'attitude_file' in rel_sec:
                     att_file = rel_sec["attitude_file"].format(obs_id=obs_id)
+                    # TODO THIS ISN'T YET USED, BUT SHOULD REPLACE THE ATTITUDE PATH DICTIONARY
+                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                           telescope=tel)
                 else:
                     att_file = None
+                    att_prod = None
+
+                # Some missions require a path to the badpixel file to be passed in whenever their backend-software
+                #  product generation functions are called, and some just access that information from an event
+                #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
+                if 'badpix_file' in rel_sec:
+                    badpix_prod = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                              telescope=tel)
+                else:
+                    badpix_prod = None
 
                 if (att_file is not None and os.path.exists(att_file)) or att_file is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
@@ -1038,16 +1051,24 @@ class BaseSource:
                     if not evt_list.usable:
                         continue
 
+                    # Start off with the events list going in
                     obs_dict[tel][obs_id][inst] = {"events": evt_list}
+
+                    # Now we'll do a couple of housekeeping files
+                    if badpix_prod is not None:
+                        obs_dict[tel][obs_id][inst]['badpix'] = badpix_prod
+
+                    if att_prod is not None:
+                        obs_dict[tel][obs_id][inst]['attitude'] = att_prod
+
+                    # TODO The attitude dictionary can be removed eventually, switching over to loading them in
+                    #  as base products
                     att_dict[tel][obs_id] = att_file
+
                     if load_products:
                         # Dictionary updated with derived product names
                         map_ret = map(read_default_products, en_comb)
                         obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
-
-                    # TODO REMOVE THIS OR FORMALISE
-                    obs_dict[tel][obs_id][inst]['badpix'] = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id,
-                                                                  'combined', '', '', '')
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
