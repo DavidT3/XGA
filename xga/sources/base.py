@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:41. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -931,7 +931,7 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "badpix_file", "region_file"] +
+            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file"] +
                          [k for k in rel_sec if 'evts' in k])
 
             # Define the energy limits as astropy quantities, these have originally been retrieved from the
