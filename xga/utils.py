@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:36. Copyright (c) The Contributors
 
 import json
 import os
@@ -502,8 +502,8 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
 # The information required to use Chandra data
 CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
                  "clean_acis_evts": "/this/is/required/{obs_id}/{obs_id}_ACIS_evts.fits",
+                 "acis_badpix_file": "/this/is/required/{obs_id}/{obs_id}_badpix.fits",
                  "attitude_file": "/this/is/required/{obs_id}/{obs_id}_asol.fits",
-                 "badpix_file": "/this/is/required/{obs_id}/{obs_id}_badpix.fits",
                  "lo_en": ['0.5'],
                  "hi_en": ['7.0'],
                  "acis_image": "/this/is/optional/{obs_id}/{obs_id}-ACIS-{lo_en}-{hi_en}keV_img.fits",
