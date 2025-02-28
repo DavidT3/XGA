@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:51. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1018,23 +1018,23 @@ class BaseSource:
                 #  the copy so that any modifications don't harm the original file.
                 reg_file = rel_sec["region_file"].format(obs_id=obs_id)
 
-                # # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
-                # #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
-                # #  telescopes, so we do check that the configuration file actually has an entry for it.
-                # if 'attitude_file' in rel_sec:
-                #     att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
-                #                            telescope=tel)
-                # else:
-                #     att_prod = None
-
-                # Some missions require a path to the badpixel file to be passed in whenever their backend-software
-                #  product generation functions are called, and some just access that information from an event
-                #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
-                if 'badpix_file' in rel_sec:
-                    badpix_prod = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
-                                              telescope=tel)
+                # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
+                #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
+                #  telescopes, so we do check that the configuration file actually has an entry for it.
+                if 'attitude_file' in rel_sec:
+                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                           telescope=tel)
                 else:
-                    badpix_prod = None
+                    att_prod = None
+
+                # # Some missions require a path to the badpixel file to be passed in whenever their backend-software
+                # #  product generation functions are called, and some just access that information from an event
+                # #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
+                # if 'badpix_file' in rel_sec:
+                #     badpix_prod = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
+                #                               telescope=tel)
+                # else:
+                #     badpix_prod = None
 
                 if (att_prod is not None and att_prod.usable) or att_prod is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
