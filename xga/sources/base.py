@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:17. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -262,7 +262,7 @@ class BaseSource:
 
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
-        self._products, region_dict, self._att_files = self._initial_products(obs, load_regions, null_load_products)
+        self._products, region_dict = self._initial_products(obs, load_regions, null_load_products)
 
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
@@ -275,11 +275,9 @@ class BaseSource:
             new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_prods = {tel: self._products[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_regs = {tel: region_dict[tel] for tel, num in cur_obs_nums.items() if num != 0}
-            new_atts = {tel: self._att_files[tel] for tel, num in cur_obs_nums.items() if num != 0}
             # Then assign the new cut down dictionaries to their original names
             obs = new_obs
             self._products = new_prods
-            self._att_files = new_atts
             region_dict = new_regs
 
         # This is somewhat inelegant, but oh well; it ensures that there are individual instrument entries for each
@@ -903,7 +901,7 @@ class BaseSource:
 
     # Next up we define the protected methods of the class
     def _initial_products(self, init_obs: dict, load_regions: bool = True, load_products: bool = True) \
-            -> Tuple[dict, dict, dict]:
+            -> Tuple[dict, dict]:
         """
         Assembles the initial dictionary structure of existing data products, for all selected
         telescopes, associated with this source.
@@ -915,9 +913,9 @@ class BaseSource:
             default is True.
         :param bool load_products: This controls whether products OTHER THAN EVENT LISTS are declared and stored in
             the XGA source product structure.
-        :return: A dictionary structure detailing the data products available at initialisation, another
-            dictionary containing paths to region files, and another dictionary containing paths to attitude files.
-        :rtype: Tuple[dict, dict, dict]
+        :return: A dictionary structure detailing the data products available at initialisation, and another
+            dictionary containing paths to region files.
+        :rtype: Tuple[dict, dict]
         """
 
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
@@ -980,8 +978,6 @@ class BaseSource:
         # Regions will get their own dictionary, I don't care about keeping the reg_file paths as
         # an attribute because they get read into memory in the init of this class
         reg_dict = {tel: {} for tel in init_obs}
-        # Attitude files also get their own dictionary, they won't be read into memory by XGA
-        att_dict = {tel: {} for tel in init_obs}
 
         for tel in init_obs:
             # Grab the dictionary relevant to the current telescope, for readability purposes
@@ -1026,12 +1022,9 @@ class BaseSource:
                 #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
                 if 'attitude_file' in rel_sec:
-                    att_file = rel_sec["attitude_file"].format(obs_id=obs_id)
-                    # TODO THIS ISN'T YET USED, BUT SHOULD REPLACE THE ATTITUDE PATH DICTIONARY
                     att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
                                            telescope=tel)
                 else:
-                    att_file = None
                     att_prod = None
 
                 # Some missions require a path to the badpixel file to be passed in whenever their backend-software
@@ -1043,7 +1036,7 @@ class BaseSource:
                 else:
                     badpix_prod = None
 
-                if (att_file is not None and os.path.exists(att_file)) or att_file is None:
+                if (att_prod is not None and att_prod.usable) or att_prod is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
                     # Otherwise nothing can be done with it.
                     evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
@@ -1060,10 +1053,6 @@ class BaseSource:
 
                     if att_prod is not None:
                         obs_dict[tel][obs_id][inst]['attitude'] = att_prod
-
-                    # TODO The attitude dictionary can be removed eventually, switching over to loading them in
-                    #  as base products
-                    att_dict[tel][obs_id] = att_file
 
                     if load_products:
                         # Dictionary updated with derived product names
@@ -1085,7 +1074,7 @@ class BaseSource:
             # Cleans any observations that don't have at least one instrument associated with them
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
 
-        return obs_dict, reg_dict, att_dict
+        return obs_dict, reg_dict
 
     def _existing_xga_products(self, read_fits: bool, load_spectra: bool):
         """
