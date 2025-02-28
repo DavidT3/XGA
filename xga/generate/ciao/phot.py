@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:42. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -130,11 +130,9 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             except NoProductAvailableError:
                 pass
 
-            print('lads')
-
             # Skip generation if files already exist.
-            if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
-                continue
+            # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
+            #     continue
 
             # TODO @Ray if this had been run as you had it written you would have immediately deleted the entire
             #  XGA directory for the current Chandra ObsID
@@ -144,7 +142,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             # os.makedirs(dest_dir)
 
             # Temporary directory for fluximage.
-            temp_dir = os.path.join(dest_dir, f"temp_{randint(0, str(1e8))}")
+            temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
             os.makedirs(temp_dir, exist_ok=True)
 
             # Build fluximage command.
