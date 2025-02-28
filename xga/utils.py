@@ -271,10 +271,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # Adding in columns for the instruments
     rel_inst_cols = ["USE_{}".format(inst.upper()) for inst in rel_insts]
-    print(obs_lookup[rel_inst_cols])
     obs_lookup[rel_inst_cols] = obs_lookup[rel_inst_cols].apply(lambda x: x == 'T')
-    # for inst in rel_insts:
-    #     obs_lookup["USE_{}".format(inst.upper())].apply(lambda x: x.astype(bool))
 
     # Finally we return the census and the blacklist
     return obs_lookup, blacklist
