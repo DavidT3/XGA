@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 11:16. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -292,7 +292,7 @@ class BaseProduct:
             # This should only trigger if the telescope is not XMM or eROSITa AND there was a non-empty string passed
             #  for the stderr
             warn("We do not currently support checking {t}-specific backend software stderr for issues - feel free to "
-                 "contact the developer team and request this feature.", stacklevel=2)
+                 "contact the developer team and request this feature.".format(t=self.telescope), stacklevel=2)
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
