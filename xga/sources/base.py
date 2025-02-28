@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:08. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3687,22 +3687,29 @@ class BaseSource:
 
         return matched_prods
 
-    def get_att_file(self, obs_id: str, telescope: str) -> str:
+    def get_att_file(self, obs_id: str, telescope: str, inst: str = None) -> str:
         """
         Fetches the path to the attitude file for an observation associated with this source.
 
         :param str obs_id: The ObsID to fetch the attitude file for.
         :param str telescope: The telescope to fetch the attitude file for.
+        :param str inst: The instrument to fetch an attitude file for (though most missions do not have
+            seperate attitude files for different instruments).
         :return: The path to the attitude file.
         :rtype: str
         """
-        if telescope not in self.telescopes:
-            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+        att_files = self.get_products('attitude', obs_id, telescope=telescope, inst=inst)
 
-        elif obs_id not in self.obs_ids[telescope]:
-            raise NotAssociatedError("{t}-{o} is not associated with {s}".format(t=telescope, o=obs_id, s=self.name))
-        else:
-            return self._att_files[telescope][obs_id]
+        # Perform some checks on the number of attitude files being returned
+        if len(att_files) > 1 and inst is None:
+            raise ValueError("Multiple attitude files have been identified for {t}-{o}, you may need to "
+                             "specify an instrument in the argument of this function.".format(t=telescope, o=obs_id))
+        elif len(att_files) > 1:
+            raise ValueError("Multiple attitude files have been identified for {t}-{o}-{i}, please "
+                             "contact the developer.".format(t=telescope, o=obs_id, i=inst))
+
+        # Now just return the path to the attitude file, so we're compatible with the behaviour of this method
+        return att_files[0].path
 
     def source_back_regions(self, reg_type: str, telescope: str, obs_id: str = None,
                             central_coord: Quantity = None) -> Tuple[SkyRegion, SkyRegion]:
