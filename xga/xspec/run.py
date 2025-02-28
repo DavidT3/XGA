@@ -80,6 +80,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     #  that error message was never printed at all
     err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line
                      if "No acceptable spectra are left after the cleaning step" not in line]
+    err_out_line_init = [line for line in out if "You do not have an up-to-date version of Xspec.init" in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
     warn_err_lines = [line.split("***Warning: ")[-1] for line in err if "***Warning" in line]
@@ -89,7 +90,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     else:
         usable = False
 
-    error = err_out_lines + err_err_lines
+    error = err_out_lines + err_err_lines + err_out_line_init
     warn = warn_out_lines + warn_err_lines
     if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
@@ -195,15 +196,11 @@ def xspec_call(xspec_func):
                     """
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
-                    if results_in[0] is None:
-                        print("results in where results_in[0] is None", results_in)
-                        fit.update(1)
-                        return
-                    else:
-                        print("results in", results_in)
-                        res_fits, rel_src, successful, err_list, warn_list, tel = results_in
-                        results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
-                        fit.update(1)
+
+                    print("results in", results_in)
+                    res_fits, rel_src, successful, err_list, warn_list, tel = results_in
+                    results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
+                    fit.update(1)
 
                 for s_ind, s in enumerate(script_list):
                     pth = paths[s_ind]
@@ -232,6 +229,10 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
+                # res_set = res_table, if it is None then the xspec fit has failed
+                if res_set[0] is None:
+                    for err in res_set[2]:
+                        raise XSPECFitError(err)
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
                 print('res_set', res_set)
@@ -289,7 +290,7 @@ def xspec_call(xspec_func):
                                 ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key, telescope=tel)
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
-                                                             "this is the developers fault, not yours.")
+                                                                "this is the developers fault, not yours.")
                                 elif len(ann_specs) == 0:
                                     raise NoMatchFoundError("Somehow I haven't found the AnnularSpectra that you "
                                                             "fitted, this is the developers fault, not yours")
@@ -364,8 +365,8 @@ def xspec_call(xspec_func):
                                             telescope=tel)[0]
                         print('comb', comb)
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
-                                              res_table["rate_{}".format(comb)].values,
-                                              res_table["Lx_{}".format(comb)].values, model, tel)
+                                                res_table["rate_{}".format(comb)].values,
+                                                res_table["Lx_{}".format(comb)].values, model, tel)
                         print('spec.add_conv_factors run')
                         print('spec path', spec.path)
                         print('spec._conv_factors', spec._conv_factors)
@@ -374,37 +375,37 @@ def xspec_call(xspec_func):
                     for err in res_set[2]:
                         raise XSPECFitError(err)
 
-            if ann_fit:
-                for tel in ann_results:
-                    # We fetch the annular spectra object that we just fitted, searching by using the set ID of
-                    #  the last spectra that was opened in the loop
-                    ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
-                    try:
-                        ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
-                                                ann_obs_order[tel])
+                if ann_fit:
+                    for tel in ann_results:
+                        # We fetch the annular spectra object that we just fitted, searching by using the set ID of
+                        #  the last spectra that was opened in the loop
+                        ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
+                        try:
+                            ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
+                                                    ann_obs_order[tel])
 
-                        # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
-                        #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
-                        #  generate a Tx profile automatically
-                        if model == "constant*tbabs*apec":
-                            temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
-                            s.update_products(temp_prof)
+                            # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
+                            #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
+                            #  generate a Tx profile automatically
+                            if model == "constant*tbabs*apec":
+                                temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
+                                s.update_products(temp_prof)
 
-                            # Normalisation profiles can be useful for many things, so we generate them too
-                            norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                            s.update_products(norm_prof)
+                                # Normalisation profiles can be useful for many things, so we generate them too
+                                norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
+                                s.update_products(norm_prof)
 
-                            if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
-                                met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
-                                s.update_products(met_prof)
+                                if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec'):
+                                    met_prof = ann_spec.generate_profile(model, 'Abundanc', '')
+                                    s.update_products(met_prof)
 
-                        else:
-                            raise NotImplementedError("How have you even managed to fit this model to a "
-                                                      "profile?! It's not supported yet.")
-                    except ValueError:
-                        warnings.warn("{src} annular spectra profile fit was not successful for the {t} "
-                                      "telescope.".format(src=ann_spec.src_name, t=tel),
-                                    stacklevel=2)
+                            else:
+                                raise NotImplementedError("How have you even managed to fit this model to a "
+                                                            "profile?! It's not supported yet.")
+                        except ValueError:
+                            warnings.warn("{src} annular spectra profile fit was not successful for the {t} "
+                                            "telescope.".format(src=ann_spec.src_name, t=tel),
+                                        stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
