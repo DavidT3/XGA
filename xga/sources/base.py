@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:17. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -957,6 +957,8 @@ class BaseSource:
             # you should use it for analysis using the .usable attribute
             # This looks up the class which corresponds to the key (which is the product ID in this case
             #  e.g. image), then instantiates an object of that class
+
+            print(files)
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
                          for key, file in files.items() if os.path.exists(file)}
