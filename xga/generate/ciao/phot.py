@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:33. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -12,11 +12,12 @@ from tqdm import tqdm
 from xga import OUTPUT, NUM_CORES, xga_conf
 from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.imagetools import data_limits
+from xga.products import BaseProduct
 from xga.samples.base import BaseSample
-from xga.sources import BaseSource
 from xga.sources.base import NullSource
 
 from .run import ciao_call
+from ...sources import BaseSource
 
 
 @ciao_call
@@ -79,6 +80,9 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
     sources_extras = []
     sources_types = []
     for source in tqdm(sources, disable=disable_progress, desc="Processing sources"):
+        # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
+        source: BaseSource
+
         cmds = []
         final_paths = []
         extra_info = []
@@ -89,11 +93,9 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             obs_id = evt_file.obs_id
             inst = evt_file.instrument
 
-            print(obs_id, inst, evt_file)
-
             # Grabbing the attitude and badpix files, which the CIAO command we aim to run will want as an input
             att_file = source.get_att_file(obs_id, 'chandra')
-            print(att_file)
+
             # We haven't added a particular get method for bad-pixel files, as they are not as universal as attitude
             #  files - the badpix files have been stored in the source product storage framework however, as we loaded
             #  them along with all the files specified in the config file
@@ -110,9 +112,6 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             # Now we've established that we have retrieved a single bad pixel product, we extract the path from it
             badpix_file = badpix_prod[0].path
 
-            print(badpix_file)
-            stop
-
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
@@ -121,28 +120,37 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
             ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_ratemap.fits")
 
+            try:
+                source.get_images(obs_id, inst, lo_en, hi_en, telescope='chandra')
+                source.get_expmaps(obs_id, inst, lo_en, hi_en, telescope='chandra')
+                source.get_ratemaps(obs_id, inst, lo_en, hi_en, telescope='chandra')
+                # If the expected outputs from this function do exist for the current ObsID, we'll just
+                #  move on to the next one
+                continue
+            except NoProductAvailableError:
+                pass
+
+            print('lads')
+
             # Skip generation if files already exist.
             if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
                 continue
 
-            # Check required files.
-            if not all(os.path.exists(f) for f in [evt_file, asol_file, badpix_file]):
-                raise NoProductAvailableError(f"Missing required files for observation {obs_id}.")
-            
-
+            # TODO @Ray if this had been run as you had it written you would have immediately deleted the entire
+            #  XGA directory for the current Chandra ObsID
             # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
-            os.makedirs(dest_dir)
+            # if os.path.exists(dest_dir):
+            #     rmtree(dest_dir)
+            # os.makedirs(dest_dir)
 
             # Temporary directory for fluximage.
-            temp_dir = os.path.join(dest_dir, f"temp_{randint(0, 1e8)}")
+            temp_dir = os.path.join(dest_dir, f"temp_{randint(0, str(1e8))}")
             os.makedirs(temp_dir, exist_ok=True)
 
             # Build fluximage command.
             flux_cmd = (
                 f"cd {temp_dir}; fluximage infile={evt_file} outroot={obs_id}_{inst} "
-                f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={asol_file} "
+                f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={att_file} "
                 f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
