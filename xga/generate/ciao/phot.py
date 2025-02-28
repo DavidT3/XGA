@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:45. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -20,7 +20,7 @@ from .run import ciao_call
 from ...sources import BaseSource
 
 
-@ciao_call
+# @ciao_call
 def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample], 
                          lo_en: Quantity = Quantity(0.5, "keV"),
                          hi_en: Quantity = Quantity(2.0, "keV"),
@@ -79,7 +79,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
     # once the CIAO cmd has run.
     sources_extras = []
     sources_types = []
-    for source in tqdm(sources, disable=disable_progress, desc="Processing sources"):
+    for source in sources:
         # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
         source: BaseSource
 

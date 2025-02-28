@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:45. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -9,13 +9,13 @@ from typing import Union
 import numpy as np
 from astropy.units import Quantity, deg
 from tqdm import tqdm
-
 from xga import OUTPUT, NUM_CORES
 from xga.exceptions import SASInputInvalid, NoProductAvailableError, TelescopeNotAssociatedError
 from xga.imagetools import data_limits
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
+
 from .misc import cifbuild
 from .run import sas_call
 
@@ -76,7 +76,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
-        #  bugs occuring in the sas_call wrapper
+        #  bugs occurring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
