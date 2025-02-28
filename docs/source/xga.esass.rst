@@ -9,18 +9,10 @@ esass.phot module
    :undoc-members:
    :show-inheritance:
 
-esass.run module
---------------
-
-.. automodule:: xga.generate.esass.run
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 esass.spec module
 ---------------
 
-.. automodule:: xga.esass.generate.spec
+.. automodule:: xga.generate.esass.spec
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +20,15 @@ esass.spec module
 esass.lightcurve module
 ---------------
 
-.. automodule:: xga.esass.generate.lightcurve
+.. automodule:: xga.generate.esass.lightcurve
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+esass.run module
+--------------
+
+.. automodule:: xga.generate.esass.run
    :members:
    :undoc-members:
    :show-inheritance:
