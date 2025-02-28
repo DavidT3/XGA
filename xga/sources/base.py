@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:39. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1033,7 +1033,8 @@ class BaseSource:
                 #  product generation functions are called, and some just access that information from an event
                 #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
                 if '{i}_badpix_file'.format(i=inst) in rel_sec:
-                    badpix_prod = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
+                    temp_pth = rel_sec['{i}_badpix_file'.format(i=inst)]
+                    badpix_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '',
                                               telescope=tel)
                 else:
                     badpix_prod = None
