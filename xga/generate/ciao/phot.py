@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 14:42. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -83,10 +83,11 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
         final_paths = []
         extra_info = []
         # Iterate through Chandra event lists associated with the source.
-        for product in source.get_products("events", telescope="chandra", just_obj=False):
+        for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
-            obs_id, inst = product[1], product[2]
-            evt_file = product[0]
+            evt_file = product
+            obs_id = evt_file.obs_id
+            inst = evt_file.instrument
 
             print(obs_id, inst, evt_file)
 
