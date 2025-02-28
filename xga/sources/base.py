@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 12:32. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1046,7 +1046,7 @@ class BaseSource:
                         obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
 
                     # TODO REMOVE THIS OR FORMALISE
-                    obs_dict[tel][obs_id]['badpix'] = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id,
+                    obs_dict[tel][obs_id][inst]['badpix'] = BaseProduct(rel_sec["badpix_file"].format(obs_id=obs_id), obs_id,
                                                                   'combined', '', '', '')
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
