@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 11:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 11:37. Copyright (c) The Contributors
 
 import json
 import os
@@ -808,7 +808,7 @@ ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 # We will only check for software relevant to those telescopes which XGA setup has deemed usable
 # --- XMM ---
 SAS_VERSION = None
-if 'xmm' in USABLE:
+if 'xmm' in USABLE and USABLE['xmm']:
     # Next up, we check to see what version of SAS (if any) is installed - for the XMM-Newton mission
     # Here we check to see whether SAS is installed (along with all the necessary paths)
     if "SAS_DIR" not in os.environ:
@@ -839,7 +839,7 @@ if 'xmm' in USABLE:
 
 # --- eROSITA ---
 ESASS_VERSION = None
-if 'erosita' in USABLE or 'erass' in USABLE:
+if ('erosita' in USABLE and USABLE['erosita']) or ('erass' in USABLE and USABLE['erass']):
     # TODO will have to handle the whole eSASS4DR1 and the original eSASS release thing at some point... sigh
     # This checks for an installation of eSASS
     eSASS_AVAIL = False
@@ -856,7 +856,7 @@ if 'erosita' in USABLE or 'erass' in USABLE:
 CIAO_VERSION = None
 # This checks for an installation of Ciao
 CIAO_AVAIL = False
-if 'chandra' in USABLE:
+if 'chandra' in USABLE and USABLE['chandra']:
     ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
     # Just turn those pesky byte outputs into strings
     ciao_out = ciao_out.decode("UTF-8")
