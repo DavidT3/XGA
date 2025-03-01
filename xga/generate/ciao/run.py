@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 19:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:01. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -99,34 +99,26 @@ def ciao_call(ciao_func):
                     The callback function for errors that occur inside a task running in the pool.
                     :param err: An error that occurred inside a task.
                     """
-                    print('ERRORRRRR', err, type(err))
-
                     nonlocal raised_errors
                     nonlocal gen
                     nonlocal src_lookup
                     nonlocal sources
 
-                    try:
-                        if err is not None:
-                            # We used a memory address laden source name representation when we adjusted the error
-                            #  message in execute_cmd, so we'll replace it with an actual name here
-                            # Again it matters how many arguments the error has
-                            if len(err.args) == 1:
-                                err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
-                                act_src_name = sources[src_lookup[err_src_rep]].name
-                                err.args = (err.args[0].replace(err_src_rep, act_src_name),)
-                            else:
-                                err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
-                                act_src_name = sources[src_lookup[err_src_rep]].name
-                                err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
+                    if err is not None:
+                        # We used a memory address laden source name representation when we adjusted the error
+                        #  message in execute_cmd, so we'll replace it with an actual name here
+                        # Again it matters how many arguments the error has
+                        if len(err.args) == 1 and ' is the associated source' in err.args[0]:
+                            err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
+                            act_src_name = sources[src_lookup[err_src_rep]].name
+                            err.args = (err.args[0].replace(err_src_rep, act_src_name),)
+                        elif ' is the associated source' in err.args[0]:
+                            err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
+                            act_src_name = sources[src_lookup[err_src_rep]].name
+                            err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
 
-                            # Rather than throwing an error straight away I append them all to a list for later.
-                            raised_errors.append(err)
-                    # Broad exceptions are very bad, don't use them! Unless you're me and just writing a catch all
-                    #  for any unknown errors that might happen when I'm dealing with an error
-                    except new_err:
-                        print('oh naaaah')
-                        raise new_err
+                        # Rather than throwing an error straight away I append them all to a list for later.
+                        raised_errors.append(err)
                     gen.update(1)
 
                 for cmd_ind, cmd in enumerate(all_run):
