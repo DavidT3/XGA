@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:57. Copyright (c) The Contributors
 
 import os
 import sys
@@ -47,6 +47,16 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
+
+    print(p_type)
+
+    print(p_path)
+
+    if type(p_path) == np.ndarray:
+        p_path = list(p_path)
+
+    if type(p_type) == np.ndarray:
+        p_type = list(p_type)
 
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
