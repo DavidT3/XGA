@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 14:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:38. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -52,7 +52,7 @@ def ciao_call(ciao_func):
         all_path = []  # Combined expected path list for all sources
         all_extras = []  # Combined extra information list for all sources
         source_rep = []  # For repr calls of each source object, needed for assigning products to sources
-        print(len(cmd_list))
+
         for ind in range(len(cmd_list)):
             source = sources[ind]
             if len(cmd_list[ind]) > 0:
@@ -68,6 +68,7 @@ def ciao_call(ciao_func):
             #  elegant solution but oh well).
             if to_execute:
                 to_run, expected_type, expected_path, extras = source.get_queue()
+                print(expected_type)
                 all_run += to_run
                 all_type.append(expected_type)
                 all_path += expected_path
