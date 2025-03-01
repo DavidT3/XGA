@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:13. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -56,11 +56,12 @@ def ciao_call(ciao_func):
                 src_lookup[repr(source)] = ind
                 # If there are commands to add to a source queue, then do it
                 source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)
-
+                print(p_type[ind])
             # If we do want to execute the commands this time round, we read them out for all sources
             # and add them to these master lists
             if to_execute:
                 to_run, expected_type, expected_path, extras = source.get_queue()
+                print(expected_type)
                 all_run += to_run
                 all_type += expected_type
                 all_path += expected_path
