@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 19:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 19:52. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -99,7 +99,7 @@ def ciao_call(ciao_func):
                     The callback function for errors that occur inside a task running in the pool.
                     :param err: An error that occurred inside a task.
                     """
-                    print('ERRORRRRR', err)
+                    print('ERRORRRRR', err, type(err))
 
                     nonlocal raised_errors
                     nonlocal gen
@@ -125,6 +125,7 @@ def ciao_call(ciao_func):
                     # Broad exceptions are very bad, don't use them! Unless you're me and just writing a catch all
                     #  for any unknown errors that might happen when I'm dealing with an error
                     except:
+                        print('oh naaaah')
                         raise err
                     gen.update(1)
 

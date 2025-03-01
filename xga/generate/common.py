@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 19:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 19:52. Copyright (c) The Contributors
 
 import os
 import sys
@@ -51,9 +51,11 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
     #  pre-existing image
     if p_type == "image":
+        print('into image town')
         # Maybe let the user decide not to raise errors detected in stderr
         prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                      extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
+        print('def. will have failed by now')
         if "psf_corr" in extra_info and extra_info["psf_corr"]:
             prod.psf_corrected = True
             prod.psf_bins = extra_info["psf_bins"]
