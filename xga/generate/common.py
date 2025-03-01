@@ -1,10 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:04. Copyright (c) The Contributors
 
 import os
 import sys
 from subprocess import Popen, PIPE
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
@@ -18,19 +18,21 @@ from ..utils import OUTPUT
 
 
 def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_info: dict,
-                src: str) -> Tuple[BaseProduct, str]:
+                src: str) -> Tuple[Union[BaseProduct, List[BaseProduct]], str]:
     """
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
     it was called from.
 
     :param str cmd: Command to be executed on the command line.
-    :param str p_type: The product type that will be produced by this command.
-    :param str p_path: The final output path of the product.
+    :param str p_type: The product type(s) that will be produced by this command - this can be a string, or a list
+        of strings in the case where an XGA interface-with-telescope-software function will produce multiple
+        different products.
+    :param str p_path: The final output path(s) of the product.
     :param dict extra_info: Any extra information required to define the product object.
     :param str src: A string representation of the source object that this product is associated with.
-    :return: The product object, and the string representation of the associated source object.
-    :rtype: Tuple[BaseProduct, str]
+    :return: The product object(s), and the string representation of the associated source object.
+    :rtype: Tuple[Union[BaseProduct, List[BaseProduct]], str]
     """
 
     # This chunk is a fix for problems with eSASS (eROSITA package) finding the correct libraries on Apple ARM based
@@ -46,18 +48,23 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
 
-    if isinstance(p_type, str):
-        # TODO I'll figure out what needs to happen here in the old case of definitely having a string passed
-        pass
-    elif isinstance(p_type, list):
-        pass
-
+    # Catch any mistakes that will be easy to make in developing new interface functions with
+    #  backend telescope software
+    if type(p_type) != type(p_path):
+        raise XGADeveloperError("Both the p_type and p_path arguments must be of the same type (both string or "
+                                "both list).")
+    elif isinstance(p_type, str):
+        p_type = [p_type]
+        p_path = [p_path]
+    # Check again for mistakes made during development, where there are multiple product paths, but they don't each
+    #  have a product type as is required
     if len(p_type) != len(p_path):
         raise XGADeveloperError("Product generation products that produce multiple products to be loaded into "
                                 "different product classes must have one product type entry for each.")
 
+    # We'll now be iterating through the product paths and their matching types
     prods = []
-    for p_ind, p_path in enumerate(p_path):
+    for p_ind, cur_p_path in enumerate(p_path):
         cur_p_type = p_type[p_ind]
 
         # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
@@ -65,7 +72,7 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         #  pre-existing image
         if cur_p_type == "image":
             # Maybe let the user decide not to raise errors detected in stderr
-            prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+            prod = Image(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                          extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
             if "psf_corr" in extra_info and extra_info["psf_corr"]:
                 prod.psf_corrected = True
@@ -74,14 +81,14 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
                 prod.psf_iterations = extra_info["psf_iter"]
                 prod.psf_algorithm = extra_info["psf_algo"]
         elif cur_p_type == "expmap":
-            prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+            prod = ExpMap(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                           extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
         elif cur_p_type == "ccf" and "NullSource" not in src:
             # ccf files may not be destined to spend life as product objects, but that doesn't mean
             # I can't take momentarily advantage of the error parsing I built into the product classes
-            prod = BaseProduct(p_path[0], "", "", out, err, cmd, telescope='xmm')
+            prod = BaseProduct(cur_p_path, "", "", out, err, cmd, telescope='xmm')
         elif (cur_p_type == "spectrum" or cur_p_type == "annular spectrum set components") and "NullSource" not in src:
-            prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
+            prod = Spectrum(cur_p_path, extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                             extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
                             extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
                             extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
@@ -91,15 +98,15 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
                            extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                            extra_info["instrument"], out, err, cmd, telescope=extra_info['telescope'])
         elif cur_p_type == 'light curve' and "NullSource" not in src:
-            prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+            prod = LightCurve(cur_p_path,  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                               extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
                               extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
                               extra_info["from_region"], telescope=extra_info['telescope'])
         elif cur_p_type == "cross arfs":
-            prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
+            prod = BaseProduct(cur_p_path, extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
                                telescope=extra_info["telescope"])
         elif cur_p_type == 'events' or cur_p_type == 'combined events':
-            prod = EventList(p_path[0], extra_info['obs_id'], extra_info['instrument'], out, err, cmd,
+            prod = EventList(cur_p_path, extra_info['obs_id'], extra_info['instrument'], out, err, cmd,
                              telescope=extra_info['telescope'], obs_ids=extra_info['obs_ids'])
         elif cur_p_type == 'ratemap':
             # The count-rate map files produced by Chandra software (for instance) cannot yet be read into XGA
@@ -113,7 +120,15 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
             prod.annulus_ident = extra_info["ann_ident"]
             prod.set_ident = extra_info["set_ident"]
 
-    return prod, src
+        # Put the current prod in the prods list
+        prods.append(prod)
+
+    # This should make it easier to keep this compatible for the telescopes without functions that generate multiple
+    #  different products at once without changing how their call decorators work right now
+    if len(prods) == 1:
+        prods = prods[0]
+
+    return prods, src
 
 
 def _interloper_esass_string(reg: EllipseSkyRegion) -> str:

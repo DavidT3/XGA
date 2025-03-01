@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:04. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -8,7 +8,8 @@ from warnings import warn
 
 import numpy as np
 from tqdm import tqdm
-from xga import CIAO_AVAIL, CIAO_VERSION, CALDB_AVAIL, CALDB_VERSION
+
+from xga import CIAO_AVAIL, CALDB_AVAIL
 from xga.exceptions import ProductGenerationError, CIAONotFoundError, CALDBNotFoundError
 from xga.generate.common import execute_cmd
 from xga.products import BaseProduct, AnnularSpectra
@@ -72,8 +73,6 @@ def ciao_call(ciao_func):
                 all_path += expected_path
                 all_extras += extras
                 source_rep += [repr(source)] * len(to_run)
-
-            print(all_type)
 
         # This is what the returned products get stored in before they're assigned to sources
         results = {s: [] for s in src_lookup}
