@@ -1,11 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:43. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
 from typing import Tuple
 from warnings import warn
 
+import numpy as np
 from tqdm import tqdm
 from xga import CIAO_AVAIL, CIAO_VERSION, CALDB_AVAIL, CALDB_VERSION
 from xga.exceptions import ProductGenerationError, CIAONotFoundError, CALDBNotFoundError
