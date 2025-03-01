@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:43. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -97,8 +97,13 @@ def ciao_call(ciao_func):
                         gen.update(1)
                         return
                     else:
+                        # This is a little bit of a bodge right now, there may come a time when execute_cmd will
+                        #  always return a list, but not yet
                         prod_obj, rel_src = results_in
-                        results[rel_src].append(prod_obj)
+                        if isinstance(prod_obj, list):
+                            results[rel_src] += prod_obj
+                        else:
+                            results[rel_src].append(prod_obj)
                         gen.update(1)
 
                 def err_callback(err):
