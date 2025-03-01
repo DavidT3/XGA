@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 14:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:22. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -12,11 +12,10 @@ from xga import OUTPUT, NUM_CORES, xga_conf
 from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources.base import NullSource
-from .run import ciao_call
 from ...sources import BaseSource
 
 
-@ciao_call
+# @ciao_call
 def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample], 
                          lo_en: Quantity = Quantity(0.5, "keV"),
                          hi_en: Quantity = Quantity(2.0, "keV"),
