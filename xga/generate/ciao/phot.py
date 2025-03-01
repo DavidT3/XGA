@@ -1,21 +1,17 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:32. Copyright (c) The Contributors
 
 import os
 from random import randint
-from shutil import rmtree
 from typing import Union
 
 import numpy as np
 from astropy.units import Quantity, deg
-from tqdm import tqdm
+
 from xga import OUTPUT, NUM_CORES, xga_conf
 from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
-from xga.imagetools import data_limits
-from xga.products import BaseProduct
 from xga.samples.base import BaseSample
 from xga.sources.base import NullSource
-
 from .run import ciao_call
 from ...sources import BaseSource
 
@@ -116,9 +112,15 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
             # Define output filenames.
-            image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_image.fits")
-            expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
-            ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_ratemap.fits")
+            # TODO unfortunately CIAO imposes that stupid '.img', '.expmap' etc. thing, so I'm modifying this
+            #  for now until we add a little snippet to the command that will move the files we want (not including
+            #  that FoV file) to the exact paths we want (i.e. the names we want).
+            # image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_image.fits")
+            # expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
+            # ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_ratemap.fits")
+            image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.img")
+            expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.expmap.fits")
+            ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_flux.img")
 
             try:
                 source.get_images(obs_id, inst, lo_en, hi_en, telescope='chandra')
