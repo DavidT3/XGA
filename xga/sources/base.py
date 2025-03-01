@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:44. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2494,10 +2494,8 @@ class BaseSource:
             extras = []
         elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
             processed_cmds = list(self.queue)
-
-            print(list(self.queue_type))
-
-            types = self.queue_type.flatten().tolist()
+            # types = self.queue_type.flatten().tolist()
+            types = list(self.queue_type)
             # The expected output paths can now be either a string or a list - hence the ternary logic
             paths = [[path] if isinstance(path, str) else list(path) for path in self.queue_path]
             extras = list(self.queue_extra_info)
