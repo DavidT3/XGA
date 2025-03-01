@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:39. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -59,13 +59,20 @@ def ciao_call(ciao_func):
 
             # If we do want to execute the commands this time round, we read them out for all sources
             # and add them to these master lists
+            # This all_type variable is a special case, because we need to account for single and multiple product
+            #  types being produced - but we also want to be able to use a set to derive which types are being
+            #  produced for the progress bar message (I think I probably could have come up with a more
+            #  elegant solution but oh well).
+            all_type = []
             if to_execute:
                 to_run, expected_type, expected_path, extras = source.get_queue()
                 all_run += to_run
-                all_type += expected_type
+                all_type.append(expected_type)
                 all_path += expected_path
                 all_extras += extras
                 source_rep += [repr(source)] * len(to_run)
+
+            print(all_type)
 
         # This is what the returned products get stored in before they're assigned to sources
         results = {s: [] for s in src_lookup}
@@ -75,7 +82,7 @@ def ciao_call(ciao_func):
         prod_type_str = ""
         if to_execute and len(all_run) > 0:
             # Will run the commands locally in a pool
-            prod_type_str = ", ".join(set(all_type))
+            prod_type_str = ", ".join(set(np.array(all_type).flatten().tolist()))
             with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str,
                       disable=disable) as gen, Pool(cores) as pool:
                 def callback(results_in: Tuple[BaseProduct, str]):
