@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 22:36. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -119,7 +119,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             # expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
             # ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_ratemap.fits")
             image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.img")
-            expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.expmap.fits")
+            expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.expmap")
             ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_flux.img")
 
             try:
