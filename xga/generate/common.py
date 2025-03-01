@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 21:54. Copyright (c) The Contributors
 
 import os
 import sys
@@ -9,15 +9,16 @@ from typing import Tuple, Union
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
-from xga.exceptions import XGADeveloperError
 
+from xga.exceptions import XGADeveloperError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList
 from ..products.lightcurve import LightCurve
 from ..sources import BaseSource
 from ..utils import OUTPUT
 
 
-def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str) -> Tuple[BaseProduct, str]:
+def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_info: dict,
+                src: str) -> Tuple[BaseProduct, str]:
     """
     This function is called for the local compute option, and runs the passed command in a Popen shell.
     It then creates an appropriate product object, and passes it back to the callback function of the Pool
@@ -45,9 +46,6 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
 
-    print(p_type)
-    print(p_path)
-
     if isinstance(p_type, str):
         # TODO I'll figure out what needs to happen here in the old case of definitely having a string passed
         pass
@@ -58,59 +56,62 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         raise XGADeveloperError("Product generation products that produce multiple products to be loaded into "
                                 "different product classes must have one product type entry for each.")
 
+    prods = []
     for p_ind, p_path in enumerate(p_path):
-        print(p_type[p_ind], p_path)
+        cur_p_type = p_type[p_ind]
 
-    print('')
+        # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
+        #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
+        #  pre-existing image
+        if cur_p_type == "image":
+            # Maybe let the user decide not to raise errors detected in stderr
+            prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                         extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
+            if "psf_corr" in extra_info and extra_info["psf_corr"]:
+                prod.psf_corrected = True
+                prod.psf_bins = extra_info["psf_bins"]
+                prod.psf_model = extra_info["psf_model"]
+                prod.psf_iterations = extra_info["psf_iter"]
+                prod.psf_algorithm = extra_info["psf_algo"]
+        elif cur_p_type == "expmap":
+            prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                          extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
+        elif cur_p_type == "ccf" and "NullSource" not in src:
+            # ccf files may not be destined to spend life as product objects, but that doesn't mean
+            # I can't take momentarily advantage of the error parsing I built into the product classes
+            prod = BaseProduct(p_path[0], "", "", out, err, cmd, telescope='xmm')
+        elif (cur_p_type == "spectrum" or cur_p_type == "annular spectrum set components") and "NullSource" not in src:
+            prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
+                            extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                            extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
+                            extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
+                            extra_info["b_rmf_path"], extra_info["b_arf_path"], telescope=extra_info["telescope"])
+        elif cur_p_type == "psf" and "NullSource" not in src:
+            prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
+                           extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
+                           extra_info["instrument"], out, err, cmd, telescope=extra_info['telescope'])
+        elif cur_p_type == 'light curve' and "NullSource" not in src:
+            prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+                              extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
+                              extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
+                              extra_info["from_region"], telescope=extra_info['telescope'])
+        elif cur_p_type == "cross arfs":
+            prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
+                               telescope=extra_info["telescope"])
+        elif cur_p_type == 'events' or cur_p_type == 'combined events':
+            prod = EventList(p_path[0], extra_info['obs_id'], extra_info['instrument'], out, err, cmd,
+                             telescope=extra_info['telescope'], obs_ids=extra_info['obs_ids'])
+        elif cur_p_type == 'ratemap':
+            # The count-rate map files produced by Chandra software (for instance) cannot yet be read into XGA
+            #  ratemap class instances - though we will include this at some point
+            continue
+        else:
+            raise NotImplementedError("Not implemented yet")
 
-    # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
-    #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
-    #  pre-existing image
-    if p_type == "image":
-        # Maybe let the user decide not to raise errors detected in stderr
-        prod = Image(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                     extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
-        if "psf_corr" in extra_info and extra_info["psf_corr"]:
-            prod.psf_corrected = True
-            prod.psf_bins = extra_info["psf_bins"]
-            prod.psf_model = extra_info["psf_model"]
-            prod.psf_iterations = extra_info["psf_iter"]
-            prod.psf_algorithm = extra_info["psf_algo"]
-    elif p_type == "expmap":
-        prod = ExpMap(p_path[0], extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                      extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
-    elif p_type == "ccf" and "NullSource" not in src:
-        # ccf files may not be destined to spend life as product objects, but that doesn't mean
-        # I can't take momentarily advantage of the error parsing I built into the product classes
-        prod = BaseProduct(p_path[0], "", "", out, err, cmd, telescope='xmm')
-    elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
-        prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
-                        extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
-                        extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
-                        extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
-                        extra_info["b_rmf_path"], extra_info["b_arf_path"], telescope=extra_info["telescope"])
-    elif p_type == "psf" and "NullSource" not in src:
-        prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
-                       extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
-                       extra_info["instrument"], out, err, cmd, telescope=extra_info['telescope'])
-    elif p_type == 'light curve' and "NullSource" not in src:
-        prod = LightCurve(p_path[0],  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                          extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
-                          extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
-                          extra_info["from_region"], telescope=extra_info['telescope'])
-    elif p_type == "cross arfs":
-        prod = BaseProduct(p_path[0], extra_info['obs_id'], extra_info['inst'], out, err, cmd, extra_info,
-                           telescope=extra_info["telescope"])
-    elif p_type == 'events' or p_type == 'combined events':
-        prod = EventList(p_path[0], extra_info['obs_id'], extra_info['instrument'], out, err, cmd, 
-                         telescope=extra_info['telescope'], obs_ids=extra_info['obs_ids'])
-    else:
-        raise NotImplementedError("Not implemented yet")
-
-    # An extra step is required for annular spectrum set components
-    if p_type == "annular spectrum set components":
-        prod.annulus_ident = extra_info["ann_ident"]
-        prod.set_ident = extra_info["set_ident"]
+        # An extra step is required for annular spectrum set components
+        if cur_p_type == "annular spectrum set components":
+            prod.annulus_ident = extra_info["ann_ident"]
+            prod.set_ident = extra_info["set_ident"]
 
     return prod, src
 
