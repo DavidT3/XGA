@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:22. Copyright (c) The Contributors
 
 import os
 import sys
@@ -9,6 +9,7 @@ from typing import Tuple, Union
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
+from xga.exceptions import XGADeveloperError
 
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList
 from ..products.lightcurve import LightCurve
@@ -46,6 +47,21 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
 
     print(p_type)
     print(p_path)
+
+    if isinstance(p_type, str):
+        # TODO I'll figure out what needs to happen here in the old case of definitely having a string passed
+        pass
+    elif isinstance(p_type, list):
+        pass
+
+    if len(p_type) != len(p_path):
+        raise XGADeveloperError("Product generation products that produce multiple products to be loaded into "
+                                "different product classes must have one product type entry for each.")
+
+    for p_ind, p_path in enumerate(p_path):
+        print(p_type[p_ind], p_path)
+
+    print('')
 
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a

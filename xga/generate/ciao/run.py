@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:22. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -126,6 +126,7 @@ def ciao_call(ciao_func):
                     # Just defined like this to save on line length for apply_async call.
                     exp_type = all_type[cmd_ind]
                     exp_path = all_path[cmd_ind]
+                    print(exp_path)
                     ext = all_extras[cmd_ind]
                     src = source_rep[cmd_ind]
                     pool.apply_async(execute_cmd, args=(str(cmd), str(exp_type), exp_path, ext, src),

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:22. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -170,7 +170,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
         # This contains any other information that will be needed to instantiate the class
         # once the CIAO cmd has run.
         sources_extras.append(np.array(extra_info))
-        # If there are multiple output types then the numpy full call will need to specify the two dimensional shape
+        # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
         sources_types.append(np.full((len(cmds), 3), ["image", "expmap", "ratemap"]))
 
     # I only return num_cores here so it has a reason to be passed to this function, really
