@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 16:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 16:57. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5062,9 +5062,9 @@ class BaseSource:
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
                     hi_en: Quantity = None, allow_negative: bool = False,
-                    telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+                    telescope: Union[str, List[str]] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
-        This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
+        This method generates a list of ObsID-Instrument pairs, ordered by the signal-to-noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
 
         :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
@@ -5075,15 +5075,29 @@ class BaseSource:
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-        :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
-            associated to the source.
+        :param str/List[str] telescope: The telescopes to return SNR rankings for - either a single string telescope
+            name, a list of strings, or None (the default). Passing None will include all telescopes associated
+            with the source.
         :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with
             the ObsID, Instrument combinations in order of ascending signal-to-noise, then a dictionary containing an
             array containing the order SNR ratios.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
+        # Nice and convenient, if the user doesn't pass a specific telescope then we just use all of them
         if telescope is None:
             telescope = self.telescopes
+        # Catches the possibility of a single string name being passed and turns into a list with one element, as
+        #  we wish to be able to iterate through it
+        elif isinstance(telescope, str):
+            telescope = [telescope]
+
+        # Checking if the user passed any energy limits of their own - the get_snr method we call would actually
+        #  have done this itself, but it is nice to have the actual values in here for an informative error
+        #  message
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
 
         obs_inst_dict = {}
         snrs_dict = {}
