@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 12:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 11:58. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -120,7 +120,7 @@ def sas_call(sas_func):
                             err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0].replace(err_src_rep, act_src_name),)
-                        else:
+                        elif ' is the associated source' in err.args[0]:
                             err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
