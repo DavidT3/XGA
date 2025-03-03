@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 11:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:03. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -112,7 +112,6 @@ def sas_call(sas_func):
                     nonlocal src_lookup
                     nonlocal sources
 
-
                     if err is not None:
                         # We used a memory address laden source name representation when we adjusted the error
                         #  message in execute_cmd, so we'll replace it with an actual name here
@@ -137,7 +136,10 @@ def sas_call(sas_func):
                     exp_path = all_path[cmd_ind]
                     ext = all_extras[cmd_ind]
                     src = source_rep[cmd_ind]
-                    pool.apply_async(execute_cmd, args=(str(cmd), str(exp_type), exp_path, ext, src),
+
+                    print(exp_type, exp_path)
+
+                    pool.apply_async(execute_cmd, args=(str(cmd), exp_type, exp_path, ext, src),
                                      error_callback=err_callback, callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
