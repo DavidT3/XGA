@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:50. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -12,10 +12,10 @@ from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
+from ..samples import BaseSample
 from ..samples import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
-from ..samples import BaseSample
-from ..xspec.fit import single_temp_apec
+
 
 def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
     """
@@ -39,6 +39,7 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
 
 def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, min_counts: int,
                   min_sn: float, over_sample: float, num_cores: int, psf_bins: int, stacked_spectra: bool):
+    from ..xspec.fit import single_temp_apec
 
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
     global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
