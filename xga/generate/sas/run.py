@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 11:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 11:59. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -112,11 +112,12 @@ def sas_call(sas_func):
                     nonlocal src_lookup
                     nonlocal sources
 
+
                     if err is not None:
                         # We used a memory address laden source name representation when we adjusted the error
                         #  message in execute_cmd, so we'll replace it with an actual name here
                         # Again it matters how many arguments the error has
-                        if len(err.args) == 1:
+                        if len(err.args) == 1 and ' is the associated source' in err.args[0]:
                             err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0].replace(err_src_rep, act_src_name),)
