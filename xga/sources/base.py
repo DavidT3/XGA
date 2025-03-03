@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 16:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 17:12. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -294,7 +294,8 @@ class BaseSource:
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
         #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
         self._obs = {t: {o: obs[t][o] if COMBINED_INSTS[t] else [i for i in self._products[t][o]
-                                                                 if len(self._products[t][o][i]) != 0]
+                                                                 if len(self._products[t][o][i]) != 0 and
+                                                                 i != 'combined']
                          for o in self._products[t]} for t in self._products}
 
         # Set the blacklisted observation attribute with our dictionary - if all has gone well then this will be a
@@ -4129,7 +4130,7 @@ class BaseSource:
                                             outer_radius * self._back_inn_factor, obs_id=obs_id,
                                             central_coord=central_coord)
 
-        # We use the ratemap's built in signal to noise calculation method
+        # We use the ratemap's built in signal-to-noise calculation method
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
