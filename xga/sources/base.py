@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:35. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1023,15 +1023,22 @@ class BaseSource:
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
                 #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
-                if 'attitude_file' in rel_sec and 'attitude' not in obs_dict[tel][obs_id]['combined']:
+                if 'attitude_file' in rel_sec and ('combined' not in obs_dict[tel][obs_id] or
+                                                   'attitude' not in obs_dict[tel][obs_id]['combined']):
                     att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, 'combined', '',
                                            '', '', telescope=tel)
+                    # Makes sure there is a combined entry if there wasn't already
+                    obs_dict[tel][obs_id].setdefault('combined', {})
+                    obs_dict[tel][obs_id]['combined']['attitude'] = att_prod
                 # Here we deal with a hypothetical case where different instruments have different attitude files
                 #  (though this isn't something we've actually come across yet)
                 elif '{i}_attitude_file'.format(i=inst) in rel_sec:
+                    obs_dict[tel][obs_id].setdefault(inst, {})
+
                     temp_pth = rel_sec['{i}_attitude_file'.format(i=inst)]
                     att_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '',
                                            '', '', telescope=tel)
+                    obs_dict[tel][obs_id][inst]['attitude'] = att_prod
                 else:
                     att_prod = None
 
@@ -1053,8 +1060,9 @@ class BaseSource:
                     if not evt_list.usable:
                         continue
 
-                    # Start off with the events list going in
-                    obs_dict[tel][obs_id][inst] = {"events": evt_list}
+                    # Start off with the events list going in - make sure there is an inst entry first
+                    obs_dict[tel][obs_id].setdefault(inst, {})
+                    obs_dict[tel][obs_id][inst]["events"] = evt_list
 
                     if load_products:
                         # Dictionary updated with derived product names
@@ -1064,9 +1072,6 @@ class BaseSource:
                     # Now we'll do a couple of housekeeping files
                     if badpix_prod is not None:
                         obs_dict[tel][obs_id][inst]['badpix'] = badpix_prod
-
-                    if att_prod is not None:
-                        obs_dict[tel][obs_id][inst]['attitude'] = att_prod
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
