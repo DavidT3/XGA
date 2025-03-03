@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:29. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1023,9 +1023,15 @@ class BaseSource:
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
                 #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
-                if 'attitude_file' in rel_sec:
-                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, inst, '', '', '',
-                                           telescope=tel)
+                if 'attitude_file' in rel_sec and 'attitude' not in obs_dict[tel][obs_id]['combined']:
+                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, 'combined', '',
+                                           '', '', telescope=tel)
+                # Here we deal with a hypothetical case where different instruments have different attitude files
+                #  (though this isn't something we've actually come across yet)
+                elif '{i}_attitude_file'.format(i=inst) in rel_sec:
+                    temp_pth = rel_sec['{i}_attitude_file'.format(i=inst)]
+                    att_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '',
+                                           '', '', telescope=tel)
                 else:
                     att_prod = None
 
@@ -3688,7 +3694,7 @@ class BaseSource:
         :param str obs_id: The ObsID to fetch the attitude file for.
         :param str telescope: The telescope to fetch the attitude file for.
         :param str inst: The instrument to fetch an attitude file for (though most missions do not have
-            seperate attitude files for different instruments).
+            separate attitude files for different instruments).
         :return: The path to the attitude file.
         :rtype: str
         """
