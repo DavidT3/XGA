@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 16:48. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4115,7 +4115,7 @@ class BaseSource:
                                    telescope=telescope)
         else:
             raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
-                             " pass both obs_id and inst.".format(s=self.name))
+                             " pass both 'obs_id' and 'inst'.".format(s=self.name))
 
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
@@ -4182,8 +4182,8 @@ class BaseSource:
             rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                                    telescope=telescope)
         else:
-            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
-                             " pass both obs_id and inst.".format(s=self.name))
+            raise ValueError("If you wish to use a specific ratemap for {s}'s count calculation, please "
+                             " pass both 'obs_id' and 'inst'.".format(s=self.name))
 
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
@@ -5060,8 +5060,9 @@ class BaseSource:
 
         return reject_dict
 
-    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
-                    allow_negative: bool = False, telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
+                    hi_en: Quantity = None, allow_negative: bool = False,
+                    telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
@@ -5076,8 +5077,9 @@ class BaseSource:
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
         :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
             associated to the source.
-        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending signal-to-noise, then a dictionary containing an array containing the order SNR ratios.
+        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with
+            the ObsID, Instrument combinations in order of ascending signal-to-noise, then a dictionary containing an
+            array containing the order SNR ratios.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
         if telescope is None:
@@ -5093,10 +5095,18 @@ class BaseSource:
             # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
             for obs_id in self.instruments[tel]:
                 for inst in self.instruments[tel][obs_id]:
-                    # Use our handy get_snr method to calculate the SNRs we want, then add that and the
-                    #  ObsID-inst combo into their respective lists
-                    snrs.append(
-                        self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
+                    try:
+                        # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                        #  ObsID-inst combo into their respective lists
+                        cur_snr = self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst,
+                                               allow_negative)
+                    except NoProductAvailableError:
+                        # Catch a no product error from a get ratemaps call and make it a little more specific
+                        raise NoProductAvailableError("No {t}-{o}-{i} {l}-{u}keV ratemap is available for "
+                                                      "signal-to-noise calculation.".format(t=tel, o=obs_id,
+                                                                                            i=inst, l=lo_en.value,
+                                                                                            u=hi_en.value))
+                    snrs.append(cur_snr)
                     obs_inst.append([obs_id, inst])
 
             # Make our storage lists into arrays, easier to work with that way
