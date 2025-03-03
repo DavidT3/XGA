@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:11. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -21,8 +21,7 @@ def sas_call(sas_func):
     """
     This is used as a decorator for functions that produce SAS command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
-    executing the SAS command will change. This supports both simple multi-threading and submission
-    with the Sun Grid Engine.
+    executing the SAS command will change. This supports simple multi-threading.
     :return:
     """
     # This is a horrible bodge to make Pycharm not remove SAS_AVAIL and SAS_VERSION from import when it cleans
@@ -136,8 +135,6 @@ def sas_call(sas_func):
                     exp_path = all_path[cmd_ind]
                     ext = all_extras[cmd_ind]
                     src = source_rep[cmd_ind]
-
-                    print(exp_type, exp_path)
 
                     pool.apply_async(execute_cmd, args=(str(cmd), exp_type, exp_path, ext, src),
                                      error_callback=err_callback, callback=callback)

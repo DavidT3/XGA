@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 16:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:11. Copyright (c) The Contributors
 
 import os
 import sys
@@ -54,6 +54,13 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
 
     if type(p_type) == np.ndarray:
         p_type = list(p_type)
+
+    # This is becoming a bit of a hodge podge of fixes to avoid making absolutely sure the inputs are right,
+    #  but it should work fine and its likely we rewrite the command management system in sources which
+    #  is causing some of these woes (at some point) so I don't feel too bad about it
+    # This is because the way the XMM call is set up, the passed paths are also in a list of one
+    if isinstance(p_path, list) and len(p_path) == 1:
+        p_path = p_path[0]
 
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
