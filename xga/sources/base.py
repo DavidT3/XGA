@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 17:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 17:32. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5205,7 +5205,7 @@ class BaseSource:
 
             # Make our storage lists into arrays, easier to work with that way
             obs_inst = np.array(obs_inst)
-            cnts = np.array(cnts)
+            cnts = Quantity(cnts)
 
             # We want to order the output by count, with the lowest being first and the highest being last, so we
             #  use a numpy function to output the index order needed to re-order our two arrays
