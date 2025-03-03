@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 11:02. Copyright (c) The Contributors
 
 import json
 import os
@@ -830,12 +830,12 @@ if 'xmm' in USABLE and USABLE['xmm']:
              "functions in xga.sas will not work.", stacklevel=2)
         SAS_AVAIL = False
 
-    # Here we read in files that list the errors and warnings in SAS
-    errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
-    warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
-    # Just the names of the errors in two handy constants
-    SASERROR_LIST = errors["ErrName"].values
-    SASWARNING_LIST = warnings["WarnName"].values
+# Here we read in files that list the errors and warnings in SAS
+errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
+warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
+# Just the names of the errors in two handy constants
+SASERROR_LIST = errors["ErrName"].values
+SASWARNING_LIST = warnings["WarnName"].values
 # -----------
 
 # --- eROSITA ---
