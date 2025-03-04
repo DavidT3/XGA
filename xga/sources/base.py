@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 17:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/03/2025, 09:08. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5197,7 +5197,7 @@ class BaseSource:
                         cur_cnt = self.get_counts(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst)
                     except NoProductAvailableError:
                         # Catch a no product error from a get ratemaps call and make it a little more specific
-                        raise NoProductAvailableError("No {t}-{o}-{i} {l}-{u}keV ratemap is available for count "
+                        raise NoProductAvailableError("No {t}-{o}-{i} {l}-{u}keV image is available for count "
                                                       "calculation.".format(t=tel, o=obs_id, i=inst,
                                                                             l=lo_en.value, u=hi_en.value)) from None
                     cnts.append(cur_cnt)
