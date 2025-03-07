@@ -206,6 +206,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"mv * {dest_dir}; cd ..;"
             )
             cmds.append(specextract_cmd)
+
+            print(specextract_cmd)
+            print()
             
             final_paths.append(spec_file)
             # This is the products final resting place, if it exists at the end of this command.
@@ -217,7 +220,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                                "b_arf_path": bkg_arf_file,
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
                                "min_sn": min_sn, "over_sample": over_sample, "central_coord": source.default_coord,
-                               "from_region": False,
+                               "from_region": True,
                                "telescope": 'chandra'})
 
             
