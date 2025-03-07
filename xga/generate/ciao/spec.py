@@ -226,7 +226,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             
             # This is the products final resting place, if it exists at the end of this command.
-            final_paths.append([spec_file, arf_file, rmf_file, bkg_spec_file, bkg_arf_file, bkg_rmf_file])
+            final_paths.append(spec_file)
             extra_info.append({
                 "obs_id": obs_id,
                 "instrument": inst,
