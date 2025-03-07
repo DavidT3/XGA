@@ -166,9 +166,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             print(spec_ext_reg_path)
             print(spec_bkg_reg_path)
 
-            ext_inter_reg = src.regions_within_radii(inner_radius,
-                                                     outer_radius,
-                                                     "chandra", source.default_coord)
+            ext_inter_reg = source.regions_within_radii(inner_radius,
+                                                        outer_radius,
+                                                        "chandra", source.default_coord)
 
             # Write the extraction region file (annulus between inner_r and outer_r)
             with open(spec_ext_reg_path, 'w') as ext_reg:
@@ -188,9 +188,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     # Write the exclusion region in ellipse format
                     ext_reg.write(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
 
-            bkg_inter_reg = src.regions_within_radii(outer_radius * source.background_radius_factors[0],
-                                                     outer_radius * source.background_radius_factors[1],
-                                                     "chandra", source.default_coord)
+            bkg_inter_reg = srouce.regions_within_radii(outer_radius * source.background_radius_factors[0],
+                                                        outer_radius * source.background_radius_factors[1],
+                                                        "chandra", source.default_coord)
             # Write the background region file (annulus between outer_r and bkg_r)
             with open(spec_bkg_reg_path, 'w') as bkg_reg:
                 bkg_reg.write("# Region file format: DS9 version 4.1\n")
