@@ -205,6 +205,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"weight=\"yes\" weight_rmf=\"no\" verbose=4 clobber=True parallel=no; "
                 f"mv * {dest_dir}; cd ..;"
             )
+            print(specextract_cmd)
             cmds.append(specextract_cmd)
             
             final_paths.append(spec_file)
