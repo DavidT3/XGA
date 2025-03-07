@@ -214,8 +214,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Build specextract command - making sure to set parallel to no, seeing as we're doing our
             #  own parallelization
             specextract_cmd = (
-                f"cd {temp_dir}; specextract infile=\"{evt_list.path}[@{spec_ext_reg_path}]\" "
-                f"outroot={obs_id}_{inst} bkgfile=\"{evt_list.path}[@{spec_bkg_reg_path}]\" "
+                f"cd {temp_dir}; specextract infile=\"{evt_file.path}[@{spec_ext_reg_path}]\" "
+                f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[@{spec_bkg_reg_path}]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype=NUM_CTS binspec={min_counts} "
                 f"weight=\"yes\" weight_rmf=\"no\" verbose=4 clobber=True parallel=no; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
