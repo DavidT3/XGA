@@ -9,6 +9,7 @@ from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity
+from astropy.coordinates import SkyCoord
 from tqdm import tqdm
 
 from xga import OUTPUT, NUM_CORES
