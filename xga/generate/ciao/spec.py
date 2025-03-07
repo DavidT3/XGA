@@ -85,12 +85,12 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         extra_info = []
         
         # Skip sources that do not have Chandra data.
-        if 'chandra' not in source.telescopes:
-            sources_cmds.append(np.array(cmds))
-            sources_paths.append(np.array(final_paths))
-            sources_extras.append(np.array(extra_info))
-            sources_types.append(np.full(len(cmds), fill_value="spectrum"))
-            continue
+        # if 'chandra' not in source.telescopes:
+        #     sources_cmds.append(np.array(cmds))
+        #     sources_paths.append(np.array(final_paths))
+        #     sources_extras.append(np.array(extra_info))
+        #     sources_types.append(np.full(len(cmds), fill_value="spectrum"))
+        #     continue
         
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
