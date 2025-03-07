@@ -217,7 +217,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                                "b_arf_path": bkg_arf_file,
                                "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
                                "min_sn": min_sn, "over_sample": over_sample, "central_coord": source.default_coord,
-                               "from_region": True,
+                               "from_region": False,
                                "telescope": 'chandra'})
 
             
