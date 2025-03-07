@@ -227,7 +227,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             # This is the products final resting place, if it exists at the end of this command.
             final_paths.append([spec_file])
-
             extra_info.append({
                 "obs_id": obs_id,
                 "instrument": inst,
@@ -250,7 +249,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         # once the CIAO cmd has run.
         sources_extras.append(np.array(extra_info))
         # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
-        sources_types.append(np.full((len(cmds), 1), ["spectrum"]))
+        sources_types.append(["spectrum"])
         
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
