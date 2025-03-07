@@ -256,8 +256,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         # once the CIAO cmd has run.
         sources_extras.append(np.array(extra_info))
         # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
-        sources_types.append(np.full((len(cmds), 6), ["spectrum"]))
+        sources_types.append(np.full((len(cmds), 1), ["spectrum"]))
         
-        # I only return num_cores here so it has a reason to be passed to this function, really
-        # it could just be picked up in the decorator.
-        return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+    # I only return num_cores here so it has a reason to be passed to this function, really
+    # it could just be picked up in the decorator.
+    return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
