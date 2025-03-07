@@ -120,11 +120,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
-            print('dest_dir:', dest_dir)
-              
-            print('badpix:', badpix_prod)
-            print()
-            
+
             # Just for group spec at this point, but need to add ungrouped later
             spec_file = os.path.join(dest_dir, f"{obs_id}_{inst}_grp.pi")
             arf_file = os.path.join(dest_dir, f"{obs_id}_{inst}.arf")
@@ -132,14 +128,11 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             bkg_spec_file = os.path.join(dest_dir, f"{obs_id}_{inst}_bkg.pi")
             bkg_arf_file = os.path.join(dest_dir, f"{obs_id}_{inst}_bkg.arf")
             bkg_rmf_file = os.path.join(dest_dir, f"{obs_id}_{inst}_bkg.rmf")
-            print('spec_path:', spec_file)
             
             # Temporary directory for fluximage.
             temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
             os.makedirs(temp_dir, exist_ok=True)
-            
-            print('temp_dir:',temp_dir)
-            
+                        
             coord = SkyCoord(ra=source.default_coord[0], dec=source.default_coord[1], frame='icrs')
 
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
@@ -149,22 +142,14 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             outer_r_arc = outer_radius.to(u.arcmin).value
             bkg_inner_r_arc = outer_r_arc * source.background_radius_factors[0]
             bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
-            print(source.background_radius_factors[0], source.background_radius_factors[1])
-            print(inner_r_arc, outer_r_arc, bkg_inner_r_arc, bkg_outer_r_arc)
             
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region")
             os.makedirs(temp_region_dir, exist_ok=True)
-            
-            print()
-            print(temp_region_dir)
-
+  
             # Define file paths
             spec_ext_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_ext_temp.reg")
             spec_bkg_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_bkg_temp.reg")
-            
-            print(spec_ext_reg_path)
-            print(spec_bkg_reg_path)
 
             ext_inter_reg = source.regions_within_radii(inner_radius,
                                                         outer_radius,
@@ -221,9 +206,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
             cmds.append(specextract_cmd)
-            print()
-            print('cmd:', cmds)
-            
             
             # This is the products final resting place, if it exists at the end of this command.
             final_paths.append([spec_file])
@@ -249,7 +231,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         # once the CIAO cmd has run.
         sources_extras.append(np.array(extra_info))
         # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
-        sources_types.append(["spectrum"])
+        sources_types.append(np.full(len(cmds), "spectrum").tolist())
         
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
