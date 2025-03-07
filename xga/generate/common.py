@@ -142,6 +142,16 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     if len(prods) == 1:
         prods = prods[0]
 
+    print()
+    print('----------------------------------------------------')
+    print('out:')
+    print(out)
+    print()
+    print('err:')
+    print(err)
+    print('----------------------------------------------------')
+    print()
+
     return prods, src
 
 
