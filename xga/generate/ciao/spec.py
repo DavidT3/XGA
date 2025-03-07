@@ -208,30 +208,23 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             cmds.append(specextract_cmd)
             
             # This is the products final resting place, if it exists at the end of this command.
-            final_paths.append([spec_file])
-            extra_info.append({
-                "obs_id": obs_id,
-                "instrument": inst,
-                "bin_size": 4,
-                "telescope": "chandra",
-                "rmf_path": rmf_file,
-                "arf_path": arf_file, 
-                "b_spec_path": bkg_spec_file,
-                "b_rmf_path": bkg_rmf_file,
-                "b_arf_path": bkg_arf_file,
-                "central_coord": source.default_coord, 
-                "inner_radius": inner_radius, 
-                "outer_radius": outer_radius,
-            })
+            extra_info.append({"inner_radius": inner_radius, "outer_radius": outer_radius,
+                               "rmf_path": rmf_file,
+                               "arf_path": arf_file,
+                               "b_spec_path": bkg_spec_file,
+                               "b_rmf_path": bkg_rmf_file,
+                               "b_arf_path": bkg_arf_file,
+                               "obs_id": obs_id, "instrument": inst, "grouped": group_spec, "min_counts": min_counts,
+                               "min_sn": min_sn, "over_sample": over_sample, "central_coord": source.default_coord,
+                               "telescope": 'chandra'})
 
             
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
-        # once the CIAO cmd has run.
+        #  once the SAS cmd has run
         sources_extras.append(np.array(extra_info))
-        # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
-        sources_types.append(np.full(len(cmds), "spectrum").tolist())
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
         
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
