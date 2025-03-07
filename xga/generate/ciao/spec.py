@@ -203,7 +203,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[@{spec_bkg_reg_path}]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype=NUM_CTS binspec={min_counts} "
                 f"weight=\"yes\" weight_rmf=\"no\" verbose=4 clobber=True parallel=no; "
-                f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
+                f"mv * {dest_dir}; cd ..;"
             )
             cmds.append(specextract_cmd)
             
