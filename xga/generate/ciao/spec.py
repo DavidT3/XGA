@@ -233,7 +233,22 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 "bin_size": 4,
                 "telescope": "chandra"
             })
-            
+
+            extra_info.append({
+                "obs_id": obs_id,
+                "instrument": inst,
+                "bin_size": 4,
+                "telescope": "chandra",
+                "rmf_path": rmf_file,
+                "arf_path": arf_file, 
+                "b_spec_path": bkg_spec_file,
+                "b_rmf_path": bkg_rmf_file,
+                "b_arf_path": bkg_arf_file,
+                "central_coord": source.default_coord, 
+                "inner_radius": inner_radius, 
+                "outer_radius": outer_radius,
+            })
+
             
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -241,8 +256,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         # once the CIAO cmd has run.
         sources_extras.append(np.array(extra_info))
         # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
-        sources_types.append(np.full((len(cmds), 6), ["spec", "spec_arf", "spec_rmf", 
-                                                      "bkg_spec", "bkg_spec_arf", "bkg_spec_rmf"]))
+        sources_types.append(np.full((len(cmds), 6), ["spectrum"]))
         
         # I only return num_cores here so it has a reason to be passed to this function, really
         # it could just be picked up in the decorator.

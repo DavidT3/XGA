@@ -175,7 +175,6 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
         # If there are multiple output types then the numpy full call will need to specify the two-dimensional shape
         sources_types.append(np.full((len(cmds), 3), ["image", "expmap", "ratemap"]))
 
-        print('test', sources_types)
 
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
