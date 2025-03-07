@@ -226,13 +226,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             
             # This is the products final resting place, if it exists at the end of this command.
-            final_paths.append(spec_file)
-            extra_info.append({
-                "obs_id": obs_id,
-                "instrument": inst,
-                "bin_size": 4,
-                "telescope": "chandra"
-            })
+            final_paths.append([spec_file])
 
             extra_info.append({
                 "obs_id": obs_id,
