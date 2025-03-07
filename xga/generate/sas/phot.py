@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 15:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/03/2025, 10:08. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -9,13 +9,13 @@ from typing import Union
 import numpy as np
 from astropy.units import Quantity, deg
 from tqdm import tqdm
+
 from xga import OUTPUT, NUM_CORES
 from xga.exceptions import SASInputInvalid, NoProductAvailableError, TelescopeNotAssociatedError
 from xga.imagetools import data_limits
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
-
 from .misc import cifbuild
 from .run import sas_call
 
@@ -54,8 +54,8 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         sources = [sources]
 
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
-    if lo_en > hi_en:
-        raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
+    if lo_en >= hi_en:
+        raise ValueError("The 'lo_en' argument cannot be greater than or equal to 'hi_en'.")
     else:
         # Converts the energies to channels for EPIC detectors, assuming one channel per eV
         lo_chan = int(lo_en.to('eV').value)
