@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/03/2025, 09:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 14:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4256,7 +4256,8 @@ class BaseSource:
             return edge_coords
 
         if deg_central_coord.unit != deg:
-            raise UnitConversionError("The central coordinate must be in degrees for this function.")
+            raise UnitConversionError("The central coordinate ('deg_central_coord') must be in degrees for "
+                                      "this function.")
 
         if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
@@ -4270,7 +4271,8 @@ class BaseSource:
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
         if inner_radius >= outer_radius:
-            raise ValueError("inner_radius cannot be larger than or equal to outer_radius".format(s=self.name))
+            raise ValueError("The 'inner_radius' argument cannot be larger than or equal to "
+                             "'outer_radius'.".format(s=self.name))
 
         # I think my last attempt at this type of function was made really slow by something to with the regions
         #  module, so I'm going to try and move away from that here

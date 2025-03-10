@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 15:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 14:30. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -108,20 +108,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             # Now we've established that we have retrieved a single bad pixel product, we extract the path from it
             badpix_file = badpix_prod[0].path
 
-            # Setting up the top level path for the eventual destination of the products to be generated here
-            dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
-
-            # Define output filenames.
-            # TODO unfortunately CIAO imposes that stupid '.img', '.expmap' etc. thing, so I'm modifying this
-            #  for now until we add a little snippet to the command that will move the files we want (not including
-            #  that FoV file) to the exact paths we want (i.e. the names we want).
-            # image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_image.fits")
-            # expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_expmap.fits")
-            # ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_ratemap.fits")
-            image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.img")
-            expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.expmap")
-            ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_flux.img")
-
+            # Do we actually need to run this generation? If matching products already exist then we won't bother
             try:
                 source.get_images(obs_id, inst, lo_en, hi_en, telescope='chandra')
                 source.get_expmaps(obs_id, inst, lo_en, hi_en, telescope='chandra')
@@ -132,6 +119,23 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             except NoProductAvailableError:
                 pass
 
+            # Setting up the top level path for the eventual destination of the products to be generated here
+            dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
+
+            # Temporary directory for fluximage - now that we know the products don't already exist we can start
+            #  setting everything up.
+            temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
+            os.makedirs(temp_dir, exist_ok=True)
+
+            # Define files-names output by fluximage, and then the ones we REALLY want.
+            out_image_file = os.path.join(temp_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.img")
+            out_expmap_file = os.path.join(temp_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_thresh.expmap")
+            out_ratemap_file = os.path.join(temp_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}_flux.img")
+            # Now the renamed ones
+            final_image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVimg.fits")
+            final_expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVexpmap.fits")
+            final_ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVratemap.fits")
+
             # Skip generation if files already exist.
             # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
             #     continue
@@ -141,22 +145,19 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             #     rmtree(dest_dir)
             # os.makedirs(dest_dir)
 
-            # Temporary directory for fluximage.
-            temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
-            os.makedirs(temp_dir, exist_ok=True)
-
             # Build fluximage command - making sure to set parallel to no, seeing as we're doing our
             #  own parallelization
             flux_cmd = (
                 f"cd {temp_dir}; fluximage infile={evt_file.path} outroot={obs_id}_{inst} "
                 f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={att_file} "
                 f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4 parallel=no; "
-                f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
+                f"mv {out_image_file} {final_image_file}; mv {out_expmap_file} {final_expmap_file}; "
+                f"mv {out_ratemap_file} {final_ratemap_file}; cd ..; rm -r {temp_dir}"
             )
             cmds.append(flux_cmd)
 
             # This is the products final resting place, if it exists at the end of this command.
-            final_paths.append([image_file, expmap_file, ratemap_file])
+            final_paths.append([final_image_file, final_expmap_file, final_ratemap_file])
             extra_info.append({
                 "obs_id": obs_id,
                 "instrument": inst,
