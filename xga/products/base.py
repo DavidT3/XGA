@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 11:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 17:11. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -258,7 +258,7 @@ class BaseProduct:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
 
-        elif self.telescope == 'erosita':
+        elif self.telescope == 'erosita' or self.telescope == 'erass':
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
             #  than stderr
             # err_str being "" is ideal, hopefully means that nothing has gone wrong
