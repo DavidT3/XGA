@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 15:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 16:25. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -293,7 +293,7 @@ class Spectrum(BaseProduct):
                 if src_spec:
                     # Make this variable so the FileNotFoundError can work
                     rel_path = self.path
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._spec_counts = all_dat['COUNTS']
                     self._spec_channels = all_dat['CHANNEL']
                     # If the spectrum has not been grouped it may not have this column
@@ -310,7 +310,7 @@ class Spectrum(BaseProduct):
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
                     rel_path = self.background
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._back_counts = all_dat['COUNTS']
                     self._back_channels = all_dat['CHANNEL']
 
