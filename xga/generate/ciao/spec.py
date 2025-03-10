@@ -1,22 +1,19 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by Ray Wang (wangru46@msu.edu) 02/19/2025, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 15:22. Copyright (c) The Contributors
 
 import os
-from copy import copy
-from itertools import permutations
 from random import randint
-from typing import Union, List
+from typing import Union
 
-import numpy as np
-from astropy.units import Quantity
-from astropy.coordinates import SkyCoord
 import astropy.units as u
-from tqdm import tqdm
+import numpy as np
+from astropy.coordinates import SkyCoord
+from astropy.units import Quantity
 
 from xga import OUTPUT, NUM_CORES
-from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
+from xga.exceptions import TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
-from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
+from xga.sources import BaseSource
 from xga.sources.base import NullSource
 from .run import ciao_call
 
@@ -202,7 +199,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype=NUM_CTS binspec={min_counts} "
-                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile=none; "
+                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile=none parallel=no; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
             cmds.append(specextract_cmd)
