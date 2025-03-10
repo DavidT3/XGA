@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 19:57. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -45,7 +45,7 @@ def _img_params_from_evtlist(evt_list: EventList):
     
     # If rasep is really tiny, then what has happened is that ramin = 0.00001 and ramax = 359.9999
     # and this means that our events go around the 0 deg. RA in the sky, so using ramin won't work
-    # I could do this more thoroughly by sorting in some way, but this is the fastest way I think
+    # I could do this more thoroughly by sorting in some way, but this is the fastest way I think
     if rasep < 0.001:
         # This is the RA on the 0 - 20 deg side
         ra1 = rel_df[(rel_df['RA'] < 20) & (rel_df['RA'] > 0)]['RA'].max()
