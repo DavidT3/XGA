@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 15:54. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -107,8 +107,14 @@ class Spectrum(BaseProduct):
         self._central_coord = central_coord
 
         # Storing the region information
-        self._inner_rad = inn_rad
-        self._outer_rad = out_rad
+        # Firstly, we'll ensure that those radii have been passed in the right kind of units, and then convert
+        #  them to degrees - all XGA spectrum filenames have degree radii in them, and more importantly the source
+        #  storage structures all expect the storage keys to have degree radii
+        if not all([inn_rad.unit.is_equivalent('deg'), out_rad.unit.is_equivalent('deg')]):
+            raise UnitConversionError("The 'inn_rad' and 'out_rad' arguments must be in angular distance units.")
+
+        self._inner_rad = inn_rad.to('deg')
+        self._outer_rad = out_rad.to('deg')
         # And also the shape of the region
         if self._inner_rad.isscalar:
             self._shape = 'circular'
