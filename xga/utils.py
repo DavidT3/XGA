@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 11:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 15:43. Copyright (c) The Contributors
 
 import json
 import os
@@ -879,15 +879,15 @@ if 'chandra' in USABLE and USABLE['chandra']:
         CIAO_VERSION = split_out[1].split(':')[-1].split('CIAO')[-1].strip(' ').split(' ')[0]
         CIAO_AVAIL = True
 
-    # Finally, we check to see what version of CALDB (if any) is installed - for the Chandra mission
-    # Here we check to see whether CALDB is installed (along with all the necessary paths)
-    if 'not installed' in split_out[5].lower():
-        warn("A Chandra CALDB installation cannot be identified on your system, and as such "
-             "Chandra data cannot be processed.", stacklevel=2)
-    else:
-        # Strip out the CALDB version
-        CALDB_VERSION = split_out[5].split(':')[-1].strip()
-        CALDB_AVAIL = True
+        # Finally, we check to see what version of CALDB (if any) is installed - for the Chandra mission
+        # Here we check to see whether CALDB is installed (along with all the necessary paths)
+        if 'not installed' in split_out[5].lower():
+            warn("A Chandra CALDB installation cannot be identified on your system, and as such "
+                 "Chandra data cannot be processed.", stacklevel=2)
+        else:
+            # Strip out the CALDB version
+            CALDB_VERSION = split_out[5].split(':')[-1].strip()
+            CALDB_AVAIL = True
 # ---------------
 
 # We set up a mapping from telescope name to software version constant
