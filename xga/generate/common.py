@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 17:06. Copyright (c) The Contributors
 
 import os
 import sys
 from subprocess import Popen, PIPE
 from typing import Tuple, Union, List
+from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
@@ -355,11 +356,15 @@ def check_pattern(pattern: Union[str, int], telescope: str = 'xmm') -> Tuple[str
         patt_file_name = pattern.replace(' ', '').replace('<=', 'lteq').replace('>=', 'gteq').replace('==', 'eq')\
             .replace('<=', 'lteq').replace('<', 'lt').replace('>', 'gt')
 
-    elif telescope == 'erosita':
+    elif telescope == 'erosita' or telescope == 'erass':
         # TODO Add a pattern checker when I actually understand what patterns can be for eROSITA
         patt_file_name = str(pattern)
+    elif telescope == 'chandra':
+        # TODO Add a pattern checker when I actually understand what patterns can be for Chandra
+        patt_file_name = str(pattern)
     else:
-        raise NotImplementedError("Support for the {t} telescope has not yet been added to this "
-                                  "function.".format(t=telescope))
+        warn("Support for the {t} telescope has not yet been added to this function.".format(t=telescope),
+             stacklevel=2)
+        patt_file_name = str(pattern)
 
     return pattern, patt_file_name
