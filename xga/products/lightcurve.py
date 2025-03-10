@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/02/2024, 09:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 17:15. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -511,7 +511,7 @@ class LightCurve(BaseProduct):
         # Usable flag to check that nothing went wrong in the light-curve generation, and the _read_in flag to
         #  check that we haven't already read this in to memory - no sense doing it again
         if self.usable and not self._read_in:
-            with FITS(self.path) as all_lc:
+            with (FITS(self.path) as all_lc):
                 # This chunk reads out the various columns of the 'RATE' entry in the light curve file, storing
                 #  them in suitably unit-ed astropy quantities
                 if self._is_back_sub:
@@ -577,11 +577,13 @@ class LightCurve(BaseProduct):
                     self._bck_gti = Quantity([all_lc['BKG_GTIS'].read_column('START'),
                                               all_lc['BKG_GTIS'].read_column('STOP')], 's').T
 
-                elif self.telescope == 'erosita' and 'SRCGTI{}'.format(self.instrument[-1]) in all_lc:
+                elif ((self.telescope == 'erosita' or self.telescope == 'erass') and
+                      'SRCGTI{}'.format(self.instrument[-1]) in all_lc):
                     self._src_gti = Quantity([all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('START'),
                                               all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('STOP')],
                                              's').T
                     self._bck_gti = self._src_gti
+                # TODO HAVEN'T MADE CHANDRA LIGHTCURVES YET SO DON'T KNOW WHAT WILL GO HERE
                 else:
                     self._src_gti = Quantity([[self._time_start.value, self._time_stop.value]], 's')
                     self._bck_gti = self._src_gti
