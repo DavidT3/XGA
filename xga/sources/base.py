@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 21:11. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -22,7 +22,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, NoProductAvailableError, ModelNotAssociatedError, \
     ParameterNotAssociatedError, \
-    NotSampleMemberError, TelescopeNotAssociatedError, PeakConvergenceFailedError
+    NotSampleMemberError, TelescopeNotAssociatedError, PeakConvergenceFailedError, XGADeveloperError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -839,10 +839,10 @@ class BaseSource:
         :return: The fiducial X-ray peak coordinates.
         :rtype: Quantity
         """
-        if any([tel not in ['xmm', 'erosita'] for tel in self.telescopes]):
-            raise NotImplementedError("This property will not work if there are any telescopes apart from XMM and "
-                                      "eROSITA associated - this should never be seen by a non-developer, but if it "
-                                      "please get in touch.")
+        if any([tel not in ['xmm', 'erosita', 'erass', 'chandra'] for tel in self.telescopes]):
+            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM and "
+                                    "eROSITA associated - this should never be seen by a non-developer, but if it "
+                                    "please get in touch.")
 
         if len(self.telescopes) > 1:
             warn_text = ("Multiple telescopes are associated with source {n} - we do not yet support combining "
@@ -865,10 +865,10 @@ class BaseSource:
 
         :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
         """
-        if any([tel not in ['xmm', 'erosita'] for tel in self.telescopes]):
-            raise NotImplementedError("This property will not work if there are any telescopes apart from XMM and "
-                                      "eROSITA associated - this should never be seen by a non-developer, but if it "
-                                      "please get in touch.")
+        if any([tel not in ['xmm', 'erosita', 'erass', 'chandra'] for tel in self.telescopes]):
+            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM and "
+                                    "eROSITA associated - this should never be seen by a non-developer, but if it "
+                                    "please get in touch.")
 
         if not new_peak.unit.is_equivalent("deg"):
             raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
