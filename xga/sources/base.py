@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:59. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1228,7 +1228,7 @@ class BaseSource:
                 # The inventory column names change depending on if it is combined or not
                 inst_lookup = 'inst'
 
-            if tel == 'erosita' and not combined_obs:
+            if tel in ['erosita', 'erass'] and not combined_obs:
                 obs_id = str(obs_id).zfill(6)
 
             inst = row[inst_lookup]
@@ -1297,7 +1297,7 @@ class BaseSource:
             arf = prod_gen_path + '.arf'
             back = prod_gen_path + '_backspec.fits'
 
-            if tel == 'erosita':
+            if tel in ['erosita', 'erass']:
                 back_rmf = prod_gen_path + '_backspec.rmf'
                 back_arf = prod_gen_path + '_backspec.arf'
                 rmf = prod_gen_path + '.rmf'
