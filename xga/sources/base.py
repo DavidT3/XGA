@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:17. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5030,6 +5030,8 @@ class BaseSource:
                      "other than XMM and eROSITA - though it is a priority.", stacklevel=2)
                 continue
             else:
+                # We step through the telescopes we've incorporated so far - calling their exposure map
+                #  generating functions
                 if tel == 'xmm':
                     # Again don't particularly want to do this local import, but its just easier
                     from xga.generate.sas import eexpmap
@@ -5037,9 +5039,12 @@ class BaseSource:
                     # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
                     #  first, then checking where the source lies on the exposure map
                     eexpmap(self, self._peak_lo_en, self._peak_hi_en)
-                elif tel == 'erosita':
+                elif tel == 'erosita' or tel == 'erass':
                     from xga.generate.esass import expmap
                     expmap(self, self._peak_lo_en, self._peak_hi_en)
+                elif tel == 'chandra':
+                    from xga.generate.ciao import chandra_image_expmap
+                    chandra_image_expmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID
