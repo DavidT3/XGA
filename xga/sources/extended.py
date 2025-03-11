@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:59. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -1175,15 +1175,17 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                              "vice versa.")
 
-        if telescope == 'erosita' and len(self.obs_ids['erosita']) > 1:
-            spec = self.get_combined_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                    min_sn=min_sn, over_sample=over_sample, inst=inst, telescope=telescope)
+        if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
+            spec = self.get_combined_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                             inst=inst, telescope=telescope)
         else:
             # Grabbing the relevant spectra
-            spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                    min_sn=min_sn, over_sample=over_sample, obs_id=obs_id, inst=inst, telescope=telescope)
+            spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                    min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, obs_id=obs_id,
+                                    inst=inst, telescope=telescope)
 
-        # Its just easier if we know that the spectra are in a list
+        # It's just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):
             spec = [spec]
 

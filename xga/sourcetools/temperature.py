@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:43. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -7,9 +7,10 @@ from warnings import warn
 import numpy as np
 from astropy.units import Quantity
 
+from ._common import _get_all_telescopes
 from .deproj import shell_ann_vol_intersect
 from .. import NUM_CORES, ABUND_TABLES
-from ..exceptions import NoProductAvailableError
+from ..exceptions import NoProductAvailableError, XGADeveloperError
 from ..generate.sas import region_setup
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.profile import annular_mask
@@ -17,7 +18,6 @@ from ..products.profile import GasTemperature3D
 from ..samples import BaseSample, ClusterSample
 from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec_profile
-from ._common import _get_all_telescopes
 
 ALLOWED_ANN_METHODS = ['min_snr', 'min_cnt']
 
@@ -63,39 +63,62 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     def get_tel_specific_params(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr,
                                 psf_model, psf_bins, psf_algo, psf_iter, tel):
         """
-        Internal method to get all of the parameters needed for annular bins for a specific
+        Internal method to get all the parameters needed for annular bins for a specific
         telescope. This function is then looped over for different telescopes.
 
         :param str tel: The telescope to set up annular bins for.
         """
         # deciding whether to retrieve combined ratemaps or not
-        if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
-            # for erosita, no psf correction is available yet
+        if (tel == 'erosita' or tel == 'erass' or tel == 'chandra') and (len(source.obs_ids[tel]) > 1):
+            # No PSF correction is available for eROSITA yet - nor is it available for Chandra, but that may
+            #  never change given how good the natural resolution of Chandra is
             get_combined = True
             psf_corr = None
             psf_model = None
             psf_bins = None
             psf_algo = None
             psf_iter = None
-        elif (tel == 'erosita') and (len(source.obs_ids['erosita']) == 1):
-            # for erosita, no psf correction is available yet
+        elif (tel == 'erosita' or tel == 'erass' or tel == 'chandra') and (len(source.obs_ids[tel]) == 1):
+            # This is exactly the same as above, but here we've found that there is only one ObsID
             get_combined = False
             psf_corr = None
             psf_model = None
             psf_bins = None
             psf_algo = None
             psf_iter = None
+        # Easy to deal with XMM
         elif (tel == 'xmm') and (all([obs_id is None, inst is None])):
             get_combined = True
         else:
             get_combined = False
 
         # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
-        if get_combined:
+        if get_combined and tel not in ['chandra']:
             # Here the user hasn't set ObsID or instrument, so we use the combined data
             tel_rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins,
                                                 psf_algo, psf_iter, telescope=tel)
             interloper_mask = source.get_interloper_mask(tel)
+
+        # We don't yet have combined photometric generation implemented for Chandra, so have to make it a special
+        #  case here for the time being
+        elif get_combined and tel == 'chandra':
+            # Imports here are because of circular import issues, but this function will make us the
+            #  individual images and exposure maps we need
+            from xga.generate.ciao import chandra_image_expmap
+            chandra_image_expmap(source, source._peak_lo_en, source._peak_hi_en, disable_progress=True)
+
+            # This snippet is how we deal with not being able to make combined ratemaps for Chandra right
+            #  now - it'll figure out which observation has the highest exposure at the source coord.
+            rel_rts = source.get_ratemaps(lo_en=source._peak_lo_en, hi_en=source._peak_hi_en, telescope=tel)
+            if not isinstance(rel_rts, list):
+                rel_rts = [rel_rts]
+            tel_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(source.ra_dec).to('s').value for rt in rel_rts])]
+            interloper_mask = source.get_interloper_mask(tel, obs_id=tel_rt.obs_id)
+
+        elif get_combined:
+            raise XGADeveloperError("Support for {t} is not yet implemented in the _ann_bins_setup preparation "
+                                    "function - please contact the developers.".format(t=tel))
+
         else:
             # Both ObsID and instrument have been set by the user
             tel_rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins,

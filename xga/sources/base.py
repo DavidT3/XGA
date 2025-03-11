@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 14:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:59. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1228,7 +1228,7 @@ class BaseSource:
                 # The inventory column names change depending on if it is combined or not
                 inst_lookup = 'inst'
 
-            if tel == 'erosita' and not combined_obs:
+            if tel in ['erosita', 'erass'] and not combined_obs:
                 obs_id = str(obs_id).zfill(6)
 
             inst = row[inst_lookup]
@@ -1297,7 +1297,7 @@ class BaseSource:
             arf = prod_gen_path + '.arf'
             back = prod_gen_path + '_backspec.fits'
 
-            if tel == 'erosita':
+            if tel in ['erosita', 'erass']:
                 back_rmf = prod_gen_path + '_backspec.rmf'
                 back_arf = prod_gen_path + '_backspec.arf'
                 rmf = prod_gen_path + '.rmf'
@@ -2370,24 +2370,44 @@ class BaseSource:
                     emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-                elif self._use_peak and tel == 'erosita':
-                    warn_text = ("Generating the combined images required for this is not supported for eROSITA - we "
-                                 "will use the highest exposure ObsID instead - associated with source "
+
+                # This part deals with eROSITA data - have to account for the fact that there may not be a combined
+                #  image because it could just be on a single sky tile, and we haven't had to merge anything
+                elif self._use_peak and (tel == 'erosita' or tel == 'erass'):
+                    from xga.generate.esass import evtool_image, expmap, combine_phot_prod
+                    combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+
+                    # Fetch the ratemap we wish to use - checking to see if there are multiple observations or not
+                    if len(self.obs_ids[tel]) > 1:
+                        comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+                    else:
+                        comb_rt = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+
+                # This part deals with Chandra data
+                elif self._use_peak and tel == 'chandra':
+                    warn_text = ("Generating the combined images required for this is not yet supported for "
+                                 "Chandra - we will use the highest exposure ObsID instead - associated with source "
                                  "{n}").format(t=tel, n=self.name)
                     if not self._samp_member:
                         warn(warn_text, stacklevel=2)
                     else:
                         self._supp_warn.append(warn_text)
 
-                    from xga.generate.esass import evtool_image, expmap
-                    evtool_image(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    expmap(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    # Imports here are because of circular import issues, but this function will make us the
+                    #  individual images and exposure maps we need
+                    from xga.generate.ciao import chandra_image_expmap
+                    chandra_image_expmap(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
+                    # This snippet is how we deal with not being able to make combined ratemaps for Chandra right
+                    #  now - it'll figure out which observation has the highest exposure at the source coord.
                     rel_rts = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
                     if not isinstance(rel_rts, list):
                         rel_rts = [rel_rts]
                     comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec).to('s').value
                                                            for rt in rel_rts])]
+
+                # Here we include a catch-all for when we might be developing and incorporating support for a new
+                #  telescope (or one new to XGA at least)
                 elif self._use_peak:
                     warn_text = ("Generating the combined images required for this is not supported for {t} "
                                  "currently - associated with source {n}").format(t=tel, n=self.name)
@@ -3355,8 +3375,9 @@ class BaseSource:
         :rtype: Union[Spectrum, List[Spectrum]]
         """
 
-        if telescope == 'xmm':
-            raise NotImplementedError("Combined spectra are not implemented for XMM observations.")
+        if telescope in ['xmm', 'chandra']:
+            raise NotImplementedError("Combined spectra are not implemented for {t} "
+                                      "observations.".format(t=telescope))
 
         matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
                                                min_counts, min_sn, over_sample, telescope)
@@ -5009,6 +5030,8 @@ class BaseSource:
                      "other than XMM and eROSITA - though it is a priority.", stacklevel=2)
                 continue
             else:
+                # We step through the telescopes we've incorporated so far - calling their exposure map
+                #  generating functions
                 if tel == 'xmm':
                     # Again don't particularly want to do this local import, but its just easier
                     from xga.generate.sas import eexpmap
@@ -5016,9 +5039,12 @@ class BaseSource:
                     # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
                     #  first, then checking where the source lies on the exposure map
                     eexpmap(self, self._peak_lo_en, self._peak_hi_en)
-                elif tel == 'erosita':
+                elif tel == 'erosita' or tel == 'erass':
                     from xga.generate.esass import expmap
                     expmap(self, self._peak_lo_en, self._peak_hi_en)
+                elif tel == 'chandra':
+                    from xga.generate.ciao import chandra_image_expmap
+                    chandra_image_expmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID

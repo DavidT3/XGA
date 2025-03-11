@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 20:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:55. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -8,12 +8,12 @@ from warnings import warn
 from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
+from ...exceptions import NoProductAvailableError, XGADeveloperError
 from ...generate.esass import srctool_spectrum
 from ...generate.sas import evselect_spectrum, region_setup
+from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, PointSource
-from ...exceptions import NoProductAvailableError
-from ...products import Spectrum
 
 
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -53,9 +53,9 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     :return: Most likely just the passed in sources, but if a single source was passed then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
-    # sorry have to import here due to a circular import 
+    # Have to import here due to a circular import error
     from ...sourcetools._common import _get_all_telescopes
-    # this returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
+    # This returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
     all_telescopes = _get_all_telescopes(sources)
 
     for tel in all_telescopes:
@@ -70,7 +70,20 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             #  in it which will kick up a fuss if variables aren't formatted right
             sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                                         over_sample, one_rmf, num_cores)
-        elif tel == 'erosita':
+        elif tel == 'chandra':
+            warn("Spectrum stacking is not currently supported for Chandra, and so combined spectra will not be "
+                 "used for these XSPEC fits.", stacklevel=2)
+            # Make sure we have Chandra spectra generated, so that we can fit them
+
+            # TODO DEAL WITH THIS
+            # Currently have to raise an error, because the name of the spectrum generation function, and how it is
+            #  called, are not currently finalised
+            raise XGADeveloperError("Spectrum generation appears to be working for Chandra currently, but "
+                                    "the actual command to call has not been finalised, so this will need "
+                                    "filling out later.")
+            # sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
+            #                             over_sample, one_rmf, num_cores)
+        elif tel == 'erosita' or tel == 'erass':
             # This is the spectrum generation tool that is specific to eROSITA
             sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores,
                                        False, stacked_spectra)
