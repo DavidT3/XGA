@@ -39,7 +39,6 @@ class EventList(BaseProduct):
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "events"
-        self._telescope = telescope
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
         self._header = None
