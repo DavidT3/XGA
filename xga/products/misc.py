@@ -56,14 +56,25 @@ class EventList(BaseProduct):
     @property
     def obs_ids(self) -> list:
         """
-        Property getter for the ObsIDs that are involved in this image, if combined. Otherwise will return a list
-        with one element, the single relevant ObsID.
+        Property getter for the ObsIDs that are involved in this Eventlist, if combined. Otherwise 
+        will return a list with one element, the single relevant ObsID.
 
-        :return: List of ObsIDs involved in this image.
+        :return: List of ObsIDs involved in this EventList.
         :rtype: list
         """
 
         return self._obs_ids
+
+    @property
+    def telescope(self) -> list:
+        """
+        Property getter for the telescope that this EventList is from.
+
+        :return: telescope the EventList is from.
+        :rtype: list
+        """
+
+        return self._telescope
 
     # This absolutely doesn't get a setter considering it's the header object
     @property
