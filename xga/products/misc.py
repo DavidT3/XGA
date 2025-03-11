@@ -64,17 +64,6 @@ class EventList(BaseProduct):
 
         return self._obs_ids
 
-    @property
-    def telescope(self) -> list:
-        """
-        Property getter for the telescope that this EventList is from.
-
-        :return: telescope the EventList is from.
-        :rtype: list
-        """
-
-        return self._telescope
-
     # This absolutely doesn't get a setter considering it's the header object
     @property
     def header(self) -> FITSHDR:
