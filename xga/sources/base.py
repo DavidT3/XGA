@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:13. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -3375,8 +3375,9 @@ class BaseSource:
         :rtype: Union[Spectrum, List[Spectrum]]
         """
 
-        if telescope == 'xmm':
-            raise NotImplementedError("Combined spectra are not implemented for XMM observations.")
+        if telescope in ['xmm', 'chandra']:
+            raise NotImplementedError("Combined spectra are not implemented for {t} "
+                                      "observations.".format(t=telescope))
 
         matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
                                                min_counts, min_sn, over_sample, telescope)
