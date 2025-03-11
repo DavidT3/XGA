@@ -10,7 +10,7 @@ from .. import SRC_INFO, SUPP_SRC_INFO
 class TestBaseSample(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.test_smp = ClusterSample([SRC_INFO['ra'], SUPP_SRC_INFO['dec']],
+        cls.test_smp = ClusterSample([SRC_INFO['ra'], SUPP_SRC_INFO['ra']],
                                      [SRC_INFO['dec'], SUPP_SRC_INFO['dec']],
                                      [SRC_INFO['z'], SUPP_SRC_INFO['z']],
                                      r500=Quantity([500, 500], 'kpc'),
