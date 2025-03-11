@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 18:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:50. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -9,7 +9,7 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
-from xga.exceptions import ModelNotAssociatedError, ProductGenerationError
+from xga.exceptions import ModelNotAssociatedError, ProductGenerationError, XGADeveloperError
 from xga.generate.esass import srctool_spectrum
 from xga.generate.sas import evselect_spectrum
 from xga.products import ScalingRelation
@@ -324,9 +324,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False,
                                   group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
                                   over_sample=over_sample)
-            elif telescope == 'erosita':
+            elif telescope == 'erosita' or telescope == 'erass':
                 srctool_spectrum(samp, samp.get_radius(o_dens), group_spec=group_spec, min_counts=min_counts,
                                  min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
+            elif telescope == 'chandra':
+                raise XGADeveloperError("Spectrum generation appears to be working for Chandra currently, but "
+                                          "the actual command to call has not been finalised, so this will need "
+                                          "filling out later.")
             else:
                 raise NotImplementedError("Support for telescopes other than XMM and eROSITA is not yet implemented.")
             # If the end of evselect_spectrum doesn't throw a ProductGenerationError then we know we're all good, so we
