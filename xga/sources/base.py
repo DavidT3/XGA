@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 16:53. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4152,11 +4152,12 @@ class BaseSource:
                 try:
                     cur_gen_fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
                     if cur_gen_fit_conf == p.spec_fit_conf:
-                        new_matched_prods.append()
+                        new_matched_prods.append(p)
 
                 # If there is a KeyError, that means that the passed spec_fit_conf isn't compatible with the
                 #  model of the current profile, so we skip right on by
-                except KeyError:
+                except KeyError as err:
+                    print(err)
                     pass
             matched_prods = new_matched_prods
 
