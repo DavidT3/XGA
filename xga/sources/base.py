@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 17:04. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4139,7 +4139,7 @@ class BaseSource:
 
         # Then the fit configuration
         if spec_fit_conf is not None:
-            from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+            from ..xspec.fit import PROF_FIT_FUNC_MODEL_NAMES
             from ..xspec.fitconfgen import fit_conf_from_function
 
             # At this point we've already applied any constraints on the spectral model name, so we just
@@ -4150,7 +4150,7 @@ class BaseSource:
             new_matched_prods = []
             for p in matched_prods:
                 try:
-                    cur_gen_fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
+                    cur_gen_fit_conf = fit_conf_from_function(PROF_FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
                     print(cur_gen_fit_conf)
                     print('')
                     print(p.spec_fit_conf)
