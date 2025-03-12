@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 19/08/2024, 14:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 17:43. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -508,7 +508,8 @@ class GalaxyCluster(ExtendedSource):
 
     def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                 set_id: int = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                                 set_id: int = None, spec_model: str = None,
+                                 spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for profiles which have been based on spectra, the only thing that tends to change
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
@@ -520,54 +521,52 @@ class GalaxyCluster(ExtendedSource):
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
+            noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object if there is an exact match, a list of such objects if there are multiple matches.
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
 
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+        # Time to start actually finding profiles - firstly we'll make use of the _get_prof_prod method to get
+        #  profiles that meet some of the general criteria (including the spectral model fit configuration, if
+        #  specified), then we'll work on narrowing them down even more.
+        init_matches = self._get_prof_prod(search_key, central_coord=self.default_coord, radii=radii,
+                                           spec_model=spec_model, spec_fit_conf=spec_fit_conf)
+        # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
+        #  associated with them, as that means that they were not generated from an annular spectrum
+        init_matches = [p for p in init_matches if p.set_ident is not None]
 
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
-        if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
+        matched_prods = []
+        for p in init_matches:
+            # Here there was an annular spectrum set identifier specified, and the current prof doesn't match,
+            #  so it cannot be a profile we care about right now
+            if set_id is not None and p.set_ident != set_id:
+                continue
 
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products(search_key, extra_key=spec_storage_name)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products(search_key)
-                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            matched_prods = [p for p in self.get_products(search_key) if p.set_ident == set_id]
+            # Now we will grab the annular spectrum from which the current profile was generated
+            rel_asp = self.get_annular_spectra(set_id=p.set_ident)
+            # If the user specified grouped spectra and the generating annular spectra for the current
+            #  profile was not grouped (or vice versa), then we aren't interested
+            if group_spec != rel_asp.grouped:
+                continue
+            # Here we know that the current profile's annular spectrum is grouped, so we'll check the actual
+            #  grouping parameters
+            elif not all([min_counts == rel_asp.min_counts, min_sn == rel_asp.min_sn,
+                          over_sample == rel_asp.over_sample]):
+                continue
+
+            # If we've made it all the way here without a continue statement, then we must be interested in
+            #  that profile!
+            matched_prods.append(p)
 
         return matched_prods
 
