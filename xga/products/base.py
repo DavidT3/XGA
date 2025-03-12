@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 12:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 15:39. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -719,7 +719,7 @@ class BaseProfile1D:
         #  have them (like brightness profiles for instance)
         self._energy_bounds = (None, None)
 
-        # Checking the if associated_set_id is supplied, so is set_storage_key, and vica versa
+        # Checking if associated_set_id is supplied, so is set_storage_key, and vice versa
         if not all([associated_set_id is None, set_storage_key is None]) and \
                 not all([associated_set_id is not None, set_storage_key is not None]):
             raise ValueError("Both associated_set_id and set_storage_key must be None, or both must be not None.")
@@ -2317,6 +2317,7 @@ class BaseProfile1D:
         """
         return self._set_id
 
+    @property
     def spec_fit_conf(self) -> str:
         """
         If this profile was generated from an annular spectrum, this property provides the fit-configuration key of
@@ -2328,6 +2329,7 @@ class BaseProfile1D:
         """
         return self._spec_fit_conf
 
+    @property
     def spec_model(self) -> str:
         """
         If this profile was generated from an annular spectrum, this property provides the name of the model
