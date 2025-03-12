@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 21:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -317,7 +317,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
         for telescope in telescopes:
             output_dict[telescope] = radii
     
-    # If the radii is input as a List, that means the user wants the same radii for each telescope, 
+    # If the radii is input as a List, that means the user wants the same radii for each telescope,
     # but different radii for different sources.
     elif isinstance(radii, List):
         for telescope in telescopes:
@@ -333,7 +333,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
             raise KeyError("If 'radii' is input as a dictionary, this dictionary must contain a key"
                            " for each telescope associated to the source.")
         # If the radii is input as a Dictionary of lists, the user wants different radii for each 
-        # source and each telescope
+        # source and each telescope
         if all(isinstance(value, List) for value in radii.values()):
             for list_ in radii.values():
                 # checking every element in the list is a Quantity

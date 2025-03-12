@@ -1,15 +1,16 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/02/2024, 16:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
 from random import randint
-from typing import Union
 from shutil import rmtree
+from typing import Union
 
 import numpy as np
 from astropy.units import Quantity, UnitConversionError
 
+from .phot import evtool_combine_evts
 from .run import esass_call
 from ..common import get_annular_esass_region
 from ..sas._common import region_setup
@@ -17,7 +18,6 @@ from ... import OUTPUT, NUM_CORES
 from ...exceptions import TelescopeNotAssociatedError, NoProductAvailableError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
-from .phot import evtool_combine_evts
 
 
 def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -291,7 +291,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             continue
 
         # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
+        # use the combine_obs = False functionality instead
         if combine_obs and len(source.obs_ids['erosita']) == 1:
             combine_obs = False
 

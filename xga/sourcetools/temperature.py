@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -179,7 +179,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     else:
         telescope = [telescope]
 
-    # Making dictionaries that will be appended to with telescope keys
+    # Making dictionaries that will be appended to with telescope keys
     rt = {}
     cur_rads = {}
     max_ann = {}
@@ -691,7 +691,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     # Making a dictionary to contain all the radii quantities for all the sources
     all_rads = {tel : [] for tel in src_telescopes}
 
-    # for each dictionary for a single source, I append to the all_rads dictionary
+    # for each dictionary for a single source, I append to the all_rads dictionary
     for rads_dict in all_rads_source_dicts:
         for tel in src_telescopes:
             # Some sources wont have an entry for all telescopes
@@ -830,7 +830,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     # Making a dictionary to contain all the radii quantities for all the sources
     all_rads = {tel : [] for tel in src_telescopes}
 
-    # for each dictionary for a single source, I append to the all_rads dictionary
+    # for each dictionary for a single source, I append to the all_rads dictionary
     for rads_dict in all_rads_source_dicts:
         for tel in src_telescopes:
             # Some sources wont have an entry for all telescopes

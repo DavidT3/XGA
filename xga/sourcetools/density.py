@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -15,10 +15,11 @@ from astropy.constants import m_p
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
+from ._common import _get_all_telescopes
 from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, \
-                         ParameterNotAssociatedError
+    ParameterNotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
@@ -29,7 +30,6 @@ from ..sourcetools import ang_to_rad
 from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
-from ._common import _get_all_telescopes
 
 ALLOWED_INV_ABEL = ['direct', 'basex', 'hansen_law_ho0', 'hansen_law_ho1', 'onion_bordas', 'onion_peeling',
                     'two_point', 'three_point', 'daun']
@@ -263,7 +263,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                      / (e_to_p_ratio * 10 ** -14))
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
-            # but if inst = None, we only want to retreive combined instrument spectra
+            # but if inst = None, we only want to retreive combined instrument spectra
             if tel == 'erosita' and inst[tel][src_ind] == None:
                 lookup_obs = 'combined'
                 lookup_inst = 'combined'
@@ -479,7 +479,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                       stacked_spectra=stacked_spectra)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius
-    # values
+    # values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
     # Need to sort out the type of model input that the user chose, and make sure its ready to be
@@ -748,7 +748,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
         sources = [sources]
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
-    # the gas_density_profile method of APECNormalisation1D
+    # the gas_density_profile method of APECNormalisation1D
     final_dens_profs = {key : [] for key in all_tels}
     with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as \
         dens_prog:

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 19:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -49,7 +49,7 @@ def _img_params_from_evtlist(evt_list: EventList):
     if rasep < 0.001:
         # This is the RA on the 0 - 20 deg side
         ra1 = rel_df[(rel_df['RA'] < 20) & (rel_df['RA'] > 0)]['RA'].max()
-        # This is the RA on the 340 - 360
+        # This is the RA on the 340 - 360
         ra2 = rel_df[(rel_df['RA'] > 340) & (rel_df['RA'] < 360)]['RA'].min()
         rasep = abs(ra1 - ra2 + 360)
     
@@ -191,11 +191,11 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             continue
         
         # Define this variable for each source no it doesn't get overwritten with the wrong value
-        # later in the loop
+        # later in the loop
         use_combine_obs = combine_obs
         
         # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
+        # use the combine_obs = False functionality instead
         if use_combine_obs and len(source.obs_ids['erosita']) == 1:
             use_combine_obs = False
     
@@ -400,11 +400,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             continue
         
         # Define this variable for each source no it doesn't get overwritten with the wrong value
-        # later in the loop
+        # later in the loop
         use_combine_obs = combine_obs
         
         # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
+        # use the combine_obs = False functionality instead
         if use_combine_obs and len(source.obs_ids['erosita']) == 1:
             use_combine_obs = False
         
@@ -454,7 +454,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
                                 "telescope": "erosita"})
         else:
-            # Checking if a combined event list has be made already
+            # Checking if a combined event list has be made already
             try:
                 exists = source.get_combined_expmaps(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
             except NoProductAvailableError:

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/03/2025, 12:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -130,7 +130,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     cut_sources = []
     for sind, src in enumerate(sources):
         # The format of has_glob_temp is a dictionary with telescope keys, and then an array of booleans
-        # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
+        # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
         # So we need to cycle through each key and collect the correct indicies to the corresponding source
         # has_temp is storing the boolean for every telescope 
         has_temp = []
