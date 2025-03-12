@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 23/08/2024, 10:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 22:44. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -3198,24 +3198,26 @@ class AnnularSpectra(BaseAggregateProduct):
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, associated_set_id=self.set_ident,
                                                          set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
-                                                         auto_save=True)
+                                                         auto_save=True, spec_model=model, fit_conf=fit_conf)
                 elif par == 'kT' and upper_limit is not None:
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True)
+                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True,
+                                                         spec_model=model, fit_conf=fit_conf)
                 elif par == 'Abundanc':
                     new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                         mid_radii_deg, auto_save=True)
+                                                         mid_radii_deg, auto_save=True, spec_model=model,
+                                                         fit_conf=fit_conf)
                 elif par == 'norm':
                     new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
                                                    rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                   mid_radii_deg, auto_save=True)
+                                                   mid_radii_deg, auto_save=True, spec_model=model, fit_conf=fit_conf)
                 else:
                     prof_type = "1d_proj_{}"
                     new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
                                          prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                         mid_radii_deg, auto_save=True)
+                                         mid_radii_deg, auto_save=True, spec_model=model, fit_conf=fit_conf)
 
                 profs.append(new_prof)
 
