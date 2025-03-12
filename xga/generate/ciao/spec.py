@@ -1,19 +1,22 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 21:02. Copyright (c) The Contributors
+#  Last modified by Ray Wang (wangru46@msu.edu) 02/19/2025, 16:16. Copyright (c) The Contributors
 
 import os
+from copy import copy
+from itertools import permutations
 from random import randint
-from typing import Union
+from typing import Union, List
 
-import astropy.units as u
 import numpy as np
-from astropy.coordinates import SkyCoord
 from astropy.units import Quantity
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+from tqdm import tqdm
 
-from xga import OUTPUT, NUM_CORES, xga_conf
-from xga.exceptions import TelescopeNotAssociatedError
+from xga import OUTPUT, NUM_CORES
+from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
-from xga.sources import BaseSource
+from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
 from xga.sources.base import NullSource
 from .run import ciao_call
 
@@ -88,7 +91,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     sources_extras.append(np.array(extra_info))
         #     sources_types.append(np.full(len(cmds), fill_value="spectrum"))
         #     continue
-        
+        inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
+        outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
@@ -135,13 +139,11 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
-            inner_r_arc = inner_radius.to(u.arcmin).value
-            outer_r_arc = outer_radius.to(u.arcmin).value
             bkg_inner_r_arc = outer_r_arc * source.background_radius_factors[0]
             bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
             
             # Ensure the directory exists
-            temp_region_dir = os.path.join(dest_dir, f"temp_region")
+            temp_region_dir = os.path.join(dest_dir, f"temp_region") #added random nubmers
             os.makedirs(temp_region_dir, exist_ok=True)
   
             # Define file paths
@@ -199,7 +201,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype=NUM_CTS binspec={min_counts} "
-                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile=none parallel=no; "
+                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile=none; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
             cmds.append(specextract_cmd)
