@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/08/2024, 11:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 22:58. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -729,6 +729,12 @@ class BaseProfile1D:
         self._set_id = associated_set_id
         # Don't think this one will get a property, I can't see why the user would need it.
         self._set_storage_key = set_storage_key
+
+        # Here we define attributes to store the fit_conf and spec_model parameters - which detail the exact
+        #  spectral model and configuration that was used to produce the profile (as such only relevant to
+        #  profiles that come from annular spectral properties
+        self._fit_conf = fit_conf
+        self._spec_model = spec_model
 
         # Here we generate a storage key for the profile to use to place itself in XGA's storage structure
         if self._set_storage_key is not None:
@@ -2291,6 +2297,27 @@ class BaseProfile1D:
         :rtype: int
         """
         return self._set_id
+
+    def spec_fit_conf(self) -> str:
+        """
+        If this profile was generated from an annular spectrum, this property provides the fit-configuration key of
+        the spectral fits that provided the properties used to build it.
+
+        :return: The spectral fit-configuration key. If the spectral fit configuration key was never set, the
+            return will be None.
+        :rtype: str
+        """
+        return self._fit_conf
+
+    def spec_model(self) -> str:
+        """
+        If this profile was generated from an annular spectrum, this property provides the name of the model
+        that was fit to the spectra in order to measure the properties used to build it.
+
+        :return: The spectral model name. If the spectral model name was never set, the return will be None.
+        :rtype: str
+        """
+        return self._spec_model
 
     @property
     def y_axis_label(self) -> str:
