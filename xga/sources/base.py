@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/08/2024, 15:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 16:16. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2711,12 +2711,14 @@ class BaseSource:
         An internal function to perform input checks and pre-processing for get methods that access fit results, or
         other related information such as fit statistic.
 
+        :param str spec_storage_key: The XGA product storage key of the spectrum for which we're checking
+            spectral fit configurations.
         :param str model: The name of the fitted model that you're requesting the results from
             (e.g. constant*tbabs*apec).
         :param str par: The name of the parameter you want a result for.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the spectrum
+            fitting function and values being the changed values (only values changed-from-default need be included)
+            or a full string representation of the fit configuration that is being requested.
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
@@ -2804,9 +2806,9 @@ class BaseSource:
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested result value, and uncertainties.
         :rtype: Union[dict, Quantity]
         """
@@ -2875,9 +2877,9 @@ class BaseSource:
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested fit statistic.
         :rtype: float
         """
@@ -2919,9 +2921,9 @@ class BaseSource:
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested fit statistic.
         :rtype: float
         """
@@ -2963,9 +2965,9 @@ class BaseSource:
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested fit statistic.
         :rtype: float
         """
@@ -3013,9 +3015,9 @@ class BaseSource:
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested luminosity value, and uncertainties.
         :rtype: Union[dict, Quantity]
         """
@@ -4065,9 +4067,10 @@ class BaseSource:
 
         return matched_prods
 
-    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None,
+                       central_coord: Quantity = None, radii: Quantity = None,
+                       lo_en: Quantity = None, hi_en: Quantity = None,  spec_model: str = None,
+                       spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
         searches for full and partial matches in this source's product storage structure.
@@ -4085,21 +4088,31 @@ class BaseSource:
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
+        # Checking the energy bound input parameters
         if all([lo_en is None, hi_en is None]):
             energy_key = "_"
         elif all([lo_en is not None, hi_en is not None]):
             energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
         else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+            raise ValueError("The 'lo_en' and 'hi_en' arguments must both be None, or both be an astropy quantity.")
 
+        # If no specific central coordinate has been passed, we fetch the default central coordinate and turn it
+        #  into a central position key
         if central_coord is None:
             central_coord = self.default_coord
         cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
 
+        # Now we convert the input radius to degrees (as that is the radius unit used in storage keys)
         if radii is not None:
             radii = self.convert_radius(radii, 'deg')
             rad_chunk = "r" + "_".join(radii.value.astype(str))
@@ -4116,6 +4129,36 @@ class BaseSource:
                 matched_prods.append(p[-1])
             elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
                 matched_prods.append(p[-1])
+
+        # At this point, we might have to impose more checks on the keys of the identified products - if the
+        #  user has passed information that indicates the profile originated from an annular spectrum, then the
+        #  profile key will have an additional component that identifies the spectral model and fit configuration
+        #  that it originates from.
+        if spec_model is not None:
+            matched_prods = [p for p in matched_prods if p.spec_model == spec_model]
+
+        # Then the fit configuration
+        if spec_fit_conf is not None:
+            from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+            from ..xspec.fitconfgen import fit_conf_from_function
+
+            # At this point we've already applied any constraints on the spectral model name, so we just
+            #  cycle through the profiles, and see if any of their stored spectral fit configuration match the
+            #  fit configuration that was passed to this method. We give the passed spec_fit_conf to the
+            #  fit_conf_from_function function to ensure that fit configuration dictionaries are converted
+            #  to full fit configuration keys
+            new_matched_prods = []
+            for p in matched_prods:
+                try:
+                    cur_gen_fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
+                    if cur_gen_fit_conf == p.spec_fit_conf:
+                        new_matched_prods.append()
+
+                # If there is a KeyError, that means that the passed spec_fit_conf isn't compatible with the
+                #  model of the current profile, so we skip right on by
+                except KeyError:
+                    pass
+            matched_prods = new_matched_prods
 
         return matched_prods
 
