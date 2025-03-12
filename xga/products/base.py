@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 12:20. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -737,6 +737,11 @@ class BaseProfile1D:
         #  There must be a more elegant way of doing checks like this?
         if any([fit_conf is None, spec_model is None]) and not all([fit_conf is None, spec_model is None]):
             raise ValueError("Both the 'fit_conf' and 'spec_model' arguments must be None, or both must be not None.")
+        # Currently restrict the input of fit_conf - only the string version is allowed.
+        elif fit_conf is not None and not isinstance(fit_conf, str):
+            raise TypeError("The 'fit_conf' argument must be the string-form of the spectral fit "
+                            "configuration, not the dictionary-form.")
+
         self._spec_fit_conf = fit_conf
         self._spec_model = spec_model
 
