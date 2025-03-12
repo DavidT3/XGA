@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 22:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:20. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -733,7 +733,11 @@ class BaseProfile1D:
         # Here we define attributes to store the fit_conf and spec_model parameters - which detail the exact
         #  spectral model and configuration that was used to produce the profile (as such only relevant to
         #  profiles that come from annular spectral properties
-        self._fit_conf = fit_conf
+        # First, we make sure that we don't have one of these passed without the other - that wouldn't make sense
+        #  There must be a more elegant way of doing checks like this?
+        if any([fit_conf is None, spec_model is None]) and not all([fit_conf is None, spec_model is None]):
+            raise ValueError("Both the 'fit_conf' and 'spec_model' arguments must be None, or both must be not None.")
+        self._spec_fit_conf = fit_conf
         self._spec_model = spec_model
 
         # Here we generate a storage key for the profile to use to place itself in XGA's storage structure
@@ -744,6 +748,16 @@ class BaseProfile1D:
             # In fact as the profile will also be indexed under the profile type name, we can just use this as
             #  our storage key
             self._storage_key = self._set_storage_key
+
+            # There will only be a set storage key if this profile came from an annular spectrum, so now we can
+            #  check if we were given a fit configuration key as well - if we were, we'll include it in the
+            #  storage key. We don't check if both self._spec_fit_conf and self._spec_model are None here because
+            #  we've already ensured that both variables have been set, or not set.
+            if self._spec_fit_conf is not None:
+                # TODO I NEED TO ENSURE THAT THE SPEC FIT CONF PASSED TO THESE PROFILES IS THE STRING VERSION, NOT
+                #  THE DICTIONARY VERSION. TROUBLE IS I WROTE ALL OF THIS STUFF DEALING WITH DIFFERENT CONFIGURATIONS
+                #  OF THE SAME MODEL SO LONG AGO NOW THAT I HAVE FORGOTTEN HOW
+                self._storage_key += ("_" + self._spec_model + "_" + self._spec_fit_conf)
         else:
             # Default storage key for profiles that don't implement their own storage key will include their radii
             #  and the central coordinate
@@ -2307,7 +2321,7 @@ class BaseProfile1D:
             return will be None.
         :rtype: str
         """
-        return self._fit_conf
+        return self._spec_fit_conf
 
     def spec_model(self) -> str:
         """
