@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:57. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1053,6 +1053,15 @@ class BaseSource:
                 else:
                     badpix_prod = None
 
+                # Exactly the same deal as bad-pixel files above, some telescope's backend software needs
+                #  'mask file' to be accessible
+                if '{i}_mask_file'.format(i=inst) in rel_sec:
+                    temp_pth = rel_sec['{i}_mask_file'.format(i=inst)]
+                    mask_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                            telescope=tel)
+                else:
+                    mask_prod = None
+
                 if (att_prod is not None and att_prod.usable) or att_prod is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
                     # Otherwise nothing can be done with it.
@@ -1073,6 +1082,8 @@ class BaseSource:
                     # Now we'll do a couple of housekeeping files
                     if badpix_prod is not None:
                         obs_dict[tel][obs_id][inst]['badpix'] = badpix_prod
+                    if mask_prod is not None:
+                        obs_dict[tel][obs_id][inst]['maskfile'] = mask_prod
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
@@ -2780,7 +2791,8 @@ class BaseSource:
 
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
-                elif isinstance(po, (AnnularSpectra)) and update_inv:                         # Don't want to store a None value as a string for the info_key
+                elif isinstance(po, AnnularSpectra) and update_inv:
+                    # Don't want to store a None value as a string for the info_key
                     if extra_key is None:
                         info_key = ''
                     else:
