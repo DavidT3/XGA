@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 23:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 20:58. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -265,7 +265,7 @@ def xspec_call(xspec_func):
                                 if not comb_spec:
                                     # Finds the appropriate matching spectrum object for the current table line
                                     spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
-                                                        telescope=tel)[0]
+                                                          telescope=tel)[0]
                                 else:
                                     spec = s.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0]
                             else:
