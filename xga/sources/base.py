@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:16. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4075,7 +4075,6 @@ class BaseSource:
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
         searches for full and partial matches in this source's product storage structure.
 
-        :param annuli_bound_radii:
         :param str search_key: The exact search key which defined profile type, and whether it is combined or not.
         :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
             which means all profiles matching the other criteria will be returned.
@@ -4192,8 +4191,8 @@ class BaseSource:
         return matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                     radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
+                     hi_en: Quantity = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         This is the generic get method for XGA profile objects stored in this source. You still must remember
         the profile type value to use it, but once entered it will return a list of all matching profiles (or a
@@ -4208,6 +4207,9 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
@@ -4218,8 +4220,8 @@ class BaseSource:
         """
         if "profile" in profile_type:
             warn("The profile_type you passed contains the word 'profile', which is appended onto "
-                          "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
+                 "a profile type by XGA, you need to try this again without profile on the end, unless"
+                 " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = profile_type + "_profile"
         if all([obs_id is None, inst is None]):
@@ -4228,9 +4230,10 @@ class BaseSource:
         search_key = profile_type + "_profile"
         if search_key not in ALLOWED_PRODUCTS:
             warn("{} seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
+                 "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en=lo_en, hi_en=hi_en)
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, annuli_bound_radii,
+                                            lo_en=lo_en, hi_en=hi_en)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -4239,18 +4242,22 @@ class BaseSource:
         return matched_prods
 
     def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
-                              lo_en: Quantity = None, hi_en: Quantity = None) \
+                              annuli_bound_radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for XGA profiles made using all available data which are stored in this source.
         You still must remember the profile type value to use it, but once entered it will return a list
         of all matching profiles (or a single object if only one match is found).
 
+        :param annuli_bound_radii:
         :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
         :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
@@ -4270,7 +4277,8 @@ class BaseSource:
             warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
                           "true then you have passed an invalid profile type.", stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en=lo_en, hi_en=hi_en)
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, annuli_bound_radii,
+                                            lo_en=lo_en, hi_en=hi_en)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
