@@ -209,8 +209,8 @@ class ExtendedSource(BaseSource):
                 emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
             if 'erosita' in self.telescopes:
                 from ..generate.esass import combine_phot_prod
-                combine_phot_prod(self, 'image')
-                combine_phot_prod(self, 'expmap')
+                combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                combine_phot_prod(self, 'expmap', self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
         if clean_obs and clean_obs_reg in self._radii:
             # Use this method to figure out what data to throw away
