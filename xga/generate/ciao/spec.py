@@ -216,7 +216,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             with open(spec_ext_reg_path, 'w') as ext_reg:
                 ext_reg.write("# Region file format: DS9 version 4.1\n")
                 ext_reg.write("fk5\n")
-                ext_reg.write(f"ANNULUS({ra_hms},{dec_dms},{inner_r_arc}',{outer_r_arc}')\n")
+                ext_reg.write(f"ANNULUS({ra_hms},{dec_dms},{inner_r_arc.value}',{outer_r_arc.value}')\n")
                 # Add exclusion regions if provided
                 for region in ext_inter_reg:
                     reg_ra = region.center.ra.to_string(unit=u.hour, sep=':', precision=5)
@@ -237,7 +237,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             with open(spec_bkg_reg_path, 'w') as bkg_reg:
                 bkg_reg.write("# Region file format: DS9 version 4.1\n")
                 bkg_reg.write("fk5\n")
-                bkg_reg.write(f"ANNULUS({ra_hms},{dec_dms},{bkg_inner_r_arc}',{bkg_outer_r_arc}')\n")
+                bkg_reg.write(f"ANNULUS({ra_hms},{dec_dms},{bkg_inner_r_arc.value}',{bkg_outer_r_arc.value}')\n")
 
                 # Add exclusion regions if provided
                 for region in bkg_inter_reg:
