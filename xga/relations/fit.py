@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 14:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/03/2025, 13:56. Copyright (c) The Contributors
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -154,7 +154,7 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     if point_names is not None:
         if isinstance(point_names, list):
             point_names = np.array(point_names)
-        point_names = point_names[all_not_nans]
+        point_names = point_names[all_acc]
     elif point_names is None:
         point_names = None
 
@@ -163,7 +163,7 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     if third_dim is not None:
         if isinstance(third_dim, list):
             third_dim = Quantity(third_dim)
-        third_dim = third_dim[all_not_nans]
+        third_dim = third_dim[all_acc]
     elif third_dim is None:
         third_dim = None
 
