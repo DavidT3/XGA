@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:25. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4192,7 +4192,8 @@ class BaseSource:
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
                      radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
-                     hi_en: Quantity = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                     hi_en: Quantity = None, spec_model: str = None,
+                     spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         This is the generic get method for XGA profile objects stored in this source. You still must remember
         the profile type value to use it, but once entered it will return a list of all matching profiles (or a
@@ -4214,6 +4215,12 @@ class BaseSource:
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
@@ -4224,16 +4231,12 @@ class BaseSource:
                  " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = profile_type + "_profile"
-        if all([obs_id is None, inst is None]):
-            search_key = "combined_" + search_key
-
-        search_key = profile_type + "_profile"
         if search_key not in ALLOWED_PRODUCTS:
             warn("{} seems to be a custom profile, not an XGA default type. If this is not "
                  "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
 
         matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, annuli_bound_radii,
-                                            lo_en=lo_en, hi_en=hi_en)
+                                            lo_en, hi_en, spec_model, spec_fit_conf)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -4242,14 +4245,14 @@ class BaseSource:
         return matched_prods
 
     def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
-                              annuli_bound_radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
+                              annuli_bound_radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                              spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for XGA profiles made using all available data which are stored in this source.
         You still must remember the profile type value to use it, but once entered it will return a list
         of all matching profiles (or a single object if only one match is found).
 
-        :param annuli_bound_radii:
         :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
         :param Quantity central_coord: The central coordinate of the profile you wish to retrieve, the default
             is None which means the method will use the default coordinate of this source.
@@ -4262,6 +4265,12 @@ class BaseSource:
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
@@ -4278,7 +4287,7 @@ class BaseSource:
                           "true then you have passed an invalid profile type.", stacklevel=2)
 
         matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, annuli_bound_radii,
-                                            lo_en=lo_en, hi_en=hi_en)
+                                            lo_en, hi_en, spec_model, spec_fit_conf)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
