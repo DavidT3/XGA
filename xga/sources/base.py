@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 17:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 21:34. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4068,13 +4068,14 @@ class BaseSource:
         return matched_prods
 
     def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None,
-                       central_coord: Quantity = None, radii: Quantity = None,
-                       lo_en: Quantity = None, hi_en: Quantity = None,  spec_model: str = None,
+                       central_coord: Quantity = None, radii: Quantity = None, annuli_bound_radii: Quantity = None,
+                       lo_en: Quantity = None, hi_en: Quantity = None, spec_model: str = None,
                        spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
         searches for full and partial matches in this source's product storage structure.
 
+        :param annuli_bound_radii:
         :param str search_key: The exact search key which defined profile type, and whether it is combined or not.
         :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
             which means all profiles matching the other criteria will be returned.
@@ -4084,6 +4085,9 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
@@ -4099,36 +4103,59 @@ class BaseSource:
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         # Checking the energy bound input parameters
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
+        if any([lo_en is None, hi_en is None]) and not all([lo_en is None, hi_en is None]):
             raise ValueError("The 'lo_en' and 'hi_en' arguments must both be None, or both be an astropy quantity.")
+        elif lo_en is not None and not all([lo_en.unit.is_equivalent('keV'), hi_en.unit.is_equivalent('keV')]):
+            raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
+        elif lo_en is not None:
+            # Make sure they're in the units we want
+            lo_en = lo_en.to('keV')
+            hi_en = hi_en.to('keV')
 
-        # If no specific central coordinate has been passed, we fetch the default central coordinate and turn it
-        #  into a central position key
+        # If no specific central coordinate has been passed, we fetch the default central coordinate - don't love
+        #  this in hindsight, but I won't change it now
+        # TODO Consider that this base level get method shouldn't impose a default coordinate?
         if central_coord is None:
             central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
 
-        # Now we convert the input radius to degrees (as that is the radius unit used in storage keys)
-        if radii is not None:
+        # Now we convert the input radii to degrees for future comparisons to profile annuli radii - whether those
+        #  radii be annular bounds or central radii
+        if all([radii is None, annuli_bound_radii is None]):
+            raise ValueError("Both the 'radii' and 'annuli_bound_radii' arguments are not None - please supply one"
+                             " or the other.")
+        elif radii is not None:
             radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
+        elif annuli_bound_radii is not None:
+            annuli_bound_radii = self.convert_radius(annuli_bound_radii, 'deg')
 
         broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
         matched_prods = []
         for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+            p: BaseProfile1D
+            # We can now start checking any supplied matching criteria against the current profile - if we got
+            #  given energy bounds then we compare them to the profile's bounds. If they don't match then we
+            #  trigger a continue statement
+            if lo_en is not None and (p.energy_bounds[0] != lo_en or p.energy_bounds[1] != hi_en):
+                continue
 
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
+            # Nice simple one, do the coordinates supplied to the get method match the central coordinates of
+            #  the current profile - if they don't then we aren't interested
+            if (p.centre != central_coord).any():
+                continue
+
+            # If we received information on the inner and outer radii of the annular bins, we'll
+            #  check it against the current profile
+            if (annuli_bound_radii is not None and len(annuli_bound_radii) != len(p.annulus_bounds) or
+                    (self.convert_radius(p.annulus_bounds, 'deg') != annuli_bound_radii).any()):
+                continue
+
+            # The same as above, but for central radii
+            if (radii is not None and len(radii) != len(p.radii) or
+                    (self.convert_radius(p.radii, 'deg') != radii).any()):
+                continue
+
+            # If we get here, then the current profile matches our search criteria
+            matched_prods.append(p)
 
         # At this point, we might have to impose more checks on the keys of the identified products - if the
         #  user has passed information that indicates the profile originated from an annular spectrum, then the
@@ -4202,7 +4229,7 @@ class BaseSource:
             warn("{} seems to be a custom profile, not an XGA default type. If this is not "
                           "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en=lo_en, hi_en=hi_en)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -4242,7 +4269,7 @@ class BaseSource:
             warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
                           "true then you have passed an invalid profile type.", stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en=lo_en, hi_en=hi_en)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
