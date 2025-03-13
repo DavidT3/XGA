@@ -275,7 +275,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             final_paths.append(spec_file)
             # This is the products final resting place, if it exists at the end of this command.
-            extra_info.append({"inner_radius": inner_radius, "outer_radius": outer_radius,
+            extra_info.append({"inner_radius": inner_r_arc, "outer_radius": outer_r_arc,
                                "rmf_path": rmf_file,
                                "arf_path": arf_file,
                                "b_spec_path": bkg_spec_file,
