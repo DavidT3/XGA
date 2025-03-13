@@ -190,16 +190,19 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                         
             coord = SkyCoord(ra=ra_src, dec=dec_src, frame='icrs')
 
+            print(coord)
+
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
+            print(ra_hms, dec_dms)
             bkg_inner_r_arc = outer_r_arc * source.background_radius_factors[0]
             bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
             
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
             os.makedirs(temp_region_dir, exist_ok=True)
-            print(spec_ciao_out)
+            print(temp_region_dir)
             print()
             # Define file paths
             spec_ext_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_ext_temp.reg")
