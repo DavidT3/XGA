@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 17:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:35. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -506,7 +506,7 @@ class GalaxyCluster(ExtendedSource):
 
         return Quantity(res, 'keV')
 
-    def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
+    def _get_spec_based_profiles(self, search_key: str, annuli_bound_radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                                  set_id: int = None, spec_model: str = None,
                                  spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
@@ -515,9 +515,9 @@ class GalaxyCluster(ExtendedSource):
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
 
         :param str search_key: The profile search key, e.g. combined_1d_proj_temperature_profile.
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+        :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the annular spectra set
             from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped.
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
@@ -539,7 +539,8 @@ class GalaxyCluster(ExtendedSource):
         # Time to start actually finding profiles - firstly we'll make use of the _get_prof_prod method to get
         #  profiles that meet some of the general criteria (including the spectral model fit configuration, if
         #  specified), then we'll work on narrowing them down even more.
-        init_matches = self._get_prof_prod(search_key, central_coord=self.default_coord, radii=radii,
+        init_matches = self._get_prof_prod(search_key, central_coord=self.default_coord,
+                                           annuli_bound_radii=annuli_bound_radii,
                                            spec_model=spec_model, spec_fit_conf=spec_fit_conf)
         # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
         #  associated with them, as that means that they were not generated from an annular spectrum
@@ -624,8 +625,8 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", radii, group_spec, min_counts,
+                                                      min_sn, over_sample, set_id)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -689,8 +690,8 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", radii, group_spec, min_counts,
+                                                      min_sn, over_sample, set_id)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
