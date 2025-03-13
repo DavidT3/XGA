@@ -43,6 +43,7 @@ class EventList(BaseProduct):
         #  information (again if read in).
         self._header = None
         self._data = None
+        self._telescope = telescope
 
         if obs_ids is not None and not isinstance(obs_ids, List):
             raise ValueError("The 'obs_ids' argument nust be a list of strings.")
