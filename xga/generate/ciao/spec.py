@@ -93,12 +93,18 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     continue
         inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
         outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
+        source_name = source.name.replace("+", "x")
+        ra_src, dec_src = source.default_coord[0], source.default_coord[1]
+        
+        ra_src_str, dec_src_str = ra_src.value, dec_src.value
+        inner_radius_str, outer_radius_str = source.convert_radius(inner_radius, 'deg').value, source.convert_radius(outer_radius, 'deg').value
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
             evt_file = product
             obs_id = evt_file.obs_id
             inst = evt_file.instrument
+
 
             # Grabbing the attitude and badpix files, which the CIAO command we aim to run will want as an input
             att_file = source.get_att_file(obs_id, 'chandra')
@@ -131,7 +137,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             # Now we've established that we have retrieved a single mask file product, we extract the path from it
             mask_file = mask_prod[0].path
-
+            
             # Check do we need to group the spec
             if group_spec and min_counts is not None:
                 extra_file_name = "_mincnt{c}".format(c=min_counts)
@@ -145,23 +151,45 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 extra_file_name = ''
                 group_type = 'NONE'
                 binspec_int = 'NONE'
-
+            
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
-
-            # Just for group spec at this point, but need to add ungrouped later
-            spec_file = os.path.join(dest_dir, f"{obs_id}_{inst}_grp.pi")
-            arf_file = os.path.join(dest_dir, f"{obs_id}_{inst}.arf")
-            rmf_file = os.path.join(dest_dir, f"{obs_id}_{inst}.rmf")
-            bkg_spec_file = os.path.join(dest_dir, f"{obs_id}_{inst}_bkg.pi")
-            bkg_arf_file = os.path.join(dest_dir, f"{obs_id}_{inst}_bkg.arf")
-            bkg_rmf_file = os.path.join(dest_dir, f"{obs_id}_{inst}_bkg.rmf")
             
             # Temporary directory for fluximage.
             temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
             os.makedirs(temp_dir, exist_ok=True)
+            
+            # Just for group spec at this point, but need to add ungrouped later
+            spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_spec.fits"
+            spec_file = os.path.join(dest_dir, spec_name)
+            if group_spec is not None:
+                spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_grp.pi")
+            else:
+                spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.pi")
+            
+            arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.arf"
+            arf_file = os.path.join(dest_dir, spec_name)
+            arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.arf")
+            
+            rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.rmf"
+            rmf_file = os.path.join(dest_dir, rmf_name)
+            rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.rmf")
+            
+            bkg_spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_backspec.fits"
+            bkg_spec_file = os.path.join(dest_dir, bkg_spec_name)
+            bkg_spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.pi")
+            
+            bkg_arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.arf"
+            bkg_arf_file = os.path.join(dest_dir, bkg_arf_name)
+            bkg_arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.arf")
+            
+            bkg_rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.rmf"
+            bkg_rmf_file = os.path.join(dest_dir, bkg_rmf_name)
+            bkg_rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.rmf")
+            
+            
                         
-            coord = SkyCoord(ra=source.default_coord[0], dec=source.default_coord[1], frame='icrs')
+            coord = SkyCoord(ra=ra_src, dec=dec_src, frame='icrs')
 
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
@@ -170,7 +198,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
             
             # Ensure the directory exists
-            temp_region_dir = os.path.join(dest_dir, f"temp_region") #added random nubmers
+            temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
             os.makedirs(temp_region_dir, exist_ok=True)
   
             # Define file paths
@@ -227,10 +255,13 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             specextract_cmd = (
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
-                f"asp={att_file} badpixfile={badpix_file} grouptype={group_type} binspec={binspec_int} "
+                f"asp={att_file} badpixfile={badpix_file} grouptype={grouptype_int} binspec={binspec_int} "
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
-                f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
+                f"mv spec_ciao_out spec_file; mv arf_ciao_out arf_file; mv rmf_ciao_out rmf_file; "
+                f"mv bkg_spec_ciao_out bkg_spec_file; mv bkg_arf_ciao_out bkg_arf_file; mv bkg_rmf_ciao_out bkg_rmf_file; "
+                f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )
+                        
             cmds.append(specextract_cmd)
 
             print(specextract_cmd)
