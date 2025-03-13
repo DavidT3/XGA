@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 23:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/03/2025, 12:33. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -732,6 +732,7 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
+    # TODO OKAY NEED TO SORT OUT RADII VS ANNULI BOUND RADII HERE
     def get_density_profiles(self, outer_rad: Union[Quantity, str] = None, method: str = None, obs_id: str = None,
                              inst: str = None, central_coord: Quantity = None, radii: Quantity = None,
                              pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
