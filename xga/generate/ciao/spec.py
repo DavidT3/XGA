@@ -133,10 +133,18 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             mask_file = mask_prod[0].path
 
             # Check do we need to group the spec
-            if group_spec:
-                group_type = 'NUM_CTS'
+            if group_spec and min_counts is not None:
+                extra_file_name = "_mincnt{c}".format(c=min_counts)
+                grouptype_int = 'NUM_CTS'
+                binspec_int = min_counts
+            elif group_spec and min_sn is not None:
+                extra_file_name = "_minsn{s}".format(s=min_sn)
+                grouptype_int = 'SNR'
+                binspec_int = min_sn
             else:
+                extra_file_name = ''
                 group_type = 'NONE'
+                binspec_int = 'NONE'
 
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
@@ -219,7 +227,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             specextract_cmd = (
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
-                f"asp={att_file} badpixfile={badpix_file} grouptype={group_type} binspec={min_counts} "
+                f"asp={att_file} badpixfile={badpix_file} grouptype={group_type} binspec={binspec_int} "
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
