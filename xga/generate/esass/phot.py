@@ -426,7 +426,12 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
                                                                 telescope='erosita')
                         if en_id in match]
+                print('exists')
+                print(exists)
+                print('usable')
+                print(exists[0][-1].usable)
                 if len(exists) == 1 and exists[0][-1].usable:
+                    print('here')
                     continue
                 # Generating an exposure map requires a reference image.
                 # ASSUMPTION5 source.get_products has a telescope parameter
