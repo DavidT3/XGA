@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 21:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 21:53. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4120,7 +4120,7 @@ class BaseSource:
 
         # Now we convert the input radii to degrees for future comparisons to profile annuli radii - whether those
         #  radii be annular bounds or central radii
-        if all([radii is None, annuli_bound_radii is None]):
+        if all([radii is not None, annuli_bound_radii is not None]):
             raise ValueError("Both the 'radii' and 'annuli_bound_radii' arguments are not None - please supply one"
                              " or the other.")
         elif radii is not None:
