@@ -199,6 +199,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
             os.makedirs(temp_region_dir, exist_ok=True)
+            print(temp_region_dir)
   
             # Define file paths
             spec_ext_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_ext_temp.reg")
