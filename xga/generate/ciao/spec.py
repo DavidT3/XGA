@@ -13,7 +13,7 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u
 from tqdm import tqdm
 
-from xga import OUTPUT, NUM_CORES
+from xga import OUTPUT, NUM_CORES, xga_conf
 from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -119,6 +119,19 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Now we've established that we have retrieved a single bad pixel product, we extract the path from it
             badpix_file = badpix_prod[0].path
 
+            mask_prod = src.get_products("maskfile", telescope="chandra", obs_id=obs_id, inst=inst)
+            if len(mask_prod) > 1:
+                raise ValueError("Found multiple mask files for Chandra {o}-{i}; this should not be "
+                         "possible, please contact the developer.".format(o=obs_id, i=inst))
+            elif len(mask_prod) == 0:
+                raise ValueError("No mask has been read in for Chandra {o}-{i}, please check the mask path"
+                                 " entered in the XGA configuration file - "
+                                 "{mask}".format(o=obs_id, i=inst,
+                                                 mask=xga_conf['CHANDRA_FILES']['{i}_mask_file'.format(i=inst)]))
+
+            # Now we've established that we have retrieved a single mask file product, we extract the path from it
+            mask_file = mask_prod[0].path
+
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
@@ -201,7 +214,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype=NUM_CTS binspec={min_counts} "
-                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile=none; "
+                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
                 f"mv * {dest_dir}; cd ..; rm -r {temp_dir}"
             )
             cmds.append(specextract_cmd)
