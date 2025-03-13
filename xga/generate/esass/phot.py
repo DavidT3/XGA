@@ -418,22 +418,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                     os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
                 en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-                print('en_id')
-                print(en_id)
-                # ASSUMPTION5 source.get_products has a telescope parameter
-                print(source._products)
-                print('full get_products')
-                print(source.get_products("expmap", obs_id, inst, just_obj=False,
-                                                                telescope='erosita'))
                 exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
                                                                 telescope='erosita')
                         if en_id in match]
-                print('exists')
-                print(exists)
-                print('usable')
-                print(exists[0][-1].usable)
+
                 if len(exists) == 1 and exists[0][-1].usable:
-                    print('here')
                     continue
                 # Generating an exposure map requires a reference image.
                 # ASSUMPTION5 source.get_products has a telescope parameter
