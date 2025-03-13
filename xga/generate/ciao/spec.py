@@ -187,7 +187,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             bkg_rmf_file = os.path.join(dest_dir, bkg_rmf_name)
             bkg_rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.rmf")
             
-            
                         
             coord = SkyCoord(ra=ra_src, dec=dec_src, frame='icrs')
 
@@ -257,8 +256,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype={grouptype_int} binspec={binspec_int} "
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
-                f"mv spec_ciao_out spec_file; mv arf_ciao_out arf_file; mv rmf_ciao_out rmf_file; "
-                f"mv bkg_spec_ciao_out bkg_spec_file; mv bkg_arf_ciao_out bkg_arf_file; mv bkg_rmf_ciao_out bkg_rmf_file; "
+                f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
+                f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
                 f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )
                         
