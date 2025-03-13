@@ -125,7 +125,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Now we've established that we have retrieved a single bad pixel product, we extract the path from it
             badpix_file = badpix_prod[0].path
 
-            mask_prod = source.get_products("maskfile", telescope="chandra", obs_id=obs_id, inst=inst)
+            mask_prod = src.get_products("maskfile", telescope="chandra", obs_id=obs_id, inst=inst)
             if len(mask_prod) > 1:
                 raise ValueError("Found multiple mask files for Chandra {o}-{i}; this should not be "
                          "possible, please contact the developer.".format(o=obs_id, i=inst))
@@ -199,8 +199,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
             os.makedirs(temp_region_dir, exist_ok=True)
-            print(temp_region_dir)
-  
+            print(spec_ciao_out)
+            print()
             # Define file paths
             spec_ext_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_ext_temp.reg")
             spec_bkg_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_bkg_temp.reg")
@@ -261,6 +261,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
                 f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )
+            
+            print(specextract_cmd)
+            
                         
             cmds.append(specextract_cmd)
 
