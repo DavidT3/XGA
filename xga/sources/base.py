@@ -4978,6 +4978,10 @@ class BaseSource:
                     eexpmap(self, self._peak_lo_en, self._peak_hi_en)
                 elif tel == 'erosita':
                     from xga.generate.esass import expmap
+                    print('peak lo en')
+                    print(self._peak_lo_en)
+                    print('hi en')
+                    print(self._peak_hi_en)
                     expmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:

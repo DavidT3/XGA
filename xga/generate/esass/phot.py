@@ -418,6 +418,8 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                     os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
                 en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
+                print('en_id')
+                print(en_id)
                 # ASSUMPTION5 source.get_products has a telescope parameter
                 print(source._products)
                 print('full get_products')
