@@ -125,7 +125,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Now we've established that we have retrieved a single bad pixel product, we extract the path from it
             badpix_file = badpix_prod[0].path
 
-            mask_prod = src.get_products("maskfile", telescope="chandra", obs_id=obs_id, inst=inst)
+            mask_prod = source.get_products("maskfile", telescope="chandra", obs_id=obs_id, inst=inst)
             if len(mask_prod) > 1:
                 raise ValueError("Found multiple mask files for Chandra {o}-{i}; this should not be "
                          "possible, please contact the developer.".format(o=obs_id, i=inst))
