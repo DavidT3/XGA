@@ -168,7 +168,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.pi")
             
             arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.arf"
-            arf_file = os.path.join(dest_dir, spec_name)
+            arf_file = os.path.join(dest_dir, arf_name)
             arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.arf")
             
             rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.rmf"
@@ -245,8 +245,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     reg_dec = region.center.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
                     # Convert width and height to arcmin
-                    width_arcmin = region.width.to(u.arcmin).value
-                    height_arcmin = region.height.to(u.arcmin).value
+                    width_arc = region.width.to(u.arcmin).value
+                    height_arc = region.height.to(u.arcmin).value
                     angle = region.angle.to(u.deg).value
 
                     # Write the exclusion region in ellipse format
@@ -263,10 +263,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
                 # f"rm -r {temp_dir}; rm -r {temp_region_dir}"
-            )
-            
-            print(specextract_cmd)
-            
+            )            
                         
             cmds.append(specextract_cmd)
 
