@@ -150,7 +150,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 binspec_int = min_sn
             else:
                 extra_file_name = ''
-                group_type = 'NONE'
+                grouptype_int = 'NONE'
                 binspec_int = 'NONE'
             
             # Setting up the top level path for the eventual destination of the products to be generated here
