@@ -93,6 +93,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     continue
         inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
         outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
+        print('inner/outer r:', inner_r_arc, outer_r_arc)
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
         
@@ -190,20 +191,15 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                         
             coord = SkyCoord(ra=ra_src, dec=dec_src, frame='icrs')
 
-            print(coord)
-
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
-            print(ra_hms, dec_dms)
             bkg_inner_r_arc = outer_r_arc * source.background_radius_factors[0]
             bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
             
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
             os.makedirs(temp_region_dir, exist_ok=True)
-            print(temp_region_dir)
-            print()
             # Define file paths
             spec_ext_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_ext_temp.reg")
             spec_bkg_reg_path = os.path.join(temp_region_dir, f"{obs_id}_{inst}_spec_bkg_temp.reg")
@@ -262,7 +258,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
-                # f"rm -r {temp_dir}; rm -r {temp_region_dir}"
+                f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )            
                         
             cmds.append(specextract_cmd)
