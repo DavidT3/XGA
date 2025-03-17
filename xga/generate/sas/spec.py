@@ -761,6 +761,9 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         all_extras.append(src_extras)
 
     # This gets passed back to the sas call function and is used to run the commands
+    print('in spectrum_set xmm')
+    print('all_extras')
+    print(all_extras)
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
 
