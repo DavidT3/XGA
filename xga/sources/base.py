@@ -1761,7 +1761,6 @@ class BaseSource:
                     #  TODO see issue #908, figure out how to support different resolutions of image
                     try:
                         ims = self.get_images(obs_id, telescope=tel)
-                        print(self._products)
                     except NoProductAvailableError:
                         raise NoProductAvailableError("There is no image available for {t}-{o}, associated "
                                                       "with {n}. An image is currently required to check for sky "
