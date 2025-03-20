@@ -152,6 +152,15 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 extra_file_name = ''
                 grouptype_int = 'NONE'
                 binspec_int = 'NONE'
+
+            # Do we actually need to run this generation? If matching products already exist then we won't bother
+            try:
+                source.get_spectra(obs_id=obs_id, inst=inst, telescope='chandra', outer_radius=outer_radius, inner_radius=inner_radius)
+                # If the expected outputs from this function do exist for the current ObsID, we'll just
+                #  move on to the next one
+                continue
+            except NoProductAvailableError:
+                pass
             
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
