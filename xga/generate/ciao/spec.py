@@ -92,7 +92,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     continue
         inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
         outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
-        print('inner/outer r:', inner_r_arc, outer_r_arc)
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
         
@@ -271,10 +270,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                         
             cmds.append(specextract_cmd)
 
-            print(specextract_cmd)
-            print()
-            
-            final_paths.append(spec_file)
             # This is the products final resting place, if it exists at the end of this command.
             extra_info.append({"inner_radius": inner_r_arc, "outer_radius": outer_r_arc,
                                "rmf_path": rmf_file,
