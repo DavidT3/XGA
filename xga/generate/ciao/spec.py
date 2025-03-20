@@ -269,7 +269,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             )            
                         
             cmds.append(specextract_cmd)
-
+            
+            final_paths.append(spec_file)
             # This is the products final resting place, if it exists at the end of this command.
             extra_info.append({"inner_radius": inner_r_arc, "outer_radius": outer_r_arc,
                                "rmf_path": rmf_file,

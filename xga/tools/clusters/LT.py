@@ -329,8 +329,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 srctool_spectrum(samp, samp.get_radius(o_dens), group_spec=group_spec, min_counts=min_counts,
                                  min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             elif telescope == 'chandra':
-                specextract_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False,
-                                     group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
+                print(samp.get_radius(o_dens))
+                specextract_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores,
+                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                      over_sample=over_sample)
             else:
                 raise NotImplementedError("Support for telescopes other than XMM and eROSITA is not yet implemented.")
