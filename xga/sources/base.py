@@ -5065,7 +5065,6 @@ class BaseSource:
                     # Just making sure that the exp_maps variable can be iterated over
                     if not isinstance(exp_maps, list):
                         exp_maps = [exp_maps]
-                    print('test functio', reg_type, tel, o, self._default_coord)
                     m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord)[0]
                     full_area[tel][o] = m.sum()
 
