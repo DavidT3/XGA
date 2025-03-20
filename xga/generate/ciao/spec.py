@@ -21,7 +21,6 @@ from xga.sources.base import NullSource
 from .run import ciao_call
 
 
-@ciao_call
 def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
@@ -299,3 +298,44 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
     # I only return num_cores here so it has a reason to be passed to this function, really
     # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
+
+
+@ciao_call
+def specextract_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                         min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+                         num_cores: int = NUM_CORES, disable_progress: bool = False):
+    """
+    A wrapper for all the CIAO processes necessary to generate an Chandra spectrum that can be analysed
+    in XSPEC. Every observation associated with this source, and every instrument associated with that
+    observation, will have a spectrum generated using the specified outer and inner radii as a boundary. The
+    default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
+    It is possible to generate both grouped and ungrouped spectra using this function, with the degree
+    of grouping set by the min_counts, min_sn, and oversample parameters.
+
+    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
+    :param str/Quantity outer_radius: The name or value of the outer radius to use for the generation of
+        the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+        'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
+        generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param str/Quantity inner_radius: The name or value of the inner radius to use for the generation of
+        the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+        default this is zero arcseconds, resulting in a circular spectrum. If you are
+        generating for multiple sources then you can also pass a Quantity with one entry per source.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores to use, default is set to 90% of available.
+    :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    """
+    # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
+    #  can also use them
+    return _chandra_spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
+                              num_cores, disable_progress)
