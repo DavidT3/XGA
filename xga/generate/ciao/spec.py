@@ -22,9 +22,9 @@ from .run import ciao_call
 
 
 def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-               min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
-               num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
+                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                       min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
+                       num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
     """
     An internal function to generate all the commands necessary to produce a Chandra spectrum using specextract,
     but is not decorated by the ciao_call function, so the commands aren't immediately run.

@@ -12,6 +12,7 @@ from xga import DEFAULT_COSMO, NUM_CORES
 from xga.exceptions import ModelNotAssociatedError, ProductGenerationError, XGADeveloperError
 from xga.generate.esass import srctool_spectrum
 from xga.generate.sas import evselect_spectrum
+from xga.generate.ciao import specextract_spectrum
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
 from xga.relations.clusters.TL import xcs_sdss_r500_52_TL
@@ -328,9 +329,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 srctool_spectrum(samp, samp.get_radius(o_dens), group_spec=group_spec, min_counts=min_counts,
                                  min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             elif telescope == 'chandra':
-                raise XGADeveloperError("Spectrum generation appears to be working for Chandra currently, but "
-                                        "the actual command to call has not been finalised, so this will need "
-                                        "filling out later.")
+                specextract_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False,
+                                     group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
+                                     over_sample=over_sample)
             else:
                 raise NotImplementedError("Support for telescopes other than XMM and eROSITA is not yet implemented.")
             # If the end of evselect_spectrum doesn't throw a ProductGenerationError then we know we're all good, so we
