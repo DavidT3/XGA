@@ -9,7 +9,7 @@ from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
 from ...exceptions import NoProductAvailableError
-from ...generate.ciao.spec import _chandra_spec_cmds
+from ...generate.ciao.spec import specextract_spectrum
 from ...generate.esass import srctool_spectrum
 from ...generate.sas import evselect_spectrum, region_setup
 from ...products import Spectrum
@@ -81,7 +81,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             #  called, are not currently finalised
             warn("Spectrum generation appears to be working for Chandra currently, but the actual command to call "
                  "has not been finalised, so this will need revisiting and updating later")
-            sources = _chandra_spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
+            sources = specextract_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                                          over_sample, False, num_cores)
 
         elif tel == 'erosita' or tel == 'erass':
