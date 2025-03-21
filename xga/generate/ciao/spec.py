@@ -97,7 +97,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
         
         ra_src_str, dec_src_str = ra_src.value, dec_src.value
-        inner_radius_str, outer_radius_str = inner_r_arc/60., outer_r_arc/60.
+        inner_radius_str, outer_radius_str = (inner_r_arc/60.).value, (outer_r_arc/60.).value
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
