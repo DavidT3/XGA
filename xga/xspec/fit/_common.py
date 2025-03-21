@@ -79,10 +79,10 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             # TODO DEAL WITH THIS
             # Currently have to raise an error, because the name of the spectrum generation function, and how it is
             #  called, are not currently finalised
-            warn("Spectrum generation appears to be working for Chandra currently, but the actual command to call "
-                 "has not been finalised, so this will need revisiting and updating later")
+            # warn("Spectrum generation appears to be working for Chandra currently, but the actual command to call "
+            #      "has not been finalised, so this will need revisiting and updating later")
             sources = specextract_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                                         over_sample, False, num_cores)
+                                           over_sample, False, num_cores)
 
         elif tel == 'erosita' or tel == 'erass':
             # This is the spectrum generation tool that is specific to eROSITA
