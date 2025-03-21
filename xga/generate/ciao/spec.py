@@ -6,7 +6,6 @@ from copy import copy
 from itertools import permutations
 from random import randint
 from typing import Union, List
-import re
 
 import numpy as np
 from astropy.units import Quantity
@@ -15,7 +14,7 @@ import astropy.units as u
 from tqdm import tqdm
 
 from xga import OUTPUT, NUM_CORES, xga_conf
-from ..sas._common import region_setup
+from xga.generate.sas._common import region_setup
 from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -222,6 +221,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
+
+            bkg_inner_r_arc = outer_r_arc * source.background_radius_factors[0]
+            bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
             
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
@@ -259,7 +261,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             with open(spec_bkg_reg_path, 'w') as bkg_reg:
                 bkg_reg.write("# Region file format: DS9 version 4.1\n")
                 bkg_reg.write("fk5\n")
-                bkg_reg.write(f"annulus({ra_hms},{dec_dms},{inner_r_arc.value}',{outer_r_arc.value}')\n")
+                bkg_reg.write(f"annulus({ra_hms},{dec_dms},{bkg_inner_r_arc.value.value}',{bkg_outer_r_arc.value}')\n")
 
                 # Add exclusion regions if provided
                 for region in bkg_inter_reg:
@@ -284,7 +286,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
-                # f"rm -r {temp_dir}; rm -r {temp_region_dir}"
+                f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )       
 
             print('---------------------------------------------------------')
