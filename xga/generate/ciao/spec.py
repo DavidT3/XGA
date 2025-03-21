@@ -189,7 +189,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             # Just for group spec at this point, but need to add ungrouped later
             spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_spec.fits"
-            spec_name = re.sub(r'[\[\]]', '', spec_name)
             spec_file = os.path.join(dest_dir, spec_name)
             if group_spec is not None:
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_grp.pi")
@@ -197,27 +196,22 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.pi")
             
             arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.arf"
-            arf_name = re.sub(r'[\[\]]', '', arf_name)
             arf_file = os.path.join(dest_dir, arf_name)
             arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.arf")
             
             rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.rmf"
-            rmf_name = re.sub(r'[\[\]]', '', rmf_name)
             rmf_file = os.path.join(dest_dir, rmf_name)
             rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.rmf")
             
             bkg_spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_backspec.fits"
-            bkg_spec_name = re.sub(r'[\[\]]', '', bkg_spec_name)
             bkg_spec_file = os.path.join(dest_dir, bkg_spec_name)
             bkg_spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.pi")
             
             bkg_arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.arf"
-            bkg_arf_name = re.sub(r'[\[\]]', '', bkg_arf_name)
             bkg_arf_file = os.path.join(dest_dir, bkg_arf_name)
             bkg_arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.arf")
             
             bkg_rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.rmf"
-            bkg_rmf_name = re.sub(r'[\[\]]', '', bkg_rmf_name)
             bkg_rmf_file = os.path.join(dest_dir, bkg_rmf_name)
             bkg_rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.rmf")
             
@@ -245,10 +239,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             with open(spec_ext_reg_path, 'w') as ext_reg:
                 ext_reg.write("# Region file format: DS9 version 4.1\n")
                 ext_reg.write("fk5\n")
-                region_line_temp = str(f"annulus({ra_hms},{dec_dms},{inner_r_arc.value}',{outer_r_arc.value}')\n")
-                region_line_clean_temp = re.sub(r'[\[\]]', '', region_line_temp)
-
-                ext_reg.write(region_line_clean_temp)
+                ext_reg.write(f"annulus({ra_hms},{dec_dms},{inner_r_arc.value}',{outer_r_arc.value}')\n")
                 # Add exclusion regions if provided
                 for region in ext_inter_reg:
                     reg_ra = region.center.ra.to_string(unit=u.hour, sep=':', precision=5)
@@ -259,10 +250,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     height_arc = region.height.to(u.arcmin).value
                     angle = region.angle.to(u.deg).value
 
-                    region_line_temp = str(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
-                    region_line_clean_temp = re.sub(r'[\[\]]', '', region_line_temp)
                     # Write the exclusion region in ellipse format
-                    ext_reg.write(region_line_clean_temp)
+                    ext_reg.write(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
 
             bkg_inter_reg = source.regions_within_radii(outer_r_arc * source.background_radius_factors[0],
                                                         outer_r_arc * source.background_radius_factors[1],
@@ -271,9 +260,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             with open(spec_bkg_reg_path, 'w') as bkg_reg:
                 bkg_reg.write("# Region file format: DS9 version 4.1\n")
                 bkg_reg.write("fk5\n")
-                region_line_temp = str(f"annulus({ra_hms},{dec_dms},{inner_r_arc.value}',{outer_r_arc.value}')\n")
-                region_line_clean_temp = re.sub(r'[\[\]]', '', region_line_temp)
-                bkg_reg.write(region_line_clean_temp)
+                bkg_reg.write(f"annulus({ra_hms},{dec_dms},{inner_r_arc.value}',{outer_r_arc.value}')\n")
 
                 # Add exclusion regions if provided
                 for region in bkg_inter_reg:
@@ -283,13 +270,10 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     # Convert width and height to arcmin
                     width_arc = region.width.to(u.arcmin).value
                     height_arc = region.height.to(u.arcmin).value
-                    angle = region.angle.to(u.deg).value
-
-                    region_line_temp = str(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
-                    region_line_clean_temp = re.sub(r'[\[\]]', '', region_line_temp)
+                    angle = region.angle.to(u.deg).valu
 
                     # Write the exclusion region in ellipse format
-                    bkg_reg.write(region_line_clean_temp)
+                    bkg_reg.write(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
 
 
             # Build specextract command - making sure to set parallel to no, seeing as we're doing our
