@@ -392,7 +392,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
             tx_all = samp.Tx(telescope, samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
-                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample
                           # stacked_spectra=stacked_spectra
                           )
             txs = tx_all[:, 0]

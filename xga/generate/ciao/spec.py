@@ -99,19 +99,13 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
         inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
         outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
-        print('--------------------------------')
-        print('int', inner_radius, outer_radius)
-        print('arc', inner_r_arc, outer_r_arc)
-        print('kpc', source.convert_radius(inner_radius, 'kpc'))
-        print('kpc', source.convert_radius(outer_radius, 'kpc'))
 
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
         
         ra_src_str, dec_src_str = ra_src.value, dec_src.value
         inner_radius_str, outer_radius_str = (inner_r_arc/60.).value, (outer_r_arc/60.).value
-        print('deg for file', inner_radius_str, outer_radius_str)
-        print('--------------------------------')
+
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
