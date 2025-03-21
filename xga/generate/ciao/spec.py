@@ -57,9 +57,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
 
-    sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
-                                                         '', num_cores)
-
+    sources, inner_radii, outer_radii = region_setup(sources, outer_radius=outer_radius, inner_radius=inner_radius, 
+                                                     disable_progress=False, obs_id='', num_cores=num_cores)
+    
     # Check if the source/sample has Chandra data.
     if not isinstance(sources, list) and "chandra" not in sources.telescopes:
         raise TelescopeNotAssociatedError("There are no Chandra data associated with the source.")
@@ -287,9 +287,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 # f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )       
 
-            # print('---------------------------------------------------------')
-            # print(specextract_cmd)
-            # print('---------------------------------------------------------')     
+            print('---------------------------------------------------------')
+            print(specextract_cmd)
+            print('---------------------------------------------------------')     
                         
             cmds.append(specextract_cmd)
             
