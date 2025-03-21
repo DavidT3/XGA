@@ -91,13 +91,19 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     sources_extras.append(np.array(extra_info))
         #     sources_types.append(np.full(len(cmds), fill_value="spectrum"))
         #     continue
+
+        if isinstance(outer_radius.value, (list, tuple, np.ndarray)):
+            outer_radius = outer_radius[0]
+        if isinstance(inner_radius.value, (list, tuple, np.ndarray)):
+            inner_radius = inner_radius[0]
+
         inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
         outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
         print('--------------------------------')
         print('int', inner_radius, outer_radius)
         print('arc', inner_r_arc, outer_r_arc)
         print('kpc', source.convert_radius(inner_radius, 'kpc'))
-        print('kpc', source.convert_radius(inner_radius, 'kpc'))
+        print('kpc', source.convert_radius(outer_radius, 'kpc'))
 
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
