@@ -378,6 +378,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             warn("Some sources ({}) have been removed because of spectrum generation "
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
+        print('------------')
+        print(samp.get_radius(o_dens))
+        print('------------')
         # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
                          lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
