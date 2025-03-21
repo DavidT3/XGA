@@ -170,6 +170,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             # Just for group spec at this point, but need to add ungrouped later
             spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_spec.fits"
+            spec_name = re.sub(r'[\[\]]', '', spec_name)
             spec_file = os.path.join(dest_dir, spec_name)
             if group_spec is not None:
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_grp.pi")
@@ -177,22 +178,27 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.pi")
             
             arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.arf"
+            arf_name = re.sub(r'[\[\]]', '', arf_name)
             arf_file = os.path.join(dest_dir, arf_name)
             arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.arf")
             
             rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}.rmf"
+            rmf_name = re.sub(r'[\[\]]', '', rmf_name)
             rmf_file = os.path.join(dest_dir, rmf_name)
             rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.rmf")
             
             bkg_spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_backspec.fits"
+            bkg_spec_name = re.sub(r'[\[\]]', '', bkg_spec_name)
             bkg_spec_file = os.path.join(dest_dir, bkg_spec_name)
             bkg_spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.pi")
             
             bkg_arf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.arf"
+            bkg_arf_name = re.sub(r'[\[\]]', '', bkg_arf_name)
             bkg_arf_file = os.path.join(dest_dir, bkg_arf_name)
             bkg_arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.arf")
             
             bkg_rmf_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.rmf"
+            bkg_rmf_name = re.sub(r'[\[\]]', '', bkg_rmf_name)
             bkg_rmf_file = os.path.join(dest_dir, bkg_rmf_name)
             bkg_rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.rmf")
             
