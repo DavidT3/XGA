@@ -97,7 +97,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
         
         ra_src_str, dec_src_str = ra_src.value, dec_src.value
-        inner_radius_str, outer_radius_str = source.convert_radius(inner_radius, 'deg').value, source.convert_radius(outer_radius, 'deg').value
+        inner_radius_str, outer_radius_str = inner_r_arc/60., outer_r_arc/60.
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
@@ -170,9 +170,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             # Just for group spec at this point, but need to add ungrouped later
             spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_spec.fits"
-            print(spec_name)
             spec_name = re.sub(r'[\[\]]', '', spec_name)
-            print(spec_name)
             spec_file = os.path.join(dest_dir, spec_name)
             if group_spec is not None:
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_grp.pi")
