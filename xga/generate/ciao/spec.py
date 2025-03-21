@@ -80,7 +80,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
     # once the CIAO cmd has run.
     sources_extras = []
     sources_types = []
-    for s_ind, source in sources:
+    for s_ind, source in enumerate(sources):
         # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
         source: BaseSource
 
