@@ -170,7 +170,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             
             # Just for group spec at this point, but need to add ungrouped later
             spec_name = f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_ro{outer_radius_str}_grp{group_spec}{extra_file_name}_spec.fits"
+            print(spec_name)
             spec_name = re.sub(r'[\[\]]', '', spec_name)
+            print(spec_name)
             spec_file = os.path.join(dest_dir, spec_name)
             if group_spec is not None:
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_grp.pi")
