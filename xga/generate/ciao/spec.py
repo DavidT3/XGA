@@ -102,12 +102,12 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     inner_radius = inner_radius[0]
 
         inner_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
-        outer_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
+        outer_r_arc = source.convert_radius(outer_radii[s_ind], 'arcmin')
         print('--------------------specextract--------------------')
         print('int', inner_radius, outer_radius)
         print('arc', inner_r_arc, outer_r_arc)
         print('kpc', source.convert_radius(inner_radii[s_ind], 'kpc'))
-        print('kpc', source.convert_radius(inner_radii[s_ind], 'kpc'))
+        print('kpc', source.convert_radius(outer_radii[s_ind], 'kpc'))
 
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
