@@ -289,9 +289,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )       
 
-            print('---------------------------------------------------------')
-            print(specextract_cmd)
-            print('---------------------------------------------------------')     
+            # print('---------------------------------------------------------')
+            # print(specextract_cmd)
+            # print('---------------------------------------------------------')     
                         
             cmds.append(specextract_cmd)
             
