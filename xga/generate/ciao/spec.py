@@ -270,7 +270,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     # Convert width and height to arcmin
                     width_arc = region.width.to(u.arcmin).value
                     height_arc = region.height.to(u.arcmin).value
-                    angle = region.angle.to(u.deg).valu
+                    angle = region.angle.to(u.deg).value
 
                     # Write the exclusion region in ellipse format
                     bkg_reg.write(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
