@@ -265,7 +265,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
-                f"rm -r {temp_dir}; rm -r {temp_region_dir}"
+                # f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )       
 
             print('---------------------------------------------------------')
