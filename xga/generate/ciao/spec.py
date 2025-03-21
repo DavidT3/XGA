@@ -100,7 +100,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     outer_radius = outer_radius[0]
         # if isinstance(inner_radius.value, (list, tuple, np.ndarray)):
         #     inner_radius = inner_radius[0]
-
+        print('test')
+        print(inner_radius, inner_radii)
+        print(outer_radius, outer_radii)
         inner_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
         outer_r_arc = source.convert_radius(outer_radii[s_ind], 'arcmin')
         print('--------------------specextract--------------------')
@@ -220,9 +222,6 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
-
-            bkg_inner_r_arc = outer_r_arc * source.background_radius_factors[0]
-            bkg_outer_r_arc = outer_r_arc * source.background_radius_factors[1]
             
             # Ensure the directory exists
             temp_region_dir = os.path.join(dest_dir, f"temp_region_{randint(0, int(1e8))}") #added random nubmers
@@ -285,7 +284,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                 f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file}; "
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
-                f"rm -r {temp_dir}; rm -r {temp_region_dir}"
+                # f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )       
 
             # print('---------------------------------------------------------')
