@@ -15,6 +15,7 @@ import astropy.units as u
 from tqdm import tqdm
 
 from xga import OUTPUT, NUM_CORES, xga_conf
+from ..sas._common import region_setup
 from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -56,6 +57,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
 
+    sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
+                                                         '', num_cores)
+
     # Check if the source/sample has Chandra data.
     if not isinstance(sources, list) and "chandra" not in sources.telescopes:
         raise TelescopeNotAssociatedError("There are no Chandra data associated with the source.")
@@ -76,7 +80,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
     # once the CIAO cmd has run.
     sources_extras = []
     sources_types = []
-    for source in sources:
+    for s_ind, source in sources:
         # Explicitly states that source is at very least a BaseSource instance - useful for code completion in IDEs
         source: BaseSource
 
@@ -92,25 +96,25 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         #     sources_types.append(np.full(len(cmds), fill_value="spectrum"))
         #     continue
 
-        if isinstance(outer_radius.value, (list, tuple, np.ndarray)):
-            outer_radius = outer_radius[0]
-        if isinstance(inner_radius.value, (list, tuple, np.ndarray)):
-            inner_radius = inner_radius[0]
+        # if isinstance(outer_radius.value, (list, tuple, np.ndarray)):
+        #     outer_radius = outer_radius[0]
+        # if isinstance(inner_radius.value, (list, tuple, np.ndarray)):
+        #     inner_radius = inner_radius[0]
 
-        inner_r_arc = source.convert_radius(inner_radius, 'arcmin')
-        outer_r_arc = source.convert_radius(outer_radius, 'arcmin')
+        inner_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
+        outer_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
         print('--------------------specextract--------------------')
         print('int', inner_radius, outer_radius)
         print('arc', inner_r_arc, outer_r_arc)
-        print('kpc', source.convert_radius(inner_radius, 'kpc'))
-        print('kpc', source.convert_radius(outer_radius, 'kpc'))
+        print('kpc', source.convert_radius(inner_radii[s_ind], 'kpc'))
+        print('kpc', source.convert_radius(inner_radii[s_ind], 'kpc'))
 
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
         
         ra_src_str, dec_src_str = ra_src.value, dec_src.value
-        inner_radius_str = source.convert_radius(inner_radius, 'deg').value
-        outer_radius_str = source.convert_radius(outer_radius, 'deg').value
+        inner_radius_str = source.convert_radius(inner_radii[s_ind], 'deg').value
+        outer_radius_str = source.convert_radius(outer_radii[s_ind], 'deg').value
         print('deg for file', inner_radius_str, outer_radius_str)
         print('-------------------------------------------------')
         # Iterate through Chandra event lists associated with the source.
