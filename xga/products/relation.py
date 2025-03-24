@@ -275,7 +275,11 @@ class ScalingRelation:
         # Setting the attributes, if we've gotten this far then there are no problems
         self._third_dim_info = third_dim_info
         self._third_dim_name = third_dim_name
+        # !!! self.core_excises = False
 
+    # @property
+    # def core_ex:
+    # return 
     @property
     def pars(self) -> np.ndarray:
         """
