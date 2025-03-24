@@ -681,22 +681,22 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     return samp, loaded_samp_data, radius_hist_df
 
-def luminosity_temperature_pipeline_chandra_tmp(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
-                                                peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
-                                                min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
-                                                lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                                core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
-                                                freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
-                                                temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
-                                                lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-                                                group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                                                over_sample: float = None, back_inn_rad_factor: float = 1.05,
-                                                back_out_rad_factor: float = 1.5, clean_obs: bool = True,
-                                                clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
-                                                save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
-                                                telescope: str = 'xmm', search_distance: Quantity = None,
-                                                stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
-                                                num_cores: int = NUM_CORES) \
+def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
+                                                 peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
+                                                 min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
+                                                 lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+                                                 core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
+                                                 freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
+                                                 temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
+                                                 lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+                                                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                                                 over_sample: float = None, back_inn_rad_factor: float = 1.05,
+                                                 back_out_rad_factor: float = 1.5, clean_obs: bool = True,
+                                                 clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
+                                                 save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
+                                                 telescope: str = 'xmm', search_distance: Quantity = None,
+                                                 stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
+                                                 num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
