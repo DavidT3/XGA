@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 19:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 19:55. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -377,13 +377,6 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             warn("Some sources ({}) have been removed because of spectrum generation "
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
-        print('------------')
-        print(samp.get_radius(o_dens))
-        print(samp[0]._products)
-        print('')
-        print(samp[1]._products)
-        print('')
-        print('------------')
         # We generate and fit spectra for the current value of the overdensity radius
         single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
                          lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,

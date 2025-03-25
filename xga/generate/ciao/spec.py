@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 19:55. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -84,27 +84,15 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         extra_info = []
 
         # Skip sources that do not have Chandra data.
-        # if 'chandra' not in source.telescopes:
-        #     sources_cmds.append(np.array(cmds))
-        #     sources_paths.append(np.array(final_paths))
-        #     sources_extras.append(np.array(extra_info))
-        #     sources_types.append(np.full(len(cmds), fill_value="spectrum"))
-        #     continue
+        if 'chandra' not in source.telescopes:
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(len(cmds), fill_value="spectrum"))
+            continue
 
-        # if isinstance(outer_radius.value, (list, tuple, np.ndarray)):
-        #     outer_radius = outer_radius[0]
-        # if isinstance(inner_radius.value, (list, tuple, np.ndarray)):
-        #     inner_radius = inner_radius[0]
-        print('test')
-        print(inner_radius, inner_radii)
-        print(outer_radius, outer_radii)
         inner_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
         outer_r_arc = source.convert_radius(outer_radii[s_ind], 'arcmin')
-        print('--------------------specextract--------------------')
-        print('int', inner_radius, outer_radius)
-        print('arc', inner_r_arc, outer_r_arc)
-        print('kpc', source.convert_radius(inner_radii[s_ind], 'kpc'))
-        print('kpc', source.convert_radius(outer_radii[s_ind], 'kpc'))
 
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
@@ -112,15 +100,13 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         ra_src_str, dec_src_str = ra_src.value, dec_src.value
         inner_radius_str = source.convert_radius(inner_radii[s_ind], 'deg').value
         outer_radius_str = source.convert_radius(outer_radii[s_ind], 'deg').value
-        print('deg for file', inner_radius_str, outer_radius_str)
-        print('-------------------------------------------------')
+
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
             evt_file = product
             obs_id = evt_file.obs_id
             inst = evt_file.instrument
-
 
             # Grabbing the attitude and badpix files, which the CIAO command we aim to run will want as an input
             att_file = source.get_att_file(obs_id, 'chandra')
@@ -170,8 +156,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             # Do we actually need to run this generation? If matching products already exist then we won't bother
             try:
-                source.get_spectra(obs_id=obs_id, inst=inst, telescope='chandra', outer_radius=outer_radius,
-                                   inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
+                source.get_spectra(obs_id=obs_id, inst=inst, telescope='chandra', outer_radius=outer_radius[s_ind],
+                                   inner_radius=inner_radius[s_ind], group_spec=group_spec, min_counts=min_counts,
                                    min_sn=min_sn)
                 # If the expected outputs from this function do exist for the current ObsID, we'll just
                 #  move on to the next one
