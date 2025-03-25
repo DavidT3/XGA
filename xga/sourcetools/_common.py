@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -68,7 +68,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
         # has_glob_temp is the same length
         for tel in all_tels:
             try:
-                if tel == 'erosita' and len(src.obs_ids['erosita']) > 1:
+                if tel in ['erosita', 'erass'] and len(src.obs_ids[tel]) > 1:
                     # A temporary temperature variable
                     src.get_temperature(global_out_rads[src_ind], tel, "constant*tbabs*apec", 
                                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 

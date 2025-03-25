@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -8,12 +8,10 @@ from typing import List, Union, Dict
 import astropy.units as u
 from astropy.units import Quantity
 
+from .fit._common import _pregen_spectra
 from .run import xspec_call
-from .fit._common import _pregen_spectra, _spec_obj_setup
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
-from ..generate.sas import evselect_spectrum
-from ..generate.sas._common import region_setup
 from ..products import Spectrum
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
@@ -132,12 +130,12 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
 
             # Find matching spectrum objects associated with the current source,
             # and checking if they are valid
-            if stacked_spectra and tel == 'erosita':
+            if stacked_spectra and tel in ['erosita', 'erass']:
                 search_inst = 'combined'
             else:
                 search_inst = None
 
-            if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
+            if tel in ['erosita', 'erass'] and len(source.obs_ids[tel]) > 1:
                 # For erosita we need to use the spectrum generated from combined observations, so that there
                 # are no duplicated events
                 spec_objs = source.get_combined_spectra(out_rad_vals[s_ind], inst=search_inst,

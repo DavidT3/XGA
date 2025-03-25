@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 20:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -341,12 +341,13 @@ def xspec_call(xspec_func):
                     # Getting the spectra for each column, then assigning rates and lums
                     # TODO this could be neater and better generalised
                     for comb in combos:
-                        if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
+                        if tel in ['erosita', 'erass'] and len(s.obs_ids[tel]) == 1:
                             spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
                                                 telescope=tel)[0]
-                        elif tel == 'erosita':
+                        elif tel in ['erosita', 'erass']:
                             spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
                                                 telescope=tel)[0]
+                        # TODO THIS IS NOT GOING TO WORK FOR CHANDRA
                         else:
                             spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
                                             telescope=tel)[0]

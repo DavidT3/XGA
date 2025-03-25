@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -9,10 +9,10 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 
 from xga import DEFAULT_COSMO, NUM_CORES
-from xga.exceptions import ModelNotAssociatedError, ProductGenerationError, XGADeveloperError
+from xga.exceptions import ModelNotAssociatedError, ProductGenerationError
+from xga.generate.ciao import specextract_spectrum
 from xga.generate.esass import srctool_spectrum
 from xga.generate.sas import evselect_spectrum
-from xga.generate.ciao import specextract_spectrum
 from xga.products import ScalingRelation
 from xga.relations.clusters.RT import arnaud_r500
 from xga.relations.clusters.TL import xcs_sdss_r500_52_TL
@@ -158,14 +158,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     :rtype: Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]
     """
     # Given the nature of most eROSITA data, I am putting this here as a message to the user with some advice
-    if telescope == 'erosita' and not stacked_spectra:
+    if telescope == 'erass' and not stacked_spectra:
         warn("It is strongly recommended that 'stacked_spectra' be set to True, for eROSITA survey data.",
              stacklevel=2)
 
     # This is because eROSITA results are still pretty new and most scaling relations in this module (at the time
     #  of writing) are from XMM data - it is known that Tx values can be different between eROSITA and XMM (from
     #  Turner et al. eFEDS-XCS paper).
-    if telescope == 'erosita':
+    if telescope != 'xmm':
         warn("Scaling relations used in this work are currently based off of XMM data - eROSITA temperatures have"
              "been shown to be somewhat discrepant, so be cautious or provide your own scaling relations.",
              stacklevel=2)
@@ -816,7 +816,7 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
     :rtype: Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]
     """
     # Given the nature of most eROSITA data, I am putting this here as a message to the user with some advice
-    if telescope == 'erosita' and not stacked_spectra:
+    if telescope == 'erass' and not stacked_spectra:
         warn("It is strongly recommended that 'stacked_spectra' be set to True, for eROSITA survey data.",
              stacklevel=2)
 

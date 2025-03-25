@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/10/2024, 19:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -172,7 +172,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
@@ -337,7 +337,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
@@ -488,7 +488,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
@@ -628,7 +628,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
@@ -771,7 +771,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
