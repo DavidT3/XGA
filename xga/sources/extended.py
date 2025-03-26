@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/03/2025, 12:33. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 15:06. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -721,8 +721,8 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
+        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", annuli_bound_radii, group_spec,
+                                                      min_counts, min_sn, over_sample, set_id, spec_model,
                                                       spec_fit_conf)
 
         if len(matched_prods) == 1:
@@ -732,7 +732,6 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
-    # TODO OKAY NEED TO SORT OUT RADII VS ANNULI BOUND RADII HERE
     def get_density_profiles(self, outer_rad: Union[Quantity, str] = None, method: str = None, obs_id: str = None,
                              inst: str = None, central_coord: Quantity = None, radii: Quantity = None,
                              pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
@@ -758,7 +757,8 @@ class GalaxyCluster(ExtendedSource):
             search for profiles generated from combined data).
         :param Quantity central_coord: The central coordinate of the density profile. Default is None, which means
             we shall use the default coordinate of this source.
-        :param Quantity radii: If known, the radii that were used to measure the density profile.
+        :param Quantity radii: If known, the radii (annular boundary radii for profiles from annular spectra, and
+            central radii for profiles from surface brightness) that were used to measure the density profile.
         :param int pix_step: The width of each annulus in pixels used to generate the profile, for profiles based on
             surface brightness.
         :param float min_snr: The minimum signal-to-noise imposed upon the profile, for profiles based on
