@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 14:06. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1163,11 +1163,7 @@ class BaseSource:
             ann_cur_fit_inv['ann_id'] = ann_ids
 
             for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
-                print(self.name)
-                print(fit_ident)
                 fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident].reset_index(drop=True)
-                print(fit_ann_inv_ent)
-                print('\n')
 
                 obs_order = {int(an_id): [] for an_id in fit_ann_inv_ent['ann_id'].values}
                 ann_lums = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
@@ -1528,6 +1524,9 @@ class BaseSource:
                 #  TODO see issue #908, figure out how to support different resolutions of image
                 try:
                     ims = self.get_images(obs_id)
+                    # Make sure that the return is in a list
+                    if not isinstance(ims, list):
+                        ims = [ims]
                 except NoProductAvailableError:
                     raise NoProductAvailableError("There is no image available for observation {o}, associated "
                                                   "with {n}. An image is currently required to check for sky "
