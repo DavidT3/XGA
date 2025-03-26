@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 15:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 16:08. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -82,10 +82,6 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         count-rate/volume to a number density of hydrogen, the parsed obs_id variable, and the parsed inst variable.
     :rtype: Tuple[Union[ClusterSample, List], List[Quantity], list, list]
     """
-    # If its a single source I shove it in a list so I can just iterate over the sources parameter
-    #  like I do when its a Sample object
-    if isinstance(sources, BaseSource):
-        sources = [sources]
 
     # Perform some checks on the ObsID and instrument parameters to make sure that they are in the correct
     #  format if they have been set. We don't need to check that the ObsIDs are associated with the sources
@@ -330,6 +326,15 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
     """
+    # If a source (rather than a sample) is input, we put it in a list - that way we can iterate over them the same
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
+    # Need to sort out the type of model input that the user chose, and make sure it's ready to be passed into
+    #  the fit method of the surface brightness profile(s)
+    # First we check the number of arguments passed for the model
+    model = model_check(sources, model)
+
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
@@ -338,11 +343,6 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
-
-    # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into
-    #  the fit method of the surface brightness profile(s)
-    # First we check the number of arguments passed for the model
-    model = model_check(sources, model)
 
     with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
               total=len(sources), position=0) as dens_prog:
