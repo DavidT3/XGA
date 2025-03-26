@@ -985,8 +985,7 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
                                  min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             elif telescope == 'chandra':
                 specextract_spectrum(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), num_cores=num_cores,
-                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                     over_sample=over_sample)
+                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
             else:
                 raise NotImplementedError("Support for telescopes other than XMM and eROSITA is not yet implemented.")
             # If the end of evselect_spectrum doesn't throw a ProductGenerationError then we know we're all good, so we
