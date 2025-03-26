@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2025, 10:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -365,7 +365,7 @@ class BaseSample:
     def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True):
+           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -394,11 +394,14 @@ class BaseSample:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
+        :param bool stacked_spectra: Specify whether to retrieve the results for each source from a stacked spectrum
+            or from simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
@@ -422,7 +425,7 @@ class BaseSample:
             try:
                 # Fetch the luminosity from a given source using the dedicated method
                 lx_val = src.get_luminosities(out_rads[src_ind], telescope, model, inn_rads[src_ind], lo_en, hi_en,
-                                              group_spec, min_counts, min_sn, over_sample)
+                                              group_spec, min_counts, min_sn, over_sample, stacked_spectra)
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
                 if quality_checks and len(frac_err[frac_err >= 1]) != 0:

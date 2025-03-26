@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 09:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
 
 from typing import List
 
@@ -580,7 +580,7 @@ class ClusterSample(BaseSample):
     def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True):
+           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -613,16 +613,19 @@ class ClusterSample(BaseSample):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
+        :param bool stacked_spectra: Specify whether to retrieve the results for each cluster from a stacked spectrum
+            or from simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
         :return: A Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
         return super().Lx(outer_radius, telescope, model, inner_radius, lo_en, hi_en, group_spec, min_counts,
-                          min_sn, over_sample, quality_checks)
+                          min_sn, over_sample, quality_checks, stacked_spectra)
 
     def Tx(self, telescope: str, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
-           min_sn: float = None, over_sample: float = None, quality_checks: bool = True):
+           min_sn: float = None, over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
@@ -648,11 +651,14 @@ class ClusterSample(BaseSample):
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
+        :param bool stacked_spectra: Specify whether to retrieve the results for each cluster from a stacked spectrum
+            or from simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
@@ -676,7 +682,7 @@ class ClusterSample(BaseSample):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
                 gcs_temp = gcs.get_temperature(out_rads[src_ind], telescope, model, inn_rads[src_ind], group_spec,
-                                               min_counts, min_sn, over_sample).value
+                                               min_counts, min_sn, over_sample, stacked_spectra).value
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN

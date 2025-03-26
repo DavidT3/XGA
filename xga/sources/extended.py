@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 20:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -576,7 +576,7 @@ class GalaxyCluster(ExtendedSource):
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
@@ -616,7 +616,7 @@ class GalaxyCluster(ExtendedSource):
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The requested luminosity value, and uncertainties.
         """
@@ -652,7 +652,7 @@ class GalaxyCluster(ExtendedSource):
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The temperature value, and uncertainties.
         """
