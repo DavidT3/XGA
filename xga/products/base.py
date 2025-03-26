@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 17:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 12:23. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -284,6 +284,38 @@ class BaseProduct:
             if len(tel_errs_msgs) > 0:
                 self._usable = False
                 self._why_unusable.append("eSASSErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        # Now for Chandra error identification
+        elif self.telescope == 'chandra':
+
+            if self.unprocessed_stderr != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                # parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
+                # parsed_tel_warns, sas_warn_lines = find_sas(err_lines, "warning")
+
+                # tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                #                  for e in parsed_sas_errs]
+                tel_errs_msgs = err_lines
+
+                # These are impossible to predict the form of, so they won't be parsed
+                # other_err_lines = [line for line in err_lines if line not in sas_err_lines
+                #                    and line not in sas_warn_lines and line != "" and "warn" not in line]
+                other_err_lines = []
+                # Adding some advice
+                for e_ind, e in enumerate(other_err_lines):
+                    if 'seg' in e.lower() and 'fault' in e.lower():
+                        other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                                                  'and have a look at where your coordinate lies.'
+
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("CIAOErrorPresent")
             if len(other_err_lines) > 0:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
