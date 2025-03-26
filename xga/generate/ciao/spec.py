@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 19:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:12. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -156,8 +156,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             # Do we actually need to run this generation? If matching products already exist then we won't bother
             try:
-                source.get_spectra(obs_id=obs_id, inst=inst, telescope='chandra', outer_radius=outer_radius[s_ind],
-                                   inner_radius=inner_radius[s_ind], group_spec=group_spec, min_counts=min_counts,
+                source.get_spectra(obs_id=obs_id, inst=inst, telescope='chandra', outer_radius=outer_radii[s_ind],
+                                   inner_radius=inner_radii[s_ind], group_spec=group_spec, min_counts=min_counts,
                                    min_sn=min_sn)
                 # If the expected outputs from this function do exist for the current ObsID, we'll just
                 #  move on to the next one
