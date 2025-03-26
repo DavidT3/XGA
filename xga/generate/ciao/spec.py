@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 10:57. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -310,7 +310,7 @@ def specextract_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: U
                          min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
                          disable_progress: bool = False):
     """
-    A wrapper for all the CIAO processes necessary to generate an Chandra spectrum that can be analysed
+    A wrapper for all the CIAO processes necessary to generate Chandra spectra that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
     observation, will have a spectrum generated using the specified outer and inner radii as a boundary. The
     default inner radius is zero, so by default this function will produce circular spectra out to the outer_radius.
@@ -334,7 +334,7 @@ def specextract_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: U
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
-    # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
+    # All the workings of this function are in _chandra_spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _chandra_spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                               num_cores, disable_progress)
