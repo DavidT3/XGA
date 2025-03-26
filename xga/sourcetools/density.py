@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 16:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 16:15. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -19,6 +19,7 @@ from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
+from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
@@ -343,6 +344,11 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
+
+    # For the last bit of setup, we make sure that PSF corrected ratemaps are available, if they have been
+    #  requested - and also available with the specified configuration
+    if psf_corr:
+        rl_psf(sources, psf_iter, psf_model, lo_en, hi_en, psf_bins, num_cores)
 
     with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
               total=len(sources), position=0) as dens_prog:
@@ -686,6 +692,10 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
     """
+    # If a source (rather than a sample) is input, we put it in a list - that way we can iterate over them the same
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
