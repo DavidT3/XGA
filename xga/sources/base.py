@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 14:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 18:04. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -23,7 +23,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NotSampleMemberError, XGADeveloperError
+    NotSampleMemberError, XGADeveloperError, FitConfNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -2749,11 +2749,6 @@ class BaseSource:
         #  as a string
         elif isinstance(fit_conf, dict):
             fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
-        elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[spec_storage_key][model]:
-            av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
-            raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to the "
-                                          "specified spectrum; available fit configurations are "
-                                          "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model]) != 1:
             av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
@@ -2766,7 +2761,12 @@ class BaseSource:
             fit_conf = self.fitted_model_configurations[spec_storage_key][model][0]
 
         # Check to make sure the requested results actually exist
-        if par is not None and par not in self._fit_results[spec_storage_key][model][fit_conf]:
+        if fit_conf not in self._fit_results[spec_storage_key][model]:
+            av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
+            raise FitConfNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to the "
+                                            "specified spectrum; available fit configurations are "
+                                            "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+        elif par is not None and par not in self._fit_results[spec_storage_key][model][fit_conf]:
             av_pars = ", ".join(self._fit_results[spec_storage_key][model][fit_conf].keys())
             raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to the specified spectra; "
                                               "available parameters are {a}".format(p=par, m=model, a=av_pars))
