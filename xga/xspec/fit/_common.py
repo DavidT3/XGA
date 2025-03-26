@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 21:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 21:45. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -274,14 +274,6 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
                                                 group_spec=group_spec, min_counts=min_counts,
                                                 min_sn=min_sn, telescope=tel)
     else:
-        print(out_rad_vals)
-        print(inn_rad_vals)
-        print(group_spec)
-        print(min_counts)
-        print(min_sn)
-        print(over_sample)
-        print(tel)
-        print(search_inst)
         # Find matching spectrum objects associated with the current source
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
