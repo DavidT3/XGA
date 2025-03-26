@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 15:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 15:43. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -149,8 +149,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                                                 min_counts, min_sn, over_sample,
                                                 fit_conf={'abund_table': abund_table})[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
-                     "3keV".format(s=src.name))
+                warn("{s}'s temperature fit was not successful - defaulting to 3 keV.".format(s=src.name),
+                     stacklevel=2)
                 temp_temp = Quantity(3, 'keV')
             temp_temps.append(temp_temp.value)
         temps = Quantity(temp_temps, 'keV')
