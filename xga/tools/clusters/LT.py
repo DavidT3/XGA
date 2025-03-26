@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 19:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:04. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -388,9 +388,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
             tx_all = samp.Tx(telescope, samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
-                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample
-                          # stacked_spectra=stacked_spectra
-                          )
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                             stacked_spectra=stacked_spectra)
             txs = tx_all[:, 0]
             tx_errs = tx_all[:, 1]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
@@ -398,7 +397,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         else:
             lx_all = samp.Lx(samp.get_radius(o_dens), telescope=telescope, quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                             hi_en=rel_lum_bounds[1])
+                             hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra)
             lxs = lx_all[:, 0]
             lx_errs = lx_all[:, 1:]
             # We can also propagate errors in the predict method - so we pass the lx_errs
@@ -446,7 +445,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         if freeze_temp:
             all_lx = samp.Lx(samp.get_radius(o_dens), telescope=telescope, quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                             hi_en=rel_lum_bounds[1])
+                             hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra)
             lxs = all_lx[:, 0]
             lx_errs = all_lx[:, 1]
             all_start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo, lx_errs)
@@ -558,8 +557,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # The temperature measured within the overdensity radius, with its - and + uncertainties are
                     #  read out
                     vals += list(rel_src.get_temperature(rel_rad, telescope, group_spec=group_spec,
-                                                         min_counts=min_counts, min_sn=min_sn,
-                                                         over_sample=over_sample, stacked_spectra=stacked_spectra).value)
+                                                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                                         stacked_spectra=stacked_spectra).value)
                     # We add columns with informative names
                     cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
@@ -677,6 +676,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         radius_hist_df.to_csv(save_rad_history_path, index=True, index_label='name')
 
     return samp, loaded_samp_data, radius_hist_df
+
 
 def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
                                                  peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
