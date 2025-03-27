@@ -55,6 +55,10 @@ class ClusterSample(BaseSample):
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
         is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
         case the brightest unmasked pixel within the source region will be selected.
+    :param bool/list/np.ndarray include_core_pnt_srcs: Controls whether bright point sources near the
+        user-defined coordinates (hopefully in cluster cores) are allowed to contribute to analyses. Default is
+        True, in which case such point sources will NOT be included in masks, in case they are a bright cool core.
+        Lists or arrays of boolean values may also be supplied, for more nuanced control.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray, name: np.ndarray, r200: Quantity = None,
                  r500: Quantity = None, r2500: Quantity = None, richness: np.ndarray = None,
@@ -64,7 +68,8 @@ class ClusterSample(BaseSample):
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, clean_obs: bool = True,
                  clean_obs_reg: str = "r200", clean_obs_threshold: float = 0.3, no_prog_bar: bool = False,
-                 psf_corr: bool = False, peak_find_method: str = "hierarchical"):
+                 psf_corr: bool = False, peak_find_method: str = "hierarchical",
+                 include_core_pnt_srcs: Union[bool, list, np.ndarray] = True):
         """
         The init of the ClusterSample XGA class, for the analysis of a large sample of galaxy clusters.
         Takes information on the clusters to enable analyses.
@@ -101,10 +106,25 @@ class ClusterSample(BaseSample):
         :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
             is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
             case the brightest unmasked pixel within the source region will be selected.
+        :param bool/list/np.ndarray include_core_pnt_srcs: Controls whether bright point sources near the
+        user-defined coordinates (hopefully in cluster cores) are allowed to contribute to analyses. Default is
+        True, in which case such point sources will NOT be included in masks, in case they are a bright cool core.
+        Lists or arrays of boolean values may also be supplied, for more nuanced control.
         """
 
         # I don't like having this here, but it does avoid a circular import problem
         from xga.sas import evselect_image, eexpmap, emosaic
+
+        # We do a quick check on the length of certain arguments (if they are not just a single value)
+        if type(include_core_pnt_srcs) != bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
+            if len(include_core_pnt_srcs) != len(ra):
+                raise ValueError("If passing a non-scalar value for 'include_core_pnt_srcs', there must be an "
+                                 "entry for each source.")
+            elif any([type(en) != bool for en in include_core_pnt_srcs]):
+                raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
+        elif type(include_core_pnt_srcs) != bool:
+            # If we get to this point then someone has passed something illegal
+            raise TypeError("You must pass a bool or list/array of bools to the 'include_core_pnt_srcs' argument.")
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
@@ -192,6 +212,15 @@ class ClusterSample(BaseSample):
                         wlm = None
                         wlm_err = None
 
+                    # Setup the include_core_pnt_srcs value to be passed to the current cluster - either single bools
+                    #  or lists/arrays of bools can be passed, so we just need to disentangle that
+                    # If we get here then the preceding code has already made sure that the type is correct, and that
+                    #  (if a non-scalar value was passed) every cluster has an entry
+                    if type(include_core_pnt_srcs) == bool:
+                        cur_inc_core_pnt_src = include_core_pnt_srcs
+                    else:
+                        cur_inc_core_pnt_src = include_core_pnt_srcs[ind]
+
                     # Will definitely load products (the True in this call), because I just made sure I generated a
                     #  bunch to make GalaxyCluster declaration quicker
                     try:
@@ -200,7 +229,7 @@ class ClusterSample(BaseSample):
                                                          use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                          back_out_rad_factor, cosmology, True, load_fits, clean_obs,
                                                          clean_obs_reg, clean_obs_threshold, False, peak_find_method,
-                                                         True)
+                                                         True, cur_inc_core_pnt_src)
                         final_names.append(n)
 
                     except PeakConvergenceFailedError:
@@ -212,7 +241,7 @@ class ClusterSample(BaseSample):
                                                              False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
                                                              back_out_rad_factor, cosmology, True, load_fits, clean_obs,
                                                              clean_obs_reg, clean_obs_threshold, False,
-                                                             peak_find_method, True)
+                                                             peak_find_method, True, cur_inc_core_pnt_src)
                             final_names.append(n)
                         except NoValidObservationsError:
                             # warn("After a failed attempt to find an X-ray peak, and after applying the criteria for "

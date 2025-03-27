@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 10:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/11/2024, 11:58. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -222,7 +222,8 @@ class BaseModel1D(metaclass=ABCMeta):
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
-            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.")
+            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.",
+                 stacklevel=2)
 
         if x.isscalar or (not x.isscalar and x.ndim == 1):
             realisations = self.model(x[..., None], *self._par_dists)
@@ -234,7 +235,7 @@ class BaseModel1D(metaclass=ABCMeta):
             #  statement
             realisations = self.model(x, *self._par_dists)
 
-        return realisations
+        return realisations.to(self._y_unit)
 
     @staticmethod
     @abstractmethod
@@ -564,7 +565,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param List[Quantity] good_pars: The second list of parameters, these are taken as having 'correct'
             units.
         :return: Only if the check pars pass the tests. We return the check pars list but with all elements
-            converted to EXACTLY the same units as good_pars, not just equivelant.
+            converted to EXACTLY the same units as good_pars, not just equivalent.
         :rtype: List[Quantity]
         """
         if len(check_pars) != len(good_pars):
@@ -659,13 +660,13 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             warn("You have not added parameter distributions to this model")
 
-    def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightslategrey"):
+    def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
         """
         Very simple method that allows you to view the parameter distributions that have been added to this
         model. The model parameter and uncertainties are indicated with red lines, highlighting the value
         and enclosing the 1sigma confidence region.
 
-        :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
+        :param Union[str, int] bins: Equivalent to the plt.hist bins argument, set either the number of bins
             or the algorithm to decide on the number of bins.
         :param str colour: Set the colour of the histogram.
         """
@@ -679,33 +680,74 @@ class BaseModel1D(metaclass=ABCMeta):
             for ax_ind, ax in enumerate(ax_arr):
                 # Add histogram
                 ax.hist(self.par_dists[ax_ind].value, bins=bins, color=colour)
-                # Add parameter value as a solid red line
-                ax.axvline(self.model_pars[ax_ind].value, color='red')
+
                 # Read out the errors
                 err = self.model_par_errs[ax_ind]
-                # Depending how many entries there are per parameter in the error quantity depends how we plot them
+
+                # Define the unit of this parameter
+                cur_unit = err.unit
+
+                # Change how we plot depending on how many entries there are per parameter in the error quantity
                 if err.isscalar:
+                    # Change how we format the value label depending on how big the number is effectively
+                    if (self.model_pars[ax_ind].value / 1000) > 1:
+                        v_ord = len(str(self.model_pars[ax_ind].value).split('.')[0]) - 1
+                        cur_v_str = str((self.model_pars[ax_ind].value / (10**v_ord)).round(2))
+                        cur_e_str = str((err.value / (10**v_ord)).round(2)) + r"\times 10^{" + str(v_ord) + "}"
+                    else:
+                        cur_v_str = str(self.model_pars[ax_ind].round(2).value)
+                        cur_e_str = str(err.round(2).value)
+
+                    # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                    vals_label = cur_v_str + r"\pm" + cur_e_str
+
                     ax.axvline(self.model_pars[ax_ind].value - err.value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err.value, color='red', linestyle='dashed')
                 elif not err.isscalar and len(err) == 2:
+
+                    # Change how we format the value label depending on how big the number is effectively
+                    if (self.model_pars[ax_ind].value / 1000) > 1:
+                        v_ord = len(str(self.model_pars[ax_ind].value).split('.')[0]) - 1
+
+                        cur_v_str = str((self.model_pars[ax_ind].value / (10 ** v_ord)).round(2))
+                        cur_em_str = str((err[0].value / (10 ** v_ord)).round(2))
+                        cur_ep_str = str((err[1].value / (10 ** v_ord)).round(2))
+                        # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                        vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "} " +
+                                      r"\times 10^{" + str(v_ord) + "}")
+                    else:
+                        cur_v_str = str(self.model_pars[ax_ind].round(2).value)
+                        cur_em_str = str(err[0].round(2).value)
+                        cur_ep_str = str(err[1].round(2).value)
+                        # Set up the label that will accompany the vertical lines to indicate parameter value and error
+                        vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "}")
+
                     ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
                     ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
                 else:
                     raise ValueError("Parameter error has three elements in it!")
 
-                cur_unit = err.unit
+                # The full label for the vertical line that indicates the parameter value
+                res_label = (r"$" + self.par_publication_names[ax_ind].replace('$', '') + "= "
+                             + vals_label + cur_unit.to_string("latex").strip("$") + '$')
+
+                # Add parameter value as a solid red line
+                ax.axvline(self.model_pars[ax_ind].value, color='red', label=res_label)
+
                 if cur_unit == Unit(''):
                     par_unit_name = ""
                 else:
                     par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
 
-                ax.set_xlabel(self.par_publication_names[ax_ind] + par_unit_name)
+                ax.set_xlabel(self.par_publication_names[ax_ind] + par_unit_name, fontsize=14)
+                ax.legend(loc='best')
+
 
             # And show the plot
             plt.tight_layout()
             plt.show()
         else:
-            warn("You have not added parameter distributions to this model")
+            warn("You have not added parameter distributions to this model", stacklevel=2)
 
     def view(self, radii: Quantity = None, xscale: str = 'log', yscale: str = 'log', figsize: tuple = (8, 8),
              colour: str = "black"):

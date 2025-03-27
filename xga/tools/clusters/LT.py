@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 20:09. Copyright (c) The Contributors
+
 from typing import Tuple
 from warnings import warn
 
@@ -318,6 +319,12 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             #  things like the pr_rs quantity we defined up top
             not_bad_gen_ind = np.nonzero(~np.isin(samp.names, bad_gen))
             acc_rad = acc_rad[not_bad_gen_ind]
+            # TODO This should be replaced with storing the radii uncertainties in the sources, but this will do
+            #  for now I think
+            # Have to make sure that, if the current radius errors are not None (i.e. they have been set by a previous
+            #  iteration) we remove any that were associated with a source that has now been removed.
+            if cur_rad_errs is not None:
+                cur_rad_errs = cur_rad_errs[not_bad_gen_ind]
 
             # Then we can cycle through those names and delete the sources from the sample (throwing a hopefully
             #  useful warning as well).
@@ -420,7 +427,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  temperature
         new_rads[~acc_rad] = pr_rs[~acc_rad]
 
-        # Then that process is repeated for the radius errors, which are not currently stored by the GalaxyClusters
+        # Then that procRess is repeated for the radius errors, which are not currently stored by the GalaxyClusters
         new_rad_errs = cur_rad_errs.copy()
         new_rad_errs[~acc_rad] = pr_r_errs[~acc_rad]
         # Yes I know...
