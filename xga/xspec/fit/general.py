@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 10:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 11:43. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -12,7 +12,7 @@ from ._common import _check_inputs, _write_xspec_script, _pregen_spectra
 from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
 from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import NoProductAvailableError, ModelNotAssociatedError, XGADeveloperError
+from ...exceptions import NoProductAvailableError, ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -196,7 +196,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
-        except ModelNotAssociatedError:
+        except (ModelNotAssociatedError, FitConfNotAssociatedError):
             out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
                                                                  fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                                  linking, freezing, par_fit_stat, lum_low_lims,
@@ -390,7 +390,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
-        except ModelNotAssociatedError:
+        except (ModelNotAssociatedError, FitConfNotAssociatedError):
             out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
                                                                  fit_method, specs, lo_en, hi_en, par_names,
                                                                  par_values, linking, freezing, par_fit_stat,
@@ -568,7 +568,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'Tmax', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
-        except ModelNotAssociatedError:
+        except (ModelNotAssociatedError, FitConfNotAssociatedError):
             # This internal function writes out the XSPEC script with all the information we've assembled in this
             #  function - filling out the XSPEC template and writing to disk
             out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
@@ -739,7 +739,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
                                      min_sn, over_sample, fit_conf)
-        except ModelNotAssociatedError:
+        except (ModelNotAssociatedError, FitConfNotAssociatedError):
             out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
                                                                  fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                                  linking, freezing, par_fit_stat, lum_low_lims,
@@ -910,7 +910,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
                                      min_sn, over_sample, fit_conf)
-        except ModelNotAssociatedError:
+        except (ModelNotAssociatedError, FitConfNotAssociatedError):
             out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
                                                                  fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                                  linking, freezing, par_fit_stat, lum_low_lims,
@@ -1110,7 +1110,7 @@ def n_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str,
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
                                      min_counts, min_sn, over_sample, fit_conf)
-        except ModelNotAssociatedError:
+        except (ModelNotAssociatedError, FitConfNotAssociatedError):
             out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
                                                                  fit_method, specs, lo_en, hi_en, par_names, par_values,
                                                                  linking, freezing, par_fit_stat, lum_low_lims,

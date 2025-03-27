@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2024, 15:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 11:43. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from random import randint
@@ -236,7 +236,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
                 try:
                     res = ann_spec.get_results(ann_id, model, 'kT', fit_conf)
-                except ModelNotAssociatedError:
+                except (ModelNotAssociatedError, FitConfNotAssociatedError):
                     out_file, script_file, inv_ent = _write_xspec_script(source, file_prefix, model, abund_table,
                                                                          fit_method, specs, lo_en, hi_en, par_names,
                                                                          par_values, linking, freezing, par_fit_stat,
@@ -379,7 +379,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             try:
                 res = ann_spec.get_results(0, model, 'kT', fit_conf)
-            except ModelNotAssociatedError:
+            except (ModelNotAssociatedError, FitConfNotAssociatedError):
                 # out_file, script_file = _write_crossarf_xspec_script(src, file_prefix, model, abund_table, fit_method,
                 #                                                              ann_spec_paths, lo_en, hi_en, par_names, par_values,
                 #                                                              linking, freezing, par_fit_stat, lum_low_lims,
