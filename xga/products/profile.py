@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 22/11/2024, 11:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 11:20. Copyright (c) The Contributors
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1308,6 +1308,8 @@ class GasTemperature3D(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1319,7 +1321,7 @@ class GasTemperature3D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, auto_save: bool = False, fit_conf: str = None):
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
 
@@ -1338,6 +1340,8 @@ class GasTemperature3D(BaseProfile1D):
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The
+            default is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1382,6 +1386,8 @@ class BaryonFraction(BaseProfile1D):
     :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
+    :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1393,7 +1399,7 @@ class BaryonFraction(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, auto_save: bool = False, fit_conf: str = None):
+                 spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
 
@@ -1412,6 +1418,8 @@ class BaryonFraction(BaseProfile1D):
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1505,7 +1513,7 @@ class HydrostaticMass(BaseProfile1D):
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False, fit_conf: str = None):
+                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a cumulative hydrostatic mass
         profile - used in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2024arXiv240307982T/abstract
@@ -2711,8 +2719,8 @@ class SpecificEntropy(BaseProfile1D):
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
                  num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False, auto_save: bool = False, spec_model: str = None,
-                 auto_save: bool = False, fit_conf: str = None):
+                 progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
+                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
