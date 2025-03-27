@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 15:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 20:09. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -505,6 +505,45 @@ class GalaxyCluster(ExtendedSource):
                                fit_conf)
 
         return Quantity(res, 'keV')
+
+    def get_luminosities(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
+                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                         over_sample: float = None, fit_conf: Union[str, dict] = None):
+        """
+        Get method for luminosities calculated from model fits to spectra associated with this source.
+        Either for given energy limits (that must have been specified when the fit was first performed), or
+        for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
+        the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
+        This overrides the BaseSource method, but the only difference is that this has a default model, which
+        is what single_temp_apec fits (constant*tbabs*apec).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the luminosities
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested luminosity value, and uncertainties.
+        """
+        return super().get_luminosities(outer_radius, model, inner_radius, lo_en, hi_en, group_spec,
+                                        min_counts, min_sn, over_sample, fit_conf)
 
     def _get_spec_based_profiles(self, search_key: str, annuli_bound_radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
