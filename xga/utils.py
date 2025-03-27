@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/07/2024, 17:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 16:43. Copyright (c) The Contributors
 
 import json
 import os
@@ -71,6 +71,7 @@ SASWARNING_LIST = warnings["WarnName"].values
 # XSPEC file extraction (and base fit) scripts
 XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
 BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
+CROSS_ARF_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/crossarf_xspec_fit.xcm")
 COUNTRATE_CONV_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/cr_conv_calc.xcm")
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
 with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
@@ -407,7 +408,7 @@ else:
     SAS_VERSION = None
     if "SAS_DIR" not in os.environ:
         warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
-             "all functions in xga.sas will not work.")
+             "all functions in xga.sas will not work.", stacklevel=2)
         SAS_VERSION = None
         SAS_AVAIL = False
     else:
@@ -420,14 +421,14 @@ else:
     #  anything with SAS
     if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
         warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
-             "functions in xga.sas will not work.")
+             "functions in xga.sas will not work.", stacklevel=2)
         SAS_AVAIL = False
 
     # Equivelant for the XSPEC dependency
     XSPEC_VERSION = None
     # Got to make sure we can access command line XSPEC.
     if shutil.which("xspec") is None:
-        warn("Unable to locate an XSPEC installation.")
+        warn("Unable to locate an XSPEC installation.", stacklevel=2)
     else:
         try:
             # The XSPEC into text includes the version, so I read that out and parse it

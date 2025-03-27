@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/11/2023, 14:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 15:30. Copyright (c) The Contributors
 
 import os.path
 import warnings
@@ -8,11 +8,12 @@ from typing import Union, Tuple, List
 from astropy.units import Quantity
 
 from .misc import cifbuild
+from ..exceptions import NotAssociatedError
 from ..samples.base import BaseSample
 from ..sources import BaseSource, GalaxyCluster
 from ..sources.base import NullSource
-from ..utils import RAD_LABELS, NUM_CORES
-from ..exceptions import NotAssociatedError
+from ..utils import RAD_LABELS, NUM_CORES, OUTPUT
+
 
 def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                  inner_radius: Union[str, Quantity], disable_progress: bool, obs_id: str, num_cores: int = NUM_CORES) \

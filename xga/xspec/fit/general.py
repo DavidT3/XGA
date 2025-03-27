@@ -1,16 +1,18 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/11/2023, 11:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 15:07. Copyright (c) The Contributors
 
 import warnings
+from inspect import signature, Parameter
 from typing import List, Union
 
 import astropy.units as u
 from astropy.units import Quantity
 
 from ._common import _check_inputs, _write_xspec_script, _pregen_spectra
+from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
 from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import NoProductAvailableError, ModelNotAssociatedError
+from ...exceptions import NoProductAvailableError, ModelNotAssociatedError, XGADeveloperError
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -96,7 +98,11 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
-        start_temp = Quantity([start_temp.value]*len(sources), start_temp.unit)
+        # Doing it like this, defining a new variable and then redeclaring the start_temp in each bit of the loop
+        #  below is important, as the fit_conf generation code accesses the current value of start_temp specifically
+        all_start_temps = Quantity([start_temp.value.copy()]*len(sources), start_temp.unit)
+    else:
+        all_start_temps = start_temp.copy()
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -106,9 +112,23 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['single_temp_apec']
+
+    sig = signature(single_temp_apec)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -132,10 +152,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
-                                                          source.redshift, 1.)
+        par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp.value,
+                                                          start_met, source.redshift, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
         #  include the temperature, if the user wants it fixed at the start value
@@ -162,30 +182,38 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             check_hi_lims = "{}"
             check_err_lims = "{}"
 
+        # We generate the fit configuration key here, on a source by source basis, as the start temperature is allowed
+        #  to be different for every source
+        in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+        fit_conf = _gen_fit_conf(in_fit_conf)
+
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
         #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
         #  them all.
         nh_to_zero = "{2}"
 
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                     min_counts, min_sn, over_sample)
+                                     min_counts, min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                 linking, freezing, par_fit_stat, lum_low_lims,
+                                                                 lum_upp_lims, lum_conf, source.redshift,
+                                                                 spectrum_checking, check_list, check_lo_lims,
+                                                                 check_hi_lims, check_err_lims, True, fit_conf,
+                                                                 nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -267,7 +295,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
-        start_temp = Quantity([start_temp.value] * len(sources), start_temp.unit)
+        # Doing it like this, defining a new variable and then redeclaring the start_temp in each bit of the loop
+        #  below is important, as the fit_conf generation code accesses the current value of start_temp specifically
+        all_start_temps = Quantity([start_temp.value.copy()] * len(sources), start_temp.unit)
+    else:
+        all_start_temps = start_temp.copy()
 
     # This function is for a set model, absorbed mekal, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -277,9 +309,22 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['single_temp_mekal']
+    sig = signature(single_temp_mekal)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -303,10 +348,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             raise ValueError("You cannot supply a source without a redshift to this model.")
 
         # Whatever start temperature is passed gets converted to keV, this will be put in the template
-        t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+        start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
         # Another TCL list, this time of the parameter start values for this model.
-        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1,
-                                                                  start_met, source.redshift, 1, 1.)
+        par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value,
+                                                                  start_temp.value, 1, start_met, source.redshift,
+                                                                  1, 1.)
 
         # Set up the TCL list that defines which parameters are frozen, dependent on user input
         freezing = "{{F {n} {t} T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
@@ -332,30 +378,39 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             check_hi_lims = "{}"
             check_err_lims = "{}"
 
+        # We generate the fit configuration key here, on a source by source basis, as the start temperature is allowed
+        #  to be different for every source
+        in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+        fit_conf = _gen_fit_conf(in_fit_conf)
+
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
         #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
         #  them all.
         nh_to_zero = "{2}"
 
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                     min_counts, min_sn, over_sample)
+                                     min_counts, min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names,
+                                                                 par_values, linking, freezing, par_fit_stat,
+                                                                 lum_low_lims, lum_upp_lims, lum_conf,
+                                                                 source.redshift, spectrum_checking, check_list,
+                                                                 check_lo_lims, check_hi_lims, check_err_lims, True,
+                                                                 fit_conf, nh_to_zero)
+
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -407,7 +462,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -432,9 +487,29 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     lum_low_lims = "{" + " ".join(lum_en[:, 0].to("keV").value.astype(str)) + "}"
     lum_upp_lims = "{" + " ".join(lum_en[:, 1].to("keV").value.astype(str)) + "}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['multi_temp_dem_apec']
+    sig = signature(multi_temp_dem_apec)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    # We generate the fit configuration key - in this case there are no relevant variables that can have different
+    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
+    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
+    #  is having a fit run
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
+
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
         # Find matching spectrum objects associated with the current source
@@ -493,25 +568,28 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
         #  them all.
         nh_to_zero = "{2}"
 
-        # This internal function writes out the XSPEC script with all the information we've assembled in this
-        #  function - filling out the XSPEC template and writing to disk
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                    spectrum_checking, check_list, check_lo_lims, check_hi_lims,
-                                                    check_err_lims, True, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'Tmax', group_spec,
-                                     min_counts, min_sn, over_sample)
+                                     min_counts, min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            # This internal function writes out the XSPEC script with all the information we've assembled in this
+            #  function - filling out the XSPEC template and writing to disk
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names,
+                                                                 par_values, linking, freezing, par_fit_stat,
+                                                                 lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
+                                                                 spectrum_checking, check_list, check_lo_lims,
+                                                                 check_hi_lims, check_err_lims, True, fit_conf,
+                                                                 nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
@@ -554,7 +632,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -581,9 +659,30 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         model = "constant*tbabs*powerlaw"
         par_names = "{factor nH PhoIndex norm}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['power_law']
+    sig = signature(power_law)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError(
+            "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    # We generate the fit configuration key - in this case there are no relevant variables that can have different
+    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
+    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
+    #  is having a fit run
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
+
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
@@ -632,7 +731,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         else:
             z = 1
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to one.".format(s=source.name))
+                          " will be invalid, as redshift has been set to one.".format(s=source.name), stacklevel=2)
 
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
@@ -640,33 +739,35 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         #  them all.
         nh_to_zero = "{2}"
 
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, nh_to_zero)
-
         # If the fit has already been performed we do not wish to perform it again
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                     min_sn, over_sample)
+                                     min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                 linking, freezing, par_fit_stat, lum_low_lims,
+                                                                 lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
+                                                                 "{}", True, fit_conf, nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
 
 
 @xspec_call
 def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
-              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_temp: Quantity = Quantity(1, "keV"),
-              lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
-              fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-              timeout: Quantity = Quantity(1, 'hr')):
+              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+              start_temp: Quantity = Quantity(1, "keV"), lo_en: Quantity = Quantity(0.3, "keV"),
+              hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True, par_fit_stat: float = 1.,
+              lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -725,9 +826,30 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         model = "constant*tbabs*bbody"
         par_names = "{factor nH kT norm}"
 
+    # Here we generate the fit configuration storage key from those arguments to this function that control the fit
+    #  and how it behaves
+    rel_args = FIT_FUNC_ARGS['blackbody']
+    sig = signature(blackbody)
+    cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
+
+    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    #  signature of this function is altered.
+    if set(list(rel_args.keys())) != set(list(cur_args.keys())):
+        raise XGADeveloperError(
+            "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+
+    # We generate the fit configuration key - in this case there are no relevant variables that can have different
+    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
+    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
+    #  is having a fit run
+    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+    fit_conf = _gen_fit_conf(in_fit_conf)
+
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     for src_ind, source in enumerate(sources):
         spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind], group_spec=group_spec,
                                        min_counts=min_counts, min_sn=min_sn, over_sample=over_sample)
@@ -780,26 +902,40 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         else:
             z = 1
             warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                          " will be invalid, as redshift has been set to one.".format(s=source.name))
+                          " will be invalid, as redshift has been set to one.".format(s=source.name), stacklevel=2)
 
         # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
         #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
         #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
         #  them all.
         nh_to_zero = "{2}"
-        out_file, script_file = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table, fit_method,
-                                                    specs, lo_en, hi_en, par_names, par_values, linking, freezing,
-                                                    par_fit_stat, lum_low_lims, lum_upp_lims, lum_conf, z, False, "{}",
-                                                    "{}", "{}", "{}", True, nh_to_zero)
 
         # If the fit has already been performed we do not wish to perform it again
         try:
             res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                     min_sn, over_sample)
+                                     min_sn, over_sample, fit_conf)
         except ModelNotAssociatedError:
+            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
+                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                 linking, freezing, par_fit_stat, lum_low_lims,
+                                                                 lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
+                                                                 "{}", True, fit_conf, nh_to_zero)
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(src_ind)
+            fit_confs.append(fit_conf)
+            inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+
+
+# This allows us to make a link between the model that was fit and the XGA function
+FIT_FUNC_MODEL_NAMES = {'constant*tbabs*apec': single_temp_apec,
+                        'constant*tbabs*mekal': single_temp_mekal,
+                        'constant*tbabs*wdem': multi_temp_dem_apec,
+                        'constant*tbabs*zpowerlw': power_law,
+                        'constant*tbabs*powerlaw': power_law,
+                        'constant*tbabs*zbbody': blackbody,
+                        'constant*tbabs*bbody': blackbody
+                        }

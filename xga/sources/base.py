@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 21:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 18:04. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -23,7 +23,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from .. import xga_conf, BLACKLIST
 from ..exceptions import NotAssociatedError, NoValidObservationsError, MultipleMatchError, \
     NoProductAvailableError, NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NotSampleMemberError
+    NotSampleMemberError, XGADeveloperError, FitConfNotAssociatedError
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -269,10 +269,12 @@ class BaseSource:
         # Initialisation of fit result attributes
         self._fit_results = {}
         self._test_stat = {}
+        self._fit_stat = {}
         self._dof = {}
         self._total_count_rate = {}
         self._total_exp = {}
         self._luminosities = {}
+        self._failed_fits = {}
 
         # Initialisation of attributes related to Extended and GalaxyCluster sources
         self._peaks = None
@@ -864,7 +866,7 @@ class BaseSource:
                     r_inner = Quantity(np.array(sp_info[5].strip('ri').split('and')).astype(float), 'deg')
                     r_outer = Quantity(np.array(sp_info[6].strip('ro').split('and')).astype(float), 'deg')
                     # Check if there is only one r_inner and r_outer value each, if so its a circle
-                    #  (otherwise its an ellipse)
+                    #  (otherwise it's an ellipse)
                     if len(r_inner) == 1:
                         r_inner = r_inner[0]
                         r_outer = r_outer[0]
@@ -909,6 +911,7 @@ class BaseSource:
                     #  spectrum
                     arf = [f for f in named if "arf" in f and "back" not in f and sp_info_str == f.split('.arf')[0]]
                     rmf = [f for f in named if "rmf" in f and "back" not in f and sp_info_str == f.split('.rmf')[0]]
+
                     # As RMFs can be generated for source and background spectra separately, or one for both,
                     #  we need to check for matching RMFs to the spectrum we found
                     if len(rmf) == 0:
@@ -1015,6 +1018,27 @@ class BaseSource:
                             # If we know the redshift we will add the radii to the annular spectra in proper
                             #  distance units
                             ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+
+                        # This tries to find any cross-arfs that might have been generated that match the current
+                        #  annular spectrum - we'll read them in and add them to the spectrum
+                        # TODO This would fall over if 'cross' were in a source name I think? - this will be replaced
+                        #  when Jess and I's work on the multi-mission branch, and will be far more efficient as it
+                        #  will involve far fewer read operations
+                        search_set_ident = "ident{}_cross".format(ann_spec_obj.set_ident)
+                        rel_c_arfs = [os.path.join(OUTPUT, oi, f) for oi in ann_spec_obj.obs_ids
+                                      for f in os.listdir(OUTPUT + oi)
+                                      if search_set_ident in f and "arf" in f and "back" not in f]
+                        # SO MANY FOR LOOPS, but I can't think of a better way right now
+                        for rel_c_arf in rel_c_arfs:
+                            cur_f_name = os.path.basename(rel_c_arf)
+                            f_name_parts = cur_f_name.split('.arf')[0].split('_')
+                            cur_oi = f_name_parts[0]
+                            cur_inst = f_name_parts[1]
+                            inn_ann = f_name_parts[-2]
+                            out_ann = f_name_parts[-1]
+                            ann_spec_obj.add_cross_arf(rel_c_arf, cur_oi, cur_inst, int(inn_ann), int(out_ann),
+                                                       ann_spec_obj.set_ident)
+
                         self.update_products(ann_spec_obj, update_inv=False)
                 except AttributeError:
                     # This should hopefully act to catch the NoneType has no attribute problems that have plagued this
@@ -1049,71 +1073,160 @@ class BaseSource:
         os.chdir(og_dir)
 
         # Now loading in previous fits
-        if os.path.exists(OUTPUT + "XSPEC/" + self.name) and read_fits:
-            ann_obs_order = {}
-            ann_results = {}
-            ann_lums = {}
-            prev_fits = [OUTPUT + "XSPEC/" + self.name + "/" + f
-                         for f in os.listdir(OUTPUT + "XSPEC/" + self.name) if ".xcm" not in f and ".fits" in f]
-            for fit in prev_fits:
-                fit_name = fit.split("/")[-1]
-                fit_info = fit_name.split("_")
-                storage_key = "_".join(fit_info[1:-1])
-                # Load in the results table
-                fit_data = FITS(fit)
+        if os.path.exists(os.path.join(OUTPUT, "XSPEC", self.name, 'inventory.csv')) and read_fits:
+            # TODO I NEED TO PUT SO MANY COMMENTS ON THE NEW WAY THIS HAS BEEN SET UP
+            # Everything in this file will be relevant to the current source
+            cur_fit_inv = pd.read_csv(os.path.join(OUTPUT, 'XSPEC', self.name, 'inventory.csv'),
+                                      dtype={'set_ident': 'Int64'})
 
-                # This bit is largely copied from xspec.py, sorry for my laziness
+            # TODO DECIDE HOW TO HANDLE THIS PROPERLY - JUST DROPPING DUPLICATES IS NOT SUFFICIENT FOR ANNULAR SPECTRA
+            #  IN PARTICULAR
+            # cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
+            #                                            'type', 'set_ident']).reset_index(drop=True)
+            glob_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'global']
+
+            for row_ind, row in glob_cur_fit_inv.iterrows():
+                # We'll read out some key information from the row into variables to make our life a little neater
+                fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
+                spec_key = row['spec_key']
+                fit_conf = row['fit_conf_key']
+                fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                           for oi in list(set(fit_ois))}
+
+                # Now we check to see if the same observations are associated with the source currently as they
+                #  were at the time of the original fit - if they are not then we are stopping the load process
+                #  here and moving onto the next entry
+                if oi_dict != self.instruments:
+                    break
+
+                # Load in the results table
+                fit_data = FITS(fit_file)
                 global_results = fit_data["RESULTS"][0]
                 model = global_results["MODEL"].strip(" ")
 
-                if "_ident" in storage_key:
-                    set_id, ann_id = storage_key.split("_ident")[-1].split("_")
-                    set_id = int(set_id)
-                    ann_id = int(ann_id)
-                    if set_id not in ann_results:
-                        ann_results[set_id] = {}
-                        ann_lums[set_id] = {}
-                        ann_obs_order[set_id] = {}
+                inst_lums = {}
 
-                    if model not in ann_results[set_id]:
-                        ann_results[set_id][model] = {}
-                        ann_lums[set_id][model] = {}
-                        ann_obs_order[set_id][model] = {}
+                assign_res = True
+                rel_sps = []
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    sp_oi, sp_inst = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")[:2]
+                    rel_sp = self.get_products('spectrum', sp_oi, sp_inst, spec_key)
+                    if len(rel_sp) != 1:
+                        assign_res = False
+                        break
+                    else:
+                        rel_sps.append(rel_sp[0])
+                # TODO I was going to use this
+                #  or len(rel_sps) != len(self.get_products('spectrum', extra_key=spec_key))
+                #  to check for spectra that match our description but weren't included in the fit output, but
+                #  I realise that would break cases where spectrum_checking has excluded some spectra
+                if not assign_res:
+                    break
 
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    rel_sp = rel_sps[line_ind]
+
+                    # Adds information from this fit to the spectrum object.
+                    rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)], fit_conf)
+
+                    # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                    #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                    processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                    if rel_sp.instrument not in inst_lums:
+                        inst_lums[rel_sp.instrument] = processed_lums
+
+                # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                #  consistent
+                if "pn" in inst_lums:
+                    chosen_lums = inst_lums["pn"]
+                    # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                elif "mos2" in inst_lums:
+                    chosen_lums = inst_lums["mos2"]
+                elif "mos1" in inst_lums:
+                    chosen_lums = inst_lums["mos1"]
                 else:
-                    set_id = None
-                    ann_id = None
+                    chosen_lums = None
+                fit_data.close()
 
-                try:
+                # Push global fit results, luminosities etc. into the corresponding source object.
+                self.add_fit_data(model, global_results, chosen_lums, spec_key, fit_conf)
+
+            # ------------ ANNULAR FIT READ IN ------------
+            ann_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann'].reset_index(drop=True)
+
+            ann_cur_fit_inv['fit_ident'] = ann_cur_fit_inv['results_file'].apply(lambda x: x.split("_")[1])
+            ann_ids = ann_cur_fit_inv['results_file'].apply(lambda x: x.split("_annid")[-1].replace('.fits', ''))
+            ann_cur_fit_inv['ann_id'] = ann_ids
+
+            for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
+                fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident].reset_index(drop=True)
+
+                obs_order = {int(an_id): [] for an_id in fit_ann_inv_ent['ann_id'].values}
+                ann_lums = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
+                ann_res = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
+
+                rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'])
+
+                assign_res = True
+                for row_ind, row in fit_ann_inv_ent.iterrows():
+                    if not assign_res:
+                        break
+
+                    # We'll read out some key information from the row into variables to make our life a little neater
+                    fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
+                    fit_conf = row['fit_conf_key']
+                    fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                    fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                    oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                               for oi in list(set(fit_ois))}
+
+                    # Now we check to see if the same observations are associated with the source currently as they
+                    #  were at the time of the original fit - if they are not then we are stopping the load process
+                    #  here and moving onto the next entry
+                    if oi_dict != self.instruments:
+                        assign_res = False
+                        break
+
+                    # Load in the results table
+                    fit_data = FITS(fit_file)
+                    global_results = fit_data["RESULTS"][0]
+                    model = global_results["MODEL"].strip(" ")
+
+                    rel_sps = []
                     inst_lums = {}
-                    obs_order = []
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-                        sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
-                        # Want to derive the spectra storage key from the file name, this strips off some
-                        #  unnecessary info
-                        sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
+                        spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                        sp_oi, sp_inst = spec_info[:2]
+                        sp_ann_id = int(spec_info[-2])
 
-                        # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
-                        #  the normal way
-                        if set_id is None:
-                            # This adds ra back on, and removes any ident information if it is there
-                            sp_key = 'ra' + sp_key
-                            # Finds the appropriate matching spectrum object for the current table line
-                            spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key)[0]
-                        else:
-                            sp_key = 'ra' + sp_key.split('_ident')[0]
-                            ann_spec = self.get_annular_spectra(set_id=set_id)
-                            spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
-                            obs_order.append([sp_info[0], sp_info[1]])
+                        try:
+                            rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
+                            rel_sps.append(rel_sp)
+                        except NoProductAvailableError:
+                            assign_res = False
+                            break
+
+                        obs_order[sp_ann_id].append([sp_oi, sp_inst])
+
+                    if not assign_res:
+                        break
+
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        rel_sp = rel_sps[line_ind]
 
                         # Adds information from this fit to the spectrum object.
-                        spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)], fit_conf)
 
                         # The add_fit_data method formats the luminosities nicely, so we grab them back out
                         #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                        processed_lums = spec.get_luminosities(model)
-                        if spec.instrument not in inst_lums:
-                            inst_lums[spec.instrument] = processed_lums
+                        processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                        if rel_sp.instrument not in inst_lums:
+                            inst_lums[rel_sp.instrument] = processed_lums
 
                     # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
                     #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
@@ -1128,49 +1241,133 @@ class BaseSource:
                     else:
                         chosen_lums = None
 
-                    if set_id is not None:
-                        ann_results[set_id][model][spec.annulus_ident] = global_results
-                        ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
-                        ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
-                    else:
-                        # Push global fit results, luminosities etc. into the corresponding source object.
-                        self.add_fit_data(model, global_results, chosen_lums, sp_key)
-                except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
-                    chosen_lums = {}
-                    warn_text = "{src} fit {f} could not be loaded in as there are no matching spectra " \
-                                "available".format(src=self.name, f=fit_name)
-                    if not self._samp_member:
-                        warn(warn_text, stacklevel=2)
-                    else:
-                        self._supp_warn.append(warn_text)
-                fit_data.close()
+                    ann_lums[int(row['ann_id'])] = chosen_lums
+                    ann_res[int(row['ann_id'])] = global_results
+                    fit_data.close()
 
-            if len(ann_results) != 0:
-                for set_id in ann_results:
+                if assign_res:
                     try:
-                        rel_ann_spec = self.get_annular_spectra(set_id=set_id)
-                        for model in ann_results[set_id]:
-                            rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
-                                                      ann_obs_order[set_id][model])
-                            # if model == "constant*tbabs*apec":
-                            #     temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
-                            #     self.update_products(temp_prof)
-                            #
-                            #     # Normalisation profiles can be useful for many things, so we generate them too
-                            #     norm_prof = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                            #     self.update_products(norm_prof)
-                            #
-                            #     if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
-                            #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
-                            #         self.update_products(met_prof)
-                    except (NoProductAvailableError, ValueError):
-                        warn_text = "A previous annular spectra profile fit for {src} was not successful, or no " \
-                                    "matching spectrum has been loaded, so it cannot be read " \
-                                    "in".format(src=self.name)
-                        if not self._samp_member:
-                            warn(warn_text, stacklevel=2)
-                        else:
-                            self._supp_warn.append(warn_text)
+                        rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
+                    except ValueError:
+                        # If the results dictionaries don't have the right number of entries a value error may be
+                        #  thrown
+                        pass
+
+            # ------------ CROSS-ARF ANNULAR FIT READ IN ------------
+            carf_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann_carf']
+
+            for row_ind, row in carf_cur_fit_inv.iterrows():
+                # Grab the relevant annular spectrum
+                rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'])
+
+                # We'll read out some key information from the row into variables to make our life a little neater
+                fit_file = os.path.join(OUTPUT, 'XSPEC', self.name, row['results_file'])
+                spec_key = row['spec_key']
+                fit_conf = row['fit_conf_key']
+                fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                           for oi in list(set(fit_ois))}
+
+                # Now we check to see if the same observations are associated with the source currently as they
+                #  were at the time of the original fit - if they are not then we are stopping the load process
+                #  here and moving onto the next entry
+                if oi_dict != self.instruments:
+                    break
+
+                # Load in the results table
+                fit_data = FITS(fit_file)
+                global_results = fit_data["RESULTS"][0]
+                model = global_results["MODEL"].strip(" ")
+
+                inst_lums = {ann_id: {} for ann_id in rel_ann_sp.annulus_ids}
+                obs_order = {int(an_id): [] for an_id in rel_ann_sp.annulus_ids}
+
+                assign_res = True
+                rel_sps = []
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                    sp_oi, sp_inst = spec_info[:2]
+                    sp_ann_id = int(spec_info[-2])
+
+                    try:
+                        rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
+                    except NoProductAvailableError:
+                        assign_res = False
+                        break
+
+                    rel_sps.append(rel_sp)
+
+                if not assign_res:
+                    break
+
+                for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                    rel_sp = rel_sps[line_ind]
+
+                    # Adds information from this fit to the spectrum object.
+                    rel_sp.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)], fit_conf)
+
+                    obs_order[rel_sp.annulus_ident].append([rel_sp.obs_id, rel_sp.instrument])
+
+                    # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                    #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                    processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                    if rel_sp.instrument not in inst_lums[rel_sp.annulus_ident]:
+                        inst_lums[rel_sp.annulus_ident][rel_sp.instrument] = processed_lums
+
+                # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                #  consistent
+                chosen_lums = {}
+                for cur_ann_id in inst_lums:
+                    if "pn" in inst_lums[cur_ann_id]:
+                        cur_chos_lum = inst_lums[cur_ann_id]["pn"]
+                    elif "mos2" in inst_lums[cur_ann_id]:
+                        cur_chos_lum = inst_lums[cur_ann_id]["mos2"]
+                    else:
+                        cur_chos_lum = inst_lums[cur_ann_id]["mos1"]
+                    chosen_lums[cur_ann_id] = cur_chos_lum
+
+                # Here our main problem is untangling the parameters in the results table for this fit, as
+                #  we need to be able to assign them to our N annuli. This starts by reading out all
+                #  the column names, and figuring out where the fit parameters (which will be relevant
+                #  to a particular annulus) start.
+                col_names = np.array(global_results.dtype.names)
+                # We know that fit parameters start after the DOF entry, because that is how we designed
+                #  the output files, so we can figure out what index to split on that will let us get
+                #  fit parameters in one array and the general parameters in the other.
+                arg_split = np.argwhere(col_names == 'DOF')[0][0]
+                # We split off the columns that aren't parameters
+                not_par_names = col_names[:arg_split + 1]
+                # Then we tile them, as we're going to be reading out these values repeatedly (i.e. N times
+                #  where N is the number of annuli). Strictly speaking all the goodness of fit info is not
+                #  for individual annuli like it is when we don't cross-arf-fit, but the annular spectrum
+                #  still expects there to be an entry per annulus
+                not_par_names = np.tile(not_par_names[..., None], rel_ann_sp.num_annuli).T
+                # We select only the column names which were fit parameters, these we need to split up
+                #  by figuring out which belong to each annulus
+                col_names = col_names[arg_split + 1:]
+                # Now we figure out how many parameters per annuli there are, this approach is valid
+                #  because the model setups of each annuli are going to be identical
+                par_per_ann = len(col_names) / rel_ann_sp.num_annuli
+                if (par_per_ann % 1) != 0:
+                    raise XGADeveloperError("Assigning results to annular spectrum after cross-arf fit"
+                                            " has resulted in a non-integer number of parameters per"
+                                            " annulus. This is the fault of the developers.")
+                # Now we can split the parameter names into those that belong with each
+                par_for_ann = col_names.reshape(rel_ann_sp.num_annuli, int(par_per_ann))
+                # Now we're adding the not-fit-parameters back on to the front of each row - that way
+                #  the not-fit-parameter info will be added into each annulus' information to be passed
+                #  to the annular spectrum
+                par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
+
+                # Then we put the results in a dictionary, the way the annulus wants it
+                ann_results = {ann_id: fit_data['RESULTS'][par_for_ann[ann_id]][0]
+                               for ann_id in rel_ann_sp.annulus_ids}
+
+                rel_ann_sp.add_fit_data(model, ann_results, chosen_lums, obs_order, fit_conf)
+                fit_data.close()
 
         os.chdir(og_dir)
 
@@ -2378,13 +2575,70 @@ class BaseSource:
         """
         return self._name
 
-    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str):
+    @property
+    def fitted_models(self) -> dict:
         """
-        A method that stores fit results and global information about a the set of spectra in a source object.
+        A property that gets the list of spectral models that have been fit to each set of spectra that were
+        generated for this source.
+
+        :return: A dict with keys being storage identifiers for spectra, and values being lists of models fit to
+            this spectrum.
+        :rtype: dict
+        """
+        return {s_ident: list(self._fit_results[s_ident].keys()) for s_ident in self._fit_results}
+
+    @property
+    def fitted_model_configurations(self) -> dict:
+        """
+        Property that returns a dictionary with spectrum storage identifiers as top level keys, model names as lower
+        level keys, and lists of fit configuration identifiers as values.
+
+        :return: Dictionary with model names as keys, and lists of model configuration identifiers as values.
+        :rtype: dict
+        """
+        return {s_ident: {m: list(self._fit_results[s_ident][m].keys()) for m in self.fitted_models[s_ident]}
+                for s_ident in self._fit_results}
+
+    @property
+    def fitted_model_failures(self) -> dict:
+        """
+        Property that returns a dictionary with spectrum storage identifiers as top level keys, model names as lower
+        level keys, and lists of fit configuration identifiers that correspond to FAILED fits.
+
+        :return: Dictionary with model names as keys, and lists of model configuration identifiers as values.
+        :rtype: dict
+        """
+        return self._failed_fits
+
+    def add_fit_failure(self, model: str, spec_storage_key: str, fit_conf: str):
+        """
+        A method that keeps a record of when a model fit to a set of spectra, with particular spectrum generation
+        and fit configuration, was not successful. It is helpful to keep track of these in order to avoid wasting
+        compute time re-running previously failed fits.
+
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. constant*tbabs*apec
+        :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
+            ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
+            settings when the spectra were generated.
+        :param str fit_conf: In order to be able to store results for different fit configurations (e.g. different
+            starting pars, abundance tables, all that), we need to have a key that identifies the configuration. We
+            do not expect the user to be adding fit data, so this will be a key generated by the fit function.
+        """
+        # Make sure that the _failed_fits attribute has the structure we want (top level keys spectrum storage
+        #  identifiers, lower level keys model names, values lists of fit configurations
+        self._failed_fits.setdefault(spec_storage_key, {}).setdefault(model, [])
+        # Then we add the failed fit configuration to the storage structure
+        self._failed_fits[spec_storage_key][model].append(fit_conf)
+
+    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str, fit_conf: str):
+        """
+        A method that stores fit results and global information for a set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
         calculated. Other parameters of interest are store in other internal attributes. This probably shouldn't
         ever be used by the user, just other parts of XGA, hence why I've asked for a spec_storage_key to be passed
         in rather than all the spectrum configuration options individually.
+
+        This method should not need to be directly called by the user - only by other XGA functions.
 
         :param str model: The XSPEC definition of the model used to perform the fit. e.g. constant*tbabs*apec
         :param tab_line: The table line with the fit data.
@@ -2392,21 +2646,29 @@ class BaseSource:
         :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
             ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
             settings when the spectra were generated.
+        :param str fit_conf: In order to be able to store results for different fit configurations (e.g. different
+            starting pars, abundance tables, all that), we need to have a key that identifies the configuration. We
+            do not expect the user to be adding fit data, so this will be a key generated by the fit function.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
         not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
                    'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
 
-        # Various global values of interest
+        # Various global values of interest - setting up the dictionary storage structure
         self._total_exp[spec_storage_key] = float(tab_line["TOTAL_EXPOSURE"])
-        if spec_storage_key not in self._total_count_rate:
-            self._total_count_rate[spec_storage_key] = {}
-            self._test_stat[spec_storage_key] = {}
-            self._dof[spec_storage_key] = {}
-        self._total_count_rate[spec_storage_key][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
-                                                           float(tab_line["TOTAL_COUNT_RATE_ERR"])]
-        self._test_stat[spec_storage_key][model] = float(tab_line["TEST_STATISTIC"])
-        self._dof[spec_storage_key][model] = float(tab_line["DOF"])
+        self._total_count_rate.setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._test_stat.setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._fit_stat.setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._dof.setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._fit_results.setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._luminosities.setdefault(spec_storage_key, {}).setdefault(model, {})
+
+        # Now we start actually storing things
+        self._total_count_rate[spec_storage_key][model][fit_conf] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                                     float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[spec_storage_key][model][fit_conf] = float(tab_line["TEST_STATISTIC"])
+        self._fit_stat[spec_storage_key][model][fit_conf] = float(tab_line["FIT_STATISTIC"])
+        self._dof[spec_storage_key][model][fit_conf] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
         #  then for each result find the +- errors
@@ -2437,24 +2699,94 @@ class BaseSource:
             mod_res[par_name][ident][pos] = float(tab_line[par])
 
         # Storing the fit results
-        if spec_storage_key not in self._fit_results:
-            self._fit_results[spec_storage_key] = {}
-        self._fit_results[spec_storage_key][model] = mod_res
+        self._fit_results[spec_storage_key][model][fit_conf] = mod_res
 
         # And now storing the luminosity results
-        if spec_storage_key not in self._luminosities:
-            self._luminosities[spec_storage_key] = {}
-        self._luminosities[spec_storage_key][model] = lums
+        self._luminosities[spec_storage_key][model][fit_conf] = lums
 
-    def get_results(self, outer_radius: Union[str, Quantity], model: str,
+    def _get_fit_checks(self, spec_storage_key: str, model: str = None, par: str = None,
+                        fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
+        """
+        An internal function to perform input checks and pre-processing for get methods that access fit results, or
+        other related information such as fit statistic.
+
+        :param str spec_storage_key: The XGA product storage key of the spectrum for which we're checking
+            spectral fit configurations.
+        :param str model: The name of the fitted model that you're requesting the results from
+            (e.g. constant*tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the spectrum
+            fitting function and values being the changed values (only values changed-from-default need be included)
+            or a full string representation of the fit configuration that is being requested.
+        :return: The model name and fit configuration.
+        :rtype: Tuple[str, str]
+        """
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fitconfgen import fit_conf_from_function
+
+        # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
+        #  has been fit to this spectrum - otherwise how are we to know which model they want?
+        if spec_storage_key not in self.fitted_models:
+            raise ModelNotAssociatedError("There are no XSPEC fits associated with the specified Spectrum object.")
+        elif model is None and len(self.fitted_models[spec_storage_key]) != 1:
+            av_mods = ", ".join(self.fitted_models[spec_storage_key])
+            raise ValueError("Multiple models have been fit to the specified spectrum, so model=None is not "
+                             "valid; available models are {a}".format(m=model, a=av_mods))
+        elif model is None:
+            # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
+            #  automatically select it for them
+            model = self.fitted_models[spec_storage_key][0]
+        elif model is not None and model not in self.fitted_models[spec_storage_key]:
+            av_mods = ", ".join(self.fitted_models[spec_storage_key])
+            raise ModelNotAssociatedError("{m} has not been fitted to the specified spectrum; available "
+                                          "models are {a}".format(m=model, a=av_mods))
+
+        # Checks the input fit configuration values - if they are completely illegal we throw an error
+        if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
+            raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
+                            "changed-from-default fit function arguments as keys and changed values as items.")
+        # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
+        #  as a string
+        elif isinstance(fit_conf, dict):
+            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+        # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
+        elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model]) != 1:
+            av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
+            raise ValueError("The {m} model has been fit to the specified spectrum with multiple configuration, so "
+                             "fit_conf=None is not valid; available fit configurations are "
+                             "{a}".format(m=model, a=av_fconfs))
+        # However here they passed no fit configuration, and only one has been used for the model, so we're all good
+        #  and will select it for them
+        elif fit_conf is None and len(self.fitted_model_configurations[spec_storage_key][model]) == 1:
+            fit_conf = self.fitted_model_configurations[spec_storage_key][model][0]
+
+        # Check to make sure the requested results actually exist
+        if fit_conf not in self._fit_results[spec_storage_key][model]:
+            av_fconfs = ", ".join(self.fitted_model_configurations[spec_storage_key][model])
+            raise FitConfNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to the "
+                                            "specified spectrum; available fit configurations are "
+                                            "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+        elif par is not None and par not in self._fit_results[spec_storage_key][model][fit_conf]:
+            av_pars = ", ".join(self._fit_results[spec_storage_key][model][fit_conf].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to the specified spectra; "
+                                              "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        return model, fit_conf
+
+    def get_results(self, outer_radius: Union[str, Quantity], model: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
-                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -2470,36 +2802,29 @@ class BaseSource:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested result value, and uncertainties.
+        :rtype: Union[dict, Quantity]
         """
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
         specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
             storage_key = specs[0].storage_key
         else:
             storage_key = specs.storage_key
 
-        # Bunch of checks to make sure the requested results actually exist
-        if len(self._fit_results) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif storage_key not in self._fit_results:
-            raise ModelNotAssociatedError("Those spectra have no associated XSPEC fit to {s}".format(s=self.name))
-        elif model not in self._fit_results[storage_key]:
-            av_mods = ", ".join(self._fit_results[storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to those spectra of {s}; available "
-                                          "models are {a}".format(m=model, s=self.name, a=av_mods))
-        elif par is not None and par not in self._fit_results[storage_key][model]:
-            av_pars = ", ".join(self._fit_results[storage_key][model].keys())
-            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to {s}, "
-                                              "the options are {a}".format(p=par, m=model, s=self.name, a=av_pars))
+        model, fit_conf = self._get_fit_checks(storage_key, model, par, fit_conf)
 
         # Read out into variable for readabilities sake
-        fit_data = self._fit_results[storage_key][model]
+        fit_data = self._fit_results[storage_key][model][fit_conf]
         proc_data = {}  # Where the output will ive
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into
@@ -2525,15 +2850,151 @@ class BaseSource:
         else:
             return proc_data[par]
 
+    def get_fit_statistic(self, outer_radius: Union[str, Quantity], model: str = None,
+                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                          min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                          fit_conf: Union[str, dict] = None) -> float:
+        """
+        Method that will retrieve fit statistic from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
+        return self._fit_stat[storage_key][model][fit_conf]
+
+    def get_test_statistic(self, outer_radius: Union[str, Quantity], model: str = None,
+                           inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                           min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                           fit_conf: Union[str, dict] = None) -> float:
+        """
+        Method that will retrieve test statistic from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
+        return self._test_stat[storage_key][model][fit_conf]
+
+    def get_fit_dof(self, outer_radius: Union[str, Quantity], model: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    fit_conf: Union[str, dict] = None) -> int:
+        """
+        Method that will retrieve DOF from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample)
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
+        return self._dof[storage_key][model][fit_conf]
+
     def get_luminosities(self, outer_radius: Union[str, Quantity], model: str,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
                          hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None):
+                         over_sample: float = None, fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -2553,7 +3014,11 @@ class BaseSource:
         :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested luminosity value, and uncertainties.
+        :rtype: Union[dict, Quantity]
         """
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
@@ -2564,6 +3029,8 @@ class BaseSource:
         else:
             storage_key = specs.storage_key
 
+        model, fit_conf = self._get_fit_checks(storage_key, model, None, fit_conf)
+
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
@@ -2573,17 +3040,10 @@ class BaseSource:
         else:
             en_key = None
 
-        # Checks that the requested region, model and energy band actually exist
-        if len(self._luminosities) == 0:
-            raise ModelNotAssociatedError("There are no XSPEC fits associated with {s}".format(s=self.name))
-        elif storage_key not in self._luminosities:
-            raise ModelNotAssociatedError("These spectra have no associated XSPEC fit to {s}.".format(s=self.name))
-        elif model not in self._luminosities[storage_key]:
-            av_mods = ", ".join(self._luminosities[storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to these spectra of {s}; "
-                                          "available models are {a}".format(m=model, s=self.name, a=av_mods))
-        elif en_key is not None and en_key not in self._luminosities[storage_key][model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[storage_key][model].keys()])
+        # Checks the energy band actually exists
+        if en_key is not None and en_key not in self._luminosities[storage_key][model][fit_conf]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV"
+                                  for en in self._luminosities[storage_key][model][fit_conf].keys()])
             raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
                                               "energy bands are {b}".format(l=lo_en.to("keV").value,
                                                                             u=hi_en.to("keV").value,
@@ -2592,13 +3052,13 @@ class BaseSource:
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[storage_key][model]:
-                lum_value = self._luminosities[storage_key][model][lum_key]
+            for lum_key in self._luminosities[storage_key][model][fit_conf]:
+                lum_value = self._luminosities[storage_key][model][fit_conf][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[storage_key][model][en_key]
+            lum_value = self._luminosities[storage_key][model][fit_conf][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
@@ -3029,6 +3489,10 @@ class BaseSource:
             extra_name = "_minsn{}".format(min_sn)
         else:
             extra_name = ''
+
+        # If set_id is passed then we make sure that it is an integer
+        if set_id is not None:
+            set_id = int(set_id)
 
         # And if it was oversampled during generation then we need to include that as well
         if over_sample is not None:
@@ -3602,9 +4066,10 @@ class BaseSource:
 
         return matched_prods
 
-    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None,
+                       central_coord: Quantity = None, radii: Quantity = None, annuli_bound_radii: Quantity = None,
+                       lo_en: Quantity = None, hi_en: Quantity = None, spec_model: str = None,
+                       spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
         searches for full and partial matches in this source's product storage structure.
@@ -3618,47 +4083,116 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+        # Checking the energy bound input parameters
+        if any([lo_en is None, hi_en is None]) and not all([lo_en is None, hi_en is None]):
+            raise ValueError("The 'lo_en' and 'hi_en' arguments must both be None, or both be an astropy quantity.")
+        elif lo_en is not None and not all([lo_en.unit.is_equivalent('keV'), hi_en.unit.is_equivalent('keV')]):
+            raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
+        elif lo_en is not None:
+            # Make sure they're in the units we want
+            lo_en = lo_en.to('keV')
+            hi_en = hi_en.to('keV')
 
+        # If no specific central coordinate has been passed, we fetch the default central coordinate - don't love
+        #  this in hindsight, but I won't change it now
+        # TODO Consider that this base level get method shouldn't impose a default coordinate?
         if central_coord is None:
             central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
 
-        if radii is not None:
+        # Now we convert the input radii to degrees for future comparisons to profile annuli radii - whether those
+        #  radii be annular bounds or central radii
+        if all([radii is not None, annuli_bound_radii is not None]):
+            raise ValueError("Both the 'radii' and 'annuli_bound_radii' arguments are not None - please supply one"
+                             " or the other.")
+        elif radii is not None:
             radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
+        elif annuli_bound_radii is not None:
+            annuli_bound_radii = self.convert_radius(annuli_bound_radii, 'deg')
 
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False)
+        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=True)
         matched_prods = []
         for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+            p: BaseProfile1D
+            # We can now start checking any supplied matching criteria against the current profile - if we got
+            #  given energy bounds then we compare them to the profile's bounds. If they don't match then we
+            #  trigger a continue statement
+            if lo_en is not None and (p.energy_bounds[0] != lo_en or p.energy_bounds[1] != hi_en):
+                continue
 
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
+            # Nice simple one, do the coordinates supplied to the get method match the central coordinates of
+            #  the current profile - if they don't then we aren't interested
+            if (p.centre != central_coord).any():
+                continue
+
+            # If we received information on the inner and outer radii of the annular bins, we'll
+            #  check it against the current profile
+            if (annuli_bound_radii is not None and
+                    (len(annuli_bound_radii) != len(p.annulus_bounds) or
+                     (self.convert_radius(p.annulus_bounds, 'deg') != annuli_bound_radii).any())):
+                continue
+
+            # The same as above, but for central radii
+            if (radii is not None and (len(radii) != len(p.radii) or
+                                       (self.convert_radius(p.radii, 'deg') != radii).any())):
+                continue
+
+            # If we get here, then the current profile matches our search criteria
+            matched_prods.append(p)
+
+        # At this point, we might have to impose more checks on the keys of the identified products - if the
+        #  user has passed information that indicates the profile originated from an annular spectrum, then the
+        #  profile key will have an additional component that identifies the spectral model and fit configuration
+        #  that it originates from.
+        if spec_model is not None:
+            matched_prods = [p for p in matched_prods if p.spec_model == spec_model]
+
+        # Then the fit configuration
+        if spec_fit_conf is not None:
+            from ..xspec.fit import PROF_FIT_FUNC_MODEL_NAMES
+            from ..xspec.fitconfgen import fit_conf_from_function
+
+            # At this point we've already applied any constraints on the spectral model name, so we just
+            #  cycle through the profiles, and see if any of their stored spectral fit configuration match the
+            #  fit configuration that was passed to this method. We give the passed spec_fit_conf to the
+            #  fit_conf_from_function function to ensure that fit configuration dictionaries are converted
+            #  to full fit configuration keys
+            new_matched_prods = []
+            for p in matched_prods:
+                try:
+                    cur_gen_fit_conf = fit_conf_from_function(PROF_FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
+                    if cur_gen_fit_conf == p.spec_fit_conf:
+                        new_matched_prods.append(p)
+
+                # If there is a KeyError, that means that the passed spec_fit_conf isn't compatible with the
+                #  model of the current profile, so we skip right on by
+                except KeyError as err:
+                    print(err)
+                    pass
+            matched_prods = new_matched_prods
 
         return matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                     radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
+                     hi_en: Quantity = None, spec_model: str = None,
+                     spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         This is the generic get method for XGA profile objects stored in this source. You still must remember
         the profile type value to use it, but once entered it will return a list of all matching profiles (or a
@@ -3673,29 +4207,35 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
         if "profile" in profile_type:
             warn("The profile_type you passed contains the word 'profile', which is appended onto "
-                          "a profile type by XGA, you need to try this again without profile on the end, unless"
-                          " you gave a generic profile a type with 'profile' in.", stacklevel=2)
-
-        search_key = profile_type + "_profile"
-        if all([obs_id is None, inst is None]):
-            search_key = "combined_" + search_key
+                 "a profile type by XGA, you need to try this again without profile on the end, unless"
+                 " you gave a generic profile a type with 'profile' in.", stacklevel=2)
 
         search_key = profile_type + "_profile"
         if search_key not in ALLOWED_PRODUCTS:
             warn("{} seems to be a custom profile, not an XGA default type. If this is not "
-                          "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
+                 "true then you have passed an invalid profile type.".format(search_key), stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en)
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, annuli_bound_radii,
+                                            lo_en, hi_en, spec_model, spec_fit_conf)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -3704,7 +4244,8 @@ class BaseSource:
         return matched_prods
 
     def get_combined_profiles(self, profile_type: str, central_coord: Quantity = None, radii: Quantity = None,
-                              lo_en: Quantity = None, hi_en: Quantity = None) \
+                              annuli_bound_radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                              spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
             -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for XGA profiles made using all available data which are stored in this source.
@@ -3716,10 +4257,19 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
@@ -3735,7 +4285,8 @@ class BaseSource:
             warn("That profile type seems to be a custom profile, not an XGA default type. If this is not "
                           "true then you have passed an invalid profile type.", stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, lo_en, hi_en)
+        matched_prods = self._get_prof_prod(search_key, None, None, central_coord, radii, annuli_bound_radii,
+                                            lo_en, hi_en, spec_model, spec_fit_conf)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -3745,7 +4296,7 @@ class BaseSource:
         return matched_prods
 
     @property
-    def fitted_models(self) -> List[str]:
+    def all_fitted_models(self) -> List[str]:
         """
         This property cycles through all the available fit results, and finds the unique names of XSPEC models
         that have been fitted to this source.
@@ -3950,7 +4501,7 @@ class BaseSource:
         print("Spectra associated - {}".format(len(self.get_products("spectrum"))))
 
         if len(self._fit_results) != 0:
-            print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
+            print("Fitted Models - {}".format(" | ".join(self.all_fitted_models)))
 
         if self._regions is not None and "custom" in self._radii:
             if self._redshift is not None:
@@ -4000,7 +4551,7 @@ class BaseSource:
                 tx = self.get_temperature('r500', 'constant*tbabs*apec').value.round(2)
                 # Just average the uncertainty for this
                 print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
-            except (ModelNotAssociatedError, NoProductAvailableError):
+            except (ModelNotAssociatedError, NoProductAvailableError, ValueError):
                 pass
 
             try:
@@ -4008,7 +4559,7 @@ class BaseSource:
                                            hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
                 print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
-            except (ModelNotAssociatedError, NoProductAvailableError):
+            except (ModelNotAssociatedError, NoProductAvailableError, ValueError):
                 pass
         print("-----------------------------------------------------\n")
 

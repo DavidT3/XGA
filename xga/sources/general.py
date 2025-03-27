@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 14:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 22:16. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -379,9 +379,10 @@ class ExtendedSource(BaseSource):
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
         if obs_id == "combined" or inst == "combined":
-            interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en, hi_en)
+            interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en=lo_en, hi_en=hi_en)
         else:
-            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en, hi_en)
+            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en=lo_en,
+                                              hi_en=hi_en)
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object

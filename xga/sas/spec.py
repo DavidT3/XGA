@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:31. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -114,7 +114,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
     rmf_cmd = "rmfgen rmfset={r} spectrumset='{s}' detmaptype={dt} detmaparray={ds} extendedsource={es}"
 
-    # Don't need to run backscale separately, as this arfgen call will do it automatically
+    # Don't make use of the setbackscale functionality of arg
     arf_cmd = "arfgen spectrumset={s} arfset={a} withrmfset=yes rmfset={r} badpixlocation={e} " \
               "extendedsource={es} detmaptype={dt} detmaparray={ds} setbackscale=no badpixmaptype={dt}"
 
@@ -804,6 +804,15 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
             for sp_comb in permutations(rel_sp_comp, 2):
                 obs_id = sp_comb[0].obs_id
                 inst = sp_comb[0].instrument
+
+                # This tries to retrieve an existing cross-arf generated for the current ObsID, instrument, and annuli
+                #  for this annular spectra - if we succeed then we simply continue and move on to the next combo
+                try:
+                    ann_spec.get_cross_arf_paths(obs_id, inst, sp_comb[0].annulus_ident, sp_comb[1].annulus_ident)
+                    continue
+                except NotAssociatedError:
+                    pass
+
                 evt_list = src.get_products('events', obs_id, inst)[0]
 
                 dest_dir = OUTPUT + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name,

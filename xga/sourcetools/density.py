@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 16:15. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -19,6 +19,7 @@ from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
 from ..imagetools.profile import radial_brightness
+from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
@@ -82,10 +83,6 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         count-rate/volume to a number density of hydrogen, the parsed obs_id variable, and the parsed inst variable.
     :rtype: Tuple[Union[ClusterSample, List], List[Quantity], list, list]
     """
-    # If its a single source I shove it in a list so I can just iterate over the sources parameter
-    #  like I do when its a Sample object
-    if isinstance(sources, BaseSource):
-        sources = [sources]
 
     # Perform some checks on the ObsID and instrument parameters to make sure that they are in the correct
     #  format if they have been set. We don't need to check that the ObsIDs are associated with the sources
@@ -142,12 +139,15 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         temp_temps = []
         for src in sources:
             try:
-                # A temporary temperature variable
+                # A temporary temperature variable - the 'fit_conf' value is set as a dictionary with an entry for
+                #  the abundance table because that is the only possible change from default single_temp_apec
+                #  fitting for the call in this function
                 temp_temp = src.get_temperature(conv_outer_radius, "constant*tbabs*apec", inner_radius, group_spec,
-                                                min_counts, min_sn, over_sample)[0]
+                                                min_counts, min_sn, over_sample,
+                                                fit_conf={'abund_table': abund_table})[0]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature of "
-                     "3keV".format(s=src.name))
+                warn("{s}'s temperature fit was not successful - defaulting to 3 keV.".format(s=src.name),
+                     stacklevel=2)
                 temp_temp = Quantity(3, 'keV')
             temp_temps.append(temp_temp.value)
         temps = Quantity(temp_temps, 'keV')
@@ -327,6 +327,15 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
     """
+    # If a source (rather than a sample) is input, we put it in a list - that way we can iterate over them the same
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
+    # Need to sort out the type of model input that the user chose, and make sure it's ready to be passed into
+    #  the fit method of the surface brightness profile(s)
+    # First we check the number of arguments passed for the model
+    model = model_check(sources, model)
+
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
@@ -336,10 +345,10 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
-    # Need to sort out the type of model input that the user chose, and make sure its ready to be passed into
-    #  the fit method of the surface brightness profile(s)
-    # First we check the number of arguments passed for the model
-    model = model_check(sources, model)
+    # For the last bit of setup, we make sure that PSF corrected ratemaps are available, if they have been
+    #  requested - and also available with the specified configuration
+    if psf_corr:
+        rl_psf(sources, psf_iter, psf_model, lo_en, hi_en, psf_bins, num_cores)
 
     with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
               total=len(sources), position=0) as dens_prog:
@@ -683,6 +692,10 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         successful an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
     """
+    # If a source (rather than a sample) is input, we put it in a list - that way we can iterate over them the same
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,

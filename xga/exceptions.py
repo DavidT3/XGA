@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/11/2023, 10:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 18:04. Copyright (c) The Contributors
 
 
 class HeasoftError(Exception):
@@ -613,3 +613,39 @@ class NotSampleMemberError(Exception):
         else:
             return 'NotSampleMemberError has been raised'
 
+
+class XGADeveloperError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when an error has occurred that needs the attention of developers.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'XGADeveloperError has been raised'
+
+class FitConfNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a supplied fit configuration isn't associated with the source, model, or spectrum.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'FitConfNotAssociatedError has been raised'

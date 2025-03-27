@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 19:57. Copyright (c) The Contributors
 
 from typing import List
 
@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .base import BaseSample
 from .. import DEFAULT_COSMO
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoProductAvailableError, NoValidObservationsError
+    NoProductAvailableError, NoValidObservationsError, FitConfNotAssociatedError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
@@ -549,7 +549,7 @@ class ClusterSample(BaseSample):
     def Lx(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True):
+           over_sample: float = None, quality_checks: bool = True, fit_conf: Union[str, dict] = None):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -581,16 +581,20 @@ class ClusterSample(BaseSample):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
         return super().Lx(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts, min_sn, over_sample,
-                          quality_checks)
+                          quality_checks, fit_conf)
 
     def Tx(self, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
-           min_sn: float = None, over_sample: float = None, quality_checks: bool = True):
+           min_sn: float = None, over_sample: float = None, quality_checks: bool = True,
+           fit_conf: Union[str, dict] = None):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
@@ -620,6 +624,9 @@ class ClusterSample(BaseSample):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
@@ -635,39 +642,42 @@ class ClusterSample(BaseSample):
 
         temps = []
         for src_ind, gcs in enumerate(self._sources.values()):
+            gcs: GalaxyCluster
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
                 gcs_temp = gcs.get_temperature(out_rads[src_ind], model, inn_rads[src_ind], group_spec, min_counts,
-                                               min_sn, over_sample).value
+                                               min_sn, over_sample, fit_conf).value
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
                 if quality_checks and gcs_temp[0] > 25:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
-                         "fit by XGA".format(s=gcs.name, m=gcs_temp))
+                         "fit by XGA".format(s=gcs.name, m=gcs_temp), stacklevel=2)
                 elif quality_checks and gcs_temp.min() < 0:
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
-                         "measurement".format(s=gcs.name))
+                         "measurement".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) <= 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
-                         " hard to use for scaling relations as values are often logged.".format(s=gcs.name))
+                         " hard to use for scaling relations as values are often logged.".format(s=gcs.name),
+                         stacklevel=2)
                 elif quality_checks and ((gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("One of the temperature uncertainty values for {s} is more than three times larger than "
-                         "the other, this means the fit quality is suspect.".format(s=gcs.name))
+                         "the other, this means the fit quality is suspect.".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
                     gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
                     warn("The temperature value - the average error goes below zero for {s}, this makes the "
-                         "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name))
+                         "temperature hard to use for scaling relations as values are often "
+                         "logged".format(s=gcs.name), stacklevel=2)
                 temps.append(gcs_temp)
 
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, FitConfNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
-                warn(str(err))
+                warn(str(err), stacklevel=2)
                 temps.append(np.array([np.NaN, np.NaN, np.NaN]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity

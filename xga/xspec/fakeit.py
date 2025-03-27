@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 16:04. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -101,6 +101,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for s_ind, source in enumerate(sources):
         # This function can take a single temperature to simulate at, or a list of them (one for each source).
@@ -149,7 +151,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         t = the_temp.to("keV", equivalencies=u.temperature_energy()).value
         # Another TCL list, this time of the parameter start values for this model.
         par_values = "{{{0} {1} {2} {3} {4}}}".format(source.nH.to("10^22 cm^-2").value, t,
-                                                      sim_met, source.redshift, 1.)
+                                                      the_met, source.redshift, 1.)
 
         with open(COUNTRATE_CONV_SCRIPT, 'r') as c_script:
             script = c_script.read()
@@ -182,13 +184,16 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
             script_paths.append(script_file)
             outfile_paths.append(out_file)
             src_inds.append(s_ind)
+            fit_confs.append('')
+            inv_ents.append('')
 
     # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
     #  to expect
     run_type = "conv_factors"
     # I don't allow the user to set a timeout for fakeit runs because its unnecessary, but the run code still
     #  needs a value
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour')
+    return (script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour'), model,
+            fit_confs, inv_ents)
 
 
 

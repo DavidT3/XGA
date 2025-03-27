@@ -6,3 +6,4 @@ xga_output
 .ipynb_checkpoints
 /docs/build
 *__pycache__
+xga.egg-info/

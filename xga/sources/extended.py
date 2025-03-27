@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 20:09. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -15,7 +15,7 @@ from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
 from ..products import Spectrum, BaseProfile1D
 from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D, GasDensity3D, GasTemperature3D, \
-    HydrostaticMass
+    HydrostaticMass, ProjectedGasMetallicity1D
 from ..sourcetools import ang_to_rad, rad_to_ang
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -320,12 +320,12 @@ class GalaxyCluster(ExtendedSource):
                     rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
                     within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
                     within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
-                    
+
                     # This finds which regions are present in both lists and makes sure if they are in both
                     #  then they are NOT removed from the analysis - AS OF regions v0.9 THIS NO LONGER WORKS AS
                     #  REGIONS ARE NOT HASHABLE - THE LIST COMPREHENSION BELOW IS A QUICK FIX BUT LESS EFFICIENT
                     # intersect_regions = list(set(within_width) & set(within_height))
-                    
+
                     # This should do what the above set intersection did, but slower
                     intersect_regions = [r for r in within_height if r in within_width]
                     for inter_reg in intersect_regions:
@@ -482,18 +482,20 @@ class GalaxyCluster(ExtendedSource):
 
         return Quantity(r_list)
 
-    def get_results(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
-                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None):
+    # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
+    #  justified considering how often the cluster temperature is used in X-ray cluster studies.
+    def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
+                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                        min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                        fit_conf: Union[str, dict] = None) -> Quantity:
         """
-        Important method that will retrieve fit results from the source object. Either for a specific
-        parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
-        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
-        of such numpy arrays, with the keys corresponding to parameter names.
+        Convenience method that calls get_results to retrieve temperature measurements. All matching values
+        from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+).
 
-        This overrides the BaseSource method, but the only difference is that this has a default model, which
-        is what single_temp_apec fits (constant*tbabs*apec).
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -505,21 +507,27 @@ class GalaxyCluster(ExtendedSource):
             the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
             circular spectrum.
-        :param str par: The name of the parameter you want a result for.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :return: The requested result value, and uncertainties.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The temperature value, and uncertainties.
+        :rtype: Quantity
         """
-        return super().get_results(outer_radius, model, inner_radius, par, group_spec, min_counts, min_sn, over_sample)
+        res = self.get_results(outer_radius, model, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample,
+                               fit_conf)
+
+        return Quantity(res, 'keV')
 
     def get_luminosities(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
                          hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None):
+                         over_sample: float = None, fit_conf: Union[str, dict] = None):
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
@@ -544,136 +552,115 @@ class GalaxyCluster(ExtendedSource):
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: The requested luminosity value, and uncertainties.
         """
-        return super().get_luminosities(outer_radius, model, inner_radius, lo_en, hi_en, group_spec, min_counts,
-                                        min_sn, over_sample)
+        return super().get_luminosities(outer_radius, model, inner_radius, lo_en, hi_en, group_spec,
+                                        min_counts, min_sn, over_sample, fit_conf)
 
-    # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
-    #  justified considering how often the cluster temperature is used in X-ray cluster studies.
-    def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
-                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                        min_counts: int = 5, min_sn: float = None, over_sample: float = None):
-        """
-        Convenience method that calls get_results to retrieve temperature measurements. All matching values
-        from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+).
-
-        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
-            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
-            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
-            region files), then any inner radius will be ignored.
-        :param str model: The name of the fitted model that you're requesting the results
-            from (e.g. constant*tbabs*apec).
-        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
-            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
-            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
-            circular spectrum.
-        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
-        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :return: The temperature value, and uncertainties.
-        """
-        res = self.get_results(outer_radius, model, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample)
-
-        return Quantity(res, 'keV')
-
-    def _get_spec_based_profiles(self, search_key: str, radii: Quantity = None, group_spec: bool = True,
+    def _get_spec_based_profiles(self, search_key: str, annuli_bound_radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                 set_id: int = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                                 set_id: int = None, spec_model: str = None,
+                                 spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for profiles which have been based on spectra, the only thing that tends to change
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
 
         :param str search_key: The profile search key, e.g. combined_1d_proj_temperature_profile.
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
+        :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the annular spectra set
             from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped.
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
+            noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object if there is an exact match, a list of such objects if there are multiple matches.
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
 
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+        # Time to start actually finding profiles - firstly we'll make use of the _get_prof_prod method to get
+        #  profiles that meet some of the general criteria (including the spectral model fit configuration, if
+        #  specified), then we'll work on narrowing them down even more.
+        init_matches = self._get_prof_prod(search_key, central_coord=self.default_coord,
+                                           annuli_bound_radii=annuli_bound_radii,
+                                           spec_model=spec_model, spec_fit_conf=spec_fit_conf)
+        # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
+        #  associated with them, as that means that they were not generated from an annular spectrum
+        init_matches = [p for p in init_matches if p.set_ident is not None]
 
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
-        if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
+        matched_prods = []
+        for p in init_matches:
+            # Here there was an annular spectrum set identifier specified, and the current prof doesn't match,
+            #  so it cannot be a profile we care about right now
+            if set_id is not None and p.set_ident != set_id:
+                continue
 
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products(search_key, extra_key=spec_storage_name)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products(search_key)
-                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            matched_prods = [p for p in self.get_products(search_key) if p.set_ident == set_id]
+            # Now we will grab the annular spectrum from which the current profile was generated
+            rel_asp = self.get_annular_spectra(set_id=p.set_ident)
+            # If the user specified grouped spectra and the generating annular spectra for the current
+            #  profile was not grouped (or vice versa), then we aren't interested
+            if group_spec != rel_asp.grouped:
+                continue
+            # Here we know that the current profile's annular spectrum is grouped, so we'll check the actual
+            #  grouping parameters
+            elif not all([min_counts == rel_asp.min_counts, min_sn == rel_asp.min_sn,
+                          over_sample == rel_asp.over_sample]):
+                continue
+
+            # If we've made it all the way here without a continue statement, then we must be interested in
+            #  that profile!
+            matched_prods.append(p)
 
         return matched_prods
 
-    def get_proj_temp_profiles(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                               min_sn: float = None, over_sample: float = None, set_id: int = None) \
+    def get_proj_temp_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                               min_sn: float = None, over_sample: float = None, set_id: int = None,
+                               spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
             -> Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]:
         """
         A get method for projected temperature profiles generated by XGA's XSPEC interface. This works identically
         to the get_annular_spectra method, because projected temperature profiles are generated from annular spectra,
         and as such can be described by the same parameters.
 
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
-            from which the projected temperature profile was measured.
+        :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the
+            annular spectra set from which the projected temperature profile was measured.
         :param bool group_spec: Was the spectrum set used to generate the profile grouped
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
+            noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA ProjectedGasTemperature1D object if there is an exact match, a list of such objects
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_proj_temperature_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_1d_proj_temperature_profile", annuli_bound_radii,
+                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
+                                                      spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -682,29 +669,37 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
-    def get_3d_temp_profiles(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                             min_sn: float = None, over_sample: float = None, set_id: int = None) \
+    def get_3d_temp_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                             min_sn: float = None, over_sample: float = None, set_id: int = None,
+                             spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
             -> Union[GasTemperature3D, List[GasTemperature3D]]:
         """
         A get method for 3D temperature profiles generated by XGA's de-projection routines.
 
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
-            from which the projected temperature profile was measured.
+        :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the annular
+            spectra set from which the projected temperature profile was measured.
         :param bool group_spec: Was the spectrum set used to generate the profile grouped
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
+            noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA ProjectedGasTemperature1D object if there is an exact match, a list of such objects
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", annuli_bound_radii,
+                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
+                                                      spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -713,14 +708,57 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
-    def get_apec_norm_profiles(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                               min_sn: float = None, over_sample: float = None, set_id: int = None) \
+    def get_proj_met_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                              min_sn: float = None, over_sample: float = None, set_id: int = None,
+                              spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
+            -> Union[ProjectedGasMetallicity1D, List[ProjectedGasMetallicity1D]]:
+        """
+        A get method for projected metallicity profiles generated by XGA's XSPEC interface (if abundance was allowed
+        to vary during the spectral fit). This works identically to the get_annular_spectra method, because
+        projected metallicity profiles are generated from annular spectra, and as such can be described by the
+        same parameters.
+
+        :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the
+            annular spectra set from which the projected metallicity profile was measured.
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped
+        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+            counts, what was the minimum number of counts?
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
+            noise, what was the minimum signal-to-noise.
+        :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
+            the level of over sampling used?
+        :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
+            Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
+        :return: An XGA ProjectedGasMetallicity1D object if there is an exact match, a list of such objects
+            if there are multiple matches.
+        :rtype: Union[ProjectedGasMetallicity1D, List[ProjectedGasMetallicity1D]]
+        """
+        matched_prods = self._get_spec_based_profiles("combined_1d_proj_metallicity_profile", annuli_bound_radii,
+                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
+                                                      spec_fit_conf)
+
+        if len(matched_prods) == 1:
+            matched_prods = matched_prods[0]
+        elif len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching 1D projected metallicity profiles can be found.")
+
+        return matched_prods
+
+    def get_apec_norm_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
+                               min_sn: float = None, over_sample: float = None, set_id: int = None,
+                               spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
             -> Union[APECNormalisation1D, List[APECNormalisation1D]]:
         """
         A get method for APEC normalisation profiles generated by XGA's XSPEC interface.
 
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
-            from which the normalisation profile was measured.
+        :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the annular
+            spectra set from which the normalisation profile was measured.
         :param bool group_spec: Was the spectrum set used to generate the profile grouped
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
@@ -730,12 +768,19 @@ class GalaxyCluster(ExtendedSource):
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA APECNormalisation1D object if there is an exact match, a list of such objects
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id)
+        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", annuli_bound_radii, group_spec,
+                                                      min_counts, min_sn, over_sample, set_id, spec_model,
+                                                      spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -749,7 +794,8 @@ class GalaxyCluster(ExtendedSource):
                              pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
                              psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
                              group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                             over_sample: float = None, set_id: int = None) -> Union[GasDensity3D, List[GasDensity3D]]:
+                             over_sample: float = None, set_id: int = None, spec_model: str = None,
+                             spec_fit_conf: Union[str, dict] = None) -> Union[GasDensity3D, List[GasDensity3D]]:
         """
         This is a get method for density profiles generated by XGA, both using surface brightness profiles and spectra.
         Having to account for two different methods is why this get method has so many arguments that can be passed. If
@@ -768,10 +814,11 @@ class GalaxyCluster(ExtendedSource):
             search for profiles generated from combined data).
         :param Quantity central_coord: The central coordinate of the density profile. Default is None, which means
             we shall use the default coordinate of this source.
-        :param Quantity radii: If known, the radii that were used to measure the density profile.
+        :param Quantity radii: If known, the radii (annular boundary radii for profiles from annular spectra, and
+            central radii for profiles from surface brightness) that were used to measure the density profile.
         :param int pix_step: The width of each annulus in pixels used to generate the profile, for profiles based on
             surface brightness.
-        :param float min_snr: The minimum signal to noise imposed upon the profile, for profiles based on
+        :param float min_snr: The minimum signal-to-noise imposed upon the profile, for profiles based on
             surface brightness.
         :param bool psf_corr: Is the brightness profile corrected for PSF effects, for profiles based on
             surface brightness.
@@ -784,11 +831,17 @@ class GalaxyCluster(ExtendedSource):
         :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
+            noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return:
         :rtype: Union[GasDensity3D, List[GasDensity3D]]
         """
@@ -804,11 +857,13 @@ class GalaxyCluster(ExtendedSource):
         elif method != 'spec':
             interim_prods = self.get_profiles("gas_density", obs_id, inst, central_coord, radii)
         elif (obs_id == "combined" or inst == "combined" or obs_id is None or inst is None) and method == 'spec':
-            interim_prods = self._get_spec_based_profiles('combined_gas_density_profile', radii, group_spec, min_counts,
-                                                          min_sn, over_sample, set_id)
+            interim_prods = self._get_spec_based_profiles('combined_gas_density_profile', radii,
+                                                          group_spec, min_counts, min_sn, over_sample, set_id,
+                                                          spec_model, spec_fit_conf)
         else:
-            interim_prods = self._get_spec_based_profiles('gas_density_profile', radii, group_spec, min_counts, min_sn,
-                                                          over_sample, set_id)
+            interim_prods = self._get_spec_based_profiles('gas_density_profile', radii, group_spec,
+                                                          min_counts, min_sn, over_sample, set_id, spec_model,
+                                                          spec_fit_conf)
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object

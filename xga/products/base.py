@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/02/2025, 18:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 15:39. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -552,11 +552,18 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False):
+                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, spec_model: str = None,
+                 fit_conf: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -582,6 +589,12 @@ class BaseProfile1D:
             plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
             is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -623,12 +636,12 @@ class BaseProfile1D:
         # I'm also going to require that the profiles have knowledge of radii in degree units, also so I can make
         #  predictable storage strings. I don't really like to do this as it feels bodgy, but oh well
         if not radii.unit.is_equivalent('deg') and deg_radii is None and set_storage_key is None:
-            raise ValueError("If the radii variable is not in units that are convertible to degrees, please pass "
-                             "radii in degrees to deg_radii, this profile needs knowledge of the radii in degrees"
+            raise ValueError("If the 'radii' variable is not in units that are convertible to degrees, please pass "
+                             "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
                              " to construct a storage key.")
         elif not radii.unit.is_equivalent('deg') and set_storage_key is None and len(deg_radii) != len(radii):
-            raise ValueError("deg_radii is a different length to radii, they should be equivelant quantities, simply"
-                             " in different units.")
+            raise ValueError("'deg_radii' is a different length to 'radii', they should be equivalent "
+                             "quantities, simply in different units.")
         elif radii.unit.is_equivalent('deg') and set_storage_key is None:
             deg_radii = radii.to('deg')
 
@@ -706,7 +719,7 @@ class BaseProfile1D:
         #  have them (like brightness profiles for instance)
         self._energy_bounds = (None, None)
 
-        # Checking the if associated_set_id is supplied, so is set_storage_key, and vica versa
+        # Checking if associated_set_id is supplied, so is set_storage_key, and vice versa
         if not all([associated_set_id is None, set_storage_key is None]) and \
                 not all([associated_set_id is not None, set_storage_key is not None]):
             raise ValueError("Both associated_set_id and set_storage_key must be None, or both must be not None.")
@@ -717,6 +730,21 @@ class BaseProfile1D:
         # Don't think this one will get a property, I can't see why the user would need it.
         self._set_storage_key = set_storage_key
 
+        # Here we define attributes to store the fit_conf and spec_model parameters - which detail the exact
+        #  spectral model and configuration that was used to produce the profile (as such only relevant to
+        #  profiles that come from annular spectral properties
+        # First, we make sure that we don't have one of these passed without the other - that wouldn't make sense
+        #  There must be a more elegant way of doing checks like this?
+        if any([fit_conf is None, spec_model is None]) and not all([fit_conf is None, spec_model is None]):
+            raise ValueError("Both the 'fit_conf' and 'spec_model' arguments must be None, or both must be not None.")
+        # Currently restrict the input of fit_conf - only the string version is allowed.
+        elif fit_conf is not None and not isinstance(fit_conf, str):
+            raise TypeError("The 'fit_conf' argument must be the string-form of the spectral fit "
+                            "configuration, not the dictionary-form.")
+
+        self._spec_fit_conf = fit_conf
+        self._spec_model = spec_model
+
         # Here we generate a storage key for the profile to use to place itself in XGA's storage structure
         if self._set_storage_key is not None:
             # If there is a storage key for a spectrum which generated this available, then our life becomes
@@ -725,6 +753,16 @@ class BaseProfile1D:
             # In fact as the profile will also be indexed under the profile type name, we can just use this as
             #  our storage key
             self._storage_key = self._set_storage_key
+
+            # There will only be a set storage key if this profile came from an annular spectrum, so now we can
+            #  check if we were given a fit configuration key as well - if we were, we'll include it in the
+            #  storage key. We don't check if both self._spec_fit_conf and self._spec_model are None here because
+            #  we've already ensured that both variables have been set, or not set.
+            if self._spec_fit_conf is not None:
+                # TODO I NEED TO ENSURE THAT THE SPEC FIT CONF PASSED TO THESE PROFILES IS THE STRING VERSION, NOT
+                #  THE DICTIONARY VERSION. TROUBLE IS I WROTE ALL OF THIS STUFF DEALING WITH DIFFERENT CONFIGURATIONS
+                #  OF THE SAME MODEL SO LONG AGO NOW THAT I HAVE FORGOTTEN HOW
+                self._storage_key += ("_" + self._spec_model + "_" + self._spec_fit_conf)
         else:
             # Default storage key for profiles that don't implement their own storage key will include their radii
             #  and the central coordinate
@@ -757,6 +795,11 @@ class BaseProfile1D:
         #  outside of an XGA source analysis. All profiles created by XGA processes running through XGA sources will
         #  autosave, but the default behaviour of the class will be not to autosave.
         self._auto_save = auto_save
+
+        # This attribute is null by default, and can only be set through a property - if set then (when profiles
+        #  are combined into an BaseAggregateProfile1D for the purposes of plotting) the value will be used as the
+        #  label for the profile, rather than just the name
+        self._custom_agg_label = None
 
     def _model_allegiance(self, model: BaseModel1D):
         """
@@ -2360,6 +2403,29 @@ class BaseProfile1D:
         return self._set_id
 
     @property
+    def spec_fit_conf(self) -> str:
+        """
+        If this profile was generated from an annular spectrum, this property provides the fit-configuration key of
+        the spectral fits that provided the properties used to build it.
+
+        :return: The spectral fit-configuration key. If the spectral fit configuration key was never set, the
+            return will be None.
+        :rtype: str
+        """
+        return self._spec_fit_conf
+
+    @property
+    def spec_model(self) -> str:
+        """
+        If this profile was generated from an annular spectrum, this property provides the name of the model
+        that was fit to the spectra in order to measure the properties used to build it.
+
+        :return: The spectral model name. If the spectral model name was never set, the return will be None.
+        :rtype: str
+        """
+        return self._spec_model
+
+    @property
     def y_axis_label(self) -> str:
         """
         Property to return the name used for labelling the y-axis in any plot generated by a profile object.
@@ -2498,6 +2564,29 @@ class BaseProfile1D:
         :rtype: Quantity
         """
         return self._outer_rad
+
+    @property
+    def custom_aggregate_label(self) -> str:
+        """
+        This property is a label that should be used in place of the source name associated with this profile when
+        plotting multiple profiles on one axis through an aggregate profile instance.
+
+        :return: The custom label, default is None.
+        :rtype: str
+        """
+        return self._custom_agg_label
+
+    @custom_aggregate_label.setter
+    def custom_aggregate_label(self, new_val: str):
+        """
+        Setter for the custom_aggregate_label property.
+
+        :param str new_val: The new label.
+        """
+        if isinstance(new_val, str) or new_val is None:
+            self._custom_agg_label = new_val
+        else:
+            raise TypeError("'custom_aggregate_label' must be a string, or None.")
 
     def __len__(self):
         """
@@ -2799,10 +2888,12 @@ class BaseAggregateProfile1D:
             else:
                 p_name = p.src_name
 
-            if p.type == "brightness_profile" and p.psf_corrected:
+            if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
                 leg_label = p_name + " PSF Corrected"
-            else:
+            elif p.custom_aggregate_label is None:
                 leg_label = p_name
+            else:
+                leg_label = p.custom_aggregate_label
 
             # This subtracts the background if the user wants a background subtracted plot
             plot_y_vals = p.values.copy()
