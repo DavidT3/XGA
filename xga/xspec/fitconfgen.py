@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 16:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 22:31. Copyright (c) The Contributors
 
 from inspect import signature, Parameter
 from types import FunctionType
@@ -7,7 +7,7 @@ from typing import Union
 
 from astropy.units import Quantity
 
-# This constant very importantly defined whether each argument to the XGA XSPEC fitting functions should be included
+# This constant very importantly defines whether each argument to the XGA XSPEC fitting functions should be included
 #  in the fit configuration storage key - we define it here so that this information can be accessed outside the
 #  actual fit function. We will also check the arguments of each fit function against these entries to see whether
 #  an argument has been added that is not accounted for here.
@@ -15,6 +15,14 @@ FIT_FUNC_ARGS = {
     'single_temp_apec': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
                          'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
                          'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
+                         'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
+                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
+
+    'double_temp_apec': {'inner_radius': False, 'start_temp_one': True, 'start_temp_two': True,
+                         'start_met_one': True, 'start_met_two': True, 'lum_en': False, 'freeze_nh': True,
+                         'freeze_met_one': True, 'freeze_met_two': True, 'freeze_temp_one': True,
+                         'freeze_temp_two': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True,
+                         'lum_conf': False, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
 
