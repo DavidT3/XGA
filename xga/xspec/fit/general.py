@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 22:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/03/2025, 05:01. Copyright (c) The Contributors
 
 import warnings
 from inspect import signature, Parameter
@@ -937,7 +937,7 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                     spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr')):
+                     spectrum_checking: bool = False, timeout: Quantity = Quantity(1, 'hr')):
     """
     This is a convenience function for fitting an absorbed double-temperature apec model (constant*tbabs*(apec+apec))
     to an object's spectrum. If there are no existing spectra with the passed settings, then they will be
@@ -1000,6 +1000,14 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
     """
+
+    # This is a little cheesy as we haven't decided what exactly to do yet, but the spectrum checking behaviour
+    #  is super inconsistent with double_temp_apec - presumably just because the greater number of parameters
+    #  makes estimating errors much less stable for individual spectral fits
+    if spectrum_checking:
+        raise NotImplementedError("The double_temp_apec function does not currently support "
+                                  "'spectrum_checking=True', as it exhibits very unstable behaviour.")
+
     sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
