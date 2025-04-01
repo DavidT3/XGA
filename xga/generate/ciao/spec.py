@@ -17,7 +17,6 @@ from xga.generate.sas._common import region_setup
 from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
-from .misc import cifbuild
 from .run import ciao_call
 
 
@@ -432,10 +431,6 @@ def ciao_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[
         if not all(greater_check):
             raise ValueError("Not all of the radii passed for {s} are larger than the annulus that "
                              "precedes them.".format(s=src_name))
-
-    # Just to make sure calibration files have been generated, though I don't actually think they could
-    #  have gotten to this point without them
-    cifbuild(sources, num_cores, disable_progress)
 
     # This generates a spectra between the innermost and outmost radii for each source, and a universal RMF
     if one_rmf:
