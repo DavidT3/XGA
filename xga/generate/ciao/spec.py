@@ -506,7 +506,7 @@ def ciao_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[
             for r_ind in range(len(radii[s_ind])-1):
                 # Generate the CIAO commands for the current annulus of the current source, for all observations
                 spec_cmd_out = _chandra_spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                                  min_sn, over_sample, num_cores, disable_progress, True)
+                                                  min_sn, over_sample, num_cores, disable_progress)
 
                 # Read out some of the output into variables to be modified
                 interim_paths = spec_cmd_out[5][0]
