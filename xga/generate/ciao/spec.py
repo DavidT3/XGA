@@ -22,7 +22,7 @@ from .run import ciao_call
 
 def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                       min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
+                       min_counts: int = 5, min_sn: float = None, over_sample: int = None, num_cores: int = NUM_CORES,
                        disable_progress: bool = False, force_gen: bool = False):
     """
     An internal function to generate all the commands necessary to produce a Chandra spectrum using specextract,
@@ -308,7 +308,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 @ciao_call
 def specextract_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                         min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
+                         min_counts: int = 5, min_sn: float = None, over_sample: int = None, num_cores: int = NUM_CORES,
                          disable_progress: bool = False):
     """
     A wrapper for all the CIAO processes necessary to generate Chandra spectra that can be analysed
@@ -338,7 +338,7 @@ def specextract_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: U
     # All the workings of this function are in _chandra_spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _chandra_spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                              num_cores, disable_progress)
+                              over_sample, num_cores, disable_progress)
 
 
 @ciao_call
