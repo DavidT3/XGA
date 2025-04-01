@@ -43,6 +43,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
+    print('err in execute_cmd')
     print(err)
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
@@ -65,7 +66,6 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
         # I can't take momentarily advantage of the error parsing I built into the product classes
         prod = BaseProduct(p_path[0], "", "", out, err, cmd, telescope='xmm')
     elif (p_type == "spectrum" or p_type == "annular spectrum set components") and "NullSource" not in src:
-        print('in excecute command p_type==spectrum')
         prod = Spectrum(p_path[0], extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                         extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
                         extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],

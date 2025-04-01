@@ -900,8 +900,6 @@ def _grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii
 
         rads = [cur_start.value]
         rads += [cur_start.value * ann_ind * cur_growth_factor for ann_ind in range(1, cur_num_ann + 1)]
-        print(Quantity(rads, 'arcsec'))
-        print('')
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores)

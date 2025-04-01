@@ -1459,8 +1459,6 @@ class BaseSource:
                                 # And adding it to the source storage structure, but only if its not a member
                                 #  of an AnnularSpectra
                                 try:
-                                    print(self.name)
-                                    print(obj.path)
                                     self.update_products(obj, update_inv=False)
                                 except NotAssociatedError:
                                     pass

@@ -163,15 +163,12 @@ def xspec_call(xspec_func):
         else:
             raise TypeError("Please pass a source object, or a list of source objects.")
         
-        print("in xspec_call")
         # This is the output from whatever function this is a decorator for
         # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
         #  and 3rd is the number of cores to use.
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
         script_list, paths, cores, run_type, src_inds, radii, timeout = xspec_func(*args, **kwargs)
-        print("in xspec call after cr_cluster_conv ran")
-        print('script list', script_list)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
@@ -197,7 +194,6 @@ def xspec_call(xspec_func):
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
 
-                    print("results in", results_in)
                     res_fits, rel_src, successful, err_list, warn_list, tel = results_in
                     results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
                     fit.update(1)
@@ -214,8 +210,6 @@ def xspec_call(xspec_func):
 
         # Now we assign the fit results to source objects
         for src_repr in results:
-            print("in here")
-            print("results", results)
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
             ind = src_lookup[src_repr]
@@ -235,9 +229,6 @@ def xspec_call(xspec_func):
                         raise XSPECFitError(err)
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
-                print('res_set', res_set)
-                print('res_set[1]', res_set[1])
-                print('run_type', run_type)
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
@@ -352,7 +343,6 @@ def xspec_call(xspec_func):
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and lums
                     # TODO this could be neater and better generalised
-                    print('combos', combos)
                     for comb in combos:
                         if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
                             spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
@@ -363,13 +353,9 @@ def xspec_call(xspec_func):
                         else:
                             spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
                                             telescope=tel)[0]
-                        print('comb', comb)
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                                 res_table["rate_{}".format(comb)].values,
                                                 res_table["Lx_{}".format(comb)].values, model, tel)
-                        print('spec.add_conv_factors run')
-                        print('spec path', spec.path)
-                        print('spec._conv_factors', spec._conv_factors)
 
                 elif len(res_set) != 0 and not res_set[1]:
                     for err in res_set[2]:

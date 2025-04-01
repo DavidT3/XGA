@@ -1763,9 +1763,6 @@ class AnnularSpectra(BaseAggregateProduct):
         have been passed in, for easy retrieval.
         """
         if len(set([s.telescope for s in spectra])) != 1:
-            print('in annularSpectra')
-            print('[s.telescope for s in spectra]')
-            print([s.telescope for s in spectra])
             raise NotImplementedError("AnnularSpectra comprised of spectra from multiple telescopes are not "
                                       "supported yet.")
         else:
