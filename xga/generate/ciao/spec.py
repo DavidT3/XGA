@@ -4,7 +4,7 @@
 import os
 from copy import copy
 from random import randint
-from typing import Union
+from typing import Union, List
 
 import astropy.units as u
 import numpy as np
