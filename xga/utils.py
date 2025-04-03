@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/04/2025, 21:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 09:12. Copyright (c) The Contributors
 
 import json
 import os
@@ -38,6 +38,7 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
              "all_good_fov+corner_pn_evts": "/this/is/optional/{obs_id}/pn_all_good_evts.fits",
+             "all_good_fov+corner_pn_oot_evts": "/this/is/optional/{obs_id}/pn_all_good_oot_evts.fits",
              "all_good_fov+corner_mos1_evts": "/this/is/optional/{obs_id}/mos1_all_good_evts.fits",
              "all_good_fov+corner_mos2_evts": "/this/is/optional/{obs_id}/mos2_all_good_evts.fits",
              "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
@@ -335,6 +336,9 @@ else:
     if 'all_good_fov+corner_pn_evts' not in xga_conf['XMM_FILES']:
         changed = True
         xga_conf['XMM_FILES']['all_good_fov+corner_pn_evts'] = XMM_FILES['all_good_fov+corner_pn_evts']
+    if 'all_good_fov+corner_pn_oot_evts' not in xga_conf['XMM_FILES']:
+        changed = True
+        xga_conf['XMM_FILES']['all_good_fov+corner_pn_oot_evts'] = XMM_FILES['all_good_fov+corner_pn_oot_evts']
     if 'all_good_fov+corner_mos1_evts' not in xga_conf['XMM_FILES']:
         xga_conf['XMM_FILES']['all_good_fov+corner_mos1_evts'] = XMM_FILES['all_good_fov+corner_mos1_evts']
         changed = True
