@@ -223,6 +223,8 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
+                print('results')
+                print(results)
                 # res_set = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
