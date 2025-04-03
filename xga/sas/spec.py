@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 11:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 11:26. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -901,8 +901,7 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
 
     # ----------------- DEFINING THE TEMPLATES FOR THE SAS COMMANDS -----------------
 
-    if Version(SAS_VERSION) <= Version("20.0.0"):
-        pn_prep_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; pn-spectra {evt} {oevt} {cevt} {coevt} {}; mv * ../; cd ..; rm -r {d}"
+    pn_cmd = "cd {d}; export SAS_CCF={ccf}; pn-spectra eventfile={ag_evt} ootevtfile={ag_oevt} {}; mv * ../; cd ..; rm -r {d}"
     # all_cmds = {'pn': , 'mos1': , 'mos2': }
 
     # -------------------------------------------------------------------------------
