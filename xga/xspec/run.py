@@ -217,9 +217,9 @@ def xspec_call(xspec_func):
 
             # This flag tells this method if the current set of fits are part of an annular spectra or not
             ann_fit = False
-            ann_results = {tel : {} for tel in s.telescopes}
-            ann_lums = {tel : {} for tel in s.telescopes}
-            ann_obs_order = {tel : {} for tel in s.telescopes}
+            ann_results = {}
+            ann_lums = {}
+            ann_obs_order = {}
             set_ident = {}
 
             for res_set in results[src_repr]:
@@ -229,6 +229,14 @@ def xspec_call(xspec_func):
                         raise XSPECFitError(err)
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
+
+                if tel not in ann_results.keys():
+                    ann_results[tel] = {}
+                if tel not in ann_lums.keys():
+                    ann_lums[tel] = {} 
+                if tel not in ann_obs_order.keys():
+                    ann_obs_order[tel] = {}
+
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
