@@ -223,22 +223,12 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
-                print('results')
-                print(results)
                 # res_set = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
                         raise XSPECFitError(err)
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
-
-                if tel not in ann_results.keys():
-                    ann_results[tel] = {}
-                if tel not in ann_lums.keys():
-                    ann_lums[tel] = {} 
-                if tel not in ann_obs_order.keys():
-                    ann_obs_order[tel] = {}
-
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
@@ -329,6 +319,12 @@ def xspec_call(xspec_func):
                             chosen_lums = processed_lums
 
                         if ann_fit:
+                            if tel not in ann_results.keys():
+                                ann_results[tel] = {}
+                            if tel not in ann_lums.keys():
+                                ann_lums[tel] = {}
+                            if tel not in ann_obs_order.keys():
+                                ann_obs_order[tel] = {}
                             print('tel')
                             print(tel)
                             set_ident[tel] = spec.set_ident
