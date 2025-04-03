@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 13:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 13:45. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -18,7 +18,7 @@ from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailable
     XGAConfigError, SASVersionError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
-from ..sources import BaseSource, ExtendedSource, GalaxyCluster
+from ..sources import BaseSource, ExtendedSource, GalaxyCluster, PointSource
 
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -894,6 +894,12 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, BaseSource):
         sources = [sources]
+
+    # I think, but admit that I don't know for sure, that the background modelling in SAS is internally set up
+    #  exclusively for extended sources (not an unreasonable thought given it's part of the extended source
+    #  analysis software (eSAS). As such we're going to throw an error if someone passes something non-extended
+    if any([isinstance(src, PointSource) for src in sources]):
+        raise TypeError("This function only supports modelling backgrounds for extended sources.")
 
     if outer_radius == 'region':
         raise XGADeveloperError("We no longer support generating spectra within detection regions, and this option"

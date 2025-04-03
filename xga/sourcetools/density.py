@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 16:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 13:45. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -106,8 +106,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                          "vice versa.")
 
-    if not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("Only GalaxyCluster sources can be passed to cluster_density_profile.")
+    if not all([isinstance(src, GalaxyCluster) for src in sources]):
+        raise TypeError("This function can only calculate density profiles for GalaxyCluster sources.")
 
     # Triggers an exception if the abundance table name passed isn't recognised
     if abund_table not in ABUND_TABLES:
