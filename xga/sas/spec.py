@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/04/2025, 22:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 10:27. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -887,44 +887,68 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
         raise XGADeveloperError("We no longer support generating spectra within detection regions, and this option"
                                 " will be removed entirely from XGA in the near future.")
 
+    # ----------------- DEFINING THE TEMPLATES FOR THE SAS COMMANDS -----------------
+    pn_prep_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; pnspectra {evt} {oevt} {cevt} {coevt} {}; mv * ../; cd ..; rm -r {d}"
+    # -------------------------------------------------------------------------------
+
+    # This is handy, it gets the inner and outer radii into a consistent format, regardless of how the user
+    #  passed them in - each will have one entry per source, so we can index them
     sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
                                                      '', num_cores)
 
-    # Just make sure these values are the expect data type, this matters when the information is
-    #  added to the storage strings and file names
-    if over_sample is not None:
-        over_sample = int(over_sample)
-    if min_counts is not None:
-        min_counts = int(min_counts)
-    if min_sn is not None:
-        min_sn = float(min_sn)
+    for s_ind, src in enumerate(sources):
+        # For convenience, we'll get the inner and outer radius relevant to this particular source
+        cur_inn_rad = inner_radii[s_ind]
+        cur_out_rad = outer_radii[s_ind]
 
-    # These check that the user hasn't done something silly like passing multiple grouping options, this is not
-    #  allowed by SAS, will cause the generation to fail
-    if all([o is not None for o in [min_counts, min_sn]]):
-        raise SASInputInvalid("evselect only allows one grouping option to be passed, you can't group both by"
-                              " minimum counts AND by minimum signal to noise.")
-    # Should also check that the user has passed any sort of grouping argument, if they say they want to group
-    elif group_spec and all([o is None for o in [min_counts, min_sn]]):
-        raise SASInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
-                              " or min_sn.")
+        # We ran the 'evselect_spectrum' function right at the beginning of this one, so if we've gotten to this
+        #  point the spectra should already exist. We'll fetch them out
 
-    # Sets up the extra part of the storage key name depending on if grouping is enabled
-    if group_spec and min_counts is not None:
-        extra_name = "_mincnt{}".format(min_counts)
-    elif group_spec and min_sn is not None:
-        extra_name = "_minsn{}".format(min_sn)
-    else:
-        extra_name = ''
+        sps = src.get_spectra(cur_out_rad, inner_radius=cur_inn_rad, group_spec=group_spec, min_counts=min_counts,
+                              over_sample=over_sample)
+        # This method can return a list, or a single spectra (I know I don't know why I designed it like
+        #  that either), so we ensure that the variable is a list, so we can iterate over it
+        if not isinstance(sps, list):
+            sps = [sps]
 
-    # Have to make sure that all observations have an up to date cif file.
-    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
-
-    # And if it was oversampled during generation then we need to include that as well
-    if over_sample is not None:
-        extra_name += "_ovsamp{ov}".format(ov=over_sample)
+        # Now we can iterate through the spectra we've selected, which will take us through the ObsIDs and
+        #  instruments that are relevant to this source
+        for sp in sps:
+            cur_oi = sp.obs_id
+            cur_inst = sp.instrument
 
 
-    # TODO NO DOUBT MANY MORE PREP STEPS
+            # Setting up the CCF path - previously the CCF was copied into the temporary directory (not sure why
+            #  I did that) but that doesn't make any sense and can actually cause problems. This is the first
+            #  function where that behaviour is being corrected
+            ccf = os.path.join(OUTPUT, "{o}/ccf.cif".format(o=cur_oi))
 
-    pn_prep_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; pnspectra {evt} {oevt} {cevt} {coevt} {}; mv * ../; cd ..; rm -r {d}"
+            # Need a temporary directory to work in, otherwise we risk colliding with other processes going
+            #  on for the same ObsID
+            dest_dir = os.path.join(OUTPUT, "{o}/{i}_{n}_temp_{r}/".format(o=cur_oi, i=cur_inst, n=src.name,
+                                                                           r=randint(0, int(1e+8))))
+            # Make the temporary directory
+            os.makedirs(dest_dir, exist_ok=True)
+
+            # TODO As discussed in a comment at the top of this function, we are currently handling the FoV+corner
+            #  all good event lists in a less sophisticated way than the 'main' event lists, as they aren't loaded
+            #  in as XGA product instances and stored in the source. As such we have to assemble the paths from the
+            #  config files here, and check that they exist
+            all_good_evt = xga_conf['XMM_FILES']['all_good_fov+corner_{}_evts'.format(
+                cur_inst.lower())].format(obs_id=cur_oi)
+
+            # We immediately check if it exists, again because we aren't handling this through the XGA product
+            #  system, which would have done this automatically
+            if not os.path.exists(all_good_evt):
+                raise FileNotFoundError("The FoV+corner event file for {oi}-{i} cannot be found - creation of model "
+                                        "particle backgrounds cannot proceed without it.".format(oi=cur_oi, i=cur_inst))
+
+            if 'pn' in cur_inst.lower():
+                all_good_oot_evt = xga_conf['XMM_FILES']['all_good_fov+corner_pn_oot_evts'].format(obs_id=cur_oi)
+                if not os.path.exists(all_good_oot_evt):
+                    raise FileNotFoundError("The FoV+corner out-of-time event file for {oi}-PN cannot be "
+                                            "found - creation of model particle backgrounds cannot proceed "
+                                            "without it.".format(oi=cur_oi))
+            else:
+                all_good_oot_evt = None
+
