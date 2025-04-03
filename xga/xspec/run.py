@@ -319,6 +319,8 @@ def xspec_call(xspec_func):
                             chosen_lums = processed_lums
 
                         if ann_fit:
+                            print('tel')
+                            print(tel)
                             set_ident[tel] = spec.set_ident
                             ann_results[tel][spec.annulus_ident] = global_results
                             ann_lums[tel][spec.annulus_ident] = chosen_lums
@@ -365,6 +367,10 @@ def xspec_call(xspec_func):
                     for tel in ann_results:
                         # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                         #  the last spectra that was opened in the loop
+                        print('set_ident')
+                        print(set_ident)
+                        print('ann_results')
+                        print(ann_results)
                         ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
                         try:
                             ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
