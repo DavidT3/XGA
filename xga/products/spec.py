@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 22:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 09:11. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -1967,7 +1967,6 @@ class Spectrum(BaseProduct):
 
         # Create figure object
         plt.figure(figsize=figsize)
-        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
 
         ax = self.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
@@ -3410,7 +3409,6 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Create figure object
         plt.figure(figsize=figsize)
-        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
         for sp in rel_spec:
             ax = sp.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
