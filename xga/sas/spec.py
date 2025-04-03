@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 11:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 13:14. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -900,9 +900,17 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
                                 " will be removed entirely from XGA in the near future.")
 
     # ----------------- DEFINING THE TEMPLATES FOR THE SAS COMMANDS -----------------
+    # TODO - WHAT DO WE NEED TO PASS? -- OUTPUT NAMES WOULD BE GOOD, PASS EITHER MASK FITS FILES OR
+    #  CHEESE-STYLE SOURCE EXCLUSION FILE, A SELECTION EXPRESSION FOR THE REGION, FLAG THAT CONTROLS WHETHER TO
+    #  EXCLUDE SOURCES OR NOT. Some of these inputs seem redundant?
 
-    pn_cmd = "cd {d}; export SAS_CCF={ccf}; pn-spectra eventfile={ag_evt} ootevtfile={ag_oevt} {}; mv * ../; cd ..; rm -r {d}"
-    # all_cmds = {'pn': , 'mos1': , 'mos2': }
+    # mv * ../; cd ..; rm -r {d}
+
+    pn_cmd = "cd {d}; export SAS_CCF={ccf}; pnspectra eventfile={ag_evt} ootevtfile={ag_oevt}; "
+    mos_cmd = "cd {d}; export SAS_CCF={ccf}; mosspectra eventfile={ag_evt}; "
+
+    # Makes dynamic access to the correct command easier
+    all_cmds = {'pn': pn_cmd, 'mos1': mos_cmd, 'mos2': mos_cmd}
 
     # -------------------------------------------------------------------------------
 
@@ -966,6 +974,14 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
                                             "without it.".format(oi=cur_oi))
             else:
                 all_good_oot_evt = None
+
+            # Grabbing and populating the right command for the current instrument - though the MOS commands don't
+            #  require out-of-time event lists to be passed in (OoT events are not a problem for MOS) we always
+            #  include the oot formatting entry here, because if it isn't in the string it isn't going to do
+            #  anything, and it means we don't need to check instrument before running a formatting operation
+            cur_cmd = all_cmds[cur_inst].format(d=dest_dir, ccf=ccf, ag_evt=all_good_evt, ag_oevt=all_good_oot_evt)
+            print(cur_cmd)
+            print('')
 
 
 
