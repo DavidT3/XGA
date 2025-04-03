@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 10:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/04/2025, 22:38. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -12,8 +12,8 @@ from astropy.units import Quantity
 
 from ._common import region_setup, _gen_detmap_cmd
 from .misc import cifbuild
-from .. import OUTPUT, NUM_CORES
-from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError
+from .. import OUTPUT, NUM_CORES, xga_conf
+from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, XGADeveloperError, XGAConfigError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -858,3 +858,73 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     # This gets passed back to the sas call function and is used to run the commands
     return all_cmds, False, True, num_cores, all_out_types, all_paths, all_extras, disable_progress
 
+
+def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
+                              inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                              min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                              one_rmf: bool = True, num_cores: int = NUM_CORES, disable_progress: bool = False):
+
+    # It isn't a certainty that the user will have set up the files we need to model backgrounds in this manner, so
+    #  the very first thing we do is to check whether the 'FoV + corner' all good event entries in the config
+    #  have been changed from the default.
+    # TODO THIS WILL ALMOST CERTAINLY CHANGE WHEN WE RECONCILE THIS WITH MULTI-MISSION, AS WE HOPE THAT THESE
+    #  PARTICULAR EVENT LISTS WILL BE ACCESSIBLE THROUGH THE SOURCE PRODUCT STORAGE FUNCTIONALITY
+    rel_ents = ['all_good_fov+corner_pn_evts', 'all_good_fov+corner_mos1_evts', 'all_good_fov+corner_mos2_evts']
+    if all(["/this/is/optional" in xga_conf['XMM_FILES'][re] for re in rel_ents]):
+        raise XGAConfigError("Modelling XMM backgrounds requires that the 'all_good_fov+corner_INSTRUMENT_evts' "
+                             "entries are set in the configuration file. They should point at event lists of the "
+                             "whole detector, with GTIs applied.")
+
+    # We make sure that source spectra for the input information have already been generated
+    evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
+                      num_cores, disable_progress)
+
+    # This function supports passing both individual sources and sets of sources
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
+    if outer_radius == 'region':
+        raise XGADeveloperError("We no longer support generating spectra within detection regions, and this option"
+                                " will be removed entirely from XGA in the near future.")
+
+    sources, inner_radii, outer_radii = region_setup(sources, outer_radius, inner_radius, disable_progress,
+                                                     '', num_cores)
+
+    # Just make sure these values are the expect data type, this matters when the information is
+    #  added to the storage strings and file names
+    if over_sample is not None:
+        over_sample = int(over_sample)
+    if min_counts is not None:
+        min_counts = int(min_counts)
+    if min_sn is not None:
+        min_sn = float(min_sn)
+
+    # These check that the user hasn't done something silly like passing multiple grouping options, this is not
+    #  allowed by SAS, will cause the generation to fail
+    if all([o is not None for o in [min_counts, min_sn]]):
+        raise SASInputInvalid("evselect only allows one grouping option to be passed, you can't group both by"
+                              " minimum counts AND by minimum signal to noise.")
+    # Should also check that the user has passed any sort of grouping argument, if they say they want to group
+    elif group_spec and all([o is None for o in [min_counts, min_sn]]):
+        raise SASInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
+                              " or min_sn.")
+
+    # Sets up the extra part of the storage key name depending on if grouping is enabled
+    if group_spec and min_counts is not None:
+        extra_name = "_mincnt{}".format(min_counts)
+    elif group_spec and min_sn is not None:
+        extra_name = "_minsn{}".format(min_sn)
+    else:
+        extra_name = ''
+
+    # Have to make sure that all observations have an up to date cif file.
+    cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
+
+    # And if it was oversampled during generation then we need to include that as well
+    if over_sample is not None:
+        extra_name += "_ovsamp{ov}".format(ov=over_sample)
+
+
+    # TODO NO DOUBT MANY MORE PREP STEPS
+
+    pn_prep_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; pnspectra {evt} {oevt} {cevt} {coevt} {}; mv * ../; cd ..; rm -r {d}"
