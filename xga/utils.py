@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/08/2024, 16:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/04/2025, 21:54. Copyright (c) The Contributors
 
 import json
 import os
@@ -37,6 +37,9 @@ XMM_FILES = {"root_xmm_dir": "/this/is/required/xmm_obs/data/",
              "clean_pn_evts": "/this/is/required/{obs_id}/pn_exp1_clean_evts.fits",
              "clean_mos1_evts": "/this/is/required/{obs_id}/mos1_exp1_clean_evts.fits",
              "clean_mos2_evts": "/this/is/required/{obs_id}/mos2_exp1_clean_evts.fits",
+             "all_good_fov+corner_pn_evts": "/this/is/optional/{obs_id}/pn_all_good_evts.fits",
+             "all_good_fov+corner_mos1_evts": "/this/is/optional/{obs_id}/mos1_all_good_evts.fits",
+             "all_good_fov+corner_mos2_evts": "/this/is/optional/{obs_id}/mos2_all_good_evts.fits",
              "attitude_file": "/this/is/required/{obs_id}/attitude.fits",
              "lo_en": ['0.50', '2.00'],
              "hi_en": ['2.00', '10.00'],
@@ -325,6 +328,24 @@ else:
         raise FileNotFoundError("root_xmm_dir={d} does not appear to exist, if it an SFTP mount check the "
                                 "connection.".format(d=xga_conf["XMM_FILES"]["root_xmm_dir"]))
 
+    # We'll also check that the newly introduced config file entries are present, and if not we'll add them in
+    #  with default values - frankly, given how close we are to the multi-mission release, this version of utils
+    #  probably won't be around long enough for people to use, but oh well
+    changed = False
+    if 'all_good_fov+corner_pn_evts' not in xga_conf['XMM_FILES']:
+        changed = True
+        xga_conf['XMM_FILES']['all_good_fov+corner_pn_evts'] = XMM_FILES['all_good_fov+corner_pn_evts']
+    if 'all_good_fov+corner_mos1_evts' not in xga_conf['XMM_FILES']:
+        xga_conf['XMM_FILES']['all_good_fov+corner_mos1_evts'] = XMM_FILES['all_good_fov+corner_mos1_evts']
+        changed = True
+    if 'all_good_fov+corner_mos2_evts' not in xga_conf['XMM_FILES']:
+        xga_conf['XMM_FILES']['all_good_fov+corner_mos2_evts'] = XMM_FILES['all_good_fov+corner_mos2_evts']
+        changed = True
+
+    # Now if we altered the configuration file we need to write it to disk again
+    with open(CONFIG_FILE, 'w') as update_cfg:
+        xga_conf.write(update_cfg)
+
     # Now I do the same for the XGA_SETUP section
     keys_to_check = ["xga_save_path"]
     # Here I check that the installer has actually changed the three events file paths
@@ -354,7 +375,7 @@ else:
         xga_conf["XMM_FILES"]["hi_en"] = to_list(xga_conf["XMM_FILES"]["hi_en"])
     except KeyError:
         raise KeyError("Entries have been removed from config file, "
-                       "please leave all in place, even if they are empty")
+                       "please leave all in place, even if they are empty.")
 
     # Do a little pre-checking for the energy entries
     if len(xga_conf["XMM_FILES"]["lo_en"]) != len(xga_conf["XMM_FILES"]["hi_en"]):
