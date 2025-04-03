@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 18:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/04/2025, 22:10. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -374,7 +374,8 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file"]
+            not_these = ["root_xmm_dir", "lo_en", "hi_en", evt_key, "attitude_file", "all_good_fov+corner_pn_evts",
+                         "all_good_fov+corner_mos1_evts", "all_good_fov+corner_mos2_evts"]
             # Formats the generic paths given in the config file for this particular obs and energy range
             files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
                      for k, v in xga_conf["XMM_FILES"].items() if k not in not_these and inst in k}
