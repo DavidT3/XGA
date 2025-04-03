@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 10:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 11:13. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -9,11 +9,13 @@ from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity
+from packaging.version import Version
 
 from ._common import region_setup, _gen_detmap_cmd
 from .misc import cifbuild
-from .. import OUTPUT, NUM_CORES, xga_conf
-from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, XGADeveloperError, XGAConfigError
+from .. import OUTPUT, NUM_CORES, xga_conf, SAS_VERSION
+from ..exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, XGADeveloperError, \
+    XGAConfigError, SASVersionError
 from ..samples.base import BaseSample
 from ..sas.run import sas_call
 from ..sources import BaseSource, ExtendedSource, GalaxyCluster
@@ -864,6 +866,16 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
                               min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                               one_rmf: bool = True, num_cores: int = NUM_CORES, disable_progress: bool = False):
 
+    # Prior to SAS v21, the commands we're going to use for this bit were part of eSAS, which at the time was
+    #  sort of a separate package (although not completely) and didn't adhere to the same design/usage as pure SAS
+    #  tasks. What that means for us is that with older versions of these functions, you can't specify paths
+    #  to the various files needed for this to work, it just assumes everything is named as it would have been
+    #  by other eSAS preparatory tasks. As such, we've decided that supporting background modelling for pre-v21.0.0
+    #  versions of SAS is a poor use of our time.
+    if Version(SAS_VERSION) <= Version("20.0.0"):
+        raise SASVersionError("Preparing model particle backgrounds for XMM observations requires "
+                              "at least SAS v21.0.0.")
+
     # It isn't a certainty that the user will have set up the files we need to model backgrounds in this manner, so
     #  the very first thing we do is to check whether the 'FoV + corner' all good event entries in the config
     #  have been changed from the default.
@@ -888,7 +900,11 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
                                 " will be removed entirely from XGA in the near future.")
 
     # ----------------- DEFINING THE TEMPLATES FOR THE SAS COMMANDS -----------------
-    pn_prep_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; pnspectra {evt} {oevt} {cevt} {coevt} {}; mv * ../; cd ..; rm -r {d}"
+
+    if Version(SAS_VERSION) <= Version("20.0.0"):
+        pn_prep_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; pn-spectra {evt} {oevt} {cevt} {coevt} {}; mv * ../; cd ..; rm -r {d}"
+    # all_cmds = {'pn': , 'mos1': , 'mos2': }
+
     # -------------------------------------------------------------------------------
 
     # This is handy, it gets the inner and outer radii into a consistent format, regardless of how the user
@@ -946,9 +962,12 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
             if 'pn' in cur_inst.lower():
                 all_good_oot_evt = xga_conf['XMM_FILES']['all_good_fov+corner_pn_oot_evts'].format(obs_id=cur_oi)
                 if not os.path.exists(all_good_oot_evt):
-                    raise FileNotFoundError("The FoV+corner out-of-time event file for {oi}-PN cannot be "
+                    raise FileNotFoundError("The FoV+corner out-of-time event file for {oi}-pn cannot be "
                                             "found - creation of model particle backgrounds cannot proceed "
                                             "without it.".format(oi=cur_oi))
             else:
                 all_good_oot_evt = None
+
+
+
 

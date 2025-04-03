@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 09:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 11:13. Copyright (c) The Contributors
 
 import json
 import os
@@ -449,7 +449,7 @@ else:
              "functions in xga.sas will not work.", stacklevel=2)
         SAS_AVAIL = False
 
-    # Equivelant for the XSPEC dependency
+    # Equivalent for the XSPEC dependency
     XSPEC_VERSION = None
     # Got to make sure we can access command line XSPEC.
     if shutil.which("xspec") is None:
