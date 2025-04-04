@@ -217,7 +217,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             src_dict[tel] = dens_profs[tel][p_ind]
         dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
 
-    print('temp_prof_dict')
-    print(temp_prof_dict)
+    print('dens_prof_dict')
+    print(dens_prof_dict)
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 

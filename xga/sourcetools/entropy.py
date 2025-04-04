@@ -152,10 +152,13 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                     continue
 
                 # If every stage of this analysis has worked then we setup the entropy profile
-                if str(src) in dens_prof_dict and dens_prof_dict[str(src)][tel] is not None:
+                if (str(src) in dens_prof_dict) and (dens_prof_dict[str(src)][tel] is not None) \
+                    and (str(src) in temp_prof_dict) and (temp_prof_dict[str(src)][tel] is not None):
                     # This fetches out the correct density and temperature profiles
                     d_prof = dens_prof_dict[str(src)][tel]
                     t_prof = temp_prof_dict[str(src)][tel]
+
+                    print(d_prof)
 
                     # And the appropriate temperature and density models
                     d_model = dens_model_dict[str(src)]
