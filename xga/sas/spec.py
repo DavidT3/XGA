@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/04/2025, 13:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/04/2025, 15:54. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -891,7 +891,8 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
     evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
                       num_cores, disable_progress)
 
-    # This function supports passing both individual sources and sets of sources
+    # This function supports passing both individual sources and sets of sources, but we want the 'sources'
+    #  variable to consistently be iterable, so we put individual sources in a list
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -912,7 +913,7 @@ def model_particle_background(sources: Union[BaseSource, BaseSample], outer_radi
 
     # mv * ../; cd ..; rm -r {d}
 
-    pn_cmd = "cd {d}; export SAS_CCF={ccf}; pnspectra eventfile={ag_evt} ootevtfile={ag_oevt}; "
+    pn_cmd = "cd {d}; export SAS_CCF={ccf}; pnspectra eventfile={ag_evt} ootevtfile={ag_oevt} ; "
     mos_cmd = "cd {d}; export SAS_CCF={ccf}; mosspectra eventfile={ag_evt}; "
 
     # Makes dynamic access to the correct command easier
