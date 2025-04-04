@@ -116,6 +116,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sb_model = model_check(sources, sb_model)
     dens_model = model_check(sources, dens_model)
     temp_model = model_check(sources, temp_model)
+    print('temp_model')
+    print(temp_model)
 
     # I also set up dictionaries, so that models for specific clusters (as you can pass individual model instances
     #  for different clusters) are assigned to the right source when we start cutting down the sources based on
@@ -123,6 +125,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(sb_model)}
     dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(dens_model)}
     temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(temp_model)}
+    print('temp_model_dict')
+    print(temp_model_dict)
 
     # Here we take only the sources that have a successful global temperature measurement for at 
     # least one of the associated telescopes
@@ -213,5 +217,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             src_dict[tel] = dens_profs[tel][p_ind]
         dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
 
+    print('temp_prof_dict')
+    print(temp_prof_dict)
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 

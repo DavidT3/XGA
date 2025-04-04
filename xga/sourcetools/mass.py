@@ -146,7 +146,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                     final_mass_profs[tel].append(None)
                     continue
                 # If every stage of this analysis has worked then we setup the hydro mass profile
-                if str(src) in dens_prof_dict and dens_prof_dict[str(src)][tel] is not None:
+                if (str(src) in dens_prof_dict) and (dens_prof_dict[str(src)][tel] is not None) \
+                    and (str(src) in temp_prof_dict) and (temp_prof_dict[str(src)[tel] is not None]):
                     # This fetches out the correct density and temperature profiles
                     d_prof = dens_prof_dict[str(src)][tel]
                     t_prof = temp_prof_dict[str(src)][tel]
@@ -180,6 +181,10 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                 elif str(src) in dens_prof_dict:
                     warn("The density profile for {} could not be generated".format(src.name), stacklevel=2)
                     # No density means no mass, so we append None to the list
+                    final_mass_profs[tel].append(None)
+                elif str(src) in temp_prof_dict:
+                    warn("The temperature profile for {} could not be generated".format(src.name), stacklevel=2)
+                    # No temp means no mass, so we append None to the list
                     final_mass_profs[tel].append(None)
                 else:
                     # And again this is a failure state, so we append a None to the list
