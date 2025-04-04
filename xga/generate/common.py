@@ -49,6 +49,16 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
 
+    print()
+    print('------------------------------------------------------------------------------')
+    print('out:')
+    print(out)
+    print()
+    print('err:')
+    print(err)
+    print('------------------------------------------------------------------------------')
+    print()
+    
     # Trying to make sure that any passed arrays get smoothed out into the list type we want
     if type(p_path) == np.ndarray:
         p_path = list(p_path)
@@ -142,16 +152,6 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     #  different products at once without changing how their call decorators work right now
     if len(prods) == 1:
         prods = prods[0]
-
-    print()
-    print('------------------------------------------------------------------------------')
-    print('out:')
-    print(out)
-    print()
-    print('err:')
-    print(err)
-    print('------------------------------------------------------------------------------')
-    print()
 
     return prods, src
 
