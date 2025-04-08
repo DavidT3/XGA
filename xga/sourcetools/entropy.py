@@ -170,7 +170,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                         rads = t_prof.radii.copy()[1:]
                         rad_errs = t_prof.radii_err.copy()[1:]
                         deg_rads = src.convert_radius(rads, 'deg')
-                        entropy = SpecificEntropy(t_prof, t_model, d_prof, d_model, rads, rad_errs, deg_rads, fit_method,
+                        entropy = SpecificEntropy(t_prof, d_prof, d_model, t_model, rads, rad_errs, deg_rads, fit_method,
                                                 num_walkers, num_steps, show_warn=show_warn, progress=False,
                                                   auto_save=True, telescope=tel)
                         # Add the profile to the source storage structure
