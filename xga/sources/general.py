@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/04/2025, 15:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/04/2025, 15:23. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -175,7 +175,7 @@ class ExtendedSource(BaseSource):
                           for tel in self.telescopes}
 
         # Just creating a flat list of detection for all ObsIDs of all telescopes
-        flat_det = [~self._detected[tel][o] for tel in self._detected for o in self._detected[tel]]
+        flat_det = [not self._detected[tel][o] for tel in self._detected for o in self._detected[tel]]
         # If in some of the observations the source has not been detected, a warning will be raised
         if True in flat_det and False in flat_det:
             warn_text = "{n} has not been detected in all region files.".format(n=self.name)
