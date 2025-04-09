@@ -2558,6 +2558,10 @@ class SpecificEntropy(BaseProfile1D):
                                   "using a smooth density model.")
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
+            print('radius')
+            print(radius)
+            print('len radius')
+            print(len(radius))
             dens = self._dens_model.get_realisations(radius)
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
@@ -2616,6 +2620,10 @@ class SpecificEntropy(BaseProfile1D):
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
             temp = self._temp_model.get_realisations(radius)
+            print('radius')
+            print(radius)
+            print('len radius')
+            print(len(radius))
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
