@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 11:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/04/2025, 15:20. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -205,12 +205,12 @@ class ExtendedSource(BaseSource):
             #  to go the long way around
             if 'xmm' in self.telescopes:
                 from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
             if 'erosita' in self.telescopes:
                 from ..generate.esass import combine_phot_prod
-                combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                combine_phot_prod(self, 'expmap', self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                combine_phot_prod(self, 'expmap', self._peak_lo_en, self._peak_hi_en, disable_progress=False)
 
         if clean_obs and clean_obs_reg in self._radii:
             # Use this method to figure out what data to throw away
@@ -226,8 +226,8 @@ class ExtendedSource(BaseSource):
                     # TODO Implement for eROSITA when merging is possible
                     if 'xmm' in self.telescopes:
                         from ..generate.sas import emosaic
-                        emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                        emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                        emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                        emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
                     self._all_peaks(peak_find_method, 'extended')
 
                     # And finally this sets the default coordinate to the peak if use peak is True
@@ -586,8 +586,8 @@ class PointSource(BaseSource):
             #  to go the long way around
             if 'xmm' in self.telescopes:
                 from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
             if 'erosita' in self.telescopes:
                 from ..generate.esass import combine_phot_prod
                 combine_phot_prod(self, 'image')
@@ -607,8 +607,8 @@ class PointSource(BaseSource):
                 # TODO Generalise this to more telescopes once generation is better supported
                 if regen_merged and 'xmm' in self.telescopes:
                     from ..generate.sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
 
         # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak
