@@ -1,11 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 12:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/04/2025, 15:08. Copyright (c) The Contributors
 
 from typing import List
 
-from fitsio import read_header, FITSHDR
 import fitsio
 import pandas as pd
+from fitsio import read_header, FITSHDR
 
 from . import BaseProduct
 
@@ -89,19 +89,6 @@ class EventList(BaseProduct):
         del self._header
         self._header = None
 
-    def _read_header_on_demand(self):
-        """
-        This will read the event list header into memory, without loading the data from the event list main table. That
-        way the user can get access to the summary information stored in the header without wasting a lot of memory.
-        """
-        try:
-            # Reads only the header information
-            self._header = read_header(self.path)
-        except OSError:
-            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
-                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                    "with {s}.".format(f=self.path, s=self.src_name))
-
     @property
     def data(self) -> pd.DataFrame:
         """
@@ -125,23 +112,34 @@ class EventList(BaseProduct):
         del self._data
         self._data = None
 
+    def _read_header_on_demand(self):
+        """
+        This will read the event list header into memory, without loading the data from the event list main table. That
+        way the user can get access to the summary information stored in the header without wasting a lot of memory.
+        """
+        try:
+            # Reads only the header information
+            self._header = read_header(self.path)
+        except OSError:
+            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
+                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
+                                    "with {s}.".format(f=self.path, s=self.src_name))
+
     def _read_data_on_demand(self):
         """
         This will read the event list table into memory.
         """
-        if self._telescope != 'erosita':
-            raise NotImplementedError("Reading Eventlist tables is not yet implemented for telescopes that aren't eROSITA.")
-        else:
-            try:
-                # reads the events table into a np.recarray
-                arr = fitsio.read(self.path, ext=1)
-                # nicer to return a df than an array
-                self._data = pd.DataFrame.from_records(arr)
 
-            except OSError:
-                raise FileNotFoundError("FITSIO read method cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                        "with {s}.".format(f=self.path, s=self.src_name))
+        try:
+            # reads the events table into a np.recarray
+            arr = fitsio.read(self.path, ext=1)
+            # nicer to return a df than an array
+            self._data = pd.DataFrame.from_records(arr)
+
+        except OSError:
+            raise FileNotFoundError("FITSIO read method cannot open {f}, possibly because there is a problem with "
+                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
+                                    "with {s}.".format(f=self.path, s=self.src_name))
 
     def unload(self, unload_data: bool = True, unload_header: bool = True):
         """
@@ -165,33 +163,33 @@ class EventList(BaseProduct):
         if unload_header:
             del self.header
     
-    def get_columns_from_data(self, colnames: List[str]) -> pd.DataFrame:
+    def get_columns_from_data(self, col_names: List[str]) -> pd.DataFrame:
         """
         This method allows you to retrieve specific columns from the event list table, without loading the whole table 
         into memory.
 
-        :param List[str] colnames: A list of column names to retrieve.
+        :param List[str] col_names: A list of column names to retrieve.
         """
 
-        if self._telescope != 'erosita':
-            raise NotImplementedError("Reading Eventlist tables is not yet implemented for telescopes that aren't eROSITA.")
-        
-        else:
-            try:
-                # reads the events table into a np.recarray
-                arr = fitsio.read(self.path, columns=colnames, ext=1)
+        # There is no sense reading in the columns again, if the whole event list is already in memory
+        if self._data is not None:
+            return self.data.loc[:, col_names]
 
-                # making sure that the byte order is correct
-                arr = arr.byteswap().newbyteorder()
-                
-                # nicer to have a dataframe than a recarray
-                return pd.DataFrame.from_records(arr)
-            
-            except ValueError:
-                # The error message generated by fitsio is informative enough
-                raise
+        try:
+            # reads the events table into a np.recarray
+            arr = fitsio.read(self.path, columns=col_names, ext=1)
 
-            except OSError:
-                raise FileNotFoundError("FITSIO read method cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                        "with {s}.".format(f=self.path, s=self.src_name))
+            # making sure that the byte order is correct
+            # arr = arr.byteswap().newbyteorder()
+
+            # nicer to have a dataframe than a recarray
+            return pd.DataFrame.from_records(arr)
+
+        except ValueError:
+            # The error message generated by fitsio is informative enough
+            raise
+
+        except OSError:
+            raise FileNotFoundError("FITSIO read method cannot open {f}, possibly because there is a problem with "
+                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
+                                    "with {s}.".format(f=self.path, s=self.src_name))
