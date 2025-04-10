@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 16:45. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -25,8 +25,10 @@ def _img_params_from_evtlist(evt_list: EventList):
     Internal function to work out the XGA image size and centre position for eROSITA observations. This is done using 
     the minimum and maximum of the ra and dec, with a 1% buffer, as the corners of the image.
     
-    :param Eventlist evt_list: An EventList product object.
+    :param EventList evt_list: An EventList product object.
     """
+
+    print(evt_list.src_name, evt_list.obs_id, evt_list.instrument)
 
     # returns a dataframe of only the RA and DEC columns
     rel_df = evt_list.get_columns_from_data(['RA', 'DEC'])
@@ -45,11 +47,11 @@ def _img_params_from_evtlist(evt_list: EventList):
     
     # If rasep is really tiny, then what has happened is that ramin = 0.00001 and ramax = 359.9999
     # and this means that our events go around the 0 deg. RA in the sky, so using ramin won't work
-    # I could do this more thoroughly by sorting in some way, but this is the fastest way I think
+    # I could do this more thoroughly by sorting in some way, but this is the fastest way I think
     if rasep < 0.001:
         # This is the RA on the 0 - 20 deg side
         ra1 = rel_df[(rel_df['RA'] < 20) & (rel_df['RA'] > 0)]['RA'].max()
-        # This is the RA on the 340 - 360
+        # This is the RA on the 340 - 360
         ra2 = rel_df[(rel_df['RA'] > 340) & (rel_df['RA'] < 360)]['RA'].min()
         rasep = abs(ra1 - ra2 + 360)
     
