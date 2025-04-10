@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 11:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 12:25. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -36,9 +36,9 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         within.
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and
         avoid PSF effects.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal-to-noise
         calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal-to-noise
         calculations.
     :param Dict[str, str] obs_id: A dictionary containing the ObsID of a specific ratemap to use for
         the SNR calculations for a specific telescope, the telescopes are the keys, and ObsIDs are
@@ -226,17 +226,17 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
               telescope: str = None) -> Tuple[Quantity, np.ndarray, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum
-    signal to noise and minimum annulus width.
+    signal-to-noise and minimum annulus width.
 
     :param BaseSource source: The source object to generate annuli for.
     :param Quantity outer_rad: The outermost radius of the source region we will generate annuli
         within.
-    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and
         avoid PSF effects.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal-to-noise
         calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal-to-noise
         calculations.
     :param Dict[str, str] obs_id: A dictionary containing the ObsID of a specific ratemap to use for
         the SNR calculations for a specific telescope, the telescopes are the keys, and ObsIDs are
@@ -255,9 +255,9 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of
         iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to
-        go below zero, which results in a lower signal to noise (and can result in a negative signal
+        go below zero, which results in a lower signal-to-noise (and can result in a negative signal
         to noise).
-    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default
+    :param bool exp_corr: Should signal-to-noises be measured with exposure time correction, default
         is True. I recommend that this be true for combined observations, as exposure time could
         change quite dramatically across the combined product.
     :param str telescope: The telescope to find radii to create annuli for.
@@ -271,7 +271,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
                                  allow_negative, exp_corr, tel):
         if max_ann[tel] > 4:
             # This will be modified by the loop until it describes annuli which all have an
-            # acceptable signal to noise
+            # acceptable signal-to-noise
             acceptable = False
         else:
             # If there are already 4 or less annuli present then we don't do the reduction while
@@ -283,7 +283,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
             cur_num_ann = ann_masks[tel].shape[2]
             tel_snrs = []
             for i in range(cur_num_ann):
-                # We're calling the signal to noise calculation method of the ratemap for all of our
+                # We're calling the signal-to-noise calculation method of the ratemap for all of our
                 # annuli
                 tel_snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel],
                                                         exp_corr, allow_negative))
@@ -297,17 +297,17 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
             # Just a list for the snrs to live in
             tel_snrs = []
             for i in range(cur_num_ann):
-                # We're calling the signal to noise calculation method of the ratemap for all of our
+                # We're calling the signal-to-noise calculation method of the ratemap for all of our
                 #  annuli
                 tel_snrs.append(rt[tel].signal_to_noise(ann_masks[tel][:, :, i], back_mask[tel],
                                 exp_corr, allow_negative))
             # Becomes a numpy array because they're nicer to work with
             tel_snrs = np.array(tel_snrs)
-            # We find any indices of the array (== annuli) where the signal to noise is not above
+            # We find any indices of the array (== annuli) where the signal-to-noise is not above
             # our minimum
             bad_snrs = np.where(tel_snrs < min_snr)[0]
 
-            # If there are no annuli below our signal to noise threshold then all is good and joyous
+            # If there are no annuli below our signal-to-noise threshold then all is good and joyous
             #  and we accept the current radii
             if len(bad_snrs) == 0:
                 acceptable = True
@@ -441,7 +441,7 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
                                  psf_corr, psf_model, psf_bins, psf_algo, psf_iter, tel):
         if max_ann[tel] > 4:
             # This will be modified by the loop until it describes annuli which all have an
-            # acceptable signal to noise
+            # acceptable signal-to-noise
             acceptable = False
         else:
             # If there are already 4 or less annuli present then we don't do the reduction while
@@ -569,7 +569,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
-    temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
+    temperature profiles of galaxy clusters, deciding on the annular bins using signal-to-noise measurements
     from photometric products. This function calls single_temp_apec_profile, but doesn't expose all of the more
     in depth variables, so if you want more control then use single_temp_apec_profile directly. The projected
     temperature profiles which are generated are added to their source's storage structure.
@@ -580,15 +580,15 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         the spectra (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
-    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.
-    :param bool use_combined: If True then the combined RateMap will be used for signal to noise annulus
+    :param bool use_combined: If True then the combined RateMap will be used for signal-to-noise annulus
         calculations, this is overridden by use_worst.
-    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal to noise) will
-        be used for signal to noise annulus calculations.
-    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global signal-to-noise) will
+        be used for signal-to-noise annulus calculations.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal-to-noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal-to-noise calculations.
     :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
     :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
     :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
@@ -596,15 +596,15 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
-        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
-    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+        zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+    :param bool exp_corr: Should signal-to-noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -615,7 +615,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
-    :param str tel: The telescope to find radii to create annuli for.
+    :param str telescope: The telescope to find radii to create annuli for.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
@@ -648,7 +648,10 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if telescope is None:
         src_telescopes = _get_all_telescopes(sources)
     else:
-        src_telescopes = telescope
+        if isinstance(telescope, str):
+            src_telescopes = [telescope]
+        else:
+            src_telescopes = telescope
 
     if isinstance(sources, BaseSource):
         sources = [sources]
@@ -753,8 +756,8 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -897,8 +900,8 @@ def _grow_ann_proj_temp_prof(sources: Union[BaseSource, BaseSample], outer_radii
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -949,7 +952,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
-    necessary, using the method specified in the function call (the default is the minimum signal to noise annuli
+    necessary, using the method specified in the function call (the default is the minimum signal-to-noise annuli
     method). As a side effect of that process APEC normalisation profiles will also be created, as well as Emission
     Measure profiles. The function is an implementation of a fairly old technique, though it has been used recently
     in https://doi.org/10.1051/0004-6361/201731748. For a more in depth discussion of this technique and its uses
@@ -987,14 +990,14 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param int psf_iter: If the RateMap you want to use is PSF corrected, this is the number of iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
         zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+    :param bool exp_corr: Should signal-to-noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
