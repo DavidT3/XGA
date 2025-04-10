@@ -118,6 +118,8 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
                 continue
             except NoProductAvailableError:
                 pass
+            
+            ##### source.get_images(obs_id, inst, telescope='chandra')
 
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
