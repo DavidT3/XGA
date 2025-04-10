@@ -140,7 +140,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
 
             img_exist = False
             try:
-                img_temp = src.get_images(obs_id, inst, telescope='chandra')
+                img_temp = source.get_images(obs_id, inst, telescope='chandra')
                 img_exist = True
             except Exception:
                 pass
