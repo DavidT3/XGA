@@ -138,6 +138,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             final_expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVexpmap.fits")
             final_ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVratemap.fits")
 
+            xygrid_dir = evt_file.path
             # Skip generation if files already exist.
             # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
             #     continue
@@ -152,7 +153,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             flux_cmd = (
                 f"cd {temp_dir}; fluximage infile={evt_file.path} outroot={obs_id}_{inst} "
                 f"bands={lo_en.value}:{hi_en.value}:{(lo_en + hi_en).value / 2} binsize=4 asolfile={att_file} "
-                f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4 parallel=no; "
+                f"badpixfile={badpix_file} units=time tmpdir={temp_dir} cleanup=yes verbose=4 parallel=no xygrid={xygrid_dir}; "
                 f"mv {out_image_file} {final_image_file}; mv {out_expmap_file} {final_expmap_file}; "
                 f"mv {out_ratemap_file} {final_ratemap_file}; cd ..; rm -r {temp_dir}"
             )
