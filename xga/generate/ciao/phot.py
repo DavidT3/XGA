@@ -138,7 +138,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             final_expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVexpmap.fits")
             final_ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVratemap.fits")
 
-            xygrid_dir = evt_file.path
+            xygrid_dir = str(evt_file.path)
             # Skip generation if files already exist.
             # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
             #     continue
@@ -157,6 +157,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
                 f"mv {out_image_file} {final_image_file}; mv {out_expmap_file} {final_expmap_file}; "
                 f"mv {out_ratemap_file} {final_ratemap_file}; cd ..; rm -r {temp_dir}"
             )
+            print(flux_cmd)
             cmds.append(flux_cmd)
 
             # This is the products final resting place, if it exists at the end of this command.
