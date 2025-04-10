@@ -138,7 +138,23 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             final_expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVexpmap.fits")
             final_ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVratemap.fits")
 
-            xygrid_dir = str(evt_file.path)
+            img_exist = False
+            try:
+                img_temp = src.get_images(obs_id, inst, telescope='chandra')
+                img_exist = True
+            except Exception:
+                pass
+            
+            if img_exist == True:
+                if not isinstance(img_temp, list):
+                    img_temp = [img_temp]
+                elif isinstance(img_temp, list):
+                    img_temp = img_temp
+                xygrid_dir = img_temp[0].path
+            elif img_exist == False:
+                xygrid_dir = ""
+
+            print("xygrid_dir", xygrid_dir)
             # Skip generation if files already exist.
             # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
             #     continue
