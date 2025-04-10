@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 11:05. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -789,7 +789,10 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if telescope is None:
         src_telescopes = _get_all_telescopes(sources)
     else:
-        src_telescopes = telescope
+        if isinstance(telescope, str):
+            src_telescopes = [telescope]
+        else:
+            src_telescopes = telescope
 
     # Makes sure that sources is iterable, even if its just a single source - makes writing the rest of this
     #  function a bit neater.
