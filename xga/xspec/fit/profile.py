@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 11:04. Copyright (c) The Contributors
 
 from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
+from xga.generate.ciao import ciao_spectrum_set
 
 from ._common import _write_xspec_script, _check_inputs, _parse_radii_input
 from ..run import xspec_call
@@ -16,6 +17,7 @@ from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 from ...sourcetools._common import _get_all_telescopes
+
 
 @xspec_call
 def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, 
@@ -87,7 +89,11 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
 
     if 'erosita' in telescopes:
-        esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
+        esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores,
+                           combine_tm=stacked_spectra)
+
+    if 'chandra' in telescopes:
+        ciao_spectrum_set(sources, radii['chandra'], group_spec, min_counts, min_sn, over_sample, False, num_cores)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
