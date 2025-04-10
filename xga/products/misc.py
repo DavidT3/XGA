@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 17:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 17:04. Copyright (c) The Contributors
 
 from typing import List
 
@@ -180,7 +180,7 @@ class EventList(BaseProduct):
             arr = fitsio.read(self.path, columns=col_names, ext=1)
 
             # Makes sure that the byte order is correct, the '=' should make it native.
-            arr.dtype = arr.newbyteorder('=')
+            arr.dtype = arr.dtype.newbyteorder('=')
 
             # Much nicer to have a dataframe than a recarray
             return pd.DataFrame.from_records(arr)
