@@ -272,7 +272,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Build specextract command - making sure to set parallel to no, seeing as we're doing our
             #  own parallelization
             specextract_cmd = (
-                f"export PFILES=\"{new_pfiles}:$PFILES\"; "
+                f"export PFILES=\"{new_pfiles}:{os.environ.get('PFILES', '')}\"; "
                 f"export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
                 f"punlearn specextract; "
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
