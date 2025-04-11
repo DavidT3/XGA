@@ -984,7 +984,7 @@ def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture
                 srctool_spectrum(samp, samp.get_radius(o_dens), group_spec=group_spec, min_counts=min_counts,
                                  min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             elif telescope == 'chandra':
-                specextract_spectrum(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens),num_cores=num_cores,
+                specextract_spectrum(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), num_cores=num_cores,
                                      group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
             else:
                 raise NotImplementedError("Support for telescopes other than XMM, eROSITA, and Chandra is not yet "
@@ -1043,7 +1043,8 @@ def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture
         #  spectral fit - as such we are reading out the measured temperatures here
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
-            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
+            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), 
+                             quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
                              stacked_spectra=stacked_spectra)
             txs = tx_all[:, 0]
