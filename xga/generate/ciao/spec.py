@@ -267,6 +267,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     bkg_reg.write(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
 
             new_pfiles = os.path.join(temp_dir, 'pfiles/')
+            os.makedirs(new_pfiles)
 
             # Build specextract command - making sure to set parallel to no, seeing as we're doing our
             #  own parallelization
