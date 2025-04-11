@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 11:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/04/2025, 15:11. Copyright (c) The Contributors
 
 from typing import List, Union, Dict
 
@@ -139,6 +139,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             # Gets the set of radii for this particular source into a variable
             cur_radii = radii[tel][src_ind]
+            print(cur_radii)
 
             # This will fetch the annular_spec, get_annular_spectra will throw an error if no matches
             #  are found, though as we have run spectrum_set that shouldn't happen
