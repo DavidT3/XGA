@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 17:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 20:16. Copyright (c) The Contributors
 
 from typing import List
 
@@ -179,8 +179,9 @@ class EventList(BaseProduct):
             # Reads the events table into a np.recarray
             arr = fitsio.read(self.path, columns=col_names, ext=1)
 
-            # Makes sure that the byte order is correct, the '=' should make it native.
-            arr = arr.view(arr.dtype.newbyteorder('='))
+            # Makes sure that the byte order is correct
+            if arr.dtype[0].byteorder != '<':
+                arr = arr.view(arr.dtype.newbyteorder()).byteswap(inplace=False)
 
             # Much nicer to have a dataframe than a recarray
             return pd.DataFrame.from_records(arr)
