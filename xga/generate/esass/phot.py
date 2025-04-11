@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 20:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 11/04/2025, 10:11. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -27,8 +27,6 @@ def _img_params_from_evtlist(evt_list: EventList):
     
     :param EventList evt_list: An EventList product object.
     """
-
-    print(evt_list.obs_id, evt_list.instrument, evt_list.path)
 
     # returns a dataframe of only the RA and DEC columns
     rel_df = evt_list.get_columns_from_data(['RA', 'DEC'])
