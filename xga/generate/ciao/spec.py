@@ -267,14 +267,14 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     bkg_reg.write(f"-ellipse({reg_ra},{reg_dec},{width_arc}',{height_arc}',{angle})\n")
 
             new_pfiles = os.path.join(temp_dir, 'pfiles/')
-            os.makedirs(new_pfiles)
+            os.makedirs(new_pfiles, exist_ok=True)
 
             # Build specextract command - making sure to set parallel to no, seeing as we're doing our
             #  own parallelization
             specextract_cmd = (
-                f"export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
-                f"punlearn specextract; "
                 f"export PFILES=\"{new_pfiles}:$PFILES\"; "
+                f"export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
+                f"punlearn; "
                 f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
                 f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
                 f"asp={att_file} badpixfile={badpix_file} grouptype={grouptype_int} binspec={binspec_int} "
