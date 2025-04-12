@@ -271,18 +271,44 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             # Build specextract command - making sure to set parallel to no, seeing as we're doing our
             #  own parallelization
+            # specextract_cmd = (
+            #     f"export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
+            #     f"punlearn specextract; "
+            #     f"export PFILES=\"{new_pfiles}:$PFILES\"; "
+            #     f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
+            #     f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
+            #     f"asp={att_file} badpixfile={badpix_file} grouptype={grouptype_int} binspec={binspec_int} "
+            #     f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file} tmpdir={temp_dir}; "
+            #     f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
+            #     f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
+            #     f"rm -r {temp_dir}; rm -r {temp_region_dir}"
+            # )
+
             specextract_cmd = (
                 f"export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; "
                 f"punlearn specextract; "
                 f"export PFILES=\"{new_pfiles}:$PFILES\"; "
-                f"cd {temp_dir}; specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\" "
-                f"outroot={obs_id}_{inst} bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\" "
-                f"asp={att_file} badpixfile={badpix_file} grouptype={grouptype_int} binspec={binspec_int} "
-                f"weight=yes weight_rmf=no clobber=yes parallel=no mskfile={mask_file} tmpdir={temp_dir}; "
+                f"cd {temp_dir}; "
+                f"pset specextract infile=\"{evt_file.path}[sky=region({spec_ext_reg_path})]\"; "
+                f"pset specextract outroot={obs_id}_{inst}; "
+                f"pset specextract bkgfile=\"{evt_file.path}[sky=region({spec_bkg_reg_path})]\"; "
+                f"pset specextract asp={att_file}; "
+                f"pset specextract mskfile={mask_file}; "
+                f"pset specextract badpixfile={badpix_file}; "
+                f"pset specextract grouptype={grouptype_int}; "
+                f"pset specextract binspec={binspec_int}; "
+                f"pset specextract weight=yes; "
+                f"pset specextract correct=no; "
+                f"pset specextract clobber=yes; "
+                f"pset specextract parallel=no; "
+                f"pset specextract tmpdir={temp_dir}; "
+                f"pset specextract verbose=2; "
+                f"specextract; "
                 f"mv {spec_ciao_out} {spec_file}; mv {arf_ciao_out} {arf_file}; mv {rmf_ciao_out} {rmf_file}; "
                 f"mv {bkg_spec_ciao_out} {bkg_spec_file}; mv {bkg_arf_ciao_out} {bkg_arf_file}; mv {bkg_rmf_ciao_out} {bkg_rmf_file}; "
                 f"rm -r {temp_dir}; rm -r {temp_region_dir}"
             )
+
 
             cmds.append(specextract_cmd)
 
