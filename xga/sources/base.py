@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/04/2025, 11:19. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -812,6 +812,24 @@ class BaseSource:
         :rtype: ndarray
         """
         return np.array([self._back_inn_factor, self._back_out_factor])
+
+    @background_radius_factors.setter
+    def background_radius_factors(self, new_val: ndarray):
+        """
+        The factors by which to multiply outer radius by to get inner and outer radii for background regions.
+
+        :param ndarray new_val: A two element array. The first entry should be the inner background radius
+            factor, and the second should be the outer.
+        """
+        if len(new_val) != 2:
+            raise ValueError("The 'background_radius_factors' argument must have two elements, the first being "
+                             "the factor to set the inner radius of the background annulus, and the second being "
+                             "for the outer.")
+        elif new_val[1] <= new_val[0]:
+            raise ValueError("The second element of the 'background_radius_factors' argument must be "
+                             "larger than the first.")
+        else:
+            self._back_inn_factor, self._back_out_factor = new_val
 
     @property
     def suppressed_warnings(self) -> List[str]:
