@@ -678,22 +678,22 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     return samp, loaded_samp_data, radius_hist_df
 
 
-def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
-                                                 peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
-                                                 min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
-                                                 lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                                 core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
-                                                 freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
-                                                 temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
-                                                 lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-                                                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                                                 over_sample: float = None, back_inn_rad_factor: float = 1.05,
-                                                 back_out_rad_factor: float = 1.5, clean_obs: bool = True,
-                                                 clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
-                                                 save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
-                                                 telescope: str = 'xmm', search_distance: Quantity = None,
-                                                 stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
-                                                 num_cores: int = NUM_CORES) \
+def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
+                                       peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
+                                       min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
+                                       lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+                                       core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
+                                       freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
+                                       temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
+                                       lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+                                       group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                                       over_sample: float = None, back_inn_rad_factor: float = 1.05,
+                                       back_out_rad_factor: float = 1.5, clean_obs: bool = True,
+                                       clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
+                                       save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
+                                       telescope: str = 'chandra', search_distance: Quantity = None,
+                                       stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
+                                       num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
     """
     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
@@ -820,7 +820,7 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
     # This is because eROSITA results are still pretty new and most scaling relations in this module (at the time
     #  of writing) are from XMM data - it is known that Tx values can be different between eROSITA and XMM (from
     #  Turner et al. eFEDS-XCS paper).
-    if telescope == 'erosita':
+    if telescope != 'xmm':
         warn("Scaling relations used in this work are currently based off of XMM data - eROSITA temperatures have"
              "been shown to be somewhat discrepant, so be cautious or provide your own scaling relations.",
              stacklevel=2)
@@ -987,7 +987,8 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
                 specextract_spectrum(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), num_cores=num_cores,
                                      group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
             else:
-                raise NotImplementedError("Support for telescopes other than XMM and eROSITA is not yet implemented.")
+                raise NotImplementedError("Support for telescopes other than XMM, eROSITA, and Chandra is not yet "
+                                          "implemented.")
             # If the end of evselect_spectrum doesn't throw a ProductGenerationError then we know we're all good, so we
             #  define the not_bad_gen_ind to just contain an index for all the clusters
             not_bad_gen_ind = np.nonzero(samp.names)
@@ -1031,11 +1032,9 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
             warn("Some sources ({}) have been removed because of spectrum generation "
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
-        print('------------')
-        print(samp.get_radius(o_dens))
-        print('------------')
         # We generate and fit spectra for the current value of the overdensity radius
-        single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
+        single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens),
+                         lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
                          lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                          over_sample=over_sample, one_rmf=False, num_cores=num_cores, timeout=timeout,
                          start_temp=start_temp, freeze_temp=freeze_temp, stacked_spectra=stacked_spectra)
@@ -1044,10 +1043,10 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
         #  spectral fit - as such we are reading out the measured temperatures here
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
-            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
-                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample
-                          # stacked_spectra=stacked_spectra
-                          )
+            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), 
+                             quality_checks=False, group_spec=group_spec,
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                             stacked_spectra=stacked_spectra)
             txs = tx_all[:, 0]
             tx_errs = tx_all[:, 1]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
@@ -1055,7 +1054,7 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
         else:
             lx_all = samp.Lx(samp.get_radius(o_dens), telescope=telescope, quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                             hi_en=rel_lum_bounds[1])
+                             hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra)
             lxs = lx_all[:, 0]
             lx_errs = lx_all[:, 1:]
             # We can also propagate errors in the predict method - so we pass the lx_errs
@@ -1103,7 +1102,7 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
         if freeze_temp:
             all_lx = samp.Lx(samp.get_radius(o_dens), telescope=telescope, quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
-                             hi_en=rel_lum_bounds[1])
+                             hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra)
             lxs = all_lx[:, 0]
             lx_errs = all_lx[:, 1]
             all_start_temp = temp_lum_rel.predict(lxs, samp.redshifts, cosmo, lx_errs)
@@ -1164,7 +1163,8 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
+    single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens),
+                     lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
                      lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                      over_sample=over_sample, one_rmf=False, num_cores=num_cores, start_temp=start_temp,
                      freeze_temp=freeze_temp, stacked_spectra=stacked_spectra)
@@ -1172,7 +1172,7 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
     # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
     #  just multiply the current radius by 0.15 and use that for the inner radius.
     if core_excised:
-        single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), lum_en=lum_en,
+        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
                          freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
                          num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
@@ -1215,8 +1215,8 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
                     # The temperature measured within the overdensity radius, with its - and + uncertainties are
                     #  read out
                     vals += list(rel_src.get_temperature(rel_rad, telescope, group_spec=group_spec,
-                                                         min_counts=min_counts, min_sn=min_sn,
-                                                         over_sample=over_sample, stacked_spectra=stacked_spectra).value)
+                                                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                                         stacked_spectra=stacked_spectra).value)
                     # We add columns with informative names
                     cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
 
@@ -1334,16 +1334,3 @@ def luminosity_temperature_pipeline_chandra_temp(sample_data: pd.DataFrame, star
         radius_hist_df.to_csv(save_rad_history_path, index=True, index_label='name')
 
     return samp, loaded_samp_data, radius_hist_df
-
-
-
-
-
-
-
-
-
-
-
-
-

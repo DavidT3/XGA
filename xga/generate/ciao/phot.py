@@ -173,7 +173,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
                 f"mv {out_image_file} {final_image_file}; mv {out_expmap_file} {final_expmap_file}; "
                 f"mv {out_ratemap_file} {final_ratemap_file}; cd ..; rm -r {temp_dir}"
             )
-            print(flux_cmd)
+            # print(flux_cmd)
             cmds.append(flux_cmd)
 
             # This is the products final resting place, if it exists at the end of this command.
