@@ -125,6 +125,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
         #  least in this current setup
         for tel in source.telescopes:
+            print('in single_temp_apec_profile')
+            print(tel)
             # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
             # if stacked_spectra and tel == 'erosita':
             #     search_inst = 'combined'
