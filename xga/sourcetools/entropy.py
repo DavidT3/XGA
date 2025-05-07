@@ -158,8 +158,6 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                     d_prof = dens_prof_dict[str(src)][tel]
                     t_prof = temp_prof_dict[str(src)][tel]
 
-                    print(d_prof)
-
                     # And the appropriate temperature and density models
                     d_model = dens_model_dict[str(src)]
                     t_model = temp_model_dict[str(src)]

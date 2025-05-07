@@ -2563,6 +2563,8 @@ class SpecificEntropy(BaseProfile1D):
             print('len radius')
             print(len(radius))
             dens = self._dens_model.get_realisations(radius)
+            print('len dens')
+            print(len(dens))
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
@@ -2624,6 +2626,8 @@ class SpecificEntropy(BaseProfile1D):
             print(radius)
             print('len radius')
             print(len(radius))
+            print('len temp')
+            print(len(temp))
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
