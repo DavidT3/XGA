@@ -2272,7 +2272,7 @@ class SpecificEntropy(BaseProfile1D):
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, auto_save: bool = False, telescope: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
