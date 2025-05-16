@@ -14,6 +14,7 @@ from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversi
 from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, ManualInterval
 from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
     LinearStretch
+from astropy.io import fits
 from fitsio import read, read_header, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -265,7 +266,8 @@ class Image(BaseProduct):
         """
         if self._header is None:
             # Reads only the header information
-            self._header = read_header(self.path)
+            with fits.open(self.path) as hdul:
+                self._header = hdul[0].header
 
             # We use the NAXIS entries to set the shape of the Image - this used to be
             #  done by loading the data array and using shape on that, but this way avoids
