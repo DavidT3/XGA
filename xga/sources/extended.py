@@ -1088,10 +1088,10 @@ class GalaxyCluster(ExtendedSource):
                                 yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
                                 hi_en: Quantity = Quantity(2.0, 'keV')):
 
-        sb_profile, draw_rads = self.generate_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
-                                min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
-                                yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
-                                hi_en: Quantity = Quantity(2.0, 'keV'))
+        sb_profile, draw_rads = self.generate_brightness_profile(reg_type, telescope, central_coord, pix_step,
+                                min_snr, figsize, xscale,
+                                yscale, back_sub, lo_en,
+                                hi_en)
         
         sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
