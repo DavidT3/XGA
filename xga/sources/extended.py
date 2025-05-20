@@ -973,7 +973,7 @@ class GalaxyCluster(ExtendedSource):
             raise NoProductAvailableError("No matching hydrostatic mass profiles can be found.")
         return matched_prods
 
-    def view_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
+    def generate_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
                                 min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
                                 yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
                                 hi_en: Quantity = Quantity(2.0, 'keV')):
@@ -1080,7 +1080,19 @@ class GalaxyCluster(ExtendedSource):
                 draw_rads[new_key] = self.get_radius(r_name, sb_profile.radii_unit)
             elif r_name == "custom":
                 draw_rads["Custom"] = self.get_radius(r_name, sb_profile.radii_unit)
+        
+        return sb_profile, draw_rads
 
+    def view_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
+                                min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
+                                yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
+                                hi_en: Quantity = Quantity(2.0, 'keV')):
+
+        sb_profile, draw_rads = self.generate_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
+                                min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
+                                yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
+                                hi_en: Quantity = Quantity(2.0, 'keV'))
+        
         sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
     def combined_lum_conv_factor(self, outer_radius: Union[str, Quantity], telescope: str, lo_en: Quantity,
