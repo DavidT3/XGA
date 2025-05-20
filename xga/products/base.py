@@ -2830,9 +2830,10 @@ class BaseAggregateProfile1D:
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
             if p.obs_id != 'combined':
-                p_name = p.src_name + " {o}-{i}".format(o=p.obs_id, i=p.instrument.upper())
+                p_name = p.src_name + " {t}-{o}-{i}".format(t=p.telescope, o=p.obs_id, 
+                                                            i=p.instrument.upper())
             else:
-                p_name = p.src_name
+                p_name = p.src_name + " {t}".format(t=p.telescope)
 
             if p.type == "brightness_profile" and p.psf_corrected:
                 leg_label = p_name + " PSF Corrected"
