@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 20:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -445,11 +445,11 @@ class GalaxyCluster(ExtendedSource):
             wl_list = [self._wl_mass.value]
             wl_unit = self._wl_mass.unit
         else:
-            wl_list = [np.NaN]
+            wl_list = [np.nan]
             wl_unit = ''
 
         if self._wl_mass_err is None:
-            wl_list.append(np.NaN)
+            wl_list.append(np.nan)
         elif isinstance(self._wl_mass_err, Quantity) and not self._wl_mass_err.isscalar:
             wl_list += list(self._wl_mass_err.value)
         elif isinstance(self._wl_mass_err, Quantity) and self._wl_mass_err.isscalar:
@@ -469,10 +469,10 @@ class GalaxyCluster(ExtendedSource):
         if self._richness is not None:
             r_list = [self._richness]
         else:
-            r_list = [np.NaN]
+            r_list = [np.nan]
 
         if self._richness_err is None:
-            r_list.append(np.NaN)
+            r_list.append(np.nan)
         elif isinstance(self._richness_err, (float, int)):
             r_list.append(self._richness_err)
         elif isinstance(self._richness_err, list):

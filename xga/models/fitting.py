@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
 
 from typing import List
 
@@ -26,7 +26,7 @@ def log_likelihood(theta: np.ndarray, r: np.ndarray, y: np.ndarray, y_err: np.nd
     try:
         lik = -np.sum(np.log(y_err*np.sqrt(2*np.pi)) + (((y - m_func(r, *theta))**2) / (2*y_err**2)))
     except ZeroDivisionError:
-        lik = np.NaN
+        lik = np.nan
     return lik
 
 

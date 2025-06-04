@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 19:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -317,7 +317,7 @@ class BaseSample:
                 #  that entry with a NaN - the names will be included in a warning at the end
                 # warn(str(err))
                 warns.append(src.name)
-                lums.append(np.array([np.NaN, np.NaN, np.NaN]))
+                lums.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
         lums = Quantity(np.array(lums), 'erg / s')

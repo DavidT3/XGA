@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 19:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
 
 from typing import List
 
@@ -418,7 +418,7 @@ class ClusterSample(BaseSample):
             rad = gcs.get_radius(rad_name, 'kpc')
             # Result could be None, if the radius wasn't set for that clusters, have to account for that
             if rad is None:
-                rads.append(np.NaN)
+                rads.append(np.nan)
             else:
                 rads.append(rad)
 
@@ -651,24 +651,24 @@ class ClusterSample(BaseSample):
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
                 if quality_checks and gcs_temp[0] > 25:
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
                          "fit by XGA".format(s=gcs.name, m=gcs_temp), stacklevel=2)
                 elif quality_checks and gcs_temp.min() < 0:
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
                          "measurement".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) <= 0):
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
                          " hard to use for scaling relations as values are often logged.".format(s=gcs.name),
                          stacklevel=2)
                 elif quality_checks and ((gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33):
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("One of the temperature uncertainty values for {s} is more than three times larger than "
                          "the other, this means the fit quality is suspect.".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("The temperature value - the average error goes below zero for {s}, this makes the "
                          "temperature hard to use for scaling relations as values are often "
                          "logged".format(s=gcs.name), stacklevel=2)
@@ -678,7 +678,7 @@ class ClusterSample(BaseSample):
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)
-                temps.append(np.array([np.NaN, np.NaN, np.NaN]))
+                temps.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
         temps = Quantity(np.array(temps), 'keV')
@@ -774,29 +774,29 @@ class ClusterSample(BaseSample):
                     try:
                         cur_gmass = dens_profs.gas_mass(dens_model, gas_mass_rad)[0]
                         if quality_checks and (cur_gmass[1] > cur_gmass[0] or cur_gmass[2] > cur_gmass[0]):
-                            gms.append([np.NaN, np.NaN, np.NaN])
+                            gms.append([np.nan, np.nan, np.nan])
                         elif quality_checks and cur_gmass[0] < Quantity(1e+9, 'Msun'):
-                            gms.append([np.NaN, np.NaN, np.NaN])
+                            gms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s gas mass is less than 1e+12 solar masses")
                         elif quality_checks and cur_gmass[0] > Quantity(1e+16, 'Msun'):
-                            gms.append([np.NaN, np.NaN, np.NaN])
+                            gms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s gas mass is greater than 1e+16 solar masses")
                         else:
                             gms.append(cur_gmass.value)
                     except ModelNotAssociatedError:
-                        gms.append([np.NaN, np.NaN, np.NaN])
+                        gms.append([np.nan, np.nan, np.nan])
                     except ValueError:
-                        gms.append([np.NaN, np.NaN, np.NaN])
+                        gms.append([np.nan, np.nan, np.nan])
                         warn("{s}'s gas mass is negative")
 
                 else:
                     warn("Somehow there multiple matches for {s}'s density profile, this is the developer's "
                          "fault.".format(s=gcs.name))
-                    gms.append([np.NaN, np.NaN, np.NaN])
+                    gms.append([np.nan, np.nan, np.nan])
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
-                gms.append([np.NaN, np.NaN, np.NaN])
+                gms.append([np.nan, np.nan, np.nan])
                 warn("{s} doesn't have a density profile associated, please look at "
                      "sourcetools.density.".format(s=gcs.name))
 
@@ -850,23 +850,23 @@ class ClusterSample(BaseSample):
                     try:
                         cur_mass = mass_profs.mass(actual_rad)[0]
                         if quality_checks and (cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]):
-                            ms.append([np.NaN, np.NaN, np.NaN])
+                            ms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s mass uncertainties are larger than the mass value.")
                         elif quality_checks and cur_mass[0] < Quantity(1e+12, 'Msun'):
-                            ms.append([np.NaN, np.NaN, np.NaN])
+                            ms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s mass is less than 1e+12 solar masses")
                         elif quality_checks and cur_mass[0] > Quantity(1e+16, 'Msun'):
-                            ms.append([np.NaN, np.NaN, np.NaN])
+                            ms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s mass is greater than 1e+16 solar masses")
                         else:
                             ms.append(cur_mass.value)
                     except ValueError:
                         warn("{s}'s mass is negative")
-                        ms.append([np.NaN, np.NaN, np.NaN])
+                        ms.append([np.nan, np.nan, np.nan])
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
-                ms.append([np.NaN, np.NaN, np.NaN])
+                ms.append([np.nan, np.nan, np.nan])
                 warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
 
         ms = np.array(ms)
@@ -927,11 +927,11 @@ class ClusterSample(BaseSample):
                          "didn't bracket the requested overdensity radius. See the docs of overdensity_radius "
                          "method of HydrostaticMass for more info.".format(s=gcs.name))
 
-                    rs.append(np.NaN)
+                    rs.append(np.nan)
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
-                rs.append(np.NaN)
+                rs.append(np.nan)
                 warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name))
 
         # Turn the radii list into a quantity and return it

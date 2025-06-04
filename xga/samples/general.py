@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 15:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
 
 from warnings import warn
 
@@ -107,7 +107,7 @@ class ExtendedSample(BaseSample):
                         #  whether this has been set yet when all radii should be forced to be the same unit
                         self._cr_unit = cr.unit
                     else:
-                        self._custom_radii.append(np.NaN)
+                        self._custom_radii.append(np.nan)
                         self._cr_unit = Unit('')
                     final_names.append(n)
                 except PeakConvergenceFailedError:
