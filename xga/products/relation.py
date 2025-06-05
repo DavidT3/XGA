@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/06/2025, 11:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/06/2025, 11:36. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -1191,7 +1191,6 @@ class ScalingRelation:
                     cbar.ax.yaxis.set_minor_formatter(third_dim_axis_formatters['minor'])
                 if 'major' in third_dim_axis_formatters:
                     cbar.ax.yaxis.set_major_formatter(third_dim_axis_formatters['major'])
-
 
         return ax
 
