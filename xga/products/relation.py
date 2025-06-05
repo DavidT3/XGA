@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/01/2025, 22:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/06/2025, 11:11. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -873,7 +873,8 @@ class ScalingRelation:
                  x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
                  label_points: bool = False, point_label_colour: str = 'black', point_label_size: int = 10,
                  point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-                 third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None, one_to_one: bool = False):
+                 third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
+                 y_lims: Quantity = None, one_to_one: bool = False):
         """
         A get method that will populate a matplotlib axes with a high quality plot of this scaling relation (including
         the data it is based upon, if available), and then return it.
@@ -913,6 +914,10 @@ class ScalingRelation:
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
+        :param Normalize third_dim_norm_cmap: A matplotlib 'Normalize' class/subclass (e.g. LogNorm, SymLogNorm, etc.)
+            that will be used to scale the colouring of the data points by the third data dimension. Note that
+            a class, NOT A CLASS INSTANCE (e.g. LogNorm()) must be passed, as the normalisation will be set up in
+            this method. Default is Normalization (linear scaling).
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
             data point coordinates to determine the location a label should be added. You can use this to fine-tune
             the label positions relative to their data point.
@@ -968,7 +973,12 @@ class ScalingRelation:
                  "the creation of this scaling relation. Setting 'show_third_dim' to False.", stacklevel=2)
             show_third_dim = False
 
-        # Plot the data with uncertainties, if any data is present in this scaling relation.
+        # Check that the passed normalization class is actually valid
+        if ((show_third_dim and third_dim_norm_cmap != Normalize) and
+                not Normalize.__subclasscheck__(third_dim_norm_cmap)):
+            raise TypeError("The 'third_dim_norm_cmap' argument must be a subclass of matplotlib.color.Normalize")
+
+        # Plot the data with uncertainties if any data is present in this scaling relation.
         if len(self.x_data) != 0 and not show_third_dim:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
                         fmt="x", color=data_colour, capsize=2)
@@ -979,7 +989,8 @@ class ScalingRelation:
             else:
                 cmap = third_dim_cmap
             # We want to normalise this colourmap to our specific data range
-            norm = Normalize(vmin=self.third_dimension_data.value.min(), vmax=self.third_dimension_data.value.max())
+            norm = third_dim_norm_cmap(vmin=self.third_dimension_data.value.min(),
+                                       vmax=self.third_dimension_data.value.max())
             # Now this mapper can be constructed so that we can take that information about the cmap and normalisation
             #  and use it with our data to calculate colours
             cmap_mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -1175,14 +1186,15 @@ class ScalingRelation:
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
              point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None, one_to_one: bool = False):
+             third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
+             y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
 
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
             this relation is based upon, if that data is not available an error will be thrown.
-        :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+        :param bool log_scale: If True, then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
         :param tuple figsize: A custom figure size for the plot, default is (8, 8).
         :param str data_colour: The colour to use for the data points in the plot, default is black.
@@ -1218,6 +1230,10 @@ class ScalingRelation:
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
+        :param Normalize third_dim_norm_cmap: A matplotlib 'Normalize' class/subclass (e.g. LogNorm, SymLogNorm, etc.)
+            that will be used to scale the colouring of the data points by the third data dimension. Note that
+            a class, NOT A CLASS INSTANCE (e.g. LogNorm()) must be passed, as the normalisation will be set up in
+            this method. Default is Normalization (linear scaling).
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
             data point coordinates to determine the location a label should be added. You can use this to fine-tune
             the label positions relative to their data point.
@@ -1234,7 +1250,7 @@ class ScalingRelation:
         ax = self.get_view(ax, x_lims, log_scale, plot_title, data_colour, model_colour, grid_on, conf_level,
                            custom_x_label, custom_y_label, fontsize, x_ticks, x_minor_ticks, y_ticks, y_minor_ticks,
                            label_points, point_label_colour, point_label_size, point_label_offset, show_third_dim,
-                           third_dim_cmap, y_lims, one_to_one)
+                           third_dim_cmap, third_dim_norm_cmap, y_lims, one_to_one)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
