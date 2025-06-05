@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/06/2025, 11:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/06/2025, 11:33. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -874,7 +874,7 @@ class ScalingRelation:
                  label_points: bool = False, point_label_colour: str = 'black', point_label_size: int = 10,
                  point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
                  third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
-                 y_lims: Quantity = None, one_to_one: bool = False):
+                 third_dim_axis_formatters: dict = None, y_lims: Quantity = None, one_to_one: bool = False):
         """
         A get method that will populate a matplotlib axes with a high quality plot of this scaling relation (including
         the data it is based upon, if available), and then return it.
@@ -918,6 +918,9 @@ class ScalingRelation:
             that will be used to scale the colouring of the data points by the third data dimension. Note that
             a class, NOT A CLASS INSTANCE (e.g. LogNorm()) must be passed, as the normalisation will be set up in
             this method. Default is Normalization (linear scaling).
+        :param dict third_dim_axis_formatters: A dictionary of formatters that can be applied to the colorbar
+            axis. Allowed keys are; 'major' and 'minor'. The values associated with the keys should be
+            instantiated matplotlib formatters.
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
             data point coordinates to determine the location a label should be added. You can use this to fine-tune
             the label positions relative to their data point.
@@ -926,7 +929,6 @@ class ScalingRelation:
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
             False.
         """
-
         # First we check that the passed axis limits are in appropriate units, if they weren't supplied then we check
         #  if any were supplied at initialisation, if that isn't the case then we make our own from the data, and
         #  if there's no data then we get stroppy
@@ -1168,14 +1170,29 @@ class ScalingRelation:
             ax.set_xticks(y_minor_ticks, minor=True)
             ax.set_xticklabels(y_minor_ticks, minor=True)
 
-        # If we did colour the data by a third dimension then we should add a colour-bar to the relation
+        # If we did colour the data by a third dimension, then we should add a colour-bar to the relation
         if show_third_dim:
+            # Setting up the colorbar axis
             cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
+            # And making sure we include units
             if self.third_dimension_data.unit.is_equivalent(''):
                 cbar_lab = self.third_dimension_name
             else:
                 cbar_lab = self.third_dimension_name + ' [' + self.third_dimension_data.unit.to_string('latex') + ']'
+
+            # Set the axis label for the colobar
             cbar.ax.set_ylabel(cbar_lab, fontsize=fontsize)
+
+            # Now we check to see if the user passed custom axis formatters for the colorbar axis, and if so then
+            #  we apply them
+            if third_dim_axis_formatters is not None:
+
+                # Checks for and uses formatters that the user may have specified for the plot
+                if 'minor' in third_dim_axis_formatters:
+                    cbar.ax.yaxis.set_minor_formatter(third_dim_axis_formatters['xminor'])
+                if 'major' in third_dim_axis_formatters:
+                    cbar.ax.yaxis.set_major_formatter(third_dim_axis_formatters['xmajor'])
+
 
         return ax
 
@@ -1187,7 +1204,7 @@ class ScalingRelation:
              save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
              point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
              third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
-             y_lims: Quantity = None, one_to_one: bool = False):
+             third_dim_axis_formatters: dict = None, y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -1234,6 +1251,9 @@ class ScalingRelation:
             that will be used to scale the colouring of the data points by the third data dimension. Note that
             a class, NOT A CLASS INSTANCE (e.g. LogNorm()) must be passed, as the normalisation will be set up in
             this method. Default is Normalization (linear scaling).
+        :param dict third_dim_axis_formatters: A dictionary of formatters that can be applied to the colorbar
+            axis. Allowed keys are; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
             data point coordinates to determine the location a label should be added. You can use this to fine-tune
             the label positions relative to their data point.
@@ -1250,7 +1270,7 @@ class ScalingRelation:
         ax = self.get_view(ax, x_lims, log_scale, plot_title, data_colour, model_colour, grid_on, conf_level,
                            custom_x_label, custom_y_label, fontsize, x_ticks, x_minor_ticks, y_ticks, y_minor_ticks,
                            label_points, point_label_colour, point_label_size, point_label_offset, show_third_dim,
-                           third_dim_cmap, third_dim_norm_cmap, y_lims, one_to_one)
+                           third_dim_cmap, third_dim_norm_cmap, third_dim_axis_formatters, y_lims, one_to_one)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
