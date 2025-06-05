@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/06/2023, 22:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -356,7 +356,7 @@ class SimpleVikhlininDensity1D(BaseModel1D):
             second_term = 1 / ((1 + rs_rat**3)**(epsilon / 3))
             result = norm * np.sqrt(first_term * second_term)
         except ZeroDivisionError:
-            result = np.NaN
+            result = np.nan
 
         return result
 
@@ -517,7 +517,7 @@ class VikhlininDensity1D(BaseModel1D):
             second_term = 1 / ((1 + rs_rat**gamma)**(epsilon / gamma))
             additive_term = 1 / ((1 + rc2_rat**2)**(3 * beta_two))
         except ZeroDivisionError:
-            return np.NaN
+            return np.nan
 
         return np.sqrt((np.power(norm_one, 2) * first_term * second_term) + (np.power(norm_two, 2) * additive_term))
 
