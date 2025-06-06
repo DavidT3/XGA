@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/06/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/06/2025, 11:09. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1509,7 +1509,7 @@ class BaseSource:
         # WCS transform from ANY of the images to convert pixels to degrees
 
         for obs_id in reg_paths:
-            if reg_paths[obs_id] is not None:
+            if reg_paths[obs_id] is not None or len(custom_regs) != 0:
                 # With the newer versions of regions we're now using, there is an explicit check for width and height
                 #  of regions being positive (definitely a good idea) - finding such a region in a file will trigger
                 #  a ValueError, and I'd like to catch it and add more context
