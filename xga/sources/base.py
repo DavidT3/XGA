@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/03/2025, 18:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/06/2025, 11:29. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1519,6 +1519,18 @@ class BaseSource:
                     err.args = (err.args[0] + "- {o} is the associated ObsID.".format(o=obs_id), )
                     raise err
 
+                # Apparently can happen that there are no regions in a region file, so if that is the case
+                #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
+                #  It can't deal with an empty list
+                if len(ds9_regs) == 0:
+                    ds9_regs = [None]
+            else:
+                ds9_regs = [None]
+
+            # If either of these are fulfilled then we MUST have a WCS - even though custom regions are always
+            #  in RA-DEC, the regions module requires a passed wcs to be able to use 'contains' - will have to
+            #  change all this at some point
+            if ds9_regs[0] is not None or len(custom_regs) != 0:
                 # Grab all images for the ObsID, instruments across an ObsID have the same WCS (other than in cases
                 #  where they were generated with different resolutions).
                 #  TODO see issue #908, figure out how to support different resolutions of image
@@ -1536,13 +1548,6 @@ class BaseSource:
                     w = None
                 else:
                     w = ims[0].radec_wcs
-                # Apparently can happen that there are no regions in a region file, so if that is the case
-                #  then I just set the ds9_regs to [None] because I know the rest of the code can deal with that.
-                #  It can't deal with an empty list
-                if len(ds9_regs) == 0:
-                    ds9_regs = [None]
-            else:
-                ds9_regs = [None]
 
             if isinstance(ds9_regs[0], PixelRegion):
                 # If regions exist in pixel coordinates, we need an image WCS to convert them to RA-DEC, so we need
@@ -1569,7 +1574,7 @@ class BaseSource:
             if reg_dict[obs_id][0] is not None:
                 reg_dict[obs_id] = np.append(reg_dict[obs_id], custom_regs)
             elif reg_dict[obs_id][0] is None and len(custom_regs) != 0:
-                reg_dict[obs_id] = custom_regs
+                reg_dict[obs_id] = np.array(custom_regs)
             else:
                 reg_dict[obs_id] = np.array([None])
 
