@@ -3785,6 +3785,7 @@ class BaseSource:
         except:
             print(crossover)
             print(self.name)
+            reg_within = None
 
         return reg_within
 
