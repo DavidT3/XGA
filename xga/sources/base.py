@@ -3779,7 +3779,12 @@ class BaseSource:
 
         crossover = np.array([region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
                               for r in self._interloper_regions[telescope]])
-        reg_within = np.array(self._interloper_regions[telescope])[crossover]
+
+        try:
+            reg_within = np.array(self._interloper_regions[telescope])[crossover]
+        except:
+            print(crossover)
+            print(self.name)
 
         return reg_within
 
