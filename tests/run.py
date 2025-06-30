@@ -2,6 +2,7 @@ import os
 import unittest
 import shutil 
 from subprocess import Popen, PIPE
+import sys
 
 from astropy.units import Quantity
 from astropy.coordinates import SkyCoord
@@ -9,7 +10,9 @@ from daxa.mission import XMMPointed, eRASS1DE
 from daxa.archive import Archive
 from daxa.process.simple import full_process_xmm, full_process_erosita
 
-from ..tests import TEST_MODE, SRC_INFO, SUPP_SRC_INFO
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from tests import TEST_MODE, SRC_INFO, SUPP_SRC_INFO
 
 def write_config(cwd, module):
     """
