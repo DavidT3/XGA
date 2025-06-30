@@ -12,12 +12,9 @@ class TestEsassMiscFuncs(unittest.TestCase):
     def test_evtool_combine_evts(self):
         evtool_combine_evts(SRC_ALL_TELS)
 
-        evtlist = SRC_ALL_TELS.get_products("combined_events", just_obj=False, telescope='erosita')[0]
+        evtlist = SRC_ALL_TELS.get_products("combined_events", just_obj=False, telescope='erosita')[0][0]
 
-        print('In test_generate.test_esass_misc.py')
-        print(evlist.telescope)
-
-        assert evtlist.telescope[0] == 'erosita'
+        assert evtlist.telescope == 'erosita'
         assert set(evtlist.obs_ids) == set(SRC_ALL_TELS.obs_ids['erosita'])
 
 if __name__ == "__main__":

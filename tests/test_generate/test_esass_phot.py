@@ -13,11 +13,11 @@ class TestEsassPhotFuncs(unittest.TestCase):
         evtool_image(SRC_ALL_TELS, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
 
         im = SRC_ALL_TELS.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
-                                      telescope='erosita')
-
-        assert im.telescope == 'erosita'
-        assert im.energy_bounds[0] == Quantity(0.4, 'keV')
-        assert im.energy_bounds[1] == Quantity(3, 'keV')
+                                      telescope='erosita')[0]
+        for i in im:
+            assert i.telescope == 'erosita'
+            assert i.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert i.energy_bounds[1] == Quantity(3, 'keV')
 
     def test_evtool_image_combined_obs(self):
         evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
