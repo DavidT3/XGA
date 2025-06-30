@@ -265,6 +265,10 @@ class BaseSource:
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict, self._att_files = self._initial_products(obs, load_regions, null_load_products)
 
+        print('self._products')
+        print(self._products)
+
+
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
         cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
