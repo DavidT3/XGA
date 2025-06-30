@@ -179,6 +179,8 @@ def clean_up_tests():
 if __name__ == "__main__":
     set_up_tests()  # Run before any tests
 
+    import xga
+
     if TEST_MODE == 'COV':
         cmd = 'coverage run -m unittest discover'
         out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
