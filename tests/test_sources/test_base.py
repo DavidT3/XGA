@@ -33,7 +33,7 @@ class TestBaseSource(unittest.TestCase):
 
         del(src)
 
-        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
@@ -50,7 +50,7 @@ class TestBaseSource(unittest.TestCase):
 
         del(src)
 
-        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
@@ -68,7 +68,7 @@ class TestBaseSource(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
@@ -85,7 +85,7 @@ class TestBaseSource(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
@@ -102,7 +102,7 @@ class TestBaseSource(unittest.TestCase):
         
         del(src)
 
-        src = GalaxyCluster(SRC_INFO['RA'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
