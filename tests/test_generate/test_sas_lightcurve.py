@@ -5,7 +5,7 @@ from astropy.units import Quantity
 import xga
 from xga.sources import GalaxyCluster
 from xga.generate.sas.lightcurve import evselect_lightcurve
-from xga.products import Lightcurve
+from xga.products.lightcurve import LightCurve
 
 from .. import SRC_ALL_TELS
 
@@ -16,4 +16,4 @@ class TestSasLcFuncs(unittest.TestCase):
         lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='xmm')
 
         assert lc.telescope == 'xmm'
-        assert isinstance(lc, Lightcurve)
+        assert isinstance(lc, LightCurve)
