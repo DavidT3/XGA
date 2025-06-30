@@ -127,6 +127,8 @@ def set_up_tests():
     write_config(cwd, 'xga')
     move_og_cfg('xga')
 
+    print('done setup tests')
+
     if TEST_MODE == 'RUN':
         write_config(cwd, 'daxa')
         move_og_cfg('daxa')
@@ -140,7 +142,7 @@ def restore_og_cfg(module):
     # to return the absolute path to the home directory
     home_dir = os.path.expanduser("~")
     # xga_config_path is the absolute path to ~/.config/xga
-    config_path = home_dir + f"/.config/{module}"
+    config_path = home_dir + f".config/{module}"
 
     if os.path.exists(config_path):
         print('deleting test config dir')
@@ -148,7 +150,7 @@ def restore_og_cfg(module):
         shutil.rmtree(config_path)
         print('moving the original config file back')
         # And then move the original back
-        shutil.move(f'./tests/{module}', home_dir + '/.config')
+        shutil.move(f'./tests/og_configs/{module}', home_dir + '/.config')
 
 def clean_up_test_files():
     """
