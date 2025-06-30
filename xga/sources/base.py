@@ -147,7 +147,7 @@ class BaseSource:
             this will also be treated as False. If 'load_products' is True and this is False, then images, exposure
             maps, and lightcurves will be loaded, but spectra will not. Default is True.
         """
-
+        print('sanity')
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
         #  behaviour of this init in some significant ways
         if type(self) == NullSource:
@@ -185,6 +185,7 @@ class BaseSource:
         #  matching ObsIDs (for the first return, matches), or completely blacklisted (observations with SOME
         #  blacklisted instruments aren't included in this) ObsIDs (the second return).
         if not null_source:
+            print('running match')
             matches, excluded = separation_match(ra, dec, search_distance, telescope)
         else:
             # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
