@@ -85,6 +85,9 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
     #  least some usable data.
     matches = matches[~matches["ObsID"].isin(all_excl["ObsID"])]
 
+    print('matches')
+    print(matches)
+
     del local_census
     del local_blacklist
     return ra, dec, matches, all_excl
