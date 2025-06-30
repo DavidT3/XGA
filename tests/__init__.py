@@ -17,7 +17,7 @@ TEST_MODE = 'COV'
 SRC_INFO = {'ra': 226.0318, 'dec': -2.8046, 'z': 0.2093, 'name': "1eRASS_J150407.6-024816"}
 
 # This is another cluster that we can use to test ClusterSample objects
-SUPP_SRC_INFO = {'ra': 226.03181, 'dec': -2.80458, 'z': 0.209, 'name': '1eRASS J150407.6-024816'}
+SUPP_SRC_INFO = {'ra': 55.7164, 'dec': -53.6292, 'z': 0.0587, 'name': 'A3158'}
 
 SRC_ALL_TELS = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
