@@ -9,7 +9,7 @@ from daxa.mission import XMMPointed, eRASS1DE
 from daxa.archive import Archive
 from daxa.process.simple import full_process_xmm, full_process_erosita
 
-from . import TEST_MODE, SRC_INFO, SUPP_SRC_INFO
+from ..tests import TEST_MODE, SRC_INFO, SUPP_SRC_INFO
 
 def write_config(cwd, module):
     """
