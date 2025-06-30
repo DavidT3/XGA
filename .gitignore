@@ -6,7 +6,10 @@ xga_output
 .ipynb_checkpoints
 .vscode
 /xga.egg-info/
-__pycache__
+*__pycache__*
 /docs/build
 *noupload*
 .DS_Store
+/xga/__pycache__
+*.pyc
+xga/__pycache__/__init__.cpython-39.pyc
