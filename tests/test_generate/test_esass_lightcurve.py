@@ -5,7 +5,7 @@ from astropy.units import Quantity
 import xga
 from xga.sources import GalaxyCluster
 from xga.generate.esass.lightcurve import srctool_lightcurve
-from xga.products import Lightcurve
+from xga.products.lightcurve import LightCurve
 
 from .. import SRC_ALL_TELS
 
@@ -18,7 +18,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='erosita', inst='TM1')
 
-        assert isinstance(lc, Lightcurve)
+        assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
         assert lc.obs_id != 'combined'
         assert lc.instrument == 'TM1'
@@ -31,7 +31,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='erosita', inst='combined')
 
-        assert isinstance(lc, Lightcurve)
+        assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
         assert lc.obs_id != 'combined'
         assert lc.instrument == 'combined'
@@ -44,7 +44,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         lc = SRC_ALL_TELS.get_combined_lightcurves('r500', telescope='erosita', inst='TM1')
 
-        assert isinstance(lc, Lightcurve)
+        assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
         assert lc.obs_id == 'combined'
         assert lc.instrument == 'TM1'
@@ -57,7 +57,7 @@ class TestEsassLcFuncs(unittest.TestCase):
 
         lc = SRC_ALL_TELS.get_combined_lightcurves('r500', telescope='erosita')
 
-        assert isinstance(lc, Lightcurve)
+        assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
         assert lc.obs_id == 'combined'
         assert lc.instrument == 'combined'
