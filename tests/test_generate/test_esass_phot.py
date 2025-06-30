@@ -35,9 +35,10 @@ class TestEsassPhotFuncs(unittest.TestCase):
         exp = SRC_ALL_TELS.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='erosita')
 
-        assert exp.telescope == 'erosita'
-        assert exp.energy_bounds[0] == Quantity(0.4, 'keV')
-        assert exp.energy_bounds[1] == Quantity(3, 'keV')
+        for e in exp:
+            assert e.telescope == 'erosita'
+            assert e.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert e.energy_bounds[1] == Quantity(3, 'keV')
 
     def test_expmap_combined_obs(self):
         expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
@@ -61,6 +62,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
                                 r500=Quantity([500, 500], 'kpc'),
                                 name=[SRC_INFO['name'], SUPP_SRC_INFO['name']],
                                 use_peak=False)
+
         
         test_smp[0].disassociate_obs('erosita')
         evtool_image(test_smp)
