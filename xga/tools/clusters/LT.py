@@ -678,23 +678,30 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     return samp, loaded_samp_data, radius_hist_df
 
 
-def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
-                                       peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
-                                       min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
-                                       lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                       core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
-                                       freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
-                                       temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
-                                       lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-                                       group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                                       over_sample: float = None, back_inn_rad_factor: float = 1.05,
-                                       back_out_rad_factor: float = 1.5, clean_obs: bool = True,
-                                       clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
-                                       save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
-                                       telescope: str = 'chandra', search_distance: Quantity = None,
-                                       stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
-                                       num_cores: int = NUM_CORES) \
+# !!! A duplicate of the old LT pipeline
+# !!! BUT here the "core_excised" parameter controls whether a core-excised temperature is used 
+#     during the iterations. Previously, it only affected the *final* temperature, with all iterations 
+#     assuming a core-included temperature.
+# Didn't modify the original LT pipeline directly, since we likely need to run tests on other missions 
+# before making major changes to that function.
+def luminosity_temperature_pipeline_new(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
+                                        peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
+                                        min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
+                                        lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+                                        core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
+                                        freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
+                                        temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
+                                        lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
+                                        group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                                        over_sample: float = None, back_inn_rad_factor: float = 1.05,
+                                        back_out_rad_factor: float = 1.5, clean_obs: bool = True,
+                                        clean_obs_threshold: float = 0.7, save_samp_results_path: str = None,
+                                        save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
+                                        telescope: str = 'xmm', search_distance: Quantity = None,
+                                        stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
+                                        num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
+    
     """
     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
     radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
@@ -977,15 +984,39 @@ def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture
             # TODO THIS WILL BENEFIT FROM THE FUTURE UNIVERSAL SPECTRUM GENERATION FUNCTION
             # Run the spectrum generation for the current values of the over density radius
             if telescope == 'xmm':
-                evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False,
-                                  group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
-                                  over_sample=over_sample)
+                # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
+                #  just multiply the current radius by 0.15 and use that for the inner radius. 
+                # !!! Now the core_excised parameter control only during the iterations
+                if core_excised:
+                    evselect_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, num_cores=num_cores, 
+                                      one_rmf=False,
+                                      group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
+                                      over_sample=over_sample)
+                else:
+                    evselect_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores, one_rmf=False,
+                                      group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
+                                      over_sample=over_sample)
             elif telescope == 'erosita' or telescope == 'erass':
-                srctool_spectrum(samp, samp.get_radius(o_dens), group_spec=group_spec, min_counts=min_counts,
-                                 min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
+                # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
+                #  just multiply the current radius by 0.15 and use that for the inner radius. 
+                # !!! Now the core_excised parameter control only during the iterations
+                if core_excised:
+                    srctool_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, group_spec=group_spec, 
+                                     min_counts=min_counts,
+                                     min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
+                else:
+                    srctool_spectrum(samp, samp.get_radius(o_dens), group_spec=group_spec, min_counts=min_counts,
+                                     min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             elif telescope == 'chandra':
-                specextract_spectrum(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), num_cores=num_cores,
-                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
+                # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
+                #  just multiply the current radius by 0.15 and use that for the inner radius. 
+                # !!! Now the core_excised parameter control only during the iterations
+                if core_excised:
+                    specextract_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, num_cores=num_cores,
+                                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
+                else:
+                    specextract_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores,
+                                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
             else:
                 raise NotImplementedError("Support for telescopes other than XMM, eROSITA, and Chandra is not yet "
                                           "implemented.")
@@ -1033,18 +1064,27 @@ def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture
                  "failures.".format(', '.join(bad_gen)), stacklevel=2)
 
         # We generate and fit spectra for the current value of the overdensity radius
-        single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens),
-                         lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
-                         lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                         over_sample=over_sample, one_rmf=False, num_cores=num_cores, timeout=timeout,
-                         start_temp=start_temp, freeze_temp=freeze_temp, stacked_spectra=stacked_spectra)
+        # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
+        #  just multiply the current radius by 0.15 and use that for the inner radius. 
+        # !!! Now the core_excised parameter control only during the iterations
+        if core_excised:
+            single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
+                             freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
+                             num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
+                             stacked_spectra=stacked_spectra)
+        else:
+            single_temp_apec(samp, samp.get_radius(o_dens), lum_en=lum_en,
+                             freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
+                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
+                             num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
+                             stacked_spectra=stacked_spectra)
 
         # This is for the standard use of this pipeline, where the temperature has been allowed to vary during the
         #  spectral fit - as such we are reading out the measured temperatures here
         if not freeze_temp:
             # Just reading out the temperatures, not the uncertainties at the moment
-            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens), 
-                             quality_checks=False, group_spec=group_spec,
+            tx_all = samp.Tx(telescope, samp.get_radius(o_dens), quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
                              stacked_spectra=stacked_spectra)
             txs = tx_all[:, 0]
@@ -1163,20 +1203,12 @@ def luminosity_temperature_pipeline_ch(sample_data: pd.DataFrame, start_aperture
 
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
-    single_temp_apec(samp, samp.get_radius(o_dens), inner_radius= 0.15*samp.get_radius(o_dens),
-                     lum_en=lum_en, freeze_nh=freeze_nh, freeze_met=freeze_met,
-                     lo_en=lo_en, hi_en=hi_en, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                     over_sample=over_sample, one_rmf=False, num_cores=num_cores, start_temp=start_temp,
-                     freeze_temp=freeze_temp, stacked_spectra=stacked_spectra)
-
-    # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
-    #  just multiply the current radius by 0.15 and use that for the inner radius.
-    if core_excised:
-        single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
-                         freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
-                         min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
-                         num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
-                         stacked_spectra=stacked_spectra)
+    # !!! we make core_excised by dafult for the final run
+    single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
+                     freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
+                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
+                     num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
+                     stacked_spectra=stacked_spectra)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
     #  retrieval of temperature and luminosity values, but they aren't so useful here because I know that some of the
