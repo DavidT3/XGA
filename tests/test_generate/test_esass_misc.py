@@ -1,10 +1,15 @@
 import unittest
 
 from astropy.units import Quantity
+import sys
+import os
 
 import xga
 from xga.sources import GalaxyCluster
 from xga.generate.esass.misc import evtool_combine_evts
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from ..import SRC_ALL_TELS
 

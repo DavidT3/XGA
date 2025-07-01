@@ -1,4 +1,6 @@
 import unittest
+import sys
+import os
 
 from astropy.units import Quantity
 
@@ -9,6 +11,10 @@ from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
 from xga.sourcetools.density import _dens_setup, _run_sb, inv_abel_fitted_model, \
                                     ann_spectra_apec_norm
 from xga.products.profile import SurfaceBrightness1D, GasDensity3D
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 from .. import SRC_ALL_TELS
 

@@ -1,4 +1,6 @@
 import unittest
+import sys
+import os
 
 from astropy.units import Quantity
 
@@ -7,6 +9,10 @@ from xga.sources import GalaxyCluster
 from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
 from xga.exceptions import TelescopeNotAssociatedError
 from xga.products import Image, ExpMap
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 from .. import SRC_ALL_TELS, SRC_ERO
 

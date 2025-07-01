@@ -1,4 +1,6 @@
 import unittest
+import os
+import sys
 
 from astropy.units import Quantity
 
@@ -8,6 +10,9 @@ from xga.generate.esass import evtool_image
 from xga.products.phot import Image
 from xga.products.spec import Spectrum
 from xga.generate.esass import srctool_spectrum
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from .. import SRC_INFO, SRC_ALL_TELS
 

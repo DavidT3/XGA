@@ -1,11 +1,16 @@
 import unittest
 
 from astropy.units import Quantity
+import os 
+import sys
 
 import xga
 from xga.sources import GalaxyCluster
 from xga.generate.esass.lightcurve import srctool_lightcurve
 from xga.products.lightcurve import LightCurve
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from .. import SRC_ALL_TELS
 

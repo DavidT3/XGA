@@ -1,4 +1,6 @@
 import unittest
+import sys 
+import os
 
 from astropy.units import Quantity
 
@@ -6,6 +8,8 @@ import xga
 from xga.sources import GalaxyCluster
 from xga.generate.sas.spec import evselect_spectrum
 from xga.products import Spectrum
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from .. import SRC_ALL_TELS
 

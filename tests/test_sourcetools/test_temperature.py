@@ -1,5 +1,6 @@
 import unittest
-
+import sys 
+import os
 import numpy as np
 
 from astropy.units import Quantity
@@ -12,6 +13,10 @@ from xga.sourcetools.temperature import _ann_bins_setup, _snr_bins, _cnt_bins, \
                                         min_snr_proj_temp_prof, min_cnt_proj_temp_prof, \
                                         onion_deproj_temp_prof
 from xga.products.profile import GasDensity3D
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 from .. import SRC_ALL_TELS
 

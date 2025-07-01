@@ -1,10 +1,14 @@
 import unittest
+import os
+import sys
 
 from astropy.units import Quantity
 
 import xga
 from xga.samples import ClusterSample
 from xga.generate.esass.phot import evtool_image, expmap
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from .. import SRC_ALL_TELS, SRC_INFO, SUPP_SRC_INFO
 

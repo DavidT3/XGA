@@ -1,4 +1,6 @@
 import unittest
+import sys
+import os
 
 from astropy.units import Quantity
 
@@ -10,6 +12,10 @@ from xga.products.profile import GasDensity3D, GasTemperature3D
 from xga.sourcetools._common import _get_all_telescopes, _setup_global, \
                                     _setup_inv_abel_dens_onion_temp
 from xga import NUM_CORES
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 from .. import SRC_ALL_TELS
 
