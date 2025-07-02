@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/07/2025, 12:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/07/2025, 15:28. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -176,7 +176,7 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
     return inn_rads, out_rads, cen_rads
 
 
-def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
+def new_radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
                       back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray = None,
                       z: float = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
                       cosmo: Cosmology = DEFAULT_COSMO, min_snr: float = 0.0, min_central_pix_rad: int = 3,
@@ -405,7 +405,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     return br_prof, succeeded
 
 
-def og_radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
+def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
                          back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray = None,
                          z: float = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
                          cosmo: Cosmology = DEFAULT_COSMO, min_snr: float = 0.0, min_central_pix_rad: int = 3,
@@ -506,6 +506,7 @@ def og_radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, bac
     elif interloper_mask is None:
         interloper_mask = np.ones(rt.shape)
 
+    print('SAD MEMORY TIME')
     # Returns conversion factor to degrees, so multiplying by 60 goes to arcminutes
     # Getting this because we want to be able to convert pixel distance into arcminutes for dividing by the area
     to_arcmin = pix_deg_scale(centre, rt.radec_wcs).value * 60
