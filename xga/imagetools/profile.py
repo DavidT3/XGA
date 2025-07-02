@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 31/10/2024, 12:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 01/07/2025, 22:12. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -293,6 +293,18 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     #  I've used ceil.
     back_inn_rad = np.array([np.ceil(out_rads[-1]*back_inn_rad_factor).astype(int)])
     back_out_rad = np.array([np.ceil(out_rads[-1]*back_out_rad_factor).astype(int)])
+
+    # TODO Alter this function so that it will only deal with the area of the data it needs (out to just
+    #  past the edge of the outer background radius
+    edge_buffer = 0.1
+    x_sel_lims = [(pix_cen[1]-back_out_rad)*(1-edge_buffer), (pix_cen[1]+back_out_rad)*(1+edge_buffer)+1]
+    y_sel_lims = [(pix_cen[0]-back_out_rad)*(1-edge_buffer), (pix_cen[0]+back_out_rad)*(1+edge_buffer)+1]
+    rt_sel_data = rt.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    sel_cen = Quantity([rt_sel_data.shape[1]/2, rt_sel_data.shape[0]/2], 'pix')
+    new_back_mask = annular_mask(sel_cen, back_inn_rad, back_out_rad, rt_sel_data.shape)
+    # TODO THIS IS GARBAGE AND I SHOULD BE ASHAMED
+    new_corr_back_mask = new_back_mask * rt.sensor_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]] * rt.edge_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]] * interloper_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    # TODO TIDY EVERYTHING UP WHEN I HAVE THE ABOVE FULLY WORKING
 
     # Using my annular mask function to make a nice background region, which will be corrected for instrumental
     #  stuff and interlopers in a second
