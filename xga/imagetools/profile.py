@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/07/2025, 15:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 02/07/2025, 21:05. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -296,15 +296,23 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     back_inn_rad = np.array([np.ceil(out_rads[-1]*back_inn_rad_factor).astype(int)])
     back_out_rad = np.array([np.ceil(out_rads[-1]*back_out_rad_factor).astype(int)])
 
-    # TODO Alter this function so that it will only deal with the area of the data it needs (out to just
-    #  past the edge of the outer background radius
-    edge_buffer = 10
+    # This is not how this function used to work, but we now cut out the count-rate map data that is relevant to
+    #  the current profile - i.e. to just outside the outer background radius. We do this to avoid huge memory
+    #  usage when dealing with data released in sky tiles (e.g. eRASS), as the annular mask array generated
+    #  later is xpix by ypix by number of annuli, and that can get really really big.
+    # Here we construct the slicing limits to select only relevant data - centered on the central pixel, a square of
+    #  side length 2*(outer background radius + buffer)
+    edge_buffer = 2
     # The lower and upper indexing bounds to select the relevant data - for the x-axis
     y_sel_lims = [int(np.floor((pix_cen[1].value-back_out_rad[0])-edge_buffer)),
                   int(np.ceil((pix_cen[1].value+back_out_rad[0])+edge_buffer+1))]
     # Same but for the y-axis
     x_sel_lims = [int(np.floor((pix_cen[0].value-back_out_rad[0])-edge_buffer)),
                   int(np.ceil((pix_cen[0].value+back_out_rad[0])+edge_buffer+1))]
+
+    # Checks the calculated slicing boundaries against the size of the image
+    if x_sel_lims[0] < 0 or y_sel_lims[0] < 0 or x_sel_lims[1] > rt.shape[1] or y_sel_lims[1] > rt.shape[0]:
+        raise ValueError("The outer background radius is outside the bounds of the image.")
 
     # Selecting the relevant count-rate, count, and exposure information using the indexing bounds we defined - all
     #  three sets of data are used in this process, though the count/exposure information is the same as the
@@ -313,17 +321,17 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     im_sel_data = rt.image.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
     ex_sel_data = rt.expmap.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
 
+    # The new central coordinate is really just the x-y middle of the slice we just made of the ratemap data
     sel_cen = Quantity([rt_sel_data.shape[1]/2, rt_sel_data.shape[0]/2], 'pix').astype(int)
-    # TODO TIDY EVERYTHING UP WHEN I HAVE THE ABOVE FULLY WORKING
 
     # Using my annular mask function to make a nice background region, which will be corrected for instrumental
     #  stuff and interlopers in a second
     back_mask = annular_mask(sel_cen, back_inn_rad, back_out_rad, rt_sel_data.shape)
 
-    # TODO THE MAIN ISSUE WITH ALL THIS IS IF THE RADIUS GOES OUTSIDE THE IMAGE
     # Includes chip gaps, interloper removal, and edge removal (to try and avoid artificially bright pixels)
     #  in the background mask
-    # TODO THIS IS GARBAGE AND I SHOULD BE ASHAMED
+    # Bit ugly. However, we're applying the same slice that we did to the data arrays - cutting down the
+    #  various masks to just those parts actually relevant to the radial profile being generated
     sel_sensor_mask = rt.sensor_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
     sel_edge_mask = rt.edge_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
     sel_inter_mask = interloper_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
