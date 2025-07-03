@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 15:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:58. Copyright (c) The Contributors
 
 from typing import List, Union, Dict
 
@@ -15,7 +15,7 @@ from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
-from ...sourcetools._common import _get_all_telescopes
+
 
 @xspec_call
 def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Union[Quantity, 
@@ -77,6 +77,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
     """
+    # Avoiding circular import errors
+    from ...sourcetools._common import _get_all_telescopes
     telescopes = _get_all_telescopes(sources)
 
     radii = _parse_radii_input(telescopes, radii)
