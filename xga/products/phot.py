@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 14:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:25. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3053,8 +3053,8 @@ class RateMap(Image):
         return edge_flag
 
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
-                        allow_negative: bool = False, x_slice_lims: List[int, int] = None,
-                        y_slice_lims: List[int, int] = None):
+                        allow_negative: bool = False, x_slice_lims: List[int] = None,
+                        y_slice_lims: List[int] = None):
         """
         A signal-to-noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
@@ -3069,9 +3069,9 @@ class RateMap(Image):
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-        :param List[int, int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
             masks, and as such have to be applied to the data array.
-        :param List[int, int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
             masks, and as such have to be applied to the data array.
         :return: A signal-to-noise value for the source region.
         :rtype: float
@@ -3141,8 +3141,8 @@ class RateMap(Image):
         return sn
 
     def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray,
-                                     x_slice_lims: List[int, int] = None,
-                                     y_slice_lims: List[int, int] = None) -> Quantity:
+                                     x_slice_lims: List[int] = None,
+                                     y_slice_lims: List[int] = None) -> Quantity:
         """
         This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
         drawn from the exposure map) to calculate the number of background-subtracted counts within the source
@@ -3154,9 +3154,9 @@ class RateMap(Image):
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
-        :param List[int, int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
             masks, and as such have to be applied to the data array.
-        :param List[int, int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
             masks, and as such have to be applied to the data array.
         :return: The background subtracted counts in the source region.
         :rtype: Quantity
