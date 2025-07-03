@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/04/2025, 10:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -191,11 +191,11 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             continue
         
         # Define this variable for each source no it doesn't get overwritten with the wrong value
-        # later in the loop
+        # later in the loop
         use_combine_obs = combine_obs
         
         # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
+        # use the combine_obs = False functionality instead
         if use_combine_obs and len(source.obs_ids['erosita']) == 1:
             use_combine_obs = False
     
@@ -400,11 +400,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             continue
         
         # Define this variable for each source no it doesn't get overwritten with the wrong value
-        # later in the loop
+        # later in the loop
         use_combine_obs = combine_obs
         
         # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
+        # use the combine_obs = False functionality instead
         if use_combine_obs and len(source.obs_ids['erosita']) == 1:
             use_combine_obs = False
         
@@ -457,7 +457,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
                                 "telescope": "erosita"})
         else:
-            # Checking if a combined event list has be made already
+            # Checking if a combined event list has be made already
             try:
                 exists = source.get_combined_expmaps(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
             except NoProductAvailableError:

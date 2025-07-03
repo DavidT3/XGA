@@ -1,17 +1,15 @@
-import unittest
-import sys
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+
 import os
+import sys
+import unittest
 
 from astropy.units import Quantity
 
-# Now when xga is imported it will make a new census with the test_data
-import xga
-from xga.sources import GalaxyCluster
-from xga.generate.esass.phot import evtool_image, expmap
-from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
-from xga.sourcetools.entropy import entropy_inv_abel_dens_onion_temp
 from xga.products.profile import SpecificEntropy
-
+# Now when xga is imported it will make a new census with the test_data
+from xga.sourcetools.entropy import entropy_inv_abel_dens_onion_temp
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/01/2024, 20:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -8,12 +8,12 @@ from warnings import warn
 from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
+from ...exceptions import NoProductAvailableError
 from ...generate.esass import srctool_spectrum
 from ...generate.sas import evselect_spectrum, region_setup
+from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, PointSource
-from ...exceptions import NoProductAvailableError
-from ...products import Spectrum
 
 
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -55,7 +55,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     """
     # sorry have to import here due to a circular import 
     from ...sourcetools._common import _get_all_telescopes
-    # this returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
+    # this returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
     all_telescopes = _get_all_telescopes(sources)
 
     for tel in all_telescopes:
@@ -303,7 +303,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
         for telescope in telescopes:
             output_dict[telescope] = radii
     
-    # If the radii is input as a List, that means the user wants the same radii for each telescope, 
+    # If the radii is input as a List, that means the user wants the same radii for each telescope,
     # but different radii for different sources.
     elif isinstance(radii, List):
         for telescope in telescopes:
@@ -319,7 +319,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
             raise KeyError("If 'radii' is input as a dictionary, this dictionary must contain a key"
                            " for each telescope associated to the source.")
         # If the radii is input as a Dictionary of lists, the user wants different radii for each 
-        # source and each telescope
+        # source and each telescope
         if all(isinstance(value, List) for value in radii.values()):
             for list_ in radii.values():
                 # checking every element in the list is a Quantity

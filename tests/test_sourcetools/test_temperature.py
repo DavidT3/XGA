@@ -1,19 +1,19 @@
-import unittest
-import sys 
-import os
-import numpy as np
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
 
+import os
+import sys
+import unittest
+
+import numpy as np
 from astropy.units import Quantity
 
-import xga
-from xga.sources import GalaxyCluster
 from xga.generate.esass.phot import evtool_image, expmap
 from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
-from xga.sourcetools.temperature import _ann_bins_setup, _snr_bins, _cnt_bins, \
-                                        min_snr_proj_temp_prof, min_cnt_proj_temp_prof, \
-                                        onion_deproj_temp_prof
 from xga.products.profile import GasDensity3D
-
+from xga.sourcetools.temperature import _ann_bins_setup, _snr_bins, _cnt_bins, \
+    min_snr_proj_temp_prof, min_cnt_proj_temp_prof, \
+    onion_deproj_temp_prof
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -39,21 +39,21 @@ class TestTempFuncs(unittest.TestCase):
         retrn = _ann_bins_setup(self.test_src,  Quantity(500, 'kpc'), Quantity(20, 'kpc'), 
                         Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         
-        # checking the rtmap is the correct telescope
+        # checking the rtmap is the correct telescope
         assert retrn[0]['erosita'].telescope == 'erosita'
-        # checking cur_rads is the correct type
+        # checking cur_rads is the correct type
         assert type(retrn[1]['erosita']) == np.ndarray
-        # checking max_ann is the correct type
+        # checking max_ann is the correct type
         assert type(retrn[2]['erosita']) == int
-        # checking ann_masks is the correct type
+        # checking ann_masks is the correct type
         assert type(retrn[3]['erosita']) == np.ndarray
-        # checking back_mask is the correct type
+        # checking back_mask is the correct type
         assert type(retrn[4]['erosita']) == np.ndarray
-        # checking pix_centre is the correct type and has correct units
+        # checking pix_centre is the correct type and has correct units
         assert retrn[5]['erosita'].unit == 'pix'
-        # checking corr_mask is the correct type
+        # checking corr_mask is the correct type
         assert type(retrn[6]['erosita']) == np.ndarray
-        # checking pix_to_deg is the correct type and has correct units
+        # checking pix_to_deg is the correct type and has correct units
         assert retrn[7]['erosita'].unit == 'deg/pix'
 
 
@@ -70,9 +70,9 @@ class TestTempFuncs(unittest.TestCase):
         
         # Checking that final_rads is the right type and in the right units
         assert retrn[0]['erosita'].unit == 'arcsec'
-        # checking snrs is the correct type
+        # checking snrs is the correct type
         assert type(retrn[1]['erosita']) == np.ndarray
-        # checking max_ann is the correct type
+        # checking max_ann is the correct type
         assert type(retrn[2]['erosita']) == int
 
     def test_cnt_bins_working_with_erosita(self):
@@ -88,9 +88,9 @@ class TestTempFuncs(unittest.TestCase):
     
         # Checking that final_rads is the right type and in the right units
         assert retrn[0]['erosita'].unit == 'arcsec'
-        # checking cnts is the correct type
+        # checking cnts is the correct type
         assert type(retrn[1]['erosita']) == Quantity
-        # checking max_ann is the correct type
+        # checking max_ann is the correct type
         assert type(retrn[2]['erosita']) == int
 
     def test_min_snr_proj_temp_prof_w_two_tscopes(self):
@@ -98,7 +98,7 @@ class TestTempFuncs(unittest.TestCase):
         # need combined ratemaps already generated for erosita
         evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
-        # and for xmm
+        # and for xmm
         evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         emosaic(SRC_ALL_TELS, 'image')
@@ -116,7 +116,7 @@ class TestTempFuncs(unittest.TestCase):
         # need combined ratemaps already generated for erosita
         evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
-        # and for xmm
+        # and for xmm
         evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         emosaic(SRC_ALL_TELS, 'image')
@@ -133,7 +133,7 @@ class TestTempFuncs(unittest.TestCase):
         # need combined ratemaps already generated for erosita
         evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
-        # and for xmm
+        # and for xmm
         evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
         emosaic(SRC_ALL_TELS, 'image')

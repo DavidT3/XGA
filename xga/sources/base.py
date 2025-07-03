@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1419,7 +1419,7 @@ class BaseSource:
                 # Assemble a set of observations-instrument strings for the current row, to test against the
                 #  src_oi_set we assembled earlier
                 test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-                # getting a list of obs_ids to parse to the Eventlist object
+                # getting a list of obs_ids to parse to the Eventlist object
                 obs_list = list(set(o_split))
                 # First we make sure the sets are the same length, if they're not then we know before starting that this
                 #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
@@ -1434,15 +1434,15 @@ class BaseSource:
                 for row_ind, row in rel_inven.iterrows():
                     # Spectra can have combined observations but individual instruments.
                     # Checking that a spectrum is associated to the source is different depending
-                    # on if the instrument is combined or not
+                    # on if the instrument is combined or not
                     o_split = row['obs_ids'].split('/')
-                    # if there is a '/' in the insts entry, that means it should be all the instruments combined
+                    # if there is a '/' in the insts entry, that means it should be all the instruments combined
                     if '/' in row['insts']:
                         i_split = row['insts'].split('/')
                         # Assemble a set of observations-instrument strings for the current row, to test against the
                         #  src_oi_set we assembled earlier
                         test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-                        # getting a list of obs_ids to parse to the Eventlist object
+                        # getting a list of obs_ids to parse to the Eventlist object
                         obs_list = list(set(o_split))
                         # First we make sure the sets are the same length, if they're not then we know before starting that this
                         #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
@@ -2734,12 +2734,12 @@ class BaseSource:
                         info_key = ''
                     else:
                         info_key = extra_key
-                    # Adding each component product to the inventory
+                    # Adding each component product to the inventory
                     for comp_po in po.all_spectra:
                         if comp_po.obs_id == "combined":
                             inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
 
-                            # For the erosita telescope it is possible to have a combined obs product for
+                            # For the erosita telescope it is possible to have a combined obs product for
                             # an individual instrument - with spectra and annular spectra
                             use_inst = comp_po.instrument
                             # TODO AT LEAST SOME COMBINED PRODUCTS NOW DO HAVE THIS INFORMATION STORED IN THEM, IT WOULD
