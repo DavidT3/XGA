@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 11:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 11:47. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -40,6 +40,7 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
         all_telescopes = sources.telescopes
     
     return all_telescopes
+
 
 def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, min_counts: int,
                   min_sn: float, over_sample: float, num_cores: int, psf_bins: int, stacked_spectra: bool):
@@ -120,8 +121,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sb_model = model_check(sources, sb_model)
     dens_model = model_check(sources, dens_model)
     temp_model = model_check(sources, temp_model)
-    print('temp_model')
-    print(temp_model)
 
     # I also set up dictionaries, so that models for specific clusters (as you can pass individual model instances
     #  for different clusters) are assigned to the right source when we start cutting down the sources based on
@@ -129,8 +128,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(sb_model)}
     dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(dens_model)}
     temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(temp_model)}
-    print('temp_model_dict')
-    print(temp_model_dict)
 
     # Here we take only the sources that have a successful global temperature measurement for at 
     # least one of the associated telescopes
@@ -144,8 +141,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
         for key in has_glob_temp:
             has_temp.append(has_glob_temp[key][sind])
 
-        # If a source has a glob temp in at least one telescope it gets passed on
-        # If the sum is 0 that means every element in has_temp was False, and we discard these sources
+        # If a source has a global temperature from at least one telescope, we'll continue analysing
+        # If the sum is 0 that means every element in has_temp was False, and we discard this source
         if sum(has_temp) > 0:
             cut_sources.append(src)
     
@@ -163,7 +160,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                         freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
                                         temp_hi_en=temp_hi_en, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
-    # DAVID_QUESTION case where a source has a measured glob temp in one telescope and not the others
     # We are reorganising this temp_profs output so it is easier to cycle through in later functions
     # temp_prof_dict will have sources as keys, then a dictionary value, this dictionary has
     # telescope keys with values that are the profile object, ie. {src1: {'xmm' : Profile}}
@@ -179,7 +175,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     # Now we take only the sources that have successful 3D temperature profiles. 
     # We do the temperature profile stuff first because its more difficult, and why should we waste 
     # time on a density profile if the temperature profile cannot even be measured.
-    # We keep source that have had at least one successful profile in any of the associated telescopes.
+    # We keep sources that have at least one successfully measured profile from any of the associated telescopes.
     cut_cut_sources = []
     for p_ind, p in enumerate(cut_sources):
         # the string of the source objects is the key in temp_prof_dict
@@ -221,7 +217,5 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             src_dict[tel] = dens_profs[tel][p_ind]
         dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
 
-    print('dens_prof_dict')
-    print(dens_prof_dict)
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 
