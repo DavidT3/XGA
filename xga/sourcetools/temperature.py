@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:34. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -223,16 +223,6 @@ def _new_ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quan
     :return: The various variables that this function sets up
     :rtype:
     """
-    # if all([obs_id is None, inst is None]):
-    #     # Here the user hasn't set ObsID or instrument, so we use the combined data
-    #     rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-    #     interloper_mask = source.get_interloper_mask()
-    # elif all([obs_id is not None, inst is not None]):
-    #     # Both ObsID and instrument have been set by the user
-    #     rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
-    #     interloper_mask = source.get_interloper_mask(obs_id)
-
-
     # Parsing the telescope, ObsID, and instrument options, to figure out the exact ratemap that we want to use
     # There are unfortunately two 'types' of combined ratemap for eROSITA (or there can be) - combined in the sense
     #  that all the TMs of an observation are added together for general analysis (even if the cluster is only on
@@ -347,7 +337,8 @@ def _new_ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quan
     # Make a copy of the initial radii, as that array may be altered in the function that called this one
     cur_rads = init_rads.copy()
 
-    return rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, sel_corr_mask, pix_to_deg, x_sel_lims, y_sel_lims
+    return (rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, sel_corr_mask, pix_to_deg,
+            x_sel_lims, y_sel_lims, sel_cen)
 
 
 
@@ -733,9 +724,14 @@ def _new_cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Q
         raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
 
     # Run the setup function for these functions that create different annular bins
-    rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
-        pix_to_deg = _new_ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
-                                     psf_bins, psf_algo, psf_iter)
+    ann_set_ret = _new_ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, telescope, obs_id, inst, psf_corr,
+                                      psf_model, psf_bins, psf_algo, psf_iter)
+    # This just makes it much nicer to read
+    (rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, pix_to_deg,
+        x_slice_lims, y_slice_lims, sel_cen) = ann_set_ret
+    # The shape of the data slice, we'll use this in several places, instead of the shape of the whole ratemap array
+    sel_data_shape = (y_sel_lims[1]-y_sel_lims[0], x_sel_lims[1]-x_sel_lims[0])
+
 
     if max_ann > 4:
         # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
@@ -750,7 +746,7 @@ def _new_cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Q
         cnts = []
         for i in range(cur_num_ann):
             # We're calling the background subtracted counts calculation method of the ratemap for all of our annuli
-            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
+            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask, x_slice_lims, y_slice_lims))
         # Becomes an astropy quantity (and so behaves like a numpy array) because they're nicer to work with
         cnts = Quantity(cnts)
 
@@ -763,7 +759,7 @@ def _new_cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Q
         for i in range(cur_num_ann):
             # We're calling the background subtracted count calculation method of the ratemap
             #  for all of our annuli
-            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
+            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask, x_slice_lims, y_slice_lims))
         # Becomes an astropy Quantity (behaves like a numpy array) because they're nicer to work with
         cnts = Quantity(cnts)
         # We find any indices of the array (== annuli) where the counts are not above our minimum
@@ -777,7 +773,7 @@ def _new_cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Q
         #  end of the count profile, then we merge that leftwards into the N-1th annuli
         elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
             cur_rads = np.delete(cur_rads, -2)
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+            ann_masks = annular_mask(sel_cen, cur_rads[:-1], cur_rads[1:], sel_data_shape) * corr_mask[..., None]
         # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
         #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
         #  which we do require - in this case it means we deleted the 1st annulus
@@ -785,12 +781,12 @@ def _new_cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Q
             # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
             #  annular boundaries
             cur_rads = np.delete(cur_rads, 1)
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+            ann_masks = annular_mask(sel_cen, cur_rads[:-1], cur_rads[1:], sel_data_shape) * corr_mask[..., None]
         # Otherwise if the outermost bad annulus is NOT right at the end (either end) of the profile, we merge
         #  to the right
         else:
             cur_rads = np.delete(cur_rads, bad_cnts[-1])
-            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+            ann_masks = annular_mask(sel_cen, cur_rads[:-1], cur_rads[1:], sel_data_shape) * corr_mask[..., None]
 
         if ann_masks.shape[2] == 4 and not acceptable:
             warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
