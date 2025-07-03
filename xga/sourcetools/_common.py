@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 11:11. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -18,21 +18,24 @@ from ..sources import BaseSource, GalaxyCluster
 from ..xspec.fit import single_temp_apec
 
 
-def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
+def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]) -> List[str]:
     """
-    Returns a list of all the telescopes associated to each Source. For most functions within
-    sourcetools, the initial sources argument may be a list, so the telescopes attribute can't be
+    Returns a list of all the telescopes associated with at least one source. For most functions within
+    xga.sourcetools, the initial sources argument may be a list, so the 'telescopes' attribute can't be
     used.
-    """
 
+    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to extract telescope information from.
+    :return: A list of telescope names that are associated with at least one of the sources
+        that were passed in.
+    :rtype: List[str]
+    """
     if isinstance(sources, list):
         # This collects all telescopes associated with each source, so there will be duplicates
         all_telescopes_inc_dups = []
         for src in sources:
             all_telescopes_inc_dups.extend(src.telescopes)
-        # and now removing the duplicates
+        # Now removing the duplicates
         all_telescopes = list(set(all_telescopes_inc_dups))
-    
     else:
         all_telescopes = sources.telescopes
     
