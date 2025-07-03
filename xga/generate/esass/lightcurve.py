@@ -249,7 +249,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     # This command just makes a standard XCS image, but will be used to generate images to debug the drilling
     #  out of regions, as the light curve expression will be supplied, so we can see exactly what data has been removed.
     # debug_im = "evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 " \
-    #            "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
+    #            "?>yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
     #            "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
 
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format
@@ -335,6 +335,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             _append_lc_info(evt_list)
 
         sources_cmds.append(np.array(cmds))
+        print(sources_cmds)
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
         #  once the eSASS cmd has run
