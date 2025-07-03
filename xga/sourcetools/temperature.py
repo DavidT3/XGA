@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:08. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -193,6 +193,163 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         pix_to_deg[tel] = tel_params[7]
 
     return rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, pix_to_deg
+
+
+
+def _new_ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity, lo_en: Quantity, hi_en: Quantity,
+                    telescope: str, obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+                    psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15):
+    """
+    This method just sets up radii, masks, etc. for annular binning functions in this file. The operations in
+    this function are shared by multiple other binning functions, hence they have been put in a function of their
+    own to minimise duplication.
+
+    :param BaseSource source: The source object to generate annuli for.
+    :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
+    :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
+        PSF effects.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default is None, which
+        means the combined ratemap will be used.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :return: The various variables that this function sets up
+    :rtype:
+    """
+    # if all([obs_id is None, inst is None]):
+    #     # Here the user hasn't set ObsID or instrument, so we use the combined data
+    #     rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+    #     interloper_mask = source.get_interloper_mask()
+    # elif all([obs_id is not None, inst is not None]):
+    #     # Both ObsID and instrument have been set by the user
+    #     rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter)
+    #     interloper_mask = source.get_interloper_mask(obs_id)
+
+
+    # Parsing the telescope, ObsID, and instrument options, to figure out the exact ratemap that we want to use
+    # There are unfortunately two 'types' of combined ratemap for eROSITA (or there can be) - combined in the sense
+    #  that all the TMs of an observation are added together for general analysis (even if the cluster is only on
+    #  one sky-tile), or combined in the sense of all TMs across all observations are added together. The distinction
+    #  is important to how they are stored and retrieved in XGA - that may change soon, see issue #1320
+    # TODO May need change when issue #1320 is resolved
+    if telescope == 'erosita' and len(source.obs_ids['erosita']) > 1:
+        # for erosita, no psf correction is available yet
+        get_combined = True
+        psf_corr = None
+        psf_model = None
+        psf_bins = None
+        psf_algo = None
+        psf_iter = None
+    elif telescope == 'erosita' and len(source.obs_ids['erosita']) == 1:
+        # for erosita, no psf correction is available yet
+        get_combined = False
+        psf_corr = None
+        psf_model = None
+        psf_bins = None
+        psf_algo = None
+        psf_iter = None
+    elif telescope == 'xmm' and all([obs_id is None, inst is None]):
+        get_combined = True
+    else:
+        get_combined = False
+
+    # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
+    if get_combined:
+        # Here the user hasn't set ObsID or instrument (or we're in some other special case where individual
+        #  ObsID-instrument data don't make sense - like with eRASS observations), so we use the combined data
+        rt = source.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, telescope)
+    else:
+        # Both ObsID and instrument have been set by the user
+        rt = source.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
+                                 psf_algo, psf_iter, telescope)
+
+    # We now have the correct RateMap, so we will use its ObsID property to fetch the matching mask to exclude
+    #  contaminating sources
+    interloper_mask = source.get_interloper_mask(telescope, rt.obs_id)
+
+    # Just making sure our relevant distances are in the same units, so that we can convert to pixels
+    outer_rad = source.convert_radius(outer_rad, 'deg')
+    min_width = source.convert_radius(min_width, 'deg')
+
+    # Using the ratemap to get a conversion factor from pixels to degrees, though we will use it
+    #  the other way around
+    pix_to_deg = pix_deg_scale(source.default_coord, rt.radec_wcs)
+
+    # Making sure to go up to the whole number, pixels have to be integer of course, and I think it's
+    #  better to err on the side of caution here and make things slightly wider than requested
+    outer_rad = int(np.ceil(outer_rad / pix_to_deg).value)
+    min_width = int(np.ceil(min_width / pix_to_deg).value)
+
+    # Calculates the maximum number of annuli, based on the input outer radius and minimum width.
+    # We have already ensured the outer radius and minimum width are integers, so 'max_ann' is
+    #  going to be a whole number of annuli
+    max_ann = int(outer_rad / min_width)
+
+    # These are the initial bins, with imposed minimum width, I have to add one to max_ann because linspace wants the
+    #  total number of values to generate, and while there are max_ann annuli, there are max_ann+1 radial boundaries
+    init_rads = np.linspace(0, outer_rad, max_ann + 1).astype(int)
+    # Converts the source's default analysis coordinates to pixels
+    pix_centre = rt.coord_conv(source.default_coord, 'pix')
+
+    # Setting up our own background region
+    back_inn_rad = np.array([np.ceil(source.background_radius_factors[0] * outer_rad)]).astype(int)
+    back_out_rad = np.array([np.ceil(source.background_radius_factors[1] * outer_rad)]).astype(int)
+
+    # This is not how this function used to work, but we now cut out the count-rate map data that is relevant to
+    #  the current profile - i.e. to just outside the outer background radius. We do this to avoid huge memory
+    #  usage when dealing with data released in sky tiles (e.g. eRASS), as the annular mask array generated
+    #  later is xpix by ypix by number of annuli, and that can get really really big.
+    # Here we construct the slicing limits to select only relevant data - centered on the central pixel, a square of
+    #  side length 2*(outer background radius + buffer)
+    edge_buffer = 2
+    # The lower and upper indexing bounds to select the relevant data - for the x-axis
+    y_sel_lims = [int(np.floor((pix_centre[1].value - back_out_rad[0]) - edge_buffer)),
+                  int(np.ceil((pix_centre[1].value + back_out_rad[0]) + edge_buffer + 1))]
+    # Same but for the y-axis
+    x_sel_lims = [int(np.floor((pix_centre[0].value - back_out_rad[0]) - edge_buffer)),
+                  int(np.ceil((pix_centre[0].value + back_out_rad[0]) + edge_buffer + 1))]
+
+    # Checks the calculated slicing boundaries against the size of the image
+    if x_sel_lims[0] < 0 or y_sel_lims[0] < 0 or x_sel_lims[1] > rt.shape[1] or y_sel_lims[1] > rt.shape[0]:
+        raise ValueError("The outer background radius is outside the bounds of the image.")
+
+    # Don't need to actually read out the data in this preparatory function - just need to know the
+    #  shape of the slice
+    sel_data_shape = (y_sel_lims[1]-y_sel_lims[0], x_sel_lims[1]-x_sel_lims[0])
+
+    # The new central coordinate is really just the x-y middle of the slice we just made of the ratemap data
+    sel_cen = Quantity([sel_data_shape[1] / 2, sel_data_shape[0] / 2], 'pix').astype(int)
+
+    # Using my annular mask function to make a nice background region, which will be corrected for instrumental
+    #  stuff and interlopers in a second
+    back_mask = annular_mask(sel_cen, back_inn_rad, back_out_rad, sel_data_shape)
+
+    # Includes chip gaps, interloper removal, and edge removal (to try and avoid artificially bright pixels)
+    #  in the background mask
+    # Bit ugly. However, we're applying the same slice that we did to the data arrays - cutting down the
+    #  various masks to just those parts actually relevant to the radial profile being generated
+    sel_sensor_mask = rt.sensor_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    sel_edge_mask = rt.edge_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    sel_inter_mask = interloper_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    sel_corr_mask = sel_sensor_mask * sel_edge_mask * sel_inter_mask
+    # Apply the extra masks to the background mask
+    back_mask = back_mask * sel_corr_mask
+
+    # Generates the requested annular masks, while making sure to apply the correcting masks
+    ann_masks = annular_mask(sel_cen, init_rads[:-1], init_rads[1:], sel_data_shape) * sel_corr_mask
+    # Make a copy of the initial radii, as that array may be altered in the function that called this one
+    cur_rads = init_rads.copy()
+
+    return rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, sel_corr_mask, pix_to_deg, x_sel_lims, y_sel_lims
+
+
 
 
 def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity,
@@ -534,16 +691,128 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
     return final_rads, cnts, max_ann
 
 
+
+def _new_cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity],
+              min_width: Quantity, lo_en: Quantity, hi_en: Quantity, telescope: str, obs_id: str = None, inst: str = None,
+              psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+              psf_iter: int = 15) -> Tuple[Quantity, Quantity, int]:
+    """
+    An internal function that will find the radii required to create annuli with a certain minimum number of counts
+    and minimum annulus width.
+
+    :param BaseSource source: The source object to generate annuli for.
+    :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
+    :param float min_cnt: The minimum number of counts which are allowable in a given annulus.
+    :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
+        PSF effects.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the background subtracted count
+        calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the background subtracted count
+        calculations.
+    :param str obs_id: An ObsID of a specific ratemap to use for the background subtracted count
+        calculations. Default is None, which means the combined ratemap will be used. Please note that inst
+        must also be set to use this option.
+    :param str inst: The instrument of a specific ratemap to use for the background subtracted count
+        calculations. Default is None, which means the combined ratemap will be used.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :return: The radii of the requested annuli, the final count values, and the original maximum number
+        based on min_width.
+    :rtype: Tuple[Quantity, Quantity, int]
+    """
+
+    # This just makes sure that the min_cnt variable is the astropy quantity that we expect it to be, otherwise
+    #  some of the comparisons made between it and the values returned by background_subtracted_counts will fail
+    if type(min_cnt) == int:
+        min_cnt = Quantity(min_cnt, 'ct')
+    elif (type(min_cnt) == Quantity and not min_cnt.unit.is_equivalent('ct')) or not type(min_cnt) == Quantity:
+        raise TypeError("The min_cnt argument must be either an integer, or an astropy Quantity in units of 'ct'.")
+
+    # Run the setup function for these functions that create different annular bins
+    rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, \
+        pix_to_deg = _new_ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, obs_id, inst, psf_corr, psf_model,
+                                     psf_bins, psf_algo, psf_iter)
+
+    if max_ann > 4:
+        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+        acceptable = False
+    else:
+        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+        #  as they are, while also issuing a warning
+        acceptable = True
+        warn("The min_width combined with the outer radius of the source creates only {} initial"
+             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
+        cur_num_ann = ann_masks.shape[2]
+        cnts = []
+        for i in range(cur_num_ann):
+            # We're calling the background subtracted counts calculation method of the ratemap for all of our annuli
+            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
+        # Becomes an astropy quantity (and so behaves like a numpy array) because they're nicer to work with
+        cnts = Quantity(cnts)
+
+    while not acceptable:
+        # How many annuli are there at this point in the loop?
+        cur_num_ann = ann_masks.shape[2]
+
+        # Just a list for the counts to live in
+        cnts = []
+        for i in range(cur_num_ann):
+            # We're calling the background subtracted count calculation method of the ratemap
+            #  for all of our annuli
+            cnts.append(rt.background_subtracted_counts(ann_masks[:, :, i], back_mask))
+        # Becomes an astropy Quantity (behaves like a numpy array) because they're nicer to work with
+        cnts = Quantity(cnts)
+        # We find any indices of the array (== annuli) where the counts are not above our minimum
+        bad_cnts = np.where(cnts < min_cnt)[0]
+
+        # If there are no annuli below our count threshold then all is good and joyous, and we
+        #  accept the current radii
+        if len(bad_cnts) == 0:
+            acceptable = True
+        # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
+        #  end of the count profile, then we merge that leftwards into the N-1th annuli
+        elif len(bad_cnts) != 0 and bad_cnts[-1] == cur_num_ann - 1:
+            cur_rads = np.delete(cur_rads, -2)
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+        #  which we do require - in this case it means we deleted the 1st annulus
+        elif len(bad_cnts) != 0 and bad_cnts[-1] == 0:
+            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+            #  annular boundaries
+            cur_rads = np.delete(cur_rads, 1)
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+        # Otherwise if the outermost bad annulus is NOT right at the end (either end) of the profile, we merge
+        #  to the right
+        else:
+            cur_rads = np.delete(cur_rads, bad_cnts[-1])
+            ann_masks = annular_mask(pix_centre, cur_rads[:-1], cur_rads[1:], rt.shape) * corr_mask[..., None]
+
+        if ann_masks.shape[2] == 4 and not acceptable:
+            warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
+                 "of four annuli will be returned".format(s=source.name), stacklevel=2)
+            break
+    # Now of course, pixels must become a more useful unit again
+    final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
+
+    return final_rads, cnts, max_ann
+
+
+
 def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
-                           min_snr: float = 20, min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
-                           use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
+                           min_snr: float = 20, min_width: Quantity = Quantity(20, 'arcsec'),
+                           use_combined: bool = True, use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES, telescope: str = None,
-                           stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
+                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
+                           telescope: str = None, stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
     temperature profiles of galaxy clusters, deciding on the annular bins using signal to noise measurements
@@ -592,7 +861,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
-    :param str tel: The telescope to find radii to create annuli for.
+    :param str telescope: The telescope to find radii to create annuli for.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
@@ -608,12 +877,12 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         raise NotImplementedError("I don't currently support fitting region spectra")
 
     if all([use_combined, use_worst]):
-        warn("You have passed both use_combined and use_worst as True. use_worst overrides use_combined, so the "
-             "worst observation for each source will be used to decide on the annuli.")
+        warn("You have set both 'use_combined' and 'use_worst' as True. 'use_worst' overrides 'use_combined', so the "
+             "worst observation for each source will be used to decide on the annuli.", stacklevel=2)
         use_combined = False
     elif all([not use_combined, not use_worst]):
-        warn("You have passed both use_combined and use_worst as False. One of them must be True, so here we default"
-             " to using the combined data to decide on the annuli.")
+        warn("You have set both 'use_combined' and 'use_worst' as False, but one must be True - defaulting "
+             "to 'use_combined=True'.", stacklevel=2)
         use_combined = True
 
     if abund_table not in ABUND_TABLES:
@@ -671,7 +940,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     # for each dictionary for a single source, I append to the all_rads dictionary
     for rads_dict in all_rads_source_dicts:
         for tel in src_telescopes:
-            # Some sources wont have an entry for all telescopes
+            # Some sources may not have an entry for every telescope
             if tel in rads_dict:
                 all_rads[tel].append(rads_dict[tel])
             else:
@@ -742,7 +1011,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
-    :param str tel: The telescope to find radii to create annuli for.
+    :param str telescope: The telescope to find radii to create annuli for.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
