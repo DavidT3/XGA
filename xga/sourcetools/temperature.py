@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 20:30. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 20:51. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -381,7 +381,7 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of
         iterations.
     :param bool allow_negative: Should pixels in the background subtracted count map be allowed to
-        go below zero, which results in a lower signal to noise (and can result in a negative signal
+        go below zero, which results in a lower signal-to-noise (and can result in a negative signal
         to noise).
     :param bool exp_corr: Should signal to noises be measured with exposure time correction, default
         is True. I recommend that this be true for combined observations, as exposure time could
@@ -510,6 +510,122 @@ def _snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width
         snrs[tel] = t_snrs
 
     return final_rads, snrs, max_ann
+
+
+
+
+def _new_snr_bins(source: BaseSource, outer_rad: Quantity, min_snr: float, min_width: Quantity, lo_en: Quantity,
+              hi_en: Quantity, telescope: str, obs_id: str = None, inst: str = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+              psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
+              allow_negative: bool = False, exp_corr: bool = True) -> Tuple[Quantity, np.ndarray, int]:
+    """
+    An internal function that will find the radii required to create annuli with a certain minimum signal to noise
+    and minimum annulus width.
+
+    :param BaseSource source: The source object to generate annuli for.
+    :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
+    :param float min_snr: The minimum signal to noise which is allowable in a given annulus.
+    :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
+        PSF effects.
+    :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal to noise calculations.
+    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal to noise calculations.
+    :param str telescope: The telescope whose data we are generating annuli for.
+    :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
+            means the combined ratemap will be used. Please note that inst must also be set to use this option.
+    :param str inst: The instrument of a specific ratemap to use for the SNR calculations. Default is None, which
+        means the combined ratemap will be used.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
+    :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+    :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
+        side in the PSF grid.
+    :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
+    :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
+        zero, which results in a lower signal to noise (and can result in a negative signal to noise).
+    :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
+            recommend that this be true for combined observations, as exposure time could change quite dramatically
+            across the combined product.
+    :return: The radii of the requested annuli, the final snr values, and the original maximum number
+        based on min_width.
+    :rtype: Tuple[Quantity, np.ndarray, int]
+    """
+
+    # This calls a function that just sets things up for this (and other annular binning) function
+    ann_set_ret = _ann_bins_setup(source, outer_rad, min_width, lo_en, hi_en, telescope, obs_id, inst, psf_corr,
+                                  psf_model, psf_bins, psf_algo, psf_iter)
+    # This just makes it much nicer to read
+    (rt, cur_rads, max_ann, ann_masks, back_mask, pix_centre, corr_mask, pix_to_deg,
+        x_slice_lims, y_slice_lims, sel_cen) = ann_set_ret
+    # The shape of the data slice, we'll use this in several places, instead of the shape of the whole ratemap array
+    sel_data_shape = (y_slice_lims[1] - y_slice_lims[0], x_slice_lims[1] - x_slice_lims[0])
+
+    if max_ann > 4:
+        # This will be modified by the loop until it describes annuli which all have an acceptable signal to noise
+        acceptable = False
+    else:
+        # If there are already 4 or less annuli present then we don't do the reduction while loop, and just take it
+        #  as they are, while also issuing a warning
+        acceptable = True
+        warn("The min_width combined with the outer radius of the source creates only {} initial"
+             " annuli, so no re-binning will take place.".format(max_ann), stacklevel=2)
+        cur_num_ann = ann_masks.shape[2]
+        snrs = []
+        for i in range(cur_num_ann):
+            # We're calling the signal-to-noise calculation method of the ratemap for all of our annuli
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative,
+                                           x_slice_lims, y_slice_lims))
+        # Becomes a numpy array because they're nicer to work with
+        snrs = np.array(snrs)
+
+    while not acceptable:
+        # How many annuli are there at this point in the loop?
+        cur_num_ann = ann_masks.shape[2]
+
+        # Just a list for the snrs to live in
+        snrs = []
+        for i in range(cur_num_ann):
+            # We're calling the signal-to-noise calculation method of the ratemap for all of our annuli
+            snrs.append(rt.signal_to_noise(ann_masks[:, :, i], back_mask, exp_corr, allow_negative,
+                                           x_slice_lims, y_slice_lims))
+        # Becomes a numpy array because they're nicer to work with
+        snrs = np.array(snrs)
+        # We find any indices of the array (== annuli) where the signal-to-noise is not above our minimum
+        bad_snrs = np.where(snrs < min_snr)[0]
+
+        # If there are no annuli below our signal-to-noise threshold then all is good and joyous and we accept
+        #  the current radii
+        if len(bad_snrs) == 0:
+            acceptable = True
+        # We work from the outside of the bad list inwards, and if the outermost bad bin is the one right on the
+        #  end of the SNR profile, then we merge that leftwards into the N-1th annuli
+        elif len(bad_snrs) != 0 and bad_snrs[-1] == cur_num_ann - 1:
+            cur_rads = np.delete(cur_rads, -2)
+            ann_masks = annular_mask(sel_cen, cur_rads[:-1], cur_rads[1:], sel_data_shape) * corr_mask[..., None]
+        # A special case must also be added for if the zeroth annulus (i.e. the innermost annulus) isn't meeting the
+        #  criteria, because if we leave it to the 'else' statement below then there will be no annulus bound at zero,
+        #  which we do require - in this case it means we deleted the 1st annulus
+        elif len(bad_snrs) != 0 and bad_snrs[-1] == 0:
+            # For where the zeroth annulus is not meeting requirements, we set up this to merge the zeroth and first
+            #  annular boundaries
+            cur_rads = np.delete(cur_rads, 1)
+            ann_masks = annular_mask(sel_cen, cur_rads[:-1], cur_rads[1:], sel_data_shape) * corr_mask[..., None]
+        # Otherwise if the outermost bad annulus is NOT right at the end of the profile, we merge to the right
+        else:
+            cur_rads = np.delete(cur_rads, bad_snrs[-1])
+            ann_masks = annular_mask(sel_cen, cur_rads[:-1], cur_rads[1:], sel_data_shape) * corr_mask[..., None]
+
+        if ann_masks.shape[2] == 4 and not acceptable:
+            warn("The requested annuli for {s} cannot be created, the data quality is too low. As such a set "
+                 "of four annuli will be returned".format(s=source.name), stacklevel=2)
+            break
+
+    # Now of course, pixels must become a more useful unit again
+    final_rads = (Quantity(cur_rads, 'pix') * pix_to_deg).to("arcsec")
+
+    return final_rads, snrs, max_ann
+
+
+
 
 
 def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quantity], min_width: Quantity,
@@ -853,6 +969,7 @@ def new_min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], out
     :rtype: Dict[str, List[Quantity]]
     """
 
+    # TODO REMOVE THE ENTIRE CONCEPT OF 'REGION' AS AN ALLOWABLE RADIUS - IT HAS BEEN UNSUPPORTED FOR AGES
     if outer_radii != 'region':
         inn_rad_vals, out_rad_vals = region_setup(sources, outer_radii, Quantity(0, 'arcsec'), True, '')[1:]
     else:
@@ -867,69 +984,64 @@ def new_min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], out
              "to 'use_combined=True'.", stacklevel=2)
         use_combined = True
 
+    # Validate the selected abundance table
     if abund_table not in ABUND_TABLES:
         avail_abund = ", ".join(ABUND_TABLES)
         raise ValueError("{a} is not a valid abundance table choice, please use one of the "
                          "following; {av}".format(a=abund_table, av=avail_abund))
 
-    # collecting the associated telescopes for later use
+    # If the user didn't specify a particular telescope, or telescopes, from which we are to
+    #  produce temperature profiles, we fetch all associated with at least one source
     if telescope is None:
         src_telescopes = _get_all_telescopes(sources)
+    elif isinstance(telescope, str):
+        src_telescopes = [telescope]
     else:
         src_telescopes = telescope
 
+    # Makes sure that sources is iterable, even if it's just a single source - makes writing the rest of this
+    #  function a bit neater.
     if isinstance(sources, BaseSource):
         sources = [sources]
 
-    # _snr_bins will output a dict of the format: {tel : Quantity}, these are stored in this list
-    # for each source
-    all_rads_source_dicts = []
+    # We're setting up a dictionary that will contain lists of annular radius sets, with top level keys being
+    #  telescope names, and values being lists. Each list will have one entry per source, even if that source
+    #  doesn't have the telescope associated (in those cases, a null value will be added)
+    all_rads = {tel: [] for tel in src_telescopes}
+
     for src_ind, src in enumerate(sources):
-        if use_combined:
-            # This is the simplest option, we just use the combined ratemap to decide on the annuli with minimum SNR
-            rads, snrs, ma = _new_snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, psf_corr=psf_corr,
-                                       psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
-                                       allow_negative=allow_negative, exp_corr=exp_corr, telescope=telescope)
-        else:
-            # The return for this function is two dictionaries of arrays ranked worst to best, so we
-            #  grab the first dictionary which contains arrays of lists of ObsIDs and instruments
-            # combos in ranked order
-            lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative)[0]
-
-            # we then need to parse this dictionary into the _snr_bins function, so we will have to
-            # have a dictionary for the obs and inst we want to use for each telescope
-            chosen_obs = {}
-            chosen_inst = {}
-            for key in lowest_ranked:
-                # This grabs the first row, which is the worst observation ranked by global snr
-                chosen_combo = lowest_ranked[key][0, :]
-                # Then just selecting the obs id of this worst observation
-                chosen_obs[key] = chosen_combo[0]
-                # same but for the instrument
-                chosen_inst[key] = chosen_combo[1]
-
-            rads, snrs, ma = _new_snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en,
-                                       chosen_obs, chosen_inst, psf_corr, psf_model, psf_bins,
-                                       psf_algo, psf_iter, allow_negative, exp_corr,
-                                       telescope=telescope)
-
-        # Shoves the annuli we've decided upon into a list for single_temp_apec_profile to use
-        all_rads_source_dicts.append(rads)
-
-    # Making a dictionary to contain all the radii quantities for all the sources
-    all_rads = {tel : [] for tel in src_telescopes}
-
-    # for each dictionary for a single source, I append to the all_rads dictionary
-    for rads_dict in all_rads_source_dicts:
+        # Iterating through all the telescopes being considered
         for tel in src_telescopes:
-            # Some sources may not have an entry for every telescope
-            if tel in rads_dict:
-                all_rads[tel].append(rads_dict[tel])
+            # Quite possible that not all sources will have the current telescope associated (if there are
+            #  multiple telescopes being used anyway) - in that case we add a null entry for the radii
+            if tel not in src.telescopes:
+                all_rads[tel].append(None)
+                continue
+
+            # If we got here then the telescope is associated with this source, and we need
+            #  to define the annular radii
+            if use_combined:
+                # This is the simplest option, we just use the combined ratemap to construct annuli
+                #  reaching the minimum SNR
+                rads, snrs, ma = _new_snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, tel,
+                                               psf_corr=psf_corr,
+                                               psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo,
+                                               psf_iter=psf_iter,
+                                               allow_negative=allow_negative, exp_corr=exp_corr)
             else:
-                # for sources without an entry for this telescope, we add in this negative number
-                # to make it obvious that this is not a genuine entry
-                # the way single_temp_apec_profile works, this -999 should never even be used
-                all_rads[tel].append(Quantity(-999, 'kpc'))
+                # The return for this function is two dictionaries of arrays ranked worst to best, so we
+                #  grab the first dictionary which contains arrays of lists of ObsIDs and instruments
+                # combos in ranked order
+                lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative)[0]
+
+                rads, snrs, ma = _new_snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, tel,
+                                               lowest_ranked[0], lowest_ranked[1], psf_corr, psf_model, psf_bins,
+                                               psf_algo, psf_iter, allow_negative, exp_corr)
+
+            # Add the current telescope's radii to the storage dictionary
+            #  The single_temp_apec_profile function will use this list to trigger generation of
+            #  spectra (if necessary) and fitting to make some nice temperature profiles
+            all_rads[tel].append(rads)
 
     if len(sources) == 1:
         sources = sources[0]
