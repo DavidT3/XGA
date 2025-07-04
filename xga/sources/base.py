@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 11:31. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -2729,7 +2729,7 @@ class BaseSource:
 
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
-                elif isinstance(po, (AnnularSpectra)) and update_inv:                         # Don't want to store a None value as a string for the info_key
+                elif isinstance(po, AnnularSpectra) and update_inv:
                     if extra_key is None:
                         info_key = ''
                     else:
@@ -3366,7 +3366,7 @@ class BaseSource:
         else:
             extra_name = ''
 
-        # And if it was oversampled during generation then we need to include that as well
+        # And if it was oversampled during generation, then we need to include that as well
         if over_sample is not None:
             extra_name += "_ovsamp{ov}".format(ov=over_sample)
 
@@ -3391,16 +3391,17 @@ class BaseSource:
         # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
         #  properly constructed storage key
         if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name, telescope=telescope)
+            matched_prods = self.get_products('combined_annular_spectrum',
+                                              extra_key=spec_storage_name, telescope=telescope)
         # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
         elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
+            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
                              if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
         # However if they have passed a setID then this over-rides everything else
         else:
             # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
             #  whatever the user passed in
-            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
+            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
                              if p.set_ident == set_id]
 
         if len(matched_prods) == 1:
