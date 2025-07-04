@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 20:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 20:30. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -1006,6 +1006,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :rtype: Dict[str, List[Quantity]]
     """
 
+    # TODO REMOVE THE ENTIRE CONCEPT OF 'REGION' AS AN ALLOWABLE RADIUS - IT HAS BEEN UNSUPPORTED FOR AGES
     if outer_radii != 'region':
         inn_rad_vals, out_rad_vals = region_setup(sources, outer_radii, Quantity(0, 'arcsec'), True, '')[1:]
     else:
