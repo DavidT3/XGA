@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:58. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5064,31 +5064,43 @@ class BaseSource:
         obs_inst_dict = {}
         snrs_dict = {}
         for tel in telescope:
-            # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
-            obs_inst = []
-            snrs = []
-            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-            for obs_id in self.instruments[tel]:
-                for inst in self.instruments[tel][obs_id]:
-                    # Use our handy get_snr method to calculate the SNRs we want, then add that and the
-                    #  ObsID-inst combo into their respective lists
-                    snrs.append(self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst,
-                                allow_negative))
-                    obs_inst.append([obs_id, inst])
+            try:
+                # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+                obs_inst = []
+                snrs = []
+                # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+                for obs_id in self.instruments[tel]:
+                    # If the stacked instrument argument is NOT true, then this is every instrument available for
+                    #  the current ObsID. Otherwise, it's just 'combined' (i.e. the stack of all instruments
+                    #  for the current ObsID)
+                    rel_insts = self.instruments[tel][obs_id] if not stacked_inst else ['combined']
+                    for inst in rel_insts:
+                        # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                        #  ObsID-inst combo into their respective lists
+                        snrs.append(self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst,
+                                    allow_negative))
+                        obs_inst.append([obs_id, inst])
 
-            # Make our storage lists into arrays, easier to work with that way
-            obs_inst = np.array(obs_inst)
-            snrs = np.array(snrs)
+                # Make our storage lists into arrays, easier to work with that way
+                obs_inst = np.array(obs_inst)
+                snrs = np.array(snrs)
 
-            # We want to order the output by SNR, with the lowest being first and the highest being last, so we
-            #  use a numpy function to output the index order needed to re-order our two arrays
-            reorder_snrs = np.argsort(snrs)
-            # Then we use that to re-order them
-            snrs = snrs[reorder_snrs]
-            obs_inst = obs_inst[reorder_snrs]
+                # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+                #  use a numpy function to output the index order needed to re-order our two arrays
+                reorder_snrs = np.argsort(snrs)
+                # Then we use that to re-order them
+                snrs = snrs[reorder_snrs]
+                obs_inst = obs_inst[reorder_snrs]
 
-            obs_inst_dict[tel] = obs_inst
-            snrs_dict[tel] = snrs
+                obs_inst_dict[tel] = obs_inst
+                snrs_dict[tel] = snrs
+            except NoProductAvailableError:
+                if not stacked_inst:
+                    warn("Individual ObsID-Instrument {t} ratemaps have not been generated "
+                         "for {s}".format(t=tel, s=self.name), stacklevel=2)
+                else:
+                    warn('Stacked-instrument whole ObsID {t} ratemaps have not been '
+                         'generated for {s}'.format(t=tel, s=self.name), stacklevel=2)
 
         # And return our ordered dictionaries
         return obs_inst_dict, snrs_dict
