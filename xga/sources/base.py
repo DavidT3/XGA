@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 11:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 12:34. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5030,10 +5030,11 @@ class BaseSource:
 
         return reject_dict
 
-    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
-                    allow_negative: bool = False, telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
+                    hi_en: Quantity = None, allow_negative: bool = False,
+                    telescope: Union[str, List[str]] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
-        This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
+        This method generates a list of ObsID-Instrument pairs, ordered by the signal-to-noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
 
         :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
@@ -5044,14 +5045,19 @@ class BaseSource:
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-        :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
-            associated to the source.
-        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending signal-to-noise, then a dictionary containing an array containing the order SNR ratios.
+        :param str/List[str] telescope: The telescopes to calculate signal-to-noise rankings for. Default is
+            None, meaning all associated telescopes will be used.
+        :return: Two dictionaries; the first contains ObsID-instrument information (as an Nx2 array) sorted by
+            ascending signal-to-noise, the second contains the signal-to-noise values. The top level keys of the
+            dictionaries are telescopes names.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
+        # The user may have specified the telescope(s), or they may have left it as None. If None then we use all
+        #  telescopes associated with this source
         if telescope is None:
             telescope = self.telescopes
+        elif isinstance(telescope, str):
+            telescope = [telescope]
 
         obs_inst_dict = {}
         snrs_dict = {}
@@ -5086,8 +5092,8 @@ class BaseSource:
         # And return our ordered dictionaries
         return obs_inst_dict, snrs_dict
 
-    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
-                      hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
+    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                      telescope: Union[str, List[str]] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
         given region, with element zero being the lowest counts, and element N being the highest.
@@ -5098,32 +5104,52 @@ class BaseSource:
             in which case the lower energy bound for peak finding will be used (default is 0.5keV).
         :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
-        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending counts, then an array containing the order counts ratios.
-        :rtype: Tuple[np.ndarray, Quantity]
+        :param str/List[str] telescope: The telescopes to calculate count rankings for. Default is
+            None, meaning all associated telescopes will be used.
+        :return: Two dictionaries; the first contains ObsID-instrument information (as an Nx2 array) sorted by
+            ascending count, the second contains the count values. The top level keys of the
+            dictionaries are telescopes names.
+        :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
-        # Set up some lists for the ObsID-Instrument combos and their cnts respectively
-        obs_inst = []
-        cnts = []
-        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-        for obs_id in self.instruments:
-            for inst in self.instruments[obs_id]:
-                cnts.append(self.get_counts(outer_radius, 'xmm', self.default_coord, lo_en, hi_en, obs_id, inst))
-                obs_inst.append([obs_id, inst])
 
-        # Make our storage lists into arrays, easier to work with that way
-        obs_inst = np.array(obs_inst)
-        cnts = Quantity(cnts)
+        # The user may have specified the telescope(s), or they may have left it as None. If None then we use all
+        #  telescopes associated with this source
+        if telescope is None:
+            telescope = self.telescopes
+        elif isinstance(telescope, str):
+            telescope = [telescope]
 
-        # We want to order the output by counts, with the lowest being first and the highest being last, so we
-        #  use a numpy function to output the index order needed to re-order our two arrays
-        reorder_cnts = np.argsort(cnts)
-        # Then we use that to re-order them
-        cnts = cnts[reorder_cnts]
-        obs_inst = obs_inst[reorder_cnts]
+        obs_inst_dict = {}
+        cnts_dict = {}
 
-        # And return our ordered dictionaries'
-        return obs_inst, cnts
+        for tel in telescope:
+            # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+            obs_inst = []
+            cnts = []
+            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+            for obs_id in self.instruments[tel]:
+                for inst in self.instruments[tel][obs_id]:
+                    # Use a built-in source method to calculate the relevant counts, then add that and the
+                    #  ObsID-inst combo into their respective lists
+                    cnts.append(self.get_counts(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst))
+                    obs_inst.append([obs_id, inst])
+
+            # Make our storage lists into arrays, easier to work with that way
+            obs_inst = np.array(obs_inst)
+            cnts = np.array(cnts)
+
+            # We want to order the output by counts, with the lowest being first and the highest being last, so we
+            #  use a numpy function to output the index order needed to re-order our two arrays
+            reorder_cnts = np.argsort(cnts)
+            # Then we use that to re-order them
+            cnts = cnts[reorder_cnts]
+            obs_inst = obs_inst[reorder_cnts]
+
+            obs_inst_dict[tel] = obs_inst
+            cnts_dict[tel] = cnts
+
+        # And return our ordered dictionaries
+        return obs_inst_dict, cnts_dict
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """
