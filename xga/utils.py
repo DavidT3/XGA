@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/12/2024, 13:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:35. Copyright (c) The Contributors
 
 import json
 import os
@@ -520,7 +520,8 @@ ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combin
 # These are the built-in profile types
 PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
                     "1d_proj_temperature_profile", "gas_temperature_profile", "baryon_fraction_profile",
-                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile"]
+                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile",
+                    "specific_entropy_profile"]
 COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
