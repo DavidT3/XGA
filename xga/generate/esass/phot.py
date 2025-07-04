@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:56. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -233,8 +233,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                             "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
                                             xs=x_size, ys=y_size, c=centre_pos))
 
-                # This is the products final resting place, if it exists at the end of this command
-                # ASSUMPTION4 new output directory structure
+                # This is the product's final resting place, if it exists at the end of this command
                 final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
                 extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
                                 "telescope": "erosita"})
@@ -289,7 +288,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(final_dest_dir, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                            "telescope": "erosita"})
+                               "telescope": "erosita"})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
