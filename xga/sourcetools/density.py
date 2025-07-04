@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 11:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -500,9 +500,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         for src_ind, src in enumerate(sources):
             for tel in src.telescopes:
                 if tel == 'erosita' and psf_corr:
-                    warn("PSF correction is not yet implemented for the erosita telescope."
-                        "Erosita surface brightness profiles will be done without PSF correction.")
-
+                    warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+                         "brightness profiles will not be corrected.", stacklevel=2)
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr

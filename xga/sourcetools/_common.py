@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 11:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -48,18 +48,19 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
     global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
-    all_tels = sources.telescopes
-    # If it's a single source I shove it in a list, so I can just iterate over the sources parameter
-    #  like I do when it's a Sample object
+    # Gets all telescopes associated with at least one source
+    all_tels = _get_all_telescopes(sources)
+    # If it's a single source, we put it in a list so we can iterate over the single source like a sample
     if isinstance(sources, BaseSource):
         sources = [sources]
 
-    # We also want to make sure that everything has a PSF corrected image, using all the default settings
-    rl_psf(sources, bins=psf_bins)
+    # If XMM is associated with at least one source, we'll run PSF correction
+    if 'xmm' in all_tels:
+        # We also want to make sure that everything has a PSF corrected image, using all the default settings
+        rl_psf(sources, bins=psf_bins)
 
     # We do this here (even though its also in the density measurement), because if we can't measure a global
-    #  temperature then its absurdly unlikely that we'll be able to measure a temperature profile, so we can avoid
-    #  even trying and save some time.
+    #  temperature, then its unlikely that we'll be able to measure a temperature profile
     single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
                      min_sn=min_sn, over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
@@ -84,7 +85,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
                 has_glob_temp[tel].append(True)
             except ModelNotAssociatedError:
                 warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
-                    "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
+                     "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
                 has_glob_temp[tel].append(False)
             # If the telescope is not associated with this Source it will raise a NotAssociatedError
             except NotAssociatedError:
