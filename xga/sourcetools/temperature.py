@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 12:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 15:06. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -527,7 +527,11 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 # The return for this function is two dictionaries of arrays ranked worst to best, so we
                 #  grab the first dictionary which contains arrays of lists of ObsIDs and instruments
                 # combos in ranked order
-                lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative, tel)[tel][0]
+                # Unfortunately eROSITA needs special treatment (for now at least). It gets stacked_inst
+                #  set to True, as we don't really want to deal with individual ObsID-inst combos there
+                stacked_inst = True if tel == 'erosita' else False
+                lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative, tel,
+                                                stacked_inst=stacked_inst)[tel][0]
 
                 rads, snrs, ma = _snr_bins(src, out_rad_vals[src_ind], min_snr, min_width, lo_en, hi_en, tel,
                                            lowest_ranked[0], lowest_ranked[1], psf_corr, psf_model, psf_bins,
@@ -667,7 +671,11 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 #  order of ascending counts).
                 # We then use the counts measured for each ObsID-Instrument combo (which are returned and
                 #  stored in cnts) to decide upon the median observation.
-                cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en, tel)[tel]
+                # Unfortunately eROSITA needs special treatment (for now at least). It gets stacked_inst
+                #  set to True, as we don't really want to deal with individual ObsID-inst combos there
+                stacked_inst = True if tel == 'erosita' else False
+                cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en, tel,
+                                                  stacked_inst=stacked_inst)[tel]
                 # Obviously the median counts will not necessarily line up with any particular ObsID-instrument, but we
                 #  can use the interpolation feature of numpy percentile to find the nearest existing counts to the
                 #  median counts.
