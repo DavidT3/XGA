@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 20:28. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -282,7 +282,7 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
     return specs, storage_key
 
 def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quantity], Dict[str, Quantity], 
-                       Dict[str, List[Quantity]]]):
+                       Dict[str, List[Quantity]]]) -> Union[Dict[str, Quantity], Dict[str, List[Quantity]]]:
     """
     Internal function to parse the user input of the 'radii' argument of spectral fitting methods
     into spectrum generation functions.
@@ -291,8 +291,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
     :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
         annuli for the sources. A single quantity containing at least three radii may be passed if one source
         is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
-        source.    
-
+        source.
     :return: A dictionary of telescope keys with values that can but input into annuluar spectrum functions.
     :rtype: Union[Dict[str, Quantity], Dict[str, List[Quantity]]]
     """
