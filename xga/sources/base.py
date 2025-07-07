@@ -3250,7 +3250,7 @@ class BaseSource:
             aaa = self.get_products('spectrum', telescope='erosita')
             print(self.get_products('spectrum', telescope='erosita'))
             for spec in aaa:
-                print(spec.inst)
+                print(spec.instrument)
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
         return matched_prods
