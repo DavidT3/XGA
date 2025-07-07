@@ -65,7 +65,7 @@ class TestEsassSpecFuncs(unittest.TestCase):
         print(aa)
         for spec in aa:
             print(spec.instrument)
-            print(spec.obs_ids)
+            print(spec.obs_id)
             print(spec.path)
 
         assert isinstance(spec, Spectrum)
