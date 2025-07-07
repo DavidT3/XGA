@@ -18,7 +18,7 @@ class TestEsassMiscFuncs(unittest.TestCase):
         evtool_combine_evts(SRC_ALL_TELS)
 
         evtlist = SRC_ALL_TELS.get_products("combined_events", just_obj=False, telescope='erosita')[0][0]
-
+        print(evtlist)
         assert evtlist.telescope == 'erosita'
         assert set(evtlist.obs_ids) == set(SRC_ALL_TELS.obs_ids['erosita'])
 
