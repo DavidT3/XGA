@@ -3248,6 +3248,8 @@ class BaseSource:
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
+            print("self.get_products('spectrum')")
+            print(self.get_products('spectrum'))
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
         return matched_prods
