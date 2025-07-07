@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 09:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:36. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -20,6 +20,7 @@ from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, \
     ParameterNotAssociatedError
+from ..generate.multitelescope.phot import all_telescope_combined_images
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
@@ -104,10 +105,16 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     :rtype: Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str],
         Dict[str, list]], Union[Dict[str, str], Dict[str, list]]]
     """
+
+    # Make sure that we have generated the ratemaps we're going to need
+    # TODO Once spectrum fitting functions have a telescope argument, then so will the _dens_setup function, and
+    #  then we can pass it through here
+    all_telescope_combined_images(sources, lo_en, hi_en, telescope=None, num_cores=num_cores)
+
     # storing all the telescopes in a list for later use
     all_tels = _get_all_telescopes(sources)
-    # If its a single source I shove it in a list so I can just iterate over the sources parameter
-    #  like I do when its a Sample object
+    # If it's a single source, I shove it in a list, so I can just iterate over the 'sources' parameter
+    #  like I do when it's a Sample object
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -175,13 +182,13 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     if not all([type(src) == GalaxyCluster for src in sources]):
         raise TypeError("Only GalaxyCluster sources can be passed to cluster_density_profile.")
 
-    # Triggers an exception if the abundance table name passed isn't recognised
+    # Triggers an exception if the abundance table name passed isn't recognized
     if abund_table not in ABUND_TABLES:
         ab_list = ", ".join(ABUND_TABLES)
         raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(
                                                                      abund_table, ab_list))
 
-    # This check will eventually become obselete, but I haven't yet implemented electron to proton
+    # This check will eventually become obsolete, but I haven't yet implemented electron to proton
     # ratios for all allowed abundance tables - so this just checks whether the chosen table has an
     # ratio associated.
     try:
@@ -189,6 +196,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     except KeyError:
         raise NotImplementedError("That is an acceptable abundance table, but I haven't added the " 
                                   "conversion factor to the dictionary yet")
+
+    # Setting up the temperatures used for the calculation of the emissivity-to-density conversion factor
     if conv_temp is not None:
         if isinstance(conv_temp, Quantity):
             if not conv_temp.isscalar and len(conv_temp) != len(sources):
