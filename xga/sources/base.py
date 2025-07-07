@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 10:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 17:23. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1184,8 +1184,8 @@ class BaseSource:
         def parse_spectrum(row: pd.Series, combined_obs: bool):
             """
             Takes information from a row of the inventory csv and sets up a Spectrum product that can be added
-            to the product storage structure of the source. If the Spectrum is an annular spectrum
-            then relevant information such as the set id and the annulus id is returned.
+            to the product storage structure of the source. If the row represents an annular spectrum
+            then relevant information such as the set id and the annulus id are returned.
 
             :param pd.Series row: The inventory dataframe object:
             :param bool combined_obs:
@@ -1659,6 +1659,7 @@ class BaseSource:
                     #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+                    print(combos)
 
                     # Getting the spectra for each column, then assigning rates and luminosities.
                     # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
