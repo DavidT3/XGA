@@ -523,6 +523,20 @@ def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str,
                       lo_en: Quantity = Quantity(0.2, 'keV'), hi_en: Quantity = Quantity(10, 'keV'),
                       num_cores: int = NUM_CORES,
                       disable_progress: bool = False):
+    """
+    A convenient Python wrapper for the eSASS evtool and expmap commands. Images or exposure maps
+    will be generated from all Obs IDs associated with the source, combined together (duplicate 
+    events are removed).
+
+    :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources
+    :param str to_combine: The data type to produce, can be either image or expmap.
+    :param Quantity lo_en: The lower energy limit for the image or expmap, in astropy energy units.
+    :param Quantity hi_en: The upper energy limit for the image or expmap, in astropy energy units.
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+        90% of available.
+    :param bool disable_progress: Setting this to true will turn off the eSASS generation progress 
+        bar.
+    """
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. 
     # If sources is a Source object, then that property contains the telescopes associated with 
     # that source, and if it is a Sample object then 'telescopes' contains the list of unique 
