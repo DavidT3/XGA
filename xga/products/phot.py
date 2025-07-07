@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2024, 14:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:25. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -3053,7 +3053,8 @@ class RateMap(Image):
         return edge_flag
 
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
-                        allow_negative: bool = False):
+                        allow_negative: bool = False, x_slice_lims: List[int] = None,
+                        y_slice_lims: List[int] = None):
         """
         A signal-to-noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
@@ -3068,50 +3069,70 @@ class RateMap(Image):
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+            masks, and as such have to be applied to the data array.
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+            masks, and as such have to be applied to the data array.
         :return: A signal-to-noise value for the source region.
         :rtype: float
         """
+        # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
+        #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
+        #  as well
+        if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
+            raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
+        elif x_slice_lims is None:
+            x_slice = slice(0, None)
+            y_slice = slice(0, None)
+        else:
+            x_slice = slice(*x_slice_lims)
+            y_slice = slice(*y_slice_lims)
+
+        # The shape of the data - we want to compare the mask shapes to make sure they can be applied. If the slicing
+        #  limits passed were None then it'll be the shape of the whole image
+        sel_shape = self.image.data[y_slice, x_slice].shape
+
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
-        if source_mask.shape != self.shape:
-            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        if source_mask.shape != sel_shape:
+            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
-        elif back_mask.shape != self.shape:
-            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif back_mask.shape != sel_shape:
+            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask*self.sensor_mask).sum()
-        back_area = (back_mask*self.sensor_mask).sum()
+        src_area = (source_mask*self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask*self.sensor_mask[y_slice, x_slice]).sum()
 
         # Exposure correction takes into account the different exposure times of the individual pixels
         if exp_corr:
             # Find an average background per pixel COUNT RATE by dividing the total cr in the background region by the
             #  number of pixels in the mask
-            av_back = (self.data * back_mask).sum() / back_area
+            av_back = (self.data[y_slice, x_slice] * back_mask).sum() / back_area
             # Then we use the exposure map to create a background COUNT map for the observation, by multiplying the
             #  average background count rate by the exposure map
-            scaled_source_back_counts = self.expmap.data * av_back * source_mask
+            scaled_source_back_counts = self.expmap.data[y_slice, x_slice] * av_back * source_mask
             # Then we create a background subtracted map of the source by subtracting the background map
-            source_map = (self.image.data * source_mask) - scaled_source_back_counts
+            source_map = (self.image.data[y_slice, x_slice] * source_mask) - scaled_source_back_counts
             # Some pixels could be negative now, but if we're not allowing negative values then they get
             #  set to zero
             if not allow_negative:
                 source_map[source_map < 0] = 0
             # Then we sum the source count map to find a total source count value, and divide that by the square root
             #  of the total number of counts (NON BACKGROUND SUBTRACTED) within the source mask
-            sn = source_map.sum() / np.sqrt((self.image.data * source_mask).sum())
+            sn = source_map.sum() / np.sqrt((self.image.data[y_slice, x_slice] * source_mask).sum())
         else:
             # Calculate an area normalisation so the background counts can be scaled to the source counts properly
             area_norm = src_area / back_area
             # Find the total counts within the source area
-            tot_cnt = (self.image.data * source_mask).sum()
+            tot_cnt = (self.image.data[y_slice, x_slice] * source_mask).sum()
             # Find the total counts within the background area
-            bck_cnt = (self.image.data * back_mask).sum()
+            bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
             # Signal to noise is then just finding the source counts by subtracting the area scaled background counts
             #  and dividing by the square root of the total counts within the source area
@@ -3119,44 +3140,66 @@ class RateMap(Image):
 
         return sn
 
-    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray) -> Quantity:
+    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray,
+                                     x_slice_lims: List[int] = None,
+                                     y_slice_lims: List[int] = None) -> Quantity:
         """
         This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
         drawn from the exposure map) to calculate the number of background-subtracted counts within the source
         region of the image used to construct this RateMap.
 
         The exposure map is used to construct a sensor mask, so that we know where the chip gaps are and take
-        them into account when calculating the ratio of areas of the source region to the background region. This
+        them into account when calculating the area ratio of the source region to the background region. This
         is why this method is built into the RateMap rather than Image class.
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+            masks, and as such have to be applied to the data array.
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+            masks, and as such have to be applied to the data array.
         :return: The background subtracted counts in the source region.
         :rtype: Quantity
         """
+        # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
+        #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
+        #  as well
+        if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
+            raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
+        elif x_slice_lims is None:
+            x_slice = slice(0, None)
+            y_slice = slice(0, None)
+        else:
+            x_slice = slice(*x_slice_lims)
+            y_slice = slice(*y_slice_lims)
+
+        # The shape of the data - we want to compare the mask shapes to make sure they can be applied. If the slicing
+        #  limits passed were None then it'll be the shape of the whole image
+        sel_shape = self.image.data[y_slice, x_slice].shape
+
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
-        if source_mask.shape != self.shape:
-            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        if source_mask.shape != sel_shape:
+            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
-        elif back_mask.shape != self.shape:
-            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif back_mask.shape != sel_shape:
+            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask * self.sensor_mask).sum()
-        back_area = (back_mask * self.sensor_mask).sum()
+        src_area = (source_mask * self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask * self.sensor_mask[y_slice, x_slice]).sum()
 
         # Calculate an area normalisation so the background counts can be scaled to the source counts properly
         area_norm = src_area / back_area
         # Find the total counts within the source area
-        tot_cnt = (self.image.data * source_mask).sum()
+        tot_cnt = (self.image.data[y_slice, x_slice] * source_mask).sum()
         # Find the total counts within the background area
-        bck_cnt = (self.image.data * back_mask).sum()
+        bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
         # Simple calculation, re-normalising the background counts with the area ratio and subtracting background
         #  from the source. Then storing it in an astropy quantity

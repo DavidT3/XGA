@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -45,7 +45,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     if ((not isinstance(sources, list) and 'xmm' not in sources.telescopes) or
             (isinstance(sources, list) and 'xmm' not in sources[0].telescopes)):
         raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
-                                          "image cannot be generated.")
+                                          "images cannot be generated.")
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately

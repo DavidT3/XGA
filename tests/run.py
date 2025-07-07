@@ -1,13 +1,15 @@
-import os 
-import unittest
-import shutil 
-from subprocess import Popen, PIPE
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+
+import os
+import shutil
 import sys
+import unittest
+from subprocess import Popen, PIPE
 
 from astropy.units import Quantity
-from astropy.coordinates import SkyCoord
-from daxa.mission import XMMPointed, eRASS1DE
 from daxa.archive import Archive
+from daxa.mission import XMMPointed, eRASS1DE
 from daxa.process.simple import full_process_xmm, full_process_erosita
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -76,7 +78,7 @@ def move_og_cfg(module):
     # For some reason an error is happening when I used the path '~/.config' so I need to use 
     # expanduser to return the absolute path to the home directory
     home_dir = os.path.expanduser("~")
-    # config_path is the absolute path to ~/.config/{module}
+    # config_path is the absolute path to ~/.config/{module}
     config_path = home_dir + f"/.config/{module}"
 
     # Now we need to move the original files that where in ~/.config/{module} elsewhere, because the 
@@ -97,7 +99,7 @@ def obtain_test_data():
     """
     Uses DAXA to download the test data for the source. This processes the data too.
     """
-    # need to import here so it retrieves the new test config, instead of the user's config
+    # need to import here so it retrieves the new test config, instead of the user's config
     import daxa
     from daxa import daxa_conf
 
@@ -141,12 +143,12 @@ def restore_og_cfg(module):
     # For some reason error where happening when I used the path '~/.config' so I need to use expanduser
     # to return the absolute path to the home directory
     home_dir = os.path.expanduser("~")
-    # xga_config_path is the absolute path to ~/.config/xga
+    # xga_config_path is the absolute path to ~/.config/xga
     config_path = home_dir + f".config/{module}"
 
     if os.path.exists(config_path):
         print('deleting test config dir')
-        # Then we delete the test config file
+        # Then we delete the test config file
         shutil.rmtree(config_path)
         print('moving the original config file back')
         # And then move the original back
@@ -162,7 +164,7 @@ def clean_up_test_files():
     if os.path.exists("./tests/test_data/daxa_out"):
         shutil.rmtree("./tests/test_data/daxa_out")
 
-#  TODO work out how to run this after all the tests have been run in different files
+#  TODO work out how to run this after all the tests have been run in different files
 def clean_up_tests():
     """
     Run after all tests have been run. This restores any original configuration files and if
@@ -178,8 +180,6 @@ def clean_up_tests():
 
 if __name__ == "__main__":
     set_up_tests()  # Run before any tests
-
-    import xga
 
     if TEST_MODE == 'COV':
         cmd = 'coverage run -m unittest discover'

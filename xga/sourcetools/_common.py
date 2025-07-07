@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -12,30 +12,35 @@ from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
+from ..samples import BaseSample
 from ..samples import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
-from ..samples import BaseSample
 from ..xspec.fit import single_temp_apec
 
-def _get_all_telescopes(sources: Union[BaseSource, BaseSample, list]) -> list:
-    """
-    Returns a list of all the telescopes associated to each Source. For most functions within
-    sourcetools, the initial sources argument may be a list, so the telescopes attribute can't be
-    used.
-    """
 
+def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]) -> List[str]:
+    """
+    Returns a list of all the telescopes associated with at least one source. For most functions within
+    xga.sourcetools, the initial sources argument may be a list, so the 'telescopes' attribute can't be
+    used.
+
+    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to extract telescope information from.
+    :return: A list of telescope names that are associated with at least one of the sources
+        that were passed in.
+    :rtype: List[str]
+    """
     if isinstance(sources, list):
         # This collects all telescopes associated with each source, so there will be duplicates
         all_telescopes_inc_dups = []
         for src in sources:
             all_telescopes_inc_dups.extend(src.telescopes)
-        # and now removing the duplicates
+        # Now removing the duplicates
         all_telescopes = list(set(all_telescopes_inc_dups))
-    
     else:
         all_telescopes = sources.telescopes
     
     return all_telescopes
+
 
 def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, min_counts: int,
                   min_sn: float, over_sample: float, num_cores: int, psf_bins: int, stacked_spectra: bool):
@@ -43,18 +48,19 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
     global_out_rads = region_setup(sources, global_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
-    all_tels = sources.telescopes
-    # If it's a single source I shove it in a list, so I can just iterate over the sources parameter
-    #  like I do when it's a Sample object
+    # Gets all telescopes associated with at least one source
+    all_tels = _get_all_telescopes(sources)
+    # If it's a single source, we put it in a list so we can iterate over the single source like a sample
     if isinstance(sources, BaseSource):
         sources = [sources]
 
-    # We also want to make sure that everything has a PSF corrected image, using all the default settings
-    rl_psf(sources, bins=psf_bins)
+    # If XMM is associated with at least one source, we'll run PSF correction
+    if 'xmm' in all_tels:
+        # We also want to make sure that everything has a PSF corrected image, using all the default settings
+        rl_psf(sources, bins=psf_bins)
 
     # We do this here (even though its also in the density measurement), because if we can't measure a global
-    #  temperature then its absurdly unlikely that we'll be able to measure a temperature profile, so we can avoid
-    #  even trying and save some time.
+    #  temperature, then its unlikely that we'll be able to measure a temperature profile
     single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
                      min_sn=min_sn, over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
@@ -79,7 +85,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
                 has_glob_temp[tel].append(True)
             except ModelNotAssociatedError:
                 warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
-                    "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
+                     "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
                 has_glob_temp[tel].append(False)
             # If the telescope is not associated with this Source it will raise a NotAssociatedError
             except NotAssociatedError:
@@ -116,8 +122,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sb_model = model_check(sources, sb_model)
     dens_model = model_check(sources, dens_model)
     temp_model = model_check(sources, temp_model)
-    print('temp_model')
-    print(temp_model)
 
     # I also set up dictionaries, so that models for specific clusters (as you can pass individual model instances
     #  for different clusters) are assigned to the right source when we start cutting down the sources based on
@@ -125,23 +129,21 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sb_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(sb_model)}
     dens_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(dens_model)}
     temp_model_dict = {str(sources[m_ind]): m for m_ind, m in enumerate(temp_model)}
-    print('temp_model_dict')
-    print(temp_model_dict)
 
     # Here we take only the sources that have a successful global temperature measurement for at 
     # least one of the associated telescopes
     cut_sources = []
     for sind, src in enumerate(sources):
         # The format of has_glob_temp is a dictionary with telescope keys, and then an array of booleans
-        # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
+        # ie. has_glob_temp = {'xmm' : [True, True, False], 'erosita' : [True, True, True]}
         # So we need to cycle through each key and collect the correct indicies to the corresponding source
         # has_temp is storing the boolean for every telescope 
         has_temp = []
         for key in has_glob_temp:
             has_temp.append(has_glob_temp[key][sind])
 
-        # If a source has a glob temp in at least one telescope it gets passed on
-        # If the sum is 0 that means every element in has_temp was False, and we discard these sources
+        # If a source has a global temperature from at least one telescope, we'll continue analysing
+        # If the sum is 0 that means every element in has_temp was False, and we discard this source
         if sum(has_temp) > 0:
             cut_sources.append(src)
     
@@ -159,7 +161,6 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                         freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
                                         temp_hi_en=temp_hi_en, num_cores=num_cores, stacked_spectra=stacked_spectra)
 
-    # DAVID_QUESTION case where a source has a measured glob temp in one telescope and not the others
     # We are reorganising this temp_profs output so it is easier to cycle through in later functions
     # temp_prof_dict will have sources as keys, then a dictionary value, this dictionary has
     # telescope keys with values that are the profile object, ie. {src1: {'xmm' : Profile}}
@@ -175,7 +176,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     # Now we take only the sources that have successful 3D temperature profiles. 
     # We do the temperature profile stuff first because its more difficult, and why should we waste 
     # time on a density profile if the temperature profile cannot even be measured.
-    # We keep source that have had at least one successful profile in any of the associated telescopes.
+    # We keep sources that have at least one successfully measured profile from any of the associated telescopes.
     cut_cut_sources = []
     for p_ind, p in enumerate(cut_sources):
         # the string of the source objects is the key in temp_prof_dict
@@ -217,7 +218,5 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             src_dict[tel] = dens_profs[tel][p_ind]
         dens_prof_dict[str(cut_cut_sources[p_ind])] = src_dict
 
-    print('dens_prof_dict')
-    print(dens_prof_dict)
     return sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict
 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:58. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1419,7 +1419,7 @@ class BaseSource:
                 # Assemble a set of observations-instrument strings for the current row, to test against the
                 #  src_oi_set we assembled earlier
                 test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-                # getting a list of obs_ids to parse to the Eventlist object
+                # getting a list of obs_ids to parse to the Eventlist object
                 obs_list = list(set(o_split))
                 # First we make sure the sets are the same length, if they're not then we know before starting that this
                 #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
@@ -1434,15 +1434,15 @@ class BaseSource:
                 for row_ind, row in rel_inven.iterrows():
                     # Spectra can have combined observations but individual instruments.
                     # Checking that a spectrum is associated to the source is different depending
-                    # on if the instrument is combined or not
+                    # on if the instrument is combined or not
                     o_split = row['obs_ids'].split('/')
-                    # if there is a '/' in the insts entry, that means it should be all the instruments combined
+                    # if there is a '/' in the insts entry, that means it should be all the instruments combined
                     if '/' in row['insts']:
                         i_split = row['insts'].split('/')
                         # Assemble a set of observations-instrument strings for the current row, to test against the
                         #  src_oi_set we assembled earlier
                         test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-                        # getting a list of obs_ids to parse to the Eventlist object
+                        # getting a list of obs_ids to parse to the Eventlist object
                         obs_list = list(set(o_split))
                         # First we make sure the sets are the same length, if they're not then we know before starting that this
                         #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
@@ -2729,17 +2729,17 @@ class BaseSource:
 
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
-                elif isinstance(po, (AnnularSpectra)) and update_inv:                         # Don't want to store a None value as a string for the info_key
+                elif isinstance(po, AnnularSpectra) and update_inv:
                     if extra_key is None:
                         info_key = ''
                     else:
                         info_key = extra_key
-                    # Adding each component product to the inventory
+                    # Adding each component product to the inventory
                     for comp_po in po.all_spectra:
                         if comp_po.obs_id == "combined":
                             inven = pd.read_csv(OUTPUT + "{t}/combined/inventory.csv".format(t=tel), dtype=str)
 
-                            # For the erosita telescope it is possible to have a combined obs product for
+                            # For the erosita telescope it is possible to have a combined obs product for
                             # an individual instrument - with spectra and annular spectra
                             use_inst = comp_po.instrument
                             # TODO AT LEAST SOME COMBINED PRODUCTS NOW DO HAVE THIS INFORMATION STORED IN THEM, IT WOULD
@@ -3366,7 +3366,7 @@ class BaseSource:
         else:
             extra_name = ''
 
-        # And if it was oversampled during generation then we need to include that as well
+        # And if it was oversampled during generation, then we need to include that as well
         if over_sample is not None:
             extra_name += "_ovsamp{ov}".format(ov=over_sample)
 
@@ -3391,16 +3391,17 @@ class BaseSource:
         # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
         #  properly constructed storage key
         if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name, telescope=telescope)
+            matched_prods = self.get_products('combined_annular_spectrum',
+                                              extra_key=spec_storage_name, telescope=telescope)
         # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
         elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
+            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
                              if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
         # However if they have passed a setID then this over-rides everything else
         else:
             # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
             #  whatever the user passed in
-            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
+            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
                              if p.set_ident == set_id]
 
         if len(matched_prods) == 1:
@@ -4084,7 +4085,7 @@ class BaseSource:
                                    telescope=telescope)
         else:
             raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
-                             " pass both obs_id and inst.".format(s=self.name))
+                             "pass both 'obs_id' and 'inst'.".format(s=self.name))
 
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
@@ -4098,7 +4099,7 @@ class BaseSource:
                                             outer_radius * self._back_inn_factor, obs_id=obs_id,
                                             central_coord=central_coord)
 
-        # We use the ratemap's built in signal to noise calculation method
+        # We use the ratemap's built in signal-to-noise calculation method
         sn = rt.signal_to_noise(src_mask, bck_mask, exp_corr, allow_negative)
 
         return sn
@@ -5030,9 +5031,10 @@ class BaseSource:
         return reject_dict
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
-                    allow_negative: bool = False, telescope: List[str] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+                    allow_negative: bool = False, telescope: Union[str, List[str]] = None,
+                    stacked_inst: bool = False) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
-        This method generates a list of ObsID-Instrument pairs, ordered by the signal to noise measured for the
+        This method generates a list of ObsID-Instrument pairs, ordered by the signal-to-noise measured for the
         given region, with element zero being the lowest SNR, and element N being the highest.
 
         :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
@@ -5043,50 +5045,69 @@ class BaseSource:
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-        :param List[str] telescope: The telescopes to return snr rankings for. By default these will be all telescopes
-            associated to the source.
-        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending signal-to-noise, then a dictionary containing an array containing the order SNR ratios.
+        :param str/List[str] telescope: The telescopes to calculate signal-to-noise rankings for. Default is
+            None, meaning all associated telescopes will be used.
+        :param bool stacked_inst: If True, then SNR-ranking will be performed at an ObsID level, using stacked
+            instrument data for each ObsID (if available). Default is False.
+        :return: Two dictionaries; the first contains ObsID-instrument information (as an Nx2 array) sorted by
+            ascending signal-to-noise, the second contains the signal-to-noise values. The top level keys of the
+            dictionaries are telescopes names.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
+        # The user may have specified the telescope(s), or they may have left it as None. If None then we use all
+        #  telescopes associated with this source
         if telescope is None:
             telescope = self.telescopes
+        elif isinstance(telescope, str):
+            telescope = [telescope]
 
         obs_inst_dict = {}
         snrs_dict = {}
-
         for tel in telescope:
-            # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
-            obs_inst = []
-            snrs = []
-            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-            for obs_id in self.instruments[tel]:
-                for inst in self.instruments[tel][obs_id]:
-                    # Use our handy get_snr method to calculate the SNRs we want, then add that and the
-                    #  ObsID-inst combo into their respective lists
-                    snrs.append(
-                        self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst, allow_negative))
-                    obs_inst.append([obs_id, inst])
+            try:
+                # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+                obs_inst = []
+                snrs = []
+                # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+                for obs_id in self.instruments[tel]:
+                    # If the stacked instrument argument is NOT true, then this is every instrument available for
+                    #  the current ObsID. Otherwise, it's just 'combined' (i.e. the stack of all instruments
+                    #  for the current ObsID)
+                    rel_insts = self.instruments[tel][obs_id] if not stacked_inst else ['combined']
+                    for inst in rel_insts:
+                        # Use our handy get_snr method to calculate the SNRs we want, then add that and the
+                        #  ObsID-inst combo into their respective lists
+                        snrs.append(self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst,
+                                    allow_negative))
+                        obs_inst.append([obs_id, inst])
 
-            # Make our storage lists into arrays, easier to work with that way
-            obs_inst = np.array(obs_inst)
-            snrs = np.array(snrs)
+                # Make our storage lists into arrays, easier to work with that way
+                obs_inst = np.array(obs_inst)
+                snrs = np.array(snrs)
 
-            # We want to order the output by SNR, with the lowest being first and the highest being last, so we
-            #  use a numpy function to output the index order needed to re-order our two arrays
-            reorder_snrs = np.argsort(snrs)
-            # Then we use that to re-order them
-            snrs = snrs[reorder_snrs]
-            obs_inst = obs_inst[reorder_snrs]
+                # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+                #  use a numpy function to output the index order needed to re-order our two arrays
+                reorder_snrs = np.argsort(snrs)
+                # Then we use that to re-order them
+                snrs = snrs[reorder_snrs]
+                obs_inst = obs_inst[reorder_snrs]
 
-            obs_inst_dict[tel] = obs_inst
-            snrs_dict[tel] = snrs
+                obs_inst_dict[tel] = obs_inst
+                snrs_dict[tel] = snrs
+            except NoProductAvailableError:
+                if not stacked_inst:
+                    warn("Individual ObsID-Instrument {t} ratemaps have not been generated "
+                         "for {s}".format(t=tel, s=self.name), stacklevel=2)
+                else:
+                    warn('Stacked-instrument whole ObsID {t} ratemaps have not been '
+                         'generated for {s}'.format(t=tel, s=self.name), stacklevel=2)
 
         # And return our ordered dictionaries
         return obs_inst_dict, snrs_dict
 
-    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
-                      hi_en: Quantity = None) -> Tuple[np.ndarray, Quantity]:
+    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                      telescope: Union[str, List[str]] = None,
+                      stacked_inst: bool = False) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
         given region, with element zero being the lowest counts, and element N being the highest.
@@ -5097,32 +5118,69 @@ class BaseSource:
             in which case the lower energy bound for peak finding will be used (default is 0.5keV).
         :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
-        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending counts, then an array containing the order counts ratios.
-        :rtype: Tuple[np.ndarray, Quantity]
+        :param str/List[str] telescope: The telescopes to calculate count rankings for. Default is
+            None, meaning all associated telescopes will be used.
+        :param bool stacked_inst: If True, then count-ranking will be performed at an ObsID level, using stacked
+            instrument data for each ObsID (if available). Default is False.
+        :return: Two dictionaries; the first contains ObsID-instrument information (as an Nx2 array) sorted by
+            ascending count, the second contains the count values. The top level keys of the
+            dictionaries are telescopes names.
+        :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
-        # Set up some lists for the ObsID-Instrument combos and their cnts respectively
-        obs_inst = []
-        cnts = []
-        # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-        for obs_id in self.instruments:
-            for inst in self.instruments[obs_id]:
-                cnts.append(self.get_counts(outer_radius, 'xmm', self.default_coord, lo_en, hi_en, obs_id, inst))
-                obs_inst.append([obs_id, inst])
 
-        # Make our storage lists into arrays, easier to work with that way
-        obs_inst = np.array(obs_inst)
-        cnts = Quantity(cnts)
+        # The user may have specified the telescope(s), or they may have left it as None. If None then we use all
+        #  telescopes associated with this source
+        if telescope is None:
+            telescope = self.telescopes
+        elif isinstance(telescope, str):
+            telescope = [telescope]
 
-        # We want to order the output by counts, with the lowest being first and the highest being last, so we
-        #  use a numpy function to output the index order needed to re-order our two arrays
-        reorder_cnts = np.argsort(cnts)
-        # Then we use that to re-order them
-        cnts = cnts[reorder_cnts]
-        obs_inst = obs_inst[reorder_cnts]
+        # These dictionaries will have telescope name as top level keys, and will store the calculated counts
+        #  and the ObsID-inst combos
+        obs_inst_dict = {}
+        cnts_dict = {}
+        for tel in telescope:
+            try:
+                # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+                obs_inst = []
+                cnts = []
+                # We loop through the ObsIDs associated with this source and the instruments
+                #  associated with those ObsIDs
+                for obs_id in self.instruments[tel]:
+                    # If the stacked instrument argument is NOT true, then this is every instrument available for
+                    #  the current ObsID. Otherwise, it's just 'combined' (i.e. the stack of all instruments
+                    #  for the current ObsID)
+                    rel_insts = self.instruments[tel][obs_id] if not stacked_inst else ['combined']
+                    # Iterating through the instruments
+                    for inst in rel_insts:
+                        # Use a built-in source method to calculate the relevant counts, then add that and the
+                        #  ObsID-inst combo into their respective lists
+                        cnts.append(self.get_counts(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst))
+                        obs_inst.append([obs_id, inst])
 
-        # And return our ordered dictionaries'
-        return obs_inst, cnts
+                # Make our storage lists into arrays, easier to work with that way
+                obs_inst = np.array(obs_inst)
+                cnts = Quantity(cnts)
+
+                # We want to order the output by counts, with the lowest being first and the highest being last, so we
+                #  use a numpy function to output the index order needed to re-order our two arrays
+                reorder_cnts = np.argsort(cnts)
+                # Then we use that to re-order them
+                cnts = cnts[reorder_cnts]
+                obs_inst = obs_inst[reorder_cnts]
+
+                obs_inst_dict[tel] = obs_inst
+                cnts_dict[tel] = cnts
+            except NoProductAvailableError:
+                if not stacked_inst:
+                    warn("Individual ObsID-Instrument {t} ratemaps have not been generated "
+                         "for {s}".format(t=tel, s=self.name), stacklevel=2)
+                else:
+                    warn('Stacked-instrument whole ObsID {t} ratemaps have not been '
+                         'generated for {s}'.format(t=tel, s=self.name), stacklevel=2)
+
+        # And return our ordered dictionaries
+        return obs_inst_dict, cnts_dict
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
         """

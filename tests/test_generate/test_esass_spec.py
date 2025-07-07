@@ -1,14 +1,12 @@
-import unittest
-import sys
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+
 import os
+import sys
+import unittest
 
-from astropy.units import Quantity
-
-import xga
-from xga.sources import GalaxyCluster
 from xga.generate.esass.spec import srctool_spectrum
 from xga.products import Spectrum
-
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -71,4 +69,4 @@ class TestEsassSpecFuncs(unittest.TestCase):
 
 
 
-# TODO test that annular spectra with combined obs but individual instruments are stored correctly
+# TODO test that annular spectra with combined obs but individual instruments are stored correctly

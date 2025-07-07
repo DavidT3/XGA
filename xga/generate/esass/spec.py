@@ -1,12 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 13:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
 from random import randint
+from shutil import rmtree
 from typing import Union, List
 from warnings import warn
-from shutil import rmtree
 
 import numpy as np
 from astropy.units import Quantity
@@ -521,7 +521,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         # need to set this so the combine_obs variable doesnt get overwritten
         use_combine_obs = combine_obs
         # if the user has set combine_obs to True and there is only one observation, then we
-        # use the combine_obs = False functionality instead
+        # use the combine_obs = False functionality instead
         if use_combine_obs and (len(source.obs_ids['erosita']) == 1):
             use_combine_obs = False
 

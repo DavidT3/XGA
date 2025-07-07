@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/08/2024, 13:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -15,10 +15,11 @@ from astropy.constants import m_p
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
 
+from ._common import _get_all_telescopes
 from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, \
-                         ParameterNotAssociatedError
+    ParameterNotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
@@ -29,7 +30,6 @@ from ..sourcetools import ang_to_rad
 from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
-from ._common import _get_all_telescopes
 
 ALLOWED_INV_ABEL = ['direct', 'basex', 'hansen_law_ho0', 'hansen_law_ho1', 'onion_bordas', 'onion_peeling',
                     'two_point', 'three_point', 'daun']
@@ -263,7 +263,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
                      / (e_to_p_ratio * 10 ** -14))
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
-            # but if inst = None, we only want to retreive combined instrument spectra
+            # but if inst = None, we only want to retreive combined instrument spectra
             if tel == 'erosita' and inst[tel][src_ind] == None:
                 lookup_obs = 'combined'
                 lookup_inst = 'combined'
@@ -479,7 +479,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                       stacked_spectra=stacked_spectra)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius
-    # values
+    # values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
 
     # Need to sort out the type of model input that the user chose, and make sure its ready to be
@@ -500,9 +500,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         for src_ind, src in enumerate(sources):
             for tel in src.telescopes:
                 if tel == 'erosita' and psf_corr:
-                    warn("PSF correction is not yet implemented for the erosita telescope."
-                        "Erosita surface brightness profiles will be done without PSF correction.")
-
+                    warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+                         "brightness profiles will not be corrected.", stacklevel=2)
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
@@ -646,7 +645,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
     :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation
         of the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or
         Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. If you are generating for multiple sources then you can also
+        inner radius will be ignored. If you are generating for multiple sources, then you can also
         pass a Quantity with one entry per source.
     :param bool num_dens: If True then a number density profile will be generated, otherwise a mass
         density profile will be generated.
@@ -688,9 +687,9 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
             change quite dramatically across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts
-        per channel. To disable minimum counts set this parameter to None.
+        per channel. To disable minimum counts, set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
-        each channel. To disable minimum signal-to-noise set this parameter to None.
+        each channel. To disable minimum signal-to-noise, set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable.
         e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that
         energy.
@@ -713,7 +712,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
         supported, this function will instead use individual spectra for an ObsID. The default is
         False.
     :return: A list of the 3D gas density profiles measured by this function, though if the
-        measurement was not successful an entry of None will be added to the list.
+        measurement was not successful, an entry of None will be added to the list.
     :rtype: List[GasDensity3D]
     """
     if annulus_method not in ALLOWED_ANN_METHODS:
@@ -740,7 +739,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
-    # collecting all the associated telescopes here for later use
+    # Collecting all the associated telescopes here for later use
     all_tels = _get_all_telescopes(sources)
 
     # So we can iterate through sources without worrying if there's more than one cluster
@@ -748,7 +747,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
         sources = [sources]
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
-    # the gas_density_profile method of APECNormalisation1D
+    # the gas_density_profile method of APECNormalisation1D
     final_dens_profs = {key : [] for key in all_tels}
     with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as \
         dens_prog:
@@ -776,14 +775,16 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                 # It is possible that no normalisation profile exists because the spectral fitting
                 # failed, we account for that here
                 except NoProductAvailableError:
-                    warn("{s} doesn't have a matching apec normalisation profile, skipping.")
+                    warn("The relevant APEC normalisation profile for {s} cannot be located, and a density "
+                         "profile cannot be calculated.".format(s=src.name), stacklevel=2)
                     final_dens_profs[tel].append(None)
 
                 # It's also possible that the gas_density_profile method of our normalisation
                 # profile is going to throw a ValueError because some values are infinite or NaNs
                 # - we have to catch that too
                 except ValueError:
-                    warn("{s}'s density profile has NaN values in it, skipping.", stacklevel=2)
+                    warn("The calculated density profile for {s} contains NaN values, and is considered "
+                         "invalid.".format(s=src.name), stacklevel=2)
                     final_dens_profs[tel].append(None)
 
             dens_prog.update(1)
