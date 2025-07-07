@@ -4,6 +4,7 @@
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
+import sys
 
 import numpy as np
 from astropy.constants import k_B, G, m_p
@@ -87,6 +88,8 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # Saves the reference to the RateMap this profile was generated from
         self._ratemap = rt
+
+        print(f"Size of rt: {sys.getsizeof(self._ratemap)} bytes")
 
         # Set the internal type attribute to brightness profile
         self._prof_type = "brightness"
