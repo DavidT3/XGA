@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:22. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -283,8 +283,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     :param int psf_bins: If PSF corrected, the number of bins per side.
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use. Default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
