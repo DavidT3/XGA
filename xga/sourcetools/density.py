@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 16:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 17:04. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -391,7 +391,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                           conv_outer_radius: Quantity = "r500", inv_abel_method: str = None,
                           num_cores: int = NUM_CORES, show_warn: bool = True,
-                          stacked_spectra: bool = False) -> List[GasDensity3D]:
+                          stacked_spectra: bool = False) -> Dict[str, List[Union[GasDensity3D, None]]]:
     """
     A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile
     is fit with a model and an inverse abel transform is used to infer the 3D count-rate/volume
@@ -476,9 +476,10 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
-    :return: A list of the 3D gas density profiles measured by this function, though if the
-        measurement was not successful an entry of None will be added to the list.
-    :rtype: List[GasDensity3D]
+    :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
+        names. The values are lists with one entry per source, even if the source in question doesn't have
+        that telescope associated or the profile construction process failed.
+    :rtype: Dict[str, List[Union[GasDensity3D, None]]]
     """
     # Run the setup function, calculates the factors that translate 3D countrate to density
     #  Also checks parameters and runs any spectra/fits that need running
@@ -521,7 +522,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                   obs_id[tel][src_ind], inst[tel][src_ind])
 
                 if sb_prof is None:
-                    final_dens_profs[tel][src_ind].append(None)
+                    final_dens_profs[tel][src_ind] = None
                     continue
                 else:
                     src.update_products(sb_prof)
@@ -610,16 +611,16 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                     deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
 
                         src.update_products(dens_prof)
-                        final_dens_profs[tel][src_ind].append(dens_prof)
+                        final_dens_profs[tel][src_ind] = dens_prof
 
                     # If, for some reason, there are some inf/NaN values in any of the quantities
                     #  passed to the GasDensity3D declaration, this is where an error will be thrown
                     except ValueError:
-                        final_dens_profs[tel][src_ind].append(None)
+                        final_dens_profs[tel][src_ind] = None
                         warn("One or more of the quantities passed to the init of {}'s density " 
                             "profile has a NaN or Inf value in it.".format(src.name), stacklevel=2)
                 else:
-                    final_dens_profs[tel].append(None)
+                    final_dens_profs[tel][src_ind] = None
 
             dens_prog.update(1)
 
@@ -634,7 +635,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                   group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                   obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
                   conv_outer_radius: Quantity = "r500", num_cores: int = NUM_CORES,
-                  stacked_spectra: bool = False) -> List[GasDensity3D]:
+                  stacked_spectra: bool = False) -> Dict[str, List[Union[GasDensity3D, None]]]:
     """
     A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile inverse
     abel transformed, thus inferring the 3D count-rate/volume profile. Then a conversion factor calculated from
@@ -735,9 +736,10 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
-    :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
-        successful an entry of None will be added to the list.
-    :rtype: List[GasDensity3D]
+    :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
+        names. The values are lists with one entry per source, even if the source in question doesn't have
+        that telescope associated or the profile construction process failed.
+    :rtype: Dict[str, List[Union[GasDensity3D, None]]]
     """
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
