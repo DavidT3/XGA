@@ -32,7 +32,8 @@ class TestEsassSpecFuncs(unittest.TestCase):
         """
         srctool_spectrum(SRC_ALL_TELS, 'r500', combine_tm=True, combine_obs=False)
 
-        spec = SRC_ALL_TELS.get_spectra('r500', telescope='erosita', inst='combined')
+        spec = SRC_ALL_TELS.get_spectra('r500', telescope='erosita', inst='combined', 
+                                        obs_id='227093')
 
         assert isinstance(spec, Spectrum)
         assert spec.telescope == 'erosita'
