@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:44. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -20,7 +20,7 @@ from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, \
     ParameterNotAssociatedError
-from ..generate.multitelescope.phot import all_telescope_combined_images
+from ..generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
@@ -110,6 +110,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     # TODO Once spectrum fitting functions have a telescope argument, then so will the _dens_setup function, and
     #  then we can pass it through here
     all_telescope_combined_images(sources, lo_en, hi_en, telescope=None, num_cores=num_cores)
+    all_telescope_combined_expmaps(sources, lo_en, hi_en, telescope=None, num_cores=num_cores)
 
     # storing all the telescopes in a list for later use
     all_tels = _get_all_telescopes(sources)
