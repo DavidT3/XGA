@@ -20,12 +20,12 @@ class TestEsassSpecFuncs(unittest.TestCase):
         """
         srctool_spectrum(SRC_ALL_TELS, 'r500', combine_tm=False, combine_obs=False)
 
-        spec = SRC_ALL_TELS.get_spectra('r500', telescope='erosita', inst='TM1')
+        spec = SRC_ALL_TELS.get_spectra('r500', telescope='erosita', inst='tm1')
 
         assert isinstance(spec, Spectrum)
         assert spec.telescope == 'erosita'
         assert spec.obs_id != 'combined'
-        assert spec.instrument == 'TM1'
+        assert spec.instrument == 'tm1'
 
     def test_srctool_spectrum_combine_insts_t_combine_obs_f(self):
         """
