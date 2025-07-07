@@ -3247,7 +3247,10 @@ class BaseSource:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
             print("self.get_products('spectrum')")
-            print(self.get_products('spectrum', inst='TM1', telescope='erosita'))
+            aaa = self.get_products('spectrum', telescope='erosita'
+            print(self.get_products('spectrum', telescope='erosita'))
+            for spec in aaa:
+                print(spec.inst)
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
         return matched_prods
