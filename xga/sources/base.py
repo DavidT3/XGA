@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 10:42. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -147,7 +147,6 @@ class BaseSource:
             this will also be treated as False. If 'load_products' is True and this is False, then images, exposure
             maps, and lightcurves will be loaded, but spectra will not. Default is True.
         """
-        print('sanity')
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
         #  behaviour of this init in some significant ways
         if type(self) == NullSource:
@@ -185,7 +184,6 @@ class BaseSource:
         #  matching ObsIDs (for the first return, matches), or completely blacklisted (observations with SOME
         #  blacklisted instruments aren't included in this) ObsIDs (the second return).
         if not null_source:
-            print('running match')
             matches, excluded = separation_match(ra, dec, search_distance, telescope)
         else:
             # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
