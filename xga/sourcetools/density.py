@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 13:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 16:54. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -387,7 +387,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                           over_sample: float = None,
                           obs_id: Union[Dict[str, str], Dict[str, list]] = None,
-                          inst:Union[Dict[str, str], Dict[str, list]] = None,
+                          inst: Union[Dict[str, str], Dict[str, list]] = None,
                           conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                           conv_outer_radius: Quantity = "r500", inv_abel_method: str = None,
                           num_cores: int = NUM_CORES, show_warn: bool = True,
@@ -415,7 +415,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         has been passed).
     :param bool num_dens: If True then a number density profile will be generated, otherwise a mass
         density profile will be generated.
-    :param bool use_peak: If true the measured peak will be used as the central coordinate of the
+    :param bool use_peak: If True the measured peak will be used as the central coordinate of the
         profile.
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
     :param int/float min_snr: The minimum allowed signal-to-noise for the surface brightness
@@ -472,7 +472,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         Default is None.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
         to use.
-    :param bool show_warn: Should fit warnings be shown on screen.
+    :param bool show_warn: Controls whether fit warnings are displayed. Default is False.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
@@ -497,15 +497,15 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # First we check the number of arguments passed for the model
     model = model_check(sources, model)
 
+    # Reading out all telescopes associated with any of the sources
     all_tels = _get_all_telescopes(sources)
 
     # Setting up dict to store profiles in
-    final_dens_profs = {key : [] for key in all_tels}
+    final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in all_tels}
 
     with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
               total=len(sources), position=0) as dens_prog:
-        # I need the ratio of electrons to protons here as well, so just fetch that for the current
-        # abundance table
+        # We need the ratio of electrons to protons, and fetch that for the current abundance table
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
             for tel in src.telescopes:
@@ -521,7 +521,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                   obs_id[tel][src_ind], inst[tel][src_ind])
 
                 if sb_prof is None:
-                    final_dens_profs[tel].append(None)
+                    final_dens_profs[tel][src_ind].append(None)
                     continue
                 else:
                     src.update_products(sb_prof)
@@ -575,8 +575,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                     num_dens_dist = np.sqrt(transformed * conv_factors[tel][src_ind])* \
                                     (1+e_to_p_ratio)
 
-                    med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
-                    num_dens_err = np.std(num_dens_dist, axis=1)
+                    med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
+                    num_dens_err = np.nanstd(num_dens_dist, axis=1)
 
                     # Setting up the instrument and ObsID to pass into the density profile
                     # definition
@@ -599,7 +599,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                      telescope=tel)
                         else:
                             # TODO Check the origin of the mean molecular weight, see if there are
-                            # different values for different abundance tables
+                            #  different values for different abundance tables
                             # The mean molecular weight multiplied by the proton mass
                             conv_mass = MEAN_MOL_WEIGHT*m_p
                             dens_prof = GasDensity3D(dens_rads.to("kpc"),
@@ -610,16 +610,295 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                     deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
 
                         src.update_products(dens_prof)
-                        final_dens_profs[tel].append(dens_prof)
+                        final_dens_profs[tel][src_ind].append(dens_prof)
 
                     # If, for some reason, there are some inf/NaN values in any of the quantities
                     #  passed to the GasDensity3D declaration, this is where an error will be thrown
                     except ValueError:
-                        final_dens_profs[tel].append(None)
+                        final_dens_profs[tel][src_ind].append(None)
                         warn("One or more of the quantities passed to the init of {}'s density " 
                             "profile has a NaN or Inf value in it.".format(src.name), stacklevel=2)
                 else:
                     final_dens_profs[tel].append(None)
+
+            dens_prog.update(1)
+
+    return final_dens_profs
+
+
+def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
+                  inv_abel_method: str, num_dens: bool = True, use_peak: bool = True, pix_step: int = 1,
+                  min_snr: Union[int, float] = 0.0, abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
+                  hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True, psf_model: str = "ELLBETA",
+                  psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_samples: int = 10000,
+                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                  obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
+                  conv_outer_radius: Quantity = "r500", num_cores: int = NUM_CORES,
+                  stacked_spectra: bool = False) -> List[GasDensity3D]:
+    """
+    A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile inverse
+    abel transformed, thus inferring the 3D count-rate/volume profile. Then a conversion factor calculated from
+    simulated spectra is used to infer the number density profile.
+
+    There are a number of choices of method for inverse abel transforming, provided by the Python package PyAbel:
+
+    * direct - This attempts a direct integration of the inverse-Abel integral (see
+      https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
+      cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
+      radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
+      generated for a minimum signal-to-noise for instance) then this is the method that will be used.
+
+    * basex - This method (basis set expansion) uses functions with a known analytic inverse-abel
+      transform (gaussian-like in this case).
+
+    * hansen_law_ho0 - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
+      a coordinate transformation to model the Abel transform as a set of linear differential equation. This
+      particular choice uses hold_order=0, which assumes a constant intensity across a pixel (between grid points)
+      for the driving function (the image gradient for the inverse transform).
+
+    * hansen_law_ho1 - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
+      a coordinate transformation to model the Abel transform as a set of linear differential equation. This
+      particular choice uses hold_order=1, which assumes a linear intensity variation between grid points, which may
+      yield a more accurate transform for some functions
+
+    * onion_peeling - In the onion-peeling method the projection is approximated by rings of constant property,
+      see the PyAbel documentation for the mathematical explanation.
+
+    * two_point - The Abel integral is broken into intervals between the radius points, with the function
+      assumed to be constant within the points.
+
+    * three_point - This method exploits the observation that the value of the Abel inverted data at any radial
+      position r is primarily determined from changes in the projection data in the neighborhood of r. The
+      projection data (raw data) is expanded as a quadratic function of in the neighborhood of each data point,
+      which allows an analytical deprojection.
+
+    * daun - Similar to onion peeling, but uses 'Tikhonov regularization'.
+
+    The PyAbel documentation provides a useful discussion of when and when not to use different methods
+    (https://pyabel.readthedocs.io/en/latest/transform_methods.html), and the authors also wrote a paper comparing
+    the various methods (https://arxiv.org/abs/1902.09007).
+
+    :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
+        profiles for.
+    :param str/Quantity outer_radius: The radius to which the surface brightness profile should be generated. It can
+        be a named radius (e.g. 'r500', 'r200') or a quantity containing a value (or values, if a sample of clusters
+        has been passed).
+    :param str inv_abel_method: The method/algorithm which should be used for the inverse abel transform of the
+        surface brightness profile data. We advise reading the information in the docstring before making a choice, as
+        well as experimenting a little.
+    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
+        will be generated.
+    :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
+    :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
+    :param int/float min_snr: The minimum allowed signal-to-noise for the surface brightness
+        profiles. Default is 0, which disables automatic re-binning.
+    :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
+        electron/hydrogen number density ratio.
+    :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
+    :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
+    :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
+        surface brightness profile, and thus the density (if False density results could be incorrect).
+    :param str psf_model: If PSF corrected, the PSF model used.
+    :param int psf_bins: If PSF corrected, the number of bins per side.
+    :param str psf_algo: If PSF corrected, the algorithm used.
+    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
+    :param int num_samples: The number of samples drawn from the posterior distributions of model parameters
+        after the fitting process is complete.
+    :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
+    :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+        were grouped by minimum counts.
+    :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for fakeit
+        were grouped by minimum signal-to-noise.
+    :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
+    :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from.
+        This should be a dictionary of strings if a single source is being analysed, or a dictionary
+        of lists of ObsIDs the same length as the number of sources otherwise. The dictionary should
+        have keys for every telescope associated to the Source/Sample. If a source in a sample
+        doesn't have data associated to one of the telescopes, use an empty string for its place in
+        the list. The default is None, in which case the combined data will be used to measure the
+        density profile.
+    :param Dict[str, str]/Dict[str, list] inst: A specific instruments(s) to measure the density
+        from. This should be a dictionary of strings if a single source is being analysed, or if the
+        same instrument should be used for every source in the sample, or a dictionary of lists of
+        instruments the same length as the number of sources otherwise. The dictionary should have
+        keys for every telescope associated to the Source/Sample. The default is None, in which case
+        the combined data will be used to measure the density profile.
+    :param Quantity/Dict[str, Quantity] conv_temp: If set this will override XGA measured
+        temperatures within the conv_outer_radius, and the fakeit run to calculate the normalisation
+        conversion factor will use these temperatures. This can be set as a quantity, or a
+        dictionary of quantities with telescope keys to specify telescope specific temperatures.
+        The quantity should have an entry for each cluster being analysed. Default is None.
+    :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
+        for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
+        a single value or an entry for each cluster being analysed.
+    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
+    :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
+        successful an entry of None will be added to the list.
+    :rtype: List[GasDensity3D]
+    """
+    # Run the setup function, calculates the factors that translate 3D count-rate to density
+    #  Also checks parameters and runs any spectra/fits that need running
+    sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
+                                                      hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
+                                                      conv_temp, conv_outer_radius, num_cores, stacked_spectra)
+
+    # Calls the handy spectrum region setup function to make a predictable set of outer radius values
+    out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
+
+    # Before we properly get started, we just check that the user has passed an 'allowed' inverse-Abel transform
+    if inv_abel_method not in ALLOWED_INV_ABEL:
+        all_str = ", ".join(ALLOWED_INV_ABEL)
+        raise ValueError("{p} is not a supported inverse-Abel transform method, please choose from; "
+                         "{a}".format(p=inv_abel_method, a=all_str))
+
+    # Reading out all telescopes associated with any of the sources
+    all_tels = _get_all_telescopes(sources)
+
+    # Setting up dict to store profiles in
+    final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in all_tels}
+
+    with tqdm(desc="Inverse Abel transforming data and measuring densities",
+              total=len(sources), position=0) as dens_prog:
+        # Need the ratio of electrons to protons for the selected abundance table
+        e_to_p_ratio = NHC[abund_table]
+        for src_ind, src in enumerate(sources):
+            for tel in src.telescopes:
+                # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
+                #  all telescopes yet
+                if tel == 'erosita' and psf_corr:
+                    warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+                         "brightness profiles will not be corrected.", stacklevel=2)
+                    use_psf_corr = False
+                else:
+                    use_psf_corr = psf_corr
+
+                # Run an internal function which sets up the surface brightness profile we'll use to infer density
+                sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, use_psf_corr,
+                                  psf_model, psf_bins, psf_algo, psf_iter, pix_step, min_snr,
+                                  obs_id[tel][src_ind], inst[tel][src_ind])
+
+                # The above function can fail to produce an SB profile, in which case the return is None. We check
+                # for that and don't continue to the rest of this function (for this source anyway)
+                if sb_prof is None:
+                    final_dens_profs[tel][src_ind] = None
+                    continue
+                else:
+                    # If it is a good SB profile, we make sure to add it to the source's storage structure
+                    src.update_products(sb_prof)
+
+                # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
+                force_change = False
+                if len(set(np.diff(sb_prof.radii.value).round(5))) != 1:
+                    warn("Most numerical methods for the abel transform require uniformly sampled radius "
+                         "values, setting the method to 'direct'", stacklevel=2)
+                    inv_abel_method = 'direct'
+                    force_change = True
+                else:
+                    dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
+
+                realisations = sb_prof.generate_data_realisations(num_samples)
+                transform_res = np.zeros(realisations.shape)
+
+                for t_ind in range(0, realisations.shape[0]):
+                    if inv_abel_method == 'direct' and force_change:
+                        # This is necessary (see issue #1164) for the direct method because the last value
+                        #  is by definition zero - one of the PyAbel authors suggested padding out the data.
+                        to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
+                        temp_dr = (sb_prof.radii[-1] - sb_prof.radii[-2]).value
+                        mod_rad = np.concatenate([sb_prof.radii.value, np.array([sb_prof.radii.value[-1] + temp_dr])])
+                        transform_res[t_ind, :] = direct_transform(to_trans, r=mod_rad, backend='python',
+                                                                   verbose=False)[:-1]
+                    elif inv_abel_method == 'direct' and not force_change:
+                        # This is necessary (see issue #1164) for the direct method because the last value
+                        #  is by definition zero - one of the PyAbel authors suggested padding out the data.
+                        to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
+                        transform_res[t_ind, :] = direct_transform(to_trans, dr=dr, verbose=False,
+                                                                   backend='python')[:-1]
+                    elif inv_abel_method == 'basex':
+                        transform_res[t_ind, :] = basex_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'hansen_law_ho0':
+                        transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'hansen_law_ho1':
+                        transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, hold_order=1,
+                                                                      verbose=False)
+                    elif inv_abel_method == 'onion_bordas':
+                        transform_res[t_ind, :] = onion_bordas_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'onion_peeling':
+                        transform_res[t_ind, :] = onion_peeling_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'two_point':
+                        transform_res[t_ind, :] = two_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'three_point':
+                        transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'daun':
+                        transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr, verbose=False)
+
+                # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
+                #  orient it properly
+                transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit).T
+
+                # Grab the radii that we need for the density profile we're about to set up
+                dens_rads = sb_prof.radii.copy()
+                dens_rads_errs = sb_prof.radii_err.copy()
+                dens_deg_rads = sb_prof.deg_radii.copy()
+
+                # Now need to make sure the units of the transformed model are what we need
+                if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
+                    # If the SB profile is in count/s/arcmin^2 then the abel transform will have
+                    #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
+                    conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
+                                    'kpc/arcmin')**2
+                    transformed /= conv
+                elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
+                    pass
+                else:
+                    raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
+                                              "other units, don't really know how you even got here.")
+
+                # We convert the volume element to cm^3 now; this is the unit we expect for the density conversion
+                transformed = transformed.to('ct/(s*cm^3)')
+
+                # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
+                #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
+                num_dens_dist = np.sqrt(transformed * conv_factors[tel][src_ind])*(1+e_to_p_ratio)
+
+                med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
+                num_dens_err = np.nanstd(num_dens_dist, axis=1)
+
+                # Setting up the instrument and ObsID to pass into the density profile definition
+                if obs_id[tel][src_ind] is None:
+                    cur_inst = "combined"
+                    cur_obs = "combined"
+                else:
+                    cur_inst = inst[tel][src_ind]
+                    cur_obs = obs_id[tel][src_ind]
+
+                try:
+                    # I now allow the user to decide if they want to generate number or mass density profiles using
+                    #  this function, and here is where that distinction is made
+                    if num_dens:
+                        dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                                 cur_inst, inv_abel_method, sb_prof, dens_rads_errs, num_dens_err,
+                                                 deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
+                    else:
+                        # The mean molecular weight multiplied by the proton mass
+                        conv_mass = MEAN_MOL_WEIGHT*m_p
+                        dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
+                                                 sb_prof.centre, src.name, cur_obs, cur_inst, inv_abel_method, sb_prof,
+                                                 dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
+                                                 deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
+
+                    src.update_products(dens_prof)
+                    final_dens_profs[tel][src_ind] = dens_prof
+
+                    # If, for some reason, there are some inf/NaN values in any of the quantities
+                    #  passed to the GasDensity3D declaration, this is where an error will be thrown
+                except ValueError:
+                    final_dens_profs[tel][src_ind] = None
+                    warn("One or more of the quantities passed to the init of {}'s density profile "
+                         "has a NaN or Inf value in it.".format(src.name), stacklevel=2)
 
             dens_prog.update(1)
 
@@ -796,258 +1075,6 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                     warn("The calculated density profile for {s} contains NaN values, and is considered "
                          "invalid.".format(s=src.name), stacklevel=2)
                     final_dens_profs[tel].append(None)
-
-            dens_prog.update(1)
-
-    return final_dens_profs
-
-
-def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
-                  inv_abel_method: str, num_dens: bool = True, use_peak: bool = True, pix_step: int = 1,
-                  min_snr: Union[int, float] = 0.0, abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
-                  hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True, psf_model: str = "ELLBETA",
-                  psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_samples: int = 10000,
-                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                  obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
-                  conv_outer_radius: Quantity = "r500", num_cores: int = NUM_CORES) -> List[GasDensity3D]:
-    """
-    A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile inverse
-    abel transformed, thus inferring the 3D count-rate/volume profile. Then a conversion factor calculated from
-    simulated spectra is used to infer the number density profile.
-
-    There are a number of choices of method for inverse abel transforming, provided by the Python package PyAbel:
-
-    * direct - This attempts a direct integration of the inverse-Abel integral (see
-      https://ned.ipac.caltech.edu/level5/March02/Sarazin/Sarazin5_5_4.html). No assumptions are made other than
-      cylindrical symmetry, and fine sampling is required. This is the only method that supports non-uniform
-      radius sampling, and if the surface brightness profile is detected to have non-uniform radius sampling (if
-      generated for a minimum signal-to-noise for instance) then this is the method that will be used.
-
-    * basex - This method (basis set expansion) uses functions with a known analytic inverse-abel
-      transform (gaussian-like in this case).
-
-    * hansen_law_ho0 - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
-      a coordinate transformation to model the Abel transform as a set of linear differential equation. This
-      particular choice uses hold_order=0, which assumes a constant intensity across a pixel (between grid points)
-      for the driving function (the image gradient for the inverse transform).
-
-    * hansen_law_ho1 - A fast transform method (the PyAbel authors describe it 'a hidden gem of the field', using
-      a coordinate transformation to model the Abel transform as a set of linear differential equation. This
-      particular choice uses hold_order=1, which assumes a linear intensity variation between grid points, which may
-      yield a more accurate transform for some functions
-
-    * onion_peeling - In the onion-peeling method the projection is approximated by rings of constant property,
-      see the PyAbel documentation for the mathematical explanation.
-
-    * two_point - The Abel integral is broken into intervals between the radius points, with the function
-      assumed to be constant within the points.
-
-    * three_point - This method exploits the observation that the value of the Abel inverted data at any radial
-      position r is primarily determined from changes in the projection data in the neighborhood of r. The
-      projection data (raw data) is expanded as a quadratic function of in the neighborhood of each data point,
-      which allows an analytical deprojection.
-
-    * daun - Similar to onion peeling, but uses 'Tikhonov regularization'.
-
-    The PyAbel documentation provides a useful discussion of when and when not to use different methods
-    (https://pyabel.readthedocs.io/en/latest/transform_methods.html), and the authors also wrote a paper comparing
-    the various methods (https://arxiv.org/abs/1902.09007).
-
-    :param GalaxyCluster/ClusterSample sources: A GalaxyCluster or ClusterSample object to measure density
-        profiles for.
-    :param str/Quantity outer_radius: The radius to which the surface brightness profile should be generated. It can
-        be a named radius (e.g. 'r500', 'r200') or a quantity containing a value (or values, if a sample of clusters
-        has been passed).
-    :param str inv_abel_method: The method/algorithm which should be used for the inverse abel transform of the
-        surface brightness profile data. We advise reading the information in the docstring before making a choice, as
-        well as experimenting a little.
-    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass density profile
-        will be generated.
-    :param bool use_peak: If true the measured peak will be used as the central coordinate of the profile.
-    :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
-    :param int/float min_snr: The minimum allowed signal-to-noise for the surface brightness
-        profiles. Default is 0, which disables automatic re-binning.
-    :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and for the
-        electron/hydrogen number density ratio.
-    :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
-    :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
-    :param bool psf_corr: Default True, whether PSF corrected ratemaps will be used to make the
-        surface brightness profile, and thus the density (if False density results could be incorrect).
-    :param str psf_model: If PSF corrected, the PSF model used.
-    :param int psf_bins: If PSF corrected, the number of bins per side.
-    :param str psf_algo: If PSF corrected, the algorithm used.
-    :param int psf_iter: If PSF corrected, the number of algorithm iterations.
-    :param int num_samples: The number of samples drawn from the posterior distributions of model parameters
-        after the fitting process is complete.
-    :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
-    :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
-        were grouped by minimum counts.
-    :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for fakeit
-        were grouped by minimum signal-to-noise.
-    :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
-    :param str/list obs_id: A specific ObsID(s) to measure the density from. This should be a string if a single
-        source is being analysed, and a list of ObsIDs the same length as the number of sources otherwise. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param str/list inst: A specific instrument(s) to measure the density from. This can either be passed as a
-        single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
-        every source in a sample, or a list of strings if different instruments are required for each source. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
-        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
-         should have an entry for each cluster being analysed. Default is None.
-    :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
-        for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
-        a single value or an entry for each cluster being analysed.
-    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
-    :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
-        successful an entry of None will be added to the list.
-    :rtype: List[GasDensity3D]
-    """
-    # Run the setup function, calculates the factors that translate 3D count-rate to density
-    #  Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
-                                                      hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
-                                                      conv_temp, conv_outer_radius, num_cores)
-
-    # Calls the handy spectrum region setup function to make a predictable set of outer radius values
-    out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
-
-    # Before we properly get started, we just check that the user has passed an 'allowed' inverse-Abel transform
-    if inv_abel_method not in ALLOWED_INV_ABEL:
-        all_str = ", ".join(ALLOWED_INV_ABEL)
-        raise ValueError("{p} is not a supported inverse-Abel transform method, please choose from; "
-                         "{a}".format(p=inv_abel_method, a=all_str))
-
-    with tqdm(desc="Inverse Abel transforming data and measuring densities",
-              total=len(sources), position=0) as dens_prog:
-        final_dens_profs = []
-        # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
-        e_to_p_ratio = NHC[abund_table]
-        for src_ind, src in enumerate(sources):
-
-            sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                              psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
-            # It is possible for the above function to fail to produce an SB profile, in which case the return is
-            #  None, so we check for that and don't continue to the rest of this function (for this source anyway) if
-            #  it is None
-            if sb_prof is None:
-                final_dens_profs.append(None)
-                continue
-            else:
-                # If it is a good SB profile, we make sure to add it to the source's storage structure
-                src.update_products(sb_prof)
-
-            # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
-            force_change = False
-            if len(set(np.diff(sb_prof.radii.value).round(5))) != 1:
-                warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                     "the method to 'direct'", stacklevel=2)
-                inv_abel_method = 'direct'
-                force_change = True
-            else:
-                dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
-
-            realisations = sb_prof.generate_data_realisations(num_samples)
-            transform_res = np.zeros(realisations.shape)
-
-            for t_ind in range(0, realisations.shape[0]):
-                if inv_abel_method == 'direct' and force_change:
-                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
-                    #  zero - one of the PyAbel authors suggested padding out the data.
-                    to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
-                    temp_dr = (sb_prof.radii[-1] - sb_prof.radii[-2]).value
-                    mod_rad = np.concatenate([sb_prof.radii.value, np.array([sb_prof.radii.value[-1] + temp_dr])])
-                    transform_res[t_ind, :] = direct_transform(to_trans, r=mod_rad, backend='python',
-                                                               verbose=False)[:-1]
-                elif inv_abel_method == 'direct' and not force_change:
-                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
-                    #  zero - one of the PyAbel authors suggested padding out the data.
-                    to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
-                    transform_res[t_ind, :] = direct_transform(to_trans, dr=dr, verbose=False, backend='python')[:-1]
-                elif inv_abel_method == 'basex':
-                    transform_res[t_ind, :] = basex_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'hansen_law_ho0':
-                    transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'hansen_law_ho1':
-                    transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, hold_order=1,
-                                                                  verbose=False)
-                elif inv_abel_method == 'onion_bordas':
-                    transform_res[t_ind, :] = onion_bordas_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'onion_peeling':
-                    transform_res[t_ind, :] = onion_peeling_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'two_point':
-                    transform_res[t_ind, :] = two_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'three_point':
-                    transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'daun':
-                    transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr, verbose=False)
-
-            # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
-            #  orient it properly
-            transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit).T
-
-            # Grab the radii that we need for the density profile we're about to set up
-            dens_rads = sb_prof.radii.copy()
-            dens_rads_errs = sb_prof.radii_err.copy()
-            dens_deg_rads = sb_prof.deg_radii.copy()
-
-            # Now need to make sure the units of the transformed model are what we need
-            if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
-                # If the SB profile is in count/s/arcmin^2 then the abel transform will have
-                #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
-                conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
-                                'kpc/arcmin')**2
-                transformed /= conv
-            elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
-                pass
-            else:
-                raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
-                                          "other units, don't really know how you even got here.")
-
-            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
-            transformed = transformed.to('ct/(s*cm^3)')
-
-            # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
-            #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
-            num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
-
-            med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
-            num_dens_err = np.nanstd(num_dens_dist, axis=1)
-
-            # Setting up the instrument and ObsID to pass into the density profile definition
-            if obs_id[src_ind] is None:
-                cur_inst = "combined"
-                cur_obs = "combined"
-            else:
-                cur_inst = inst[src_ind]
-                cur_obs = obs_id[src_ind]
-
-            try:
-                # I now allow the user to decide if they want to generate number or mass density profiles using
-                #  this function, and here is where that distinction is made
-                if num_dens:
-                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                             cur_inst, inv_abel_method, sb_prof, dens_rads_errs, num_dens_err,
-                                             deg_radii=dens_deg_rads, auto_save=True)
-                else:
-                    # TODO Check the origin of the mean molecular weight, see if there are different values for
-                    #  different abundance tables
-                    # The mean molecular weight multiplied by the proton mass
-                    conv_mass = MEAN_MOL_WEIGHT*m_p
-                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
-                                             sb_prof.centre, src.name, cur_obs, cur_inst, inv_abel_method, sb_prof,
-                                             dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
-                                             deg_radii=dens_deg_rads, auto_save=True)
-
-                src.update_products(dens_prof)
-                final_dens_profs.append(dens_prof)
-
-                # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
-                #  declaration, this is where an error will be thrown
-            except ValueError:
-                final_dens_profs.append(None)
-                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
-                     " in it.".format(src.name), stacklevel=2)
 
             dens_prog.update(1)
 
