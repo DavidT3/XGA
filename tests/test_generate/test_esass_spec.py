@@ -61,6 +61,13 @@ class TestEsassSpecFuncs(unittest.TestCase):
 
         spec = SRC_ALL_TELS.get_combined_spectra('r500', telescope='erosita')
 
+        aa = SRC_ALL_TELS.get_products('combined_spectrum', telescope='erosita')
+        print(SRC_ALL_TELS.get_products('combined_spectrum'), telescope='erosita')
+        for spec in aa:
+            print(spec.instrument)
+            print(spec.obs_ids)
+            print(spec.path)
+
         assert isinstance(spec, Spectrum)
         assert spec.telescope == 'erosita'
         assert spec.obs_id == 'combined'
