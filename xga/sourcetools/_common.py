@@ -152,6 +152,89 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                                     over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                                     show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False):
+    """
+    Internal function to run the common setup functions that are needed for mass and entropy profile
+    measurements.
+
+    :param GalaxyCluster/ClusterSample sources: The galaxy cluster, or sample of galaxy clusters, 
+        that are having their hydrostatic masses/entropy measured.
+    :param str/Quantity outer_radius: The radius out to which you wish to measure gas density and temperature
+        profiles. This can either be a string radius name (like 'r500') or an astropy quantity. That quantity should
+        have as many entries as there are sources.
+    :param str/List[str]/BaseModel1D/List[BaseModel1D] sb_model: The model(s) to be fit to the cluster surface
+        profile(s). You may pass the string name of a model (for single or multiple clusters), a single instance
+        of an XGA model class (for single or multiple clusters), a list of string names (one entry for each cluster
+        being analysed), or a list of XGA model instances (one entry for each cluster being analysed).
+    :param str/List[str]/BaseModel1D/List[BaseModel1D] dens_model: The model(s) to be fit to the cluster density
+        profile(s). You may pass the string name of a model (for single or multiple clusters), a single instance
+        of an XGA model class (for single or multiple clusters), a list of string names (one entry for each cluster
+        being analysed), or a list of XGA model instances (one entry for each cluster being analysed).
+    :param str/List[str]/BaseModel1D/List[BaseModel1D] temp_model: The model(s) to be fit to the cluster temperature
+        profile(s). You may pass the string name of a model (for single or multiple clusters), a single instance
+        of an XGA model class (for single or multiple clusters), a list of string names (one entry for each cluster
+        being analysed), or a list of XGA model instances (one entry for each cluster being analysed).
+    :param str/Quantity global_radius: This is a radius for a 'global' temperature measurement, which is both used as
+        an initial check of data quality, and feeds into the conversion factor required for density measurements. This
+        may also be passed as either a named radius or a quantity.
+    :param str fit_method: The method to use for fitting profiles within this function, default is 'mcmc'.
+    :param int num_walkers: If fit_method is 'mcmc' this is the number of walkers to initialise for
+        the ensemble sampler.
+    :param int num_steps: If fit_method is 'mcmc' this is the number steps for each walker to take.
+    :param int sb_pix_step: The width (in pixels) of each annular bin for the surface brightness profiles, default is 1.
+    :param int/float sb_min_snr: The minimum allowed signal to noise for the surface brightness profiles. Default
+        is 0, which disables automatic re-binning.
+    :param str inv_abel_method: The method which should be used for the inverse abel transform of the model which
+        is fitted to the surface brightness profile. This overrides the default method for the model, which is either
+        'analytical' for models with an analytical solution to the inverse abel transform, or 'direct' for
+        models which don't have an analytical solution. Default is None.
+    :param str temp_annulus_method: The method by which the temperature profile annuli are designated, this can
+        be 'min_snr' (which will use the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the
+        min_cnt_proj_temp_prof function).
+    :param int/float temp_min_snr: The minimum signal-to-noise for a temperature measurement annulus, default is 30.
+    :param int/Quantity temp_min_cnt: The minimum background subtracted counts which are allowable in a given
+        temperature annulus, used if temp_annulus_method is set to 'min_cnt'.
+    :param Quantity temp_min_width: The minimum allowable width of a temperature annulus. The default is set to
+        20 arcseconds to try and avoid PSF effects.
+    :param bool temp_use_combined: If True (and temp_annulus_method is set to 'min_snr') then the combined
+        RateMap will be used for signal-to-noise annulus calculations, this is overridden by temp_use_worst. If
+        True (and temp_annulus_method is set to 'min_cnt') then combined RateMaps will be used for temperature
+        annulus count calculations, if False then the median observation (in terms of counts) will be used.
+    :param bool temp_use_worst: If True then the worst observation of the cluster (ranked by global signal-to-noise)
+        will be used for signal-to-noise temperature annulus calculations. Used if temp_annulus_method is set
+        to 'min_snr'.
+    :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should be frozen.
+    :param str abund_table: The abundance table to use for fitting, and the conversion factor required during density
+        calculations.
+    :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
+    :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param int spec_min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+        To disable minimum counts set this parameter to None.
+    :param float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+        To disable minimum signal to noise set this parameter to None.
+    :param bool over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+        over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
+        ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
+        slightly on position on the detector.
+    :param int num_cores: The number of cores on your local machine which this function is allowed, default is
+        90% of the cores in your system.
+    :param bool show_warn: Should profile fit warnings be shown, or only stored in the profile models.
+    :param int psf_bins: The number of bins per side when generating a grid of PSFs for image correction prior
+        to surface brightness profile (and thus density) measurements.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
+        used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
+        supported, this function will instead use individual spectra for an ObsID. The default is
+        False.
+    :return: A tuple. The first element are the sources. The second is a dens_prof_dict with source
+    strings as keys, and values of dictionaries with telescope keys and values of the density 
+    profile objects (ie. {src_string: {tel : dens_prof}}). The third is a temp_prof_dict with source
+    strings as keys, and values of dictionaries with telescope keys and values of the temperature
+    profile objects (ie. {src_string: {tel : temp_prof}}). The fourth is a dens_model_dict, with 
+    source strings as keys and density models as values. The fifth is a temp_model_dict, with 
+    source strings as keys and temperature models as values. 
+    :rtype: Tuple[BaseSource/List[BaseSource]/BaseSample, dict, dict, dict, dict]
+    """
 
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
                                                        spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins,
