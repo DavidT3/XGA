@@ -18,10 +18,16 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
         im = SRC_ALL_TELS.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='erosita')[0]
-        for i in im:
-            assert i.telescope == 'erosita'
-            assert i.energy_bounds[0] == Quantity(0.4, 'keV')
-            assert i.energy_bounds[1] == Quantity(3, 'keV')
+        if isinstance(im, list):
+            for i in im:
+                assert i.telescope == 'erosita'
+                assert i.energy_bounds[0] == Quantity(0.4, 'keV')
+                assert i.energy_bounds[1] == Quantity(3, 'keV')
+        else:
+            assert im.telescope == 'erosita'
+            assert im.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert im.energy_bounds[1] == Quantity(3, 'keV')
+
 
     def test_evtool_image_combined_obs(self):
         evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
@@ -30,7 +36,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
                                       telescope='erosita')
 
         assert im.telescope == 'erosita'
-        assert im.energy_bounds[0] == Quantity(0.4, 'keV')
+        assert im.energy_bounds[0] == Quantity(0.5, 'keV')
         assert im.energy_bounds[1] == Quantity(3, 'keV')
 
     def test_expmap(self):
@@ -67,7 +73,8 @@ class TestEsassPhotFuncs(unittest.TestCase):
                                 name=[SRC_INFO['name'], SUPP_SRC_INFO['name']],
                                 use_peak=False)
 
-        
+        print(test_smp[0].telescopes)
+        print(test_smp[1].telescopes)
         test_smp[0].disassociate_obs('erosita')
         evtool_image(test_smp)
 
