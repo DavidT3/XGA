@@ -3881,7 +3881,6 @@ class BaseSource:
                 # Just grab the first instrument that comes out the get method, the masks should be
                 #  the same.
                 mask_image = mask_image[0]
-        print(mask_image.path)
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
@@ -5023,6 +5022,7 @@ class BaseSource:
                     if not isinstance(exp_maps, list):
                         exp_maps = [exp_maps]
 
+                    # erosita expmaps and images can change dimensions depending on inst, and energy
                     if tel == 'erosita':
                         m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
                                             lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, 
@@ -5035,8 +5035,6 @@ class BaseSource:
 
                     for ex in exp_maps:
                         # Grabs exposure map data, then alters it so anything that isn't zero is a one
-                        print(ex.path)
-                        print(o)
                         ex_data = ex.data.copy()
                         ex_data[ex_data > 0] = 1
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
