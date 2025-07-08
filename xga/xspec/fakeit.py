@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 10:53. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -8,12 +8,10 @@ from typing import List, Union, Dict
 import astropy.units as u
 from astropy.units import Quantity
 
+from .fit._common import _pregen_spectra
 from .run import xspec_call
-from .fit._common import _pregen_spectra, _spec_obj_setup
 from .. import OUTPUT, NUM_CORES, COUNTRATE_CONV_SCRIPT
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, ParameterNotAssociatedError
-from ..generate.sas import evselect_spectrum
-from ..generate.sas._common import region_setup
 from ..products import Spectrum
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
@@ -78,7 +76,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         ab_list = ", ".join(ABUND_TABLES)
         raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(abund_table, ab_list))
 
-    sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
+    sources, inn_rad_vals, out_rad_vals, telescopes = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
                                                           min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
 
     # pregen spectra can output a BaseSource after inputting it as a list, so turning this back to a list

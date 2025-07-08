@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 20:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 10:53. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -18,9 +18,9 @@ from ...sources import BaseSource, ExtendedSource, PointSource
 
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                     inner_radius: Union[str, Quantity], group_spec: bool = True, min_counts: int = 5,
-                    min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                    num_cores: int = NUM_CORES, stacked_spectra: bool = False) \
-        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity]:
+                    min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                    stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
+        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str]]:
     """
     This pre-generates the spectra necessary for the requested fit (if they do not exist), and formats the input
     radii in a more predictable way.
@@ -50,24 +50,35 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be generated. If a
         stacking procedure for a particular telescope is not supported, this function will instead use individual
         spectra for an ObsID. The default is False.
-    :return: Most likely just the passed in sources, but if a single source was passed then a list will be returned.
-    :rtype: Union[List[BaseSource], BaseSample]
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
+    :return: The sources, inner radii, outer radii, and telescopes.
+    :rtype: Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str]]
     """
-    # sorry have to import here due to a circular import 
+    # Have to import here to avoid a circular import error
     from ...sourcetools._common import _get_all_telescopes
-    # this returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
-    all_telescopes = _get_all_telescopes(sources)
 
-    for tel in all_telescopes:
+    # If the user didn't specify a particular telescope, or telescopes, from which we are to
+    #  produce spectra, we fetch all telescope names associated with at least one source
+    if telescope is None:
+        # returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
+        src_telescopes = _get_all_telescopes(sources)
+    elif isinstance(telescope, str):
+        src_telescopes = [telescope]
+    else:
+        src_telescopes = telescope
+
+    # Cycle through the telescopes that we need to generate spectra for
+    for tel in src_telescopes:
         # TODO create a function that does this sort of thing for us - as in generating spectra for each of the
         #  telescopes that are associated with a source or sample
         # Each telescope has its own methods of generating spectra
         if tel == 'xmm':
-            warn("Spectrum stacking is not currently supported for XMM, and so combined spectra will not be used for"
-                 " these XSPEC fits.", stacklevel=2)
-            # I call the evselect_spectrum function here for two reasons; to make sure that the spectra which the user
-            #  want to fit are generated, and because that function has a lot of radius parsing and checking stuff
-            #  in it which will kick up a fuss if variables aren't formatted right
+            warn("Spectrum stacking is not currently supported (or recommended) for XMM, and so combined spectra "
+                 "will not be used for these XSPEC fits.", stacklevel=2)
+            # We call the evselect_spectrum function here for two reasons; to make sure the spectra we want to fit
+            #  are generated, and because that function has a lot of radius parsing and checking that will
+            #  tell us if the inputs aren't formatted correctly
             sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                                         over_sample, one_rmf, num_cores)
         elif tel == 'erosita':
@@ -85,7 +96,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     else:
         raise NotImplementedError("I don't currently support fitting region spectra")
 
-    return sources, inn_rad_vals, out_rad_vals
+    return sources, inn_rad_vals, out_rad_vals, src_telescopes
 
 
 def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_en: Quantity, hi_en: Quantity,
