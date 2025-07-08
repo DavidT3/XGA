@@ -3609,7 +3609,8 @@ class BaseSource:
     def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
                                  inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
                                  hi_en: Quantity = None, time_bin_size: Quantity = None,
-                                 pattern: Union[dict, str] = "default", telescope: str = None) \
+                                 pattern: Union[dict, str] = "default", telescope: str = None,
+                                 inst: str = None) \
             -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
         """
         A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at
@@ -3637,45 +3638,43 @@ class BaseSource:
             objects (if there were multiple matching products).
         :rtype: Union[AggregateLightCurve, List[AggregateLightCurve]]
         """
-        if telescope == 'xmm':
-            from ..generate.common import check_pattern
-        else:
-            raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
+        from ..generate.common import check_pattern
 
         # TODO SO THIS IS THE LAST GET METHOD THAT NEEDS CONVERTING TO SUPPORT DIFFERENT TELESCOPES - HOWEVER THAT IS
         #  COMPLICATED BY THE FACT THAT WE DON'T CURRENTLY AUTO-CREATE AGGREGATE LIGHTCURVES, AND THEY MIGHT BE THE
         #  ONE THING THAT IS ALREADY ALLOWED TO BE MULTI-TELESCOPE
-
-        # TODO This is XMM specific because of the patterns currently
-        # This is where we set up the search string for the patterns specified by the user.
-        if pattern is None:
-            patt_search = "pattern"
-        elif isinstance(pattern, str):
-            pattern = {'pn': '<=4', 'mos': '<=12'}
-            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
-                           for inst, patt in pattern.items()}
-        elif isinstance(pattern, dict):
-            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
-                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
-                                 "should be one entry for 'mos'.")
-            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
-            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
-                           for inst, patt in pattern.items()}
-        else:
-            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
-                            "instrument names and values are string patterns.")
-
-        # Use the internal function to find the combined light curves, then apply pattern checks after
-        some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
-        matched_prods = []
-        for lc in some_lcs:
-            if isinstance(patt_search, str):
-                rel_patt_search = [patt_search]
+        if telescope == 'xmm':
+            # TODO This is XMM specific because of the patterns currently
+            # This is where we set up the search string for the patterns specified by the user.
+            if pattern is None:
+                patt_search = "pattern"
+            elif isinstance(pattern, str):
+                pattern = {'pn': '<=4', 'mos': '<=12'}
+                patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                            for inst, patt in pattern.items()}
+            elif isinstance(pattern, dict):
+                if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                    raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                    "should be one entry for 'mos'.")
+                pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+                patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                            for inst, patt in pattern.items()}
             else:
-                rel_patt_search = [patt for inst, patt in patt_search.items()]
+                raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                                "instrument names and values are string patterns.")            
+            
+            some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
+            matched_prods = []
+            for lc in some_lcs:
+                if isinstance(patt_search, str):
+                    rel_patt_search = [patt_search]
+                else:
+                    rel_patt_search = [patt for inst, patt in patt_search.items()]
 
-            if all([rps in lc.storage_key for rps in rel_patt_search]):
-                matched_prods.append(lc)
+                if all([rps in lc.storage_key for rps in rel_patt_search]):
+                    matched_prods.append(lc)
+        else:
+            matched_prods = self._get_lc_prod(outer_radius, 'combined', inst, inner_radius, lo_en, hi_en, time_bin_size)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]

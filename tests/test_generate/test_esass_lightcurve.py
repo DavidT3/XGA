@@ -35,6 +35,7 @@ class TestEsassLcFuncs(unittest.TestCase):
         srctool_lightcurve(SRC_ALL_TELS, 'r500', combine_tm=True, combine_obs=False)
 
         lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='erosita', inst='combined')
+        print(lc)
 
         assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
