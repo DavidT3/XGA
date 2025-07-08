@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 12:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 10:05. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -21,8 +21,7 @@ def sas_call(sas_func):
     """
     This is used as a decorator for functions that produce SAS command strings. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
-    executing the SAS command will change. This supports both simple multi-threading and submission
-    with the Sun Grid Engine.
+    executing the SAS command will change. This supports simple multi-threading.
     :return:
     """
     # This is a horrible bodge to make Pycharm not remove SAS_AVAIL and SAS_VERSION from import when it cleans
@@ -84,7 +83,7 @@ def sas_call(sas_func):
         if to_execute and len(all_run) > 0:
             # Will run the commands locally in a pool
             prod_type_str = ", ".join(set(all_type))
-            with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str,
+            with tqdm(total=len(all_run), desc="Generating XMM products of type(s) " + prod_type_str,
                       disable=disable) as gen, Pool(cores) as pool:
                 def callback(results_in: Tuple[BaseProduct, str]):
                     """
