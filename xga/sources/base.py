@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 15:44. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -3899,8 +3899,7 @@ class BaseSource:
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
-            comb_images = self.get_combined_images(lo_en=lo_en, hi_en=hi_en, inst=inst,
-                                                   telescope=telescope)
+            comb_images = self.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope=telescope)
             if len(comb_images) != 0:
                 mask_image = comb_images[0]
             else:
@@ -5102,8 +5101,10 @@ class BaseSource:
                     full_area[tel][o] = m.sum()
 
                     for ex in exp_maps:
-                        # Grabs exposure map data, then alters it so anything that isn't zero is a one
-                        ex_data = ex.data.copy()
+                        # Grabs exposure map data, then alters it so anything that isn't zero is a one. We
+                        #  use the int8 datatype because we're about to convert the array to zeroes
+                        #  and ones and saving as much memory as possible is important for eROSITA
+                        ex_data = ex.data.copy().astype('int8')
                         ex_data[ex_data > 0] = 1
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
                         #  with the XMM chips. Just mask the modified expmap, then sum.

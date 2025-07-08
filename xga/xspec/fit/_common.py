@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 14:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 15:44. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -234,7 +234,7 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
 
 
 def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
-                    src_ind: float, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: float,
+                    src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: float,
                     min_sn: float, over_sample: float) -> str: 
     """
     Internal function that collects relevant spectrum objects per telescope. This is used in 
@@ -262,6 +262,7 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         search_inst = 'combined'
     else:
         search_inst = None
+
     try:
         if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
             # For erosita we need to use the spectrum generated from combined observations, so that there

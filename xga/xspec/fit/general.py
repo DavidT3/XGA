@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 14:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 15:44. Copyright (c) The Contributors
 
 from typing import List, Union
 from warnings import warn
@@ -581,9 +581,6 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                                      min_counts, min_sn, over_sample, one_rmf,
                                                                      num_cores, stacked_spectra, telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
-
-    # TODO REMOVE THIS
-    print(out_rad_vals)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
