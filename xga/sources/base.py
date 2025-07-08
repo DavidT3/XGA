@@ -5021,6 +5021,7 @@ class BaseSource:
 
                     for ex in exp_maps:
                         # Grabs exposure map data, then alters it so anything that isn't zero is a one
+                        print(ex.path)
                         ex_data = ex.data.copy()
                         ex_data[ex_data > 0] = 1
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
