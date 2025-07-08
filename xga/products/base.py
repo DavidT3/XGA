@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 17:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 17:26. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -292,12 +292,13 @@ class BaseProduct:
 
         elif self.telescope == 'erosita':
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
-            #  than stderr
-            # err_str being "" is ideal, hopefully means that nothing has gone wrong
-            if self.unprocessed_stdout != "":
+            #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
+            #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
+            #  so that has to be checked as well
+            if self.unprocessed_stdout != "" or self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in self.unprocessed_stdout.split('\n') if e != '']
+                err_lines = [e for e in (self.unprocessed_stdout+'\n'+self.unprocessed_stderr).split('\n') if e != '']
                 # Fingers crossed each line is a separate error
                 parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
                 parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
