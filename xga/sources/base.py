@@ -1123,7 +1123,7 @@ class BaseSource:
 
             return final_obj
 
-        def parse_lightcurve(inven_entry: pd.Series, telescope: str) -> LightCurve:
+        def parse_lightcurve(inven_entry: pd.Series, telescope: str, combined_obs: bool) -> LightCurve:
             """
             Very simple little function that takes information on an XGA-generated lightcurve (including a path to
             the file), and sets up a LightCurve product that can be added to the product storage structure
@@ -1138,13 +1138,24 @@ class BaseSource:
                 # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
                 #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
                 #  later to read in the data
+                if combined_obs:
+                    rel_obs_id = 'combined'
+                    # The inventory column names change depending on if it is combined or not
+                    inst_lookup = 'insts'
+                else:
+                    inst_lookup = 'inst'
+                    rel_obs_id = inven_entry['obs_id']
+
                 rel_path = cur_d + inven_entry['file_name']
-                rel_obs_id = inven_entry['obs_id']
-                rel_inst = inven_entry['inst']
+                rel_inst = inven_entry[inst_lookup]
+                
+                if '/' in rel_inst:
+                    rel_inst = 'combined'
 
                 # Make sure that the current ObsID and instrument are actually associated with the source
-                if (rel_obs_id in self.obs_ids[telescope] and
-                        (rel_inst in self.instruments[telescope][rel_obs_id] or rel_inst == "combined")):
+                if (rel_obs_id == 'combined' and rel_inst == 'combined') or \
+                   (((rel_obs_id == 'combined' or rel_obs_id in self.obs_ids[telescope]) and
+                     (rel_inst == "combined" or rel_inst in self.instruments[telescope][rel_obs_id]))):
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry['info_key'].split("_")
@@ -1172,7 +1183,6 @@ class BaseSource:
                     final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
                                            rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True,
                                            telescope=telescope)
-
                 else:
                     final_obj = None
 
@@ -1338,7 +1348,7 @@ class BaseSource:
                     for row_ind, row in lc_lines.iterrows():
                         # The parse lightcurve function does check to see if an inventory entry is relevant to this
                         #  source (using the source name), and if the ObsID and instrument are still associated.
-                        self.update_products(parse_lightcurve(row, tel), update_inv=False)
+                        self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
 
                     if load_spectra:
 
@@ -1426,6 +1436,11 @@ class BaseSource:
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
                     self.update_products(evt_list, update_inv=False)
+            
+            # now assigning combined lightcurves
+            rel_inven = inven[inven['type'] == 'lightcurve']
+            for row_ind, row in rel_inven.iterrows():
+                self.update_products(parse_lightcurve(row, tel, True), update_inv=False)
 
             if load_spectra:
                 rel_inven = inven[inven['type'] == 'spectrum']
