@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/02/2024, 13:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 09:37. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -171,18 +171,22 @@ class ExtendedSample(BaseSample):
                         #  whether this has been set yet when all radii should be forced to be the same unit
                         self._cr_unit = cr.unit
                     else:
-                        self._custom_radii.append(np.NaN)
+                        self._custom_radii.append(np.nan)
                         self._cr_unit = Unit('')
                     final_names.append(n)
+
                 except PeakConvergenceFailedError:
-                    warn("The peak finding algorithm has not converged for {}, using user "
-                         "supplied coordinates".format(n))
-                    # Have to re-declare the source if peak finding failed
-                    self._sources[n] = ExtendedSource(r, d, z, n, cr, False, peak_lo_en, peak_hi_en,
-                                                      back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                      load_fits, peak_find_method, True, telescope, search_distance,
-                                                      clean_obs, clean_obs_reg, clean_obs_threshold)
-                    final_names.append(n)
+                    try:
+                        failed_peak_find.append(n)
+                        # Have to re-declare the source if peak finding failed
+                        self._sources[n] = ExtendedSource(r, d, z, n, cr, False, peak_lo_en, peak_hi_en,
+                                                          back_inn_rad_factor, back_out_rad_factor, cosmology, True,
+                                                          load_fits, peak_find_method, True, telescope, search_distance,
+                                                          clean_obs, clean_obs_reg, clean_obs_threshold)
+                        final_names.append(n)
+                    except NoValidObservationsError:
+                        self._failed_sources[n] = "Failed ObsClean"
+
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"
 
@@ -407,13 +411,21 @@ class PointSample(BaseSample):
                     self._pr_unit = pr.unit
                     final_names.append(n)
                 except PeakConvergenceFailedError:
-                    warn("The peak finding algorithm has not converged for {}, using user "
-                         "supplied coordinates".format(n))
-                    self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                                                   back_out_rad_factor, cosmology, True, load_fits, regen_merged=False,
-                                                   in_sample=True, telescope=telescope, search_distance=search_distance,
-                                                   clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold)
-                    final_names.append(n)
+                    try:
+                        failed_peak_find.append(n)
+                        # If the peak finding failed, we need to re-declare the source, telling it is a part of a
+                        #  sample with in_sample=True
+                        self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en,
+                                                       back_inn_rad_factor,
+                                                       back_out_rad_factor, cosmology, True, load_fits,
+                                                       regen_merged=False,
+                                                       in_sample=True, telescope=telescope,
+                                                       search_distance=search_distance,
+                                                       clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold)
+                        final_names.append(n)
+                    except NoValidObservationsError:
+                        self._failed_sources[n] = "FailedObsClean"
+
                 except NoValidObservationsError:
                     self._failed_sources[n] = "CleanedNoMatch"
 
