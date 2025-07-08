@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 11:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 14:55. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -262,19 +262,22 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         search_inst = 'combined'
     else:
         search_inst = None
+    try:
+        if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
+            # For erosita we need to use the spectrum generated from combined observations, so that there
+            # are no duplicated events
+            spec_objs = source.get_combined_spectra(out_rad_vals[src_ind], inst=search_inst,
+                                                    inner_radius=inn_rad_vals[src_ind],
+                                                    group_spec=group_spec, min_counts=min_counts,
+                                                    min_sn=min_sn, telescope=tel)
+        else:
+            # Find matching spectrum objects associated with the current source
+            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
+                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                            over_sample=over_sample, telescope=tel, inst=search_inst)
+    except NoProductAvailableError:
+        raise NoProductAvailableError("Relevant {t} spectra for {s} cannot be found.".format(t=tel, s=source.name))
 
-    if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
-        # For erosita we need to use the spectrum generated from combined observations, so that there
-        # are no duplicated events
-        spec_objs = source.get_combined_spectra(out_rad_vals[src_ind], inst=search_inst, 
-                                                inner_radius=inn_rad_vals[src_ind],
-                                                group_spec=group_spec, min_counts=min_counts,
-                                                min_sn=min_sn, telescope=tel)
-    else:
-        # Find matching spectrum objects associated with the current source
-        spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                        over_sample=over_sample, telescope=tel, inst=search_inst)
     # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
     #  a cluster with only a single valid instrument for a single valid observation this may not be the case
     if isinstance(spec_objs, Spectrum):

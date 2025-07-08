@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 14:13. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 14:55. Copyright (c) The Contributors
 
 from typing import List, Union
 from warnings import warn
@@ -582,6 +582,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                                      num_cores, stacked_spectra, telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
+    # TODO REMOVE THIS
+    print(out_rad_vals)
+
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
     #  of TCL lists.
@@ -603,7 +606,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                 continue
             # retrieving the spectrum objects needed for each source/ tel combo
             specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+                                                 inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
             # For this model, we have to know the redshift of the source.
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zpowerlw.")
@@ -786,8 +789,8 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                 z = source.redshift
             else:
                 z = 1
-                warnings.warn("{s} has no redshift information associated, so luminosities from this fit"
-                              " will be invalid, as redshift has been set to one.".format(s=source.name))
+                warn("{s} has no redshift information associated, so luminosities from this fit"
+                     " will be invalid, as redshift has been set to one.".format(s=source.name))
 
             # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
             #  luminosities. I am only specifying parameter 2 here (though there will likely be multiple models
