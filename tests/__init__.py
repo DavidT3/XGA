@@ -24,7 +24,7 @@ SUPP_SRC_INFO = {'ra': 55.7164, 'dec': -53.6292, 'z': 0.0587, 'name': 'A3158'}
 # Making a df to make a sample from
 column_names = ['name', 'ra', 'dec', 'z', 'r500']
 cluster_data = np.array([[SRC_INFO['name'], SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], 500],
-                          SUPP_SRC_INFO['name'], SUPP_SRC_INFO['ra'], SUPP_SRC_INFO['dec'], SRC_INFO['z'], 500])
+                         [SUPP_SRC_INFO['name'], SUPP_SRC_INFO['ra'], SUPP_SRC_INFO['dec'], SRC_INFO['z'], 500]])
 
 CLUSTER_SMP = pd.DataFrame(data=cluster_data, columns=column_names)
 CLUSTER_SMP[['ra', 'dec', 'z', 'r500']] = CLUSTER_SMP[['ra', 'dec', 'z', 'r500']].astype(float)
