@@ -20,6 +20,7 @@ from .. import SRC_INFO, SRC_ALL_TELS
 class TestBaseSource(unittest.TestCase):
     def test_obs_ids_assigned(self):
         obs = SRC_ALL_TELS.obs_ids
+        print(obs)
 
         expected_xmm_obs = set(['0404910601', '0201901401', '0201903501'])
         expected_ero_obs = set(['147099', '148102', '151102', '150099'])
@@ -42,7 +43,7 @@ class TestBaseSource(unittest.TestCase):
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
-        img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
+        img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erosita')
 
         assert all([isinstance(im, Image) for im in img])
 
@@ -59,7 +60,7 @@ class TestBaseSource(unittest.TestCase):
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
         
-        img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'))
+        img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erosita')
 
         assert isinstance(img, Image)
         assert img.obs_id == 'combined'
