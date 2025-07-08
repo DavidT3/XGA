@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 09:51. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -366,7 +366,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
     elif obs_ids is not None and isinstance(obs_ids, list) and len(telescope) > 1:
         raise TypeError("It is not possible to pass a list of ObsIDs when multiple telescopes have been passed, please "
                         "pass a dictionary of lists of ObsIDs.")
-    # However if dictionary is passed for ObsIDs but it doesn't relate to the telescopes we're looking at, we will
+    # However, if dictionary is passed for ObsIDs and doesn't relate to the telescopes we're looking at, we will
     #  be forgiving and just use all observations
     elif obs_ids is not None and isinstance(obs_ids, dict) and all([tel not in obs_ids for tel in telescope]):
         warn("None of the telescopes specified were contained in the obs_ids dictionary; defaulting to using all "
@@ -416,7 +416,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
 
 def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
-                     num_cores: int = NUM_CORES) \
+                     num_cores: int = NUM_CORES, show_warnings: bool = True) \
         -> Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that match to the input coordinates (either a single
@@ -437,6 +437,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         a single telescope name, or a list of telescope names, to control which are used.
     :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
         if multiple coordinate pairs are passed.
+    :param bool show_warnings: If False, then any warnings that occur will not be displayed. Default is True.
     :return: A list of dictionaries (or single dictionary for one coordinate) of dataframes of matching ObsIDs, where
         each dictionary corresponds to an input RA-Dec (in the same order), and the dictionary keys correspond to
         different telescopes. The second return is structured exactly the same, but represents observations that were
@@ -449,20 +450,21 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     telescope = check_telescope_choices(telescope)
 
     # Set up the search distance, making sure the output at the end if the same format of dictionary.
-    # If the distance is not set by the user then we have to set it ourselves using the default values for each
+    # If the distance is not set by the user, then we have to set it ourselves using the default values for each
     #  telescope/mission
     if distance is None:
         distance = {t: DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
-    # Whereas if the user has passed a dictionary of values and NONE of the keys are for the requested telescopes
+    # Whereas if the user has passed a dictionary of values and NONE of the keys are for the requested telescopes,
     #  then I think they're probably confused, and we throw an error
     elif type(distance) == dict and all([t not in distance for t in telescope]):
         raise KeyError("When it is a dictionary, the 'distance' argument must contain an entry for every mission "
                        "specified by 'telescope'.")
-    # However if the passed dictionary contains SOME of the requested telescopes then we fill in the rest with the
+    # However if the passed dictionary contains SOME of the requested telescopes, then we fill in the rest with the
     #  default values - I think it is probably more convenient
     elif type(distance) == dict and any([t not in distance for t in telescope]):
-        warn("A dictionary of search distances that did not contain all requested telescopes has been passed, default"
-             " values have been used for the missing telescopes.", stacklevel=2)
+        if show_warnings:
+            warn("A dictionary of search distances that did not contain all requested telescopes has been "
+                 "passed, default values have been used for the missing telescopes.", stacklevel=2)
         distance = {t: distance[t] if t in distance else DEFAULT_TELE_SEARCH_DIST[t] for t in telescope}
     elif isinstance(distance, Quantity):
         # Just make sure that distance is a dictionary whatever, to simplify the code later
