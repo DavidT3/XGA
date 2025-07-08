@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 17:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 21:23. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -501,6 +501,14 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # Reading out all telescopes associated with any of the sources
     all_tels = _get_all_telescopes(sources)
 
+    # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
+    #  all telescopes yet. We also check this in the loop as we have to temporarily change
+    #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
+    #  multiple sources
+    if 'erosita' in all_tels and psf_corr:
+        warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+             "brightness profiles will not be corrected.", stacklevel=2)
+
     # Setting up dict to store profiles in
     final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in all_tels}
 
@@ -511,8 +519,6 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         for src_ind, src in enumerate(sources):
             for tel in src.telescopes:
                 if tel == 'erosita' and psf_corr:
-                    warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
-                         "brightness profiles will not be corrected.", stacklevel=2)
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
@@ -759,6 +765,14 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     # Reading out all telescopes associated with any of the sources
     all_tels = _get_all_telescopes(sources)
 
+    # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
+    #  all telescopes yet. We also check this in the loop as we have to temporarily change
+    #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
+    #  multiple sources
+    if 'erosita' in all_tels and psf_corr:
+        warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+             "brightness profiles will not be corrected.", stacklevel=2)
+
     # Setting up dict to store profiles in
     final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in all_tels}
 
@@ -771,8 +785,6 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                 # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
                 #  all telescopes yet
                 if tel == 'erosita' and psf_corr:
-                    warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
-                         "brightness profiles will not be corrected.", stacklevel=2)
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
