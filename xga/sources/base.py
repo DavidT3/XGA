@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 18:12. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -5092,11 +5092,12 @@ class BaseSource:
                     # erosita expmaps and images can change dimensions depending on inst, and energy
                     if tel == 'erosita':
                         m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
-                                            lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, 
-                                            inst='combined')[0]
+                                                 lo_en=self._peak_lo_en, hi_en=self._peak_hi_en,
+                                                 inst='combined')[0]
                     else:
                         m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
                                                  lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
+                        print(m.sum())
 
                     full_area[tel][o] = m.sum()
 
@@ -5127,6 +5128,7 @@ class BaseSource:
                                 frac = (area[tel][o][i] / full_area[tel][o])
                             else:
                                 frac = 0
+
                             if frac <= threshold_fraction and tel not in reject_dict:
                                 reject_dict[tel] = {o: [i]}
                             elif frac <= threshold_fraction and o not in reject_dict[tel]:
