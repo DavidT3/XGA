@@ -71,8 +71,6 @@ class TestEsassPhotFuncs(unittest.TestCase):
                                  r500=Quantity(CLUSTER_SMP["r500"].values, 'kpc'), use_peak=False,
                                  search_distance={'erosita': Quantity(3.6, 'deg')})
 
-        print(test_smp[0].telescopes)
-        print(test_smp[1].telescopes)
         test_smp[0].disassociate_obs('erosita')
         evtool_image(test_smp)
 
