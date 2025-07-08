@@ -19,6 +19,8 @@ class TestSasLcFuncs(unittest.TestCase):
         evselect_lightcurve(SRC_ALL_TELS, 'r500')
 
         lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='xmm')
+        if isinstance(lc, list):
+            lc = lc[0]
 
         assert lc.telescope == 'xmm'
         assert isinstance(lc, LightCurve)
