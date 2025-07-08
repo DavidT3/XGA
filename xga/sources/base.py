@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 23:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 23:40. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1652,7 +1652,7 @@ class BaseSource:
                 #  daft way I made XGA save these conversion files, and that I'm now too lazy to change
                 rel_re = OBS_ID_REGEX[tel]
                 # We're going to assume we always pad the ObsIDs out to their maximum allowable length
-                rel_oi_len = max([int(re_len) for re_len in rel_re.split("{", '')[-1].replace("}", '').split(',')])
+                rel_oi_len = max([int(re_len) for re_len in rel_re.split("{")[-1].replace("}", '').split(',')])
 
                 for conv_path in conv_factors:
                     res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
