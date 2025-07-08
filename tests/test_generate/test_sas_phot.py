@@ -29,23 +29,36 @@ class TestSasPhotFuncs(unittest.TestCase):
 
         im = SRC_ALL_TELS.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='xmm')
-        
-        for i in im:
-            assert i.telescope == 'xmm'
-            assert i.energy_bounds[0] == Quantity(0.4, 'keV')
-            assert i.energy_bounds[1] == Quantity(3, 'keV')
-            assert isinstance(i, Image)
+        if isinstance(im, list):
+            for i in im:
+                assert i.telescope == 'xmm'
+                assert i.energy_bounds[0] == Quantity(0.4, 'keV')
+                assert i.energy_bounds[1] == Quantity(3, 'keV')
+                assert isinstance(i, Image)
+        else:
+            assert im.telescope == 'xmm'
+            assert im.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert im.energy_bounds[1] == Quantity(3, 'keV')
+            assert isinstance(im, Image)
+
     
     def test_eexpmap(self):
         eexpmap(SRC_ALL_TELS, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
 
         exp = SRC_ALL_TELS.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
-                                      telescope='xmm')
-        for e in exp:
-            assert e.telescope == 'xmm'
-            assert e.energy_bounds[0] == Quantity(0.4, 'keV')
-            assert e.energy_bounds[1] == Quantity(3, 'keV')
-            assert isinstance(e, ExpMap)
+                                       telescope='xmm')
+        if isinstance(exp, list):
+            for e in exp:
+                assert e.telescope == 'xmm'
+                assert e.energy_bounds[0] == Quantity(0.4, 'keV')
+                assert e.energy_bounds[1] == Quantity(3, 'keV')
+                assert isinstance(e, ExpMap)
+        else:
+            assert exp.telescope == 'xmm'
+            assert exp.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert exp.energy_bounds[1] == Quantity(3, 'keV')
+            assert isinstance(exp, ExpMap)
+
     
     def test_emosaic_incorrect_input(self):
         self.assertRaises(ValueError, emosaic(SRC_ALL_TELS, 'wrong'))
@@ -55,10 +68,17 @@ class TestSasPhotFuncs(unittest.TestCase):
         
         im = SRC_ALL_TELS.get_combined_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                                telescope='xmm')
-        assert im.telescope == 'xmm'
-        assert im.energy_bounds[0] == Quantity(0.4, 'keV')
-        assert im.energy_bounds[1] == Quantity(3, 'keV')
-        assert isinstance(im, Image)
+        if isinstance(im,list):
+            for i in im:
+                assert i.telescope == 'xmm'
+                assert i.energy_bounds[0] == Quantity(0.4, 'keV')
+                assert i.energy_bounds[1] == Quantity(3, 'keV')
+                assert isinstance(i, Image)
+        else:
+            assert im.telescope == 'xmm'
+            assert im.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert im.energy_bounds[1] == Quantity(3, 'keV')
+            assert isinstance(im, Image)
 
 
     def test_emosaic_expmap(self):
@@ -66,10 +86,17 @@ class TestSasPhotFuncs(unittest.TestCase):
         
         exp = SRC_ALL_TELS.get_combined_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                                telescope='xmm')
-        assert exp.telescope == 'xmm'
-        assert exp.energy_bounds[0] == Quantity(0.4, 'keV')
-        assert exp.energy_bounds[1] == Quantity(3, 'keV')
-        assert isinstance(exp, ExpMap)
+        if isinstance(exp, list):
+            for e in exp:
+                assert e.telescope == 'xmm'
+                assert e.energy_bounds[0] == Quantity(0.4, 'keV')
+                assert e.energy_bounds[1] == Quantity(3, 'keV')
+                assert isinstance(e, ExpMap)
+        else:
+            assert exp.telescope == 'xmm'
+            assert exp.energy_bounds[0] == Quantity(0.4, 'keV')
+            assert exp.energy_bounds[1] == Quantity(3, 'keV')
+            assert isinstance(exp, ExpMap)
 
 
 
