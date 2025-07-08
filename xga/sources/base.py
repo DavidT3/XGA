@@ -5498,5 +5498,5 @@ class NullSource(BaseSource):
         super().__init__(0, 0, None, "AllObservations", load_products=load_products, telescope=telescope,
                          sel_null_obs=obs, null_load_products=null_load_products)
 
-        self._ra_dec = np.array([np.NaN, np.NaN])
-        self._nH = Quantity(np.NaN, self._nH.unit)
+        self._ra_dec = np.array([np.nan, np.nan])
+        self._nH = Quantity(np.nan, self._nH.unit)
