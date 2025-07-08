@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:27. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -1047,7 +1047,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
         raise NotImplementedError("This method isn't implemented yet")
 
     # Collecting all the associated telescopes here for later use
-    all_tels = _get_all_telescopes(sources)
+    telescope = list(ann_rads.keys())
 
     # So we can iterate through sources without worrying if there's more than one cluster
     if not isinstance(sources, ClusterSample):
@@ -1055,11 +1055,10 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
 
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
     # the gas_density_profile method of APECNormalisation1D
-    final_dens_profs = {key : [] for key in all_tels}
-    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as \
-        dens_prog:
+    final_dens_profs = {tel : [None]*len(sources) for tel in telescope}
+    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
         for src_ind, src in enumerate(sources):
-            for tel in src.telescopes:
+            for tel in telescope:
                 cur_rads = ann_rads[tel][src_ind]
 
                 try:
@@ -1077,14 +1076,14 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                                                                    sigma, num_dens)
                     # Then I store it in the source
                     src.update_products(dens_prof)
-                    final_dens_profs[tel].append(dens_prof)
+                    final_dens_profs[tel][src_ind] = dens_prof
 
                 # It is possible that no normalisation profile exists because the spectral fitting
                 # failed, we account for that here
                 except NoProductAvailableError:
                     warn("The relevant APEC normalisation profile for {s} cannot be located, and a density "
                          "profile cannot be calculated.".format(s=src.name), stacklevel=2)
-                    final_dens_profs[tel].append(None)
+                    final_dens_profs[tel][src_ind] = None
 
                 # It's also possible that the gas_density_profile method of our normalisation
                 # profile is going to throw a ValueError because some values are infinite or NaNs
@@ -1092,7 +1091,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                 except ValueError:
                     warn("The calculated density profile for {s} contains NaN values, and is considered "
                          "invalid.".format(s=src.name), stacklevel=2)
-                    final_dens_profs[tel].append(None)
+                    final_dens_profs[tel][src_ind] = None
 
             dens_prog.update(1)
 
