@@ -3586,7 +3586,7 @@ class BaseSource:
             patt_search.update({'mos1': patt_search['mos'], 'mos2': patt_search['mos']})
 
         if 'tm' in patt_search:
-            patt_search.update({'tm{}'.format(tm_i): patt_search['tm'] for tm_i in range(0, 7)})
+            patt_search.update({'tm{}'.format(tm_i): patt_search['tm'] for tm_i in range(1, 8)})
 
         some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size, telescope)
         matched_prods = []
