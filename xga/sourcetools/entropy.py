@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 30/07/2024, 17:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:56. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -32,8 +32,9 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                      temp_hi_en: Quantity = Quantity(7.9, 'keV'),
                                      group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                                      over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                                     show_warn: bool = True, psf_bins: int = 4,
-                                     stacked_spectra: bool = False) -> Union[List[SpecificEntropy], SpecificEntropy]:
+                                     show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False,
+                                     telescope: Union[str, List[str]] = None) -> Union[List[SpecificEntropy],
+                                                                                       SpecificEntropy]:
     """
     A convenience function that should allow the user to easily measure specific entropy profiles for a sample of
     galaxy clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For
@@ -117,8 +118,9 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
         to surface brightness profile (and thus density) measurements.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
         used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
-        supported, this function will instead use individual spectra for an ObsID. The default is
-        False.
+        supported, this function will instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to produce entropy profiles from. Default is None, in which case
+        entropy profiles will be produced from all telescopes associated with a source.
     :return: A list of the specific entropy profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
     :rtype: List[SpecificEntropy]/SpecificEntropy
@@ -127,18 +129,16 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     #  them, and tries to fit the requested models to them - implemented like this because it is an identical process
     #  to that required by the hydrostatic mass function of similar name
     sources, dens_prof_dict, temp_prof_dict, dens_model_dict, \
-        temp_model_dict = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
+        temp_model_dict, telescope = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
                                                           global_radius, fit_method, num_walkers, num_steps,
                                                           sb_pix_step, sb_min_snr, inv_abel_method, temp_annulus_method,
                                                           temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
                                                           temp_use_worst, freeze_met, abund_table, temp_lo_en,
                                                           temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
                                                           over_sample, one_rmf, num_cores, show_warn, psf_bins,
-                                                          stacked_spectra)
-    # Need to import here to avoid circular import errors
-    from ..sourcetools._common import _get_all_telescopes
-    # collecting all the associated telescopes to loop over later
-    all_tels = _get_all_telescopes(sources)
+                                                          stacked_spectra, telescope)
+
+
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them from the sources sometimes
     final_entropy_profs = {key : [] for key in all_tels}
     # Better to use a with statement for tqdm, so it shut down if something fails inside
