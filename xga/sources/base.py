@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 23:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 23:45. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -1680,14 +1680,17 @@ class BaseSource:
                             if 'combinedcombined' in comb:
                                 rel_obsid = 'combined'
                                 rel_inst = 'combined'
+                                prod_fetch_key = 'combined_spectrum'
                             elif comb[:8] == 'combined':
                                 rel_obsid = 'combined'
                                 rel_inst = comb[8:]
+                                prod_fetch_key = 'combined_spectrum'
                             else:
                                 rel_obsid = comb[:rel_oi_len]
                                 rel_inst = comb[rel_oi_len:]
+                                prod_fetch_key = 'spectrum'
 
-                            spec = self.get_products("spectrum", rel_obsid, rel_inst, extra_key=storage_key)[0]
+                            spec = self.get_products(prod_fetch_key, rel_obsid, rel_inst, extra_key=storage_key)[0]
                             rel_spec.append(spec)
 
                         for comb_ind, comb in enumerate(combos):
