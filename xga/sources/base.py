@@ -3873,8 +3873,11 @@ class BaseSource:
             else:
                 raise NoProductAvailableError("There are no combined products available to generate a mask for.")
         else:
-            # Just grab the first instrument that comes out the get method, the masks should be the same.
-            mask_image = self.get_images(obs_id=obs_id, lo_en=lo_en, hi_en=hi_en, telescope=telescope)[0]
+            mask_image = self.get_images(obs_id=obs_id, lo_en=lo_en, hi_en=hi_en, telescope=telescope)
+            if isinstance(mask_image, list):
+                # Just grab the first instrument that comes out the get method, the masks should be
+                #  the same.
+                mask_image = mask_image[0]
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
