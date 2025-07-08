@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:42. Copyright (c) The Contributors
-
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:45. Copyright (c) The Contributors
+import gc
 import os
 import pickle
 from copy import deepcopy
@@ -5112,6 +5112,8 @@ class BaseSource:
                         # Desperately trying to make sure I don't get memory allocation errors, particularly with
                         #  eROSITA with their memory-hogging images/exposure maps
                         del ex_data
+                        # Trying to make sure it is gone from memory
+                        gc.collect()
                         ex.unload(unload_data=True, unload_header=False)
 
                 if max(list(full_area[tel].values())) == 0:
