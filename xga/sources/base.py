@@ -3572,7 +3572,7 @@ class BaseSource:
                            for inst, patt in pattern[telescope].items()}
         elif isinstance(pattern, dict):
             if ('mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys())
-                    or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(0, 7)])):
+                    or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(1, 8)])):
                 raise ValueError("Specific MOS/TM instruments do not need to be specified for 'pattern'; i.e. there "
                                  "should be one entry for 'mos' or 'tm'.")
             pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
