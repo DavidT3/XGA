@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:42. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -5097,7 +5097,7 @@ class BaseSource:
                                             inst='combined')[0]
                     else:
                         m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
-                        lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
+                                                 lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
 
                     full_area[tel][o] = m.sum()
 
