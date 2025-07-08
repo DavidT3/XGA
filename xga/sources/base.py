@@ -3881,6 +3881,7 @@ class BaseSource:
                 # Just grab the first instrument that comes out the get method, the masks should be
                 #  the same.
                 mask_image = mask_image[0]
+        print(mask_image.path)
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
@@ -5036,7 +5037,6 @@ class BaseSource:
                         # Grabs exposure map data, then alters it so anything that isn't zero is a one
                         print(ex.path)
                         print(o)
-                        print(self._products)
                         ex_data = ex.data.copy()
                         ex_data[ex_data > 0] = 1
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
