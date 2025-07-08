@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 09:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:34. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -4801,8 +4801,13 @@ class BaseSource:
                 if tel in self.telescopes:
                     to_remove[tel] = deepcopy(self.instruments[tel])
                 else:
-                    warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
-                         stacklevel=2)
+                    warn_text = ('{t} is not a telescope associated with {n} and is '
+                                 'being skipped.').format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
+
         # In this instance the value is a dictionary, and I have created a disgusting nested set of if statements
         #  and for loops to ensure that the user hasn't passed anything daft
         elif isinstance(to_remove, dict):
@@ -4815,9 +4820,14 @@ class BaseSource:
                 #  has been passed - in this case the current top level key isn't actually a valid telescope for this
                 #  source
                 if tel not in self.telescopes:
-                    warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
-                         stacklevel=2)
+                    warn_text = ('{t} is not a telescope associated with {n} and is '
+                                 'being skipped.').format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
                     continue
+
                 # If we get here we set up the to_remove dictionary that will be constructed
                 final_to_remove[tel] = {}
 
@@ -4825,9 +4835,14 @@ class BaseSource:
                 #  and add the instruments that are associated with it to our final_to_remove dict
                 if isinstance(val, str):
                     if val not in self.obs_ids[tel]:
-                        warn("{o} is not an ObsID associated with {t} for {n}, and is being "
-                             "skipped.".format(o=val, t=tel, n=self.name), stacklevel=2)
+                        warn_text = ("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                     "skipped.").format(o=val, t=tel, n=self.name)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
                         continue
+
                     final_to_remove[tel][val] = deepcopy(self.instruments[tel][val])
 
                 # This should only be a list of ObsIDs at this level, so we assume it is and check them against the
@@ -4835,9 +4850,14 @@ class BaseSource:
                 elif isinstance(val, (list, np.ndarray)):
                     for v_oi in val:
                         if v_oi not in self.obs_ids[tel]:
-                            warn("{o} is not an ObsID associated with {t} for {n}, and is being "
-                                 "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
+                            warn_text = ("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                         "skipped.").format(o=v_oi, t=tel, n=self.name)
+                            if not self._samp_member:
+                                warn(warn_text, stacklevel=2)
+                            else:
+                                self._supp_warn.append(warn_text)
                             continue
+
                         # At this point we add all the instruments associated with the current ObsID to the removal
                         #  dictionary
                         final_to_remove[tel][v_oi] = deepcopy(self.instruments[tel][v_oi])
@@ -4849,16 +4869,25 @@ class BaseSource:
                     for v_oi, insts in val.items():
                         # Check that the key is an ObsID, skipping if not
                         if v_oi not in self.obs_ids[tel]:
-                            warn("{o} is not an ObsID associated with {t} for {n}, and is being "
-                                 "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
+                            warn_text = ("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                         "skipped.").format(o=v_oi, t=tel, n=self.name)
+                            if not self._samp_member:
+                                warn(warn_text, stacklevel=2)
+                            else:
+                                self._supp_warn.append(warn_text)
 
                         # Then if the value is a string it should be a single instrument, we check it is valid for
                         #  the current ObsID
                         if isinstance(insts, str):
                             if insts.lower() not in self.instruments[tel][v_oi]:
-                                warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
-                                     "skipped.".format(i=insts.lower(), t=tel, o=v_oi, n=self.name))
+                                warn_text = ("{i} is not an instrument associated with {t}-{o} for {n}, and is "
+                                             "being skipped.").format(i=insts.lower(), t=tel, o=v_oi, n=self.name)
+                                if not self._samp_member:
+                                    warn(warn_text, stacklevel=2)
+                                else:
+                                    self._supp_warn.append(warn_text)
                                 continue
+
                             # If it is then it is added to the removal dictionary
                             final_to_remove[tel][v_oi] = [insts.lower()]
 
@@ -4868,9 +4897,14 @@ class BaseSource:
                             final_inst_list = []
                             for inst in insts:
                                 if inst.lower() not in self.instruments[tel][v_oi] and inst != 'combined':
-                                    warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
-                                         "skipped.".format(i=inst.lower(), t=tel, o=v_oi, n=self.name))
+                                    warn_text = ("{i} is not an instrument associated with {t}-{o} for {n}, and is "
+                                                 "being skipped.").format(i=inst.lower(), t=tel, o=v_oi, n=self.name)
+                                    if not self._samp_member:
+                                        warn(warn_text, stacklevel=2)
+                                    else:
+                                        self._supp_warn.append(warn_text)
                                     continue
+
                                 final_inst_list.append(inst.lower())
                             # Check to make sure our list of instruments actually has something in it
                             if len(final_inst_list) != 0:
@@ -4981,8 +5015,11 @@ class BaseSource:
                     if tel in self._obs_sep:
                         del self._obs_sep[tel]
 
-                    warn("All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name),
-                         stacklevel=2)
+                    warn_text = "All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
 
             if whole_obsid_dis and tel in self._other_regions:
                 # We replace the interloper regions entry for this telescope (i.e. the combined list of contaminant
