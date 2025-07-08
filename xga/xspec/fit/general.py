@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 11:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 11:09. Copyright (c) The Contributors
 
 import warnings
 from typing import List, Union
@@ -203,7 +203,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                       over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                       spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
-                      stacked_spectra: bool = False):
+                      stacked_spectra: bool = False, telescope: Union[str, List[str]] = None):
     """
     This is a convenience function for fitting an absorbed single temperature mekal model(constant*tbabs*mekal) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -263,9 +263,12 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
+    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
+                                                                     min_counts, min_sn, over_sample, one_rmf,
+                                                                     num_cores, stacked_spectra, telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
@@ -290,10 +293,10 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
-        for tel in source.telescopes:
+        for tel in telescope:
             # retrieving the spectrum objects needed for each source/ tel combo
             specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+                                                 inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift to this model.")
@@ -368,7 +371,8 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                         abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                         min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                         num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                        timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
+                        timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
+                        telescope: Union[str, List[str]] = None):
     """
     This is a convenience function for fitting an absorbed multi temperature apec model (constant*tbabs*wdem) to
     spectra generated for XGA sources. The wdem model uses a power law distribution of the differential emission
@@ -421,9 +425,12 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
+    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
+                                                                     min_counts, min_sn, over_sample, one_rmf,
+                                                                     num_cores, stacked_spectra, telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
@@ -439,7 +446,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     src_inds = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
-        for tel in source.telescopes:
+        for tel in telescope:
             # retrieving the spectrum objects needed for each source/ tel combo
             specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
                                     inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
@@ -515,7 +522,8 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-              timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
+              timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
+              telescope: Union[str, List[str]] = None):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -560,9 +568,12 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
+    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
+                                                                     min_counts, min_sn, over_sample, one_rmf,
+                                                                     num_cores, stacked_spectra, telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
@@ -581,7 +592,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     outfile_paths = []
     src_inds = []
     for src_ind, source in enumerate(sources):
-        for tel in source.telescopes:
+        for tel in telescope:
             # retrieving the spectrum objects needed for each source/ tel combo
             specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
                                     inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
@@ -655,7 +666,8 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True, par_fit_stat: float = 1.,
               lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
               min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
+              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
+              telescope: Union[str, List[str]] = None):
     """
     This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -700,9 +712,12 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores, stacked_spectra)
+    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
+                                                                     min_counts, min_sn, over_sample, one_rmf,
+                                                                     num_cores, stacked_spectra, telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed blackbody or absorbed zbbody
@@ -721,10 +736,10 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     outfile_paths = []
     src_inds = []
     for src_ind, source in enumerate(sources):
-        for tel in source.telescopes:
+        for tel in telescope:
             # retrieving the spectrum objects needed for each source/ tel combo
             specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+                                                 inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
@@ -775,7 +790,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                         lum_conf, z, False, "{}", "{}", "{}", "{}", True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
                 stacked_spec = tel == 'erosita'
