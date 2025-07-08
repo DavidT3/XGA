@@ -21,7 +21,7 @@ class TestBaseSample(unittest.TestCase):
 
     def test_smp_names(self):
         print(self.test_smp.names)
-        assert set([SRC_INFO['name'], SUPP_SRC_INFO['name']]) == set(self.test_smp.names)
+        assert set([SRC_INFO['name'].replace("_", "-"), SUPP_SRC_INFO['name']]) == set(self.test_smp.names)
 
     def test_smp_redshifts(self):
         print(self.test_smp.redshifts)
@@ -33,5 +33,5 @@ class TestBaseSample(unittest.TestCase):
     
     def test_smp_src_telescopes(self):
         print(self.test_smp.src_telescopes)
-        assert self.test_smp.src_telescopes[SRC_INFO['name']] == set(['xmm', 'erosita'])
+        assert self.test_smp.src_telescopes[SRC_INFO['name'].replace("_", "-")] == set(['xmm', 'erosita'])
         assert self.test_smp.src_telescopes[SUPP_SRC_INFO['name']] == set(['xmm', 'erosita'])
