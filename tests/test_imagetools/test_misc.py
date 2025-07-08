@@ -206,10 +206,10 @@ class TestImageToolsMisc(unittest.TestCase):
                                                                      ])
 """
 #def test_pix_deg_scale(test_coord, test_wcs, test_offset, expected):
-    """
-    Testing that the calculation of scale between the pixels and degrees of an image is correct. Tests include
-    different coordinate units and different offsets.
-    """
+"""
+Testing that the calculation of scale between the pixels and degrees of an image is correct. Tests include
+different coordinate units and different offsets.
+"""
 #    assert pix_deg_scale(test_coord, test_wcs, test_offset) == expected
 
 """
@@ -226,11 +226,11 @@ class TestImageToolsMisc(unittest.TestCase):
                                                                          1.3888394987109003e-05)])
 """
 #def test_sky_deg_scale(test_im, test_coord, test_offset, expected):
-    """
-    Testing that the calculation of scale between the degrees and sky coordinates of an XMM image is correct. Tests
-    include different coordinate units and different offsets. I check only the values here because the way pytest
-    runs tests evidently doesn't define xmm_sky.
-    """
+"""
+Testing that the calculation of scale between the degrees and sky coordinates of an XMM image is correct. Tests
+include different coordinate units and different offsets. I check only the values here because the way pytest
+runs tests evidently doesn't define xmm_sky.
+"""
 #    assert sky_deg_scale(test_im, test_coord, test_offset).value == expected
 
 """
@@ -242,9 +242,9 @@ class TestImageToolsMisc(unittest.TestCase):
                                                                     Quantity(1275.5389422602298, 'kpc'))])
 """
 #def test_pix_rad_to_physical(test_im, test_rad, out_unit, expected):
-    """
-    Testing conversion of radius in pixels to physical units (both proper and angular).
-    """
+"""
+Testing conversion of radius in pixels to physical units (both proper and angular).
+"""
 #    ret_val = pix_rad_to_physical(test_im, test_rad, out_unit, A907_LOC, 0.16, Planck15)
 #    assert ret_val == expected
 
