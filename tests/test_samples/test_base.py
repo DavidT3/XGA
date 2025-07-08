@@ -20,14 +20,18 @@ class TestBaseSample(unittest.TestCase):
                                  search_distance={'erosita': Quantity(3.6, 'deg')})
 
     def test_smp_names(self):
+        print(self.test_smp.names)
         assert set([SRC_INFO['name'], SUPP_SRC_INFO['name']]) == set(self.test_smp.names)
 
     def test_smp_redshifts(self):
+        print(self.test_smp.redshifts)
         assert set([SRC_INFO['z'], SUPP_SRC_INFO['z']]) == set(self.test_smp.redshifts)
 
     def test_smp_telescopes(self):
+        print(self.test_smp.telescopes)
         assert set(['erosita', 'xmm']) == set(self.test_smp.telescopes)
     
     def test_smp_src_telescopes(self):
+        print(self.test_smp.src_telescopes)
         assert self.test_smp.src_telescopes[SRC_INFO['name']] == set(['xmm', 'erosita'])
         assert self.test_smp.src_telescopes[SUPP_SRC_INFO['name']] == set(['xmm', 'erosita'])
