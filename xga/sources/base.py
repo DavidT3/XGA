@@ -1151,6 +1151,9 @@ class BaseSource:
                 
                 if '/' in rel_inst:
                     rel_inst = 'combined'
+                
+                print(rel_inst)
+                print(self.instruments[telescope])
 
                 # Make sure that the current ObsID and instrument are actually associated with the source
                 if (rel_obs_id == 'combined' and rel_inst == 'combined') or \
