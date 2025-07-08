@@ -17,6 +17,8 @@ TEST_MODE = 'COV'
 
 # This is the main source for running the tests on
 SRC_INFO = {'ra': 226.0318, 'dec': -2.8046, 'z': 0.2093, 'name': "1eRASS_J150407.6-024816"}
+expected_xmm_obs = set(['0401040101', '0840580201', '0840580101'])
+expected_ero_obs = set(['227093', '227090', '224093'])
 
 # This is another cluster that we can use to test ClusterSample objects
 SUPP_SRC_INFO = {'ra': 55.7164, 'dec': -53.6292, 'z': 0.0587, 'name': 'A3158'}

@@ -14,16 +14,13 @@ from xga.generate.esass import srctool_spectrum
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from .. import SRC_INFO, SRC_ALL_TELS
+from .. import SRC_INFO, SRC_ALL_TELS, expected_ero_obs, expected_xmm_obs
 
 
 class TestBaseSource(unittest.TestCase):
     def test_obs_ids_assigned(self):
         obs = SRC_ALL_TELS.obs_ids
-        print(obs)
 
-        expected_xmm_obs = set(['0404910601', '0201901401', '0201903501'])
-        expected_ero_obs = set(['147099', '148102', '151102', '150099'])
         xmm_obs = set(obs['xmm'])
         ero_obs = set(obs['erosita'])
 
