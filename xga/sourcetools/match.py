@@ -390,7 +390,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
         #  have non X-ray telescopes, like the OM on XMM).
         rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT']).copy()
         # To make the output entirely the same as the matches on position we add a NaN distance column
-        rel_census.loc[:, 'dist'] = np.NaN
+        rel_census.loc[:, 'dist'] = np.nan
         if rel_obs_ids is not None:
             # If the ObsIDs under consideration for a particular telescope have been limited, then we include only
             #  those ObsIDs that the user wanted us to include
