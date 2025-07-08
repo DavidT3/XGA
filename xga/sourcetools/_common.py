@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 00:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:24. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -325,11 +325,11 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
      # I know this looks nasty, but I had to do this to avoid a circular import error
     from ..sourcetools.density import inv_abel_fitted_model
     dens_profs = inv_abel_fitted_model(cut_cut_sources, sb_models_cut, fit_method, cut_cut_rads, pix_step=sb_pix_step,
-                                       min_snr=sb_min_snr, abund_table=abund_table, num_steps=num_steps,
-                                       num_walkers=num_walkers, group_spec=group_spec, min_counts=spec_min_counts,
-                                       min_sn=spec_min_sn, over_sample=over_sample, conv_outer_radius=global_radius,
-                                       inv_abel_method=inv_abel_method, num_cores=num_cores, show_warn=show_warn,
-                                       psf_bins=psf_bins, stacked_spectra=stacked_spectra)
+                                       min_snr=sb_min_snr, abund_table=abund_table, psf_bins=psf_bins,
+                                       num_walkers=num_walkers, num_steps=num_steps, group_spec=group_spec,
+                                       min_counts=spec_min_counts, min_sn=spec_min_sn, over_sample=over_sample,
+                                       conv_outer_radius=global_radius, inv_abel_method=inv_abel_method,
+                                       num_cores=num_cores, show_warn=show_warn, stacked_spectra=stacked_spectra)
     
     # Once again reformatting this output to lookup density profiles based on source
     # so dens_prof_dict will be of the form: {src_key : {'xmm': prof, 'erosita': prof} etc.}
