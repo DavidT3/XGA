@@ -21,8 +21,8 @@ class TestSasPhotFuncs(unittest.TestCase):
         """
         Testing that TelescopeNotAssociatedError is raised when telescope isn't associated.
         """
-
-        self.assertRaises(TelescopeNotAssociatedError, evselect_image(SRC_ERO))
+        with self.assertRaises(TelescopeNotAssociatedError):
+            evselect_image(SRC_ERO)
 
     def test_evselect_image(self):
         evselect_image(SRC_ALL_TELS, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
@@ -61,7 +61,8 @@ class TestSasPhotFuncs(unittest.TestCase):
 
     
     def test_emosaic_incorrect_input(self):
-        self.assertRaises(ValueError, emosaic(SRC_ALL_TELS, 'wrong'))
+        with self.assertRaises(ValueError):
+            emosaic(SRC_ALL_TELS, 'wrong')
     
     def test_emosaic_image(self):
         emosaic(SRC_ALL_TELS, 'image', lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'))

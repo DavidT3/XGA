@@ -19,5 +19,10 @@ class TestSasSpecFuncs(unittest.TestCase):
 
         spec = SRC_ALL_TELS.get_spectra('r500', telescope='xmm')
 
-        assert isinstance(spec, Spectrum)
-        assert spec.telescope == 'xmm'
+        if isinstance(spec, list):
+            for sp in spec:
+                assert isinstance(sp, Spectrum)
+                assert sp.telescope == 'xmm'
+        else:
+            assert isinstance(spec, Spectrum)
+            assert spec.telescope == 'xmm'
