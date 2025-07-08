@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 18:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 18:21. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -5097,7 +5097,6 @@ class BaseSource:
                     else:
                         m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
                                                  lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
-                        print(m.sum())
 
                     full_area[tel][o] = m.sum()
 
@@ -5117,6 +5116,10 @@ class BaseSource:
                         # Trying to make sure it is gone from memory
                         gc.collect()
                         ex.unload(unload_data=True, unload_header=False)
+
+                print(full_area)
+                print(area)
+                print('\n\n')
 
                 if max(list(full_area[tel].values())) == 0:
                     # Everything has to be rejected in this case
