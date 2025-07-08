@@ -897,6 +897,12 @@ def luminosity_temperature_pipeline_new(sample_data: pd.DataFrame, start_apertur
         raise ValueError("The max_iter value ({mai}) is less than or equal to the min_iter value "
                          "({mii}).".format(mai=max_iter, mii=min_iter))
 
+    # Check whether the specified core_excised value matches that of the scaling relation
+    if core_excised == ScalingRelation.core_excised:
+        print("Your choice of 'core_excised' matches the ScalingRelation.")
+    else:
+        raise TypeError("Mismatch: Your choice of 'core_excised' for iteration does not match the ScalingRelation.")
+
     # Trying to determine the targeted overdensity based on the name of the scaling relation y-axis label
     y_name = rad_temp_rel.y_name.lower()
     if 'r' in y_name and '2500' in y_name:
