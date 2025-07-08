@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 16:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 17:05. Copyright (c) The Contributors
 
 import os
 import sys
@@ -92,6 +92,9 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     if p_type == "annular spectrum set components":
         prod.annulus_ident = extra_info["ann_ident"]
         prod.set_ident = extra_info["set_ident"]
+
+    if prod.obs_id == '012117':
+        print(prod.parse_stderr())
 
     return prod, src
 
