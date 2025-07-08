@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:10. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -128,27 +128,24 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     # Call this common function which checks for whether temperature profiles/density profiles exist, if not creates
     #  them, and tries to fit the requested models to them - implemented like this because it is an identical process
     #  to that required by the hydrostatic mass function of similar name
-    sources, dens_prof_dict, temp_prof_dict, dens_model_dict, \
-        temp_model_dict, telescope = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model,
-                                                          global_radius, fit_method, num_walkers, num_steps,
-                                                          sb_pix_step, sb_min_snr, inv_abel_method, temp_annulus_method,
-                                                          temp_min_snr, temp_min_cnt, temp_min_width, temp_use_combined,
-                                                          temp_use_worst, freeze_met, abund_table, temp_lo_en,
-                                                          temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
-                                                          over_sample, one_rmf, num_cores, show_warn, psf_bins,
-                                                          stacked_spectra, telescope)
-
+    setup_res = _setup_inv_abel_dens_onion_temp(sources, outer_radius, sb_model, dens_model, temp_model, global_radius,
+                                                fit_method, num_walkers, num_steps, sb_pix_step, sb_min_snr,
+                                                inv_abel_method, temp_annulus_method, temp_min_snr, temp_min_cnt,
+                                                temp_min_width, temp_use_combined, temp_use_worst, freeze_met,
+                                                abund_table, temp_lo_en, temp_hi_en, group_spec, spec_min_counts,
+                                                spec_min_sn, over_sample, one_rmf, num_cores, show_warn, psf_bins,
+                                                stacked_spectra, telescope)
+    sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, telescope = setup_res
 
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them from the sources sometimes
-    final_entropy_profs = {key : [] for key in all_tels}
+    final_entropy_profs = {tel : [None]*len(sources) for tel in telescope}
     # Better to use a with statement for tqdm, so it shut down if something fails inside
     prog_desc = "Generating {} specific entropy profile"
     with tqdm(desc=prog_desc.format("None"), total=len(sources)) as onwards:
-        for src in sources:
+        for src_ind, src in enumerate(sources):
             onwards.set_description(prog_desc.format(src.name))
-            for tel in all_tels:
+            for tel in telescope:
                 if tel not in src.telescopes:
-                    final_entropy_profs[tel].append(None)
                     continue
 
                 # If every stage of this analysis has worked then we setup the entropy profile
@@ -168,25 +165,27 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                         rads = t_prof.radii.copy()[1:]
                         rad_errs = t_prof.radii_err.copy()[1:]
                         deg_rads = src.convert_radius(rads, 'deg')
-                        entropy = SpecificEntropy(t_prof, d_prof, t_model, d_model, rads, rad_errs, deg_rads, fit_method,
-                                                num_walkers, num_steps, show_warn=show_warn, progress=False,
-                                                  auto_save=True, telescope=tel)
+                        entropy = SpecificEntropy(t_prof, d_prof, t_model, d_model, rads, rad_errs, deg_rads,
+                                                  fit_method, num_walkers, num_steps, show_warn=show_warn,
+                                                  progress=False, auto_save=True, telescope=tel)
                         # Add the profile to the source storage structure
                         src.update_products(entropy)
                         # Also put it into a list for returning
-                        final_entropy_profs[tel].append(entropy)
+                        final_entropy_profs[tel][src_ind] = entropy
                     except XGAFitError:
-                        warn("A fit failure occurred in the specific entropy profile definition.", stacklevel=2)
-                        final_entropy_profs[tel].append(None)
+                        warn("A fit failure occurred in the {t} specific entropy profile definition "
+                             "for {s}.".format(t=tel, s=src.name), stacklevel=2)
+                        final_entropy_profs[tel][src_ind] = None
 
                 # If the density generation failed we give a warning here
                 elif str(src) in dens_prof_dict:
-                    warn("The density profile for {0} for the {1} telescope could not be generated".format(src.name, tel), stacklevel=2)
+                    warn("The {t} density profile for {s} could not be generated".format(s=src.name, t=tel),
+                         stacklevel=2)
                     # No density means no entropy, so we append None to the list
-                    final_entropy_profs[tel].append(None)
+                    final_entropy_profs[tel][src_ind] = None
                 else:
                     # And again this is a failure state, so we append a None to the list
-                    final_entropy_profs[tel].append(None)
+                    final_entropy_profs[tel][src_ind] = None
 
                 onwards.update(1)
             onwards.set_description("Complete")
