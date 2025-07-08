@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 22:02. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -656,7 +656,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
 
         spec_storage_name += extra_name
 
-        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='xmm')
+        exists = source.get_products('combined_annular_spectrum', extra_key=spec_storage_name, telescope='xmm')
         if len(exists) == 0:
             # If it doesn't exist then we do need to call evselect_spectrum
             generate_spec = True

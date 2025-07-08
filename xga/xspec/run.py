@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/04/2025, 10:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 22:02. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -277,8 +277,10 @@ def xspec_call(xspec_func):
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 first_part = sp_key.split('ri')[0]
                                 second_part = "_" + "_".join(sp_key.split('ro')[-1].split("_")[1:])
-                                ann_sp_key = first_part + "ar" + "_".join(radii[src_repr][tel].value.astype(str)) + second_part
-                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key, telescope=tel)
+                                ann_sp_key = (first_part + "ar" +
+                                              "_".join(radii[src_repr][tel].value.astype(str)) + second_part)
+                                ann_specs = s.get_products("combined_annular_spectrum",
+                                                           extra_key=ann_sp_key, telescope=tel)
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
                                                                 "this is the developers fault, not yours.")
