@@ -3844,7 +3844,8 @@ class BaseSource:
         return ret_reg
 
     def get_source_mask(self, reg_type: str, telescope: str, obs_id: str = None,
-                        central_coord: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None) -> Tuple[np.ndarray, np.ndarray]:
+                        central_coord: Quantity = None, lo_en: Quantity = None, 
+                        hi_en: Quantity = None, inst: str = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type.
 
@@ -3867,13 +3868,15 @@ class BaseSource:
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
-            comb_images = self.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope=telescope)
+            comb_images = self.get_combined_images(lo_en=lo_en, hi_en=hi_en, inst=inst,
+                                                   telescope=telescope)
             if len(comb_images) != 0:
                 mask_image = comb_images[0]
             else:
                 raise NoProductAvailableError("There are no combined products available to generate a mask for.")
         else:
-            mask_image = self.get_images(obs_id=obs_id, lo_en=lo_en, hi_en=hi_en, telescope=telescope)
+            mask_image = self.get_images(obs_id=obs_id, lo_en=lo_en, hi_en=hi_en, inst=inst,
+                                         telescope=telescope)
             if isinstance(mask_image, list):
                 # Just grab the first instrument that comes out the get method, the masks should be
                 #  the same.
@@ -5019,8 +5022,14 @@ class BaseSource:
                     if not isinstance(exp_maps, list):
                         exp_maps = [exp_maps]
 
-                    m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
-                                            lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
+                    if tel == 'erosita':
+                        m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
+                                            lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, 
+                                            inst='combined')[0]
+                    else:
+                        m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
+                        lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
+
                     full_area[tel][o] = m.sum()
 
                     for ex in exp_maps:
