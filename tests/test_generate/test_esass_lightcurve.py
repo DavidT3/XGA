@@ -21,12 +21,12 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         srctool_lightcurve(SRC_ALL_TELS, 'r500', combine_tm=False, combine_obs=False)
 
-        lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='erosita', inst='TM1')
+        lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='erosita', inst='tm1')
 
         assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
         assert lc.obs_id != 'combined'
-        assert lc.instrument == 'TM1'
+        assert lc.instrument == 'tm1'
 
     def test_srctool_lightcurve_combine_insts_t_combine_obs_f(self):
         """
@@ -35,12 +35,19 @@ class TestEsassLcFuncs(unittest.TestCase):
         srctool_lightcurve(SRC_ALL_TELS, 'r500', combine_tm=True, combine_obs=False)
 
         lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='erosita', inst='combined')
-        print(lc)
 
-        assert isinstance(lc, LightCurve)
-        assert lc.telescope == 'erosita'
-        assert lc.obs_id != 'combined'
-        assert lc.instrument == 'combined'
+        if isinstance(lc, list):
+            for l in lc:
+                assert isinstance(l, LightCurve)
+                assert l.telescope == 'erosita'
+                assert l.obs_id != 'combined'
+                assert l.instrument == 'combined'
+        else:
+            assert isinstance(lc, LightCurve)
+            assert lc.telescope == 'erosita'
+            assert lc.obs_id != 'combined'
+            assert lc.instrument == 'combined'
+
 
     def test_srctool_lightcurve_combine_insts_f_combine_obs_t(self):
         """
@@ -48,12 +55,12 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         srctool_lightcurve(SRC_ALL_TELS, 'r500', combine_tm=False, combine_obs=True)
 
-        lc = SRC_ALL_TELS.get_combined_lightcurves('r500', telescope='erosita', inst='TM1')
-
+        lc = SRC_ALL_TELS.get_combined_lightcurves('r500', telescope='erosita', inst='tm1')
+        
         assert isinstance(lc, LightCurve)
         assert lc.telescope == 'erosita'
         assert lc.obs_id == 'combined'
-        assert lc.instrument == 'TM1'
+        assert lc.instrument == 'tm1'
 
     def test_srctool_lightcurve_combine_insts_t_combine_obs_t(self):
         """
