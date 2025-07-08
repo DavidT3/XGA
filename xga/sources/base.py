@@ -1153,13 +1153,26 @@ class BaseSource:
                 if '/' in rel_inst:
                     rel_inst = 'combined'
                 
-                print(rel_inst)
-                print(self.instruments[telescope])
+                # checking for valid obs_ids and insts
+                valid = False
+                if (rel_obs_id == 'combined' and rel_inst == 'combined'):
+                    valid = True
+                elif rel_obs_id == 'combined':
+                    for inst_list in self.instruments[telescope].values():
+                        if rel_inst in inst_list:
+                            valid = True
+                elif rel_inst == 'combined':
+                    # rel_obs_id must exist in obs_ids
+                    if rel_obs_id in self.obs_ids[telescope]:
+                        valid = True
+                else:
+                    # Both are specific, must match directly
+                    if (rel_obs_id in self.obs_ids[telescope] and
+                        rel_inst in self.instruments[telescope].get(rel_obs_id, [])):
+                        valid = True
 
                 # Make sure that the current ObsID and instrument are actually associated with the source
-                if (rel_obs_id == 'combined' and rel_inst == 'combined') or \
-                   (((rel_obs_id == 'combined' or rel_obs_id in self.obs_ids[telescope]) and
-                     (rel_inst == "combined" or rel_inst in self.instruments[telescope].get(rel_obs_id, [])))):
+                if valid:
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry['info_key'].split("_")
