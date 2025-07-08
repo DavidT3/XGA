@@ -1155,7 +1155,7 @@ class BaseSource:
                 # Make sure that the current ObsID and instrument are actually associated with the source
                 if (rel_obs_id == 'combined' and rel_inst == 'combined') or \
                    (((rel_obs_id == 'combined' or rel_obs_id in self.obs_ids[telescope]) and
-                     (rel_inst == "combined" or rel_inst in self.instruments[telescope][rel_obs_id]))):
+                     (rel_inst == "combined" or rel_inst in self.instruments[telescope].get(rel_obs_id, [])))):
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry['info_key'].split("_")
