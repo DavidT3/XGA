@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 10:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 09:57. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -82,6 +82,14 @@ class BaseSample:
         # We run the telescope input check so that I know that telescope will be a list of telescope names, in case
         #  I need to use it for joining into a string at the end of this init
         telescope = check_telescope_choices(telescope)
+
+        # This check and warning is also contained in the separation_match function called by BaseSource init, but
+        #  the warning is disabled when called from BaseSource. This is to save us from a deluge of identical
+        #  warnings for every source.
+        # Instead, we check and warn just once here
+        if type(search_distance) == dict and any([t not in search_distance for t in telescope]):
+            warn("A dictionary of search distances that did not contain all requested telescopes has been "
+                 "passed, default values have been used for the missing telescopes.", stacklevel=2)
 
         # There used to be a set of attributes storing the basic information (ra, dec, and redshifts) about
         #  the sources in this sample, but for subclasses its actually way more convenient for the properties
