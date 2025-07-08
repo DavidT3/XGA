@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 10:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 16:59. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -198,32 +198,64 @@ class BaseProduct:
                 with eSASS errors/warnings in.
             :rtype: Tuple[List[dict], List[str]]
             """
-            parsed_esass = []
-            # This is a crude way of looking for eSASS error/warning strings ONLY
-            if err_type == 'error':
-                esass_lines = [line for line in split_stderr if "**ERROR" in line or '**STOP' in line]
-            elif err_type == 'warning':
-                esass_lines = [line for line in split_stderr if "**WARN" in line]
+            # The substrings we're looking for are different depending on if we're searching for
+            #  errors or warnings
+            if err_type == "error":
+                indicators = np.array(["**ERROR", '**STOP', "Fortran runtime error"])
+            else:
+                indicators = np.array(["**WARN"])
 
-            for err in esass_lines:
+            parsed_esass = []
+            rel_esass_lines = []
+            # Iterating through the lines
+            for line in split_stderr:
+                # Checking to see if any of the error/warning indicators are in the current line
+                pres_indic = np.array([cur_indic in line for cur_indic in indicators])
+                # If no indicators are present, we can stop looking at the current line
+                if not np.any(pres_indic):
+                    continue
+
+                # Make a note of the line, as it contains something relevant
+                rel_esass_lines.append(line)
+
+                # The relevant error or warning indicator(s) for the current line - I suspect that the vast majority
+                #  of the time this is going to be a one element array.
+                rel_indic = indicators[pres_indic]
+                # Just in case it isn't a one element array though, we add this to select a single indicator to
+                #  focus on
+                if len(rel_indic) != 1:
+                    rel_indic = rel_indic[0]
+
                 try:
-                    # This tries to split out the eSASS task that produced the error
-                    originator = err.split(" **")[0].split(":")[0].replace(" ", "")
-                    # The eROSITA errors don't seem to have specific names, so this will be the same for all
-                    err_ident = "eROSITAError"
-                    # Actual error message
-                    err_body = err.split(" **")[-1].split("** ")[-1]
+                    # More almost hard coding that makes me very uncomfortable
+                    if '**' in rel_indic:
+                        # This tries to split out the eSASS task that produced the error
+                        originator = line.split(" **")[0].split(":")[0].replace(" ", "")
+                        # The eROSITA errors don't seem to have specific names, so this will be the same for all
+                        err_ident = "eROSITAError"
+                        # Actual error message
+                        err_body = line.split(" **")[-1].split("** ")[-1]
+
+                    elif 'Fortran' in rel_indic:
+                        originator = 'fortran'
+                        err_ident = "eROSITAError"
+                        err_body = line
+
+                    else:
+                        originator = ""
+                        err_ident = "eROSITAError"
+                        err_body = line
 
                 except IndexError:
                     originator = ""
-                    err_ident = ""
-                    err_body = ""
+                    err_ident = "eROSITAError"
+                    err_body = line
 
                 parsed_esass.append({"originator": originator, "name": err_ident, "message": err_body})
-            return parsed_esass, esass_lines
+
+            return parsed_esass, rel_esass_lines
 
         # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
-
         # Defined as empty as they are returned by this method
         tel_errs_msgs = []
         parsed_tel_warns = []
