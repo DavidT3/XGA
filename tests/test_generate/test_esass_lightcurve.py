@@ -25,8 +25,6 @@ class TestEsassLcFuncs(unittest.TestCase):
         
         if isinstance(lc, list):
             for l in lc:
-                print(l.usable)
-                print(l.not_usable_reasons)
                 assert isinstance(l, LightCurve)
                 assert l.telescope == 'erosita'
                 assert l.obs_id != 'combined'

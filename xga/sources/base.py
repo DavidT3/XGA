@@ -1148,10 +1148,13 @@ class BaseSource:
 
                 rel_path = cur_d + inven_entry['file_name']
                 rel_inst = inven_entry[inst_lookup]
+                
+                if '/' in rel_inst:
+                    rel_inst = 'combined'
 
                 # Make sure that the current ObsID and instrument are actually associated with the source
-                if ((rel_obs_id in self.obs_ids[telescope] or rel_obs_id == 'combined') and
-                        (rel_inst in self.instruments[telescope][rel_obs_id] or rel_inst == "combined")):
+                if ((rel_obs_id == 'combined' or rel_obs_id in self.obs_ids[telescope]) and
+                        (rel_inst == "combined" or rel_inst in self.instruments[telescope][rel_obs_id])):
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry['info_key'].split("_")
