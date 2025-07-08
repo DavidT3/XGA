@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 17:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 23:30. Copyright (c) The Contributors
 
 import os
 import pickle
@@ -33,7 +33,7 @@ from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
-    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES
+    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -1647,6 +1647,13 @@ class BaseSource:
                 conv_factors = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
                                 for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
                                 if ".xcm" not in f and "conv_factors" in f]
+
+                # We figure out how long the ObsIDs should be for the current telescope, helps parse the
+                #  daft way I made XGA save these conversion files, and that I'm now too lazy to change
+                rel_re = OBS_ID_REGEX[tel]
+                # We're going to assume we always pad the ObsIDs out to their maximum allowable length
+                rel_oi_len = max([int(re_len) for re_len in rel_re.replace("{", '').replace("}", '').split(',')])
+
                 for conv_path in conv_factors:
                     res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
@@ -1659,7 +1666,7 @@ class BaseSource:
                     #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
-                    print(combos)
+                    # Parsing out the ObsID and instrument information
 
                     # Getting the spectra for each column, then assigning rates and luminosities.
                     # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
@@ -1668,7 +1675,18 @@ class BaseSource:
                     rel_spec = []
                     try:
                         for comb in combos:
-                            spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                            # We figure out the ObsID and instrument we need to fetch the spectrum for
+                            if 'combinedcombined' in comb:
+                                rel_obsid = 'combined'
+                                rel_inst = 'combined'
+                            elif comb[:8] == 'combined':
+                                rel_obsid = 'combined'
+                                rel_inst = comb[8:]
+                            else:
+                                rel_obsid = comb[:rel_oi_len]
+                                rel_inst = comb[rel_oi_len:]
+
+                            spec = self.get_products("spectrum", rel_obsid, rel_inst, extra_key=storage_key)[0]
                             rel_spec.append(spec)
 
                         for comb_ind, comb in enumerate(combos):
