@@ -1,6 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
 from astropy.units import Quantity
+import numpy as np
+import pandas as pd
 
 from xga.sources import GalaxyCluster
 
@@ -17,7 +19,15 @@ TEST_MODE = 'COV'
 SRC_INFO = {'ra': 226.0318, 'dec': -2.8046, 'z': 0.2093, 'name': "1eRASS_J150407.6-024816"}
 
 # This is another cluster that we can use to test ClusterSample objects
-SUPP_SRC_INFO = {'ra': 55.7814, 'dec': -53.6359, 'z': 0.0587, 'name': 'A3158'}
+SUPP_SRC_INFO = {'ra': 55.7164, 'dec': -53.6292, 'z': 0.0587, 'name': 'A3158'}
+
+# Making a df to make a sample from
+column_names = ['name', 'ra', 'dec', 'z', 'r500']
+cluster_data = np.array([[SRC_INFO['name'], SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], 500],
+                          SUPP_SRC_INFO['name'], SUPP_SRC_INFO['ra'], SUPP_SRC_INFO['dec'], SRC_INFO['z'], 500])
+
+CLUSTER_SMP = pd.DataFrame(data=cluster_data, columns=column_names)
+CLUSTER_SMP[['ra', 'dec', 'z', 'r500']] = CLUSTER_SMP[['ra', 'dec', 'z', 'r500']].astype(float)
 
 SRC_ALL_TELS = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
