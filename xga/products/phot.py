@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 14:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 15:02. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -637,7 +637,7 @@ class Image(BaseProduct):
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
         # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""
@@ -1342,8 +1342,8 @@ class Image(BaseProduct):
             else:
                 # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                 #  it isn't essential, so I'll just display a warning
-                warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
-                              "pairs in it, or is otherwise the wrong shape.")
+                warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                     "the wrong shape.", stacklevel=2)
                 # Just in case annuli were also passed, I set the coordinate to None so that it knows something is wrong
                 pix_coord = None
 
@@ -1875,8 +1875,8 @@ class Image(BaseProduct):
                 else:
                     # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                     #  it isn't essential, so I'll just display a warning
-                    warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
-                                  "pairs in it, or is otherwise the wrong shape.")
+                    warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                         "the wrong shape.", stacklevel=2)
                     # Just in case annuli were also passed, I set the coordinate to None so that it knows something is
                     # wrong
                     pix_coord = None
@@ -3374,7 +3374,7 @@ class RateMap(Image):
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
         # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""
