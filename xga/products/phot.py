@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 14:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 14:17. Copyright (c) The Contributors
 import gc
 import os
 import warnings
@@ -3215,6 +3215,26 @@ class RateMap(Image):
         cnts = Quantity(tot_cnt - (bck_cnt*area_norm), 'ct')
 
         return cnts
+
+    def unload(self, unload_data: bool = True, unload_header: bool = False):
+        """
+        This method allows you to safely remove the data and/or header information contained in this
+        RateMap (and its component image and exposure map) from memory, while guaranteeing that it will be
+        read back in if required. We use the delete methods implemented for the data and header properties, which
+        can also be used directly by the user.
+
+        :param bool unload_data: Specifies whether the data should be unloaded from memory. Default is True, as the
+            data are liable to take up far more memory than the header, meaning it is more likely to need to
+            be removed.
+        :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
+        """
+        # Call the Image-implemented unload method first
+        super().unload(unload_data, unload_header)
+
+        # Then we do a little extra job of unloading the component image and exposure map data as well
+        if unload_data or unload_header:
+            self.image.unload(unload_data, unload_header)
+            self.expmap.unload(unload_data, unload_header)
 
     @property
     def edge_mask(self) -> np.ndarray:
