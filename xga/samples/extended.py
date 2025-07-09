@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .base import BaseSample
 from .. import DEFAULT_COSMO
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoProductAvailableError, NoValidObservationsError, NotAssociatedError
+    NoProductAvailableError, NoValidObservationsError, NotAssociatedError, TelescopeNotAssociatedError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
@@ -704,7 +704,7 @@ class ClusterSample(BaseSample):
                          stacklevel=2)
                 temps.append(gcs_temp)
 
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)

@@ -4556,8 +4556,14 @@ class BaseSource:
         else:
             storage_key = specs.storage_key
 
+        try:
+            len_fit_results = len(self._fit_results[telescope])
+        except KeyError:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
+                                              f"{self.name} so no results can be retrieved.")
+
         # Bunch of checks to make sure the requested results actually exist
-        if len(self._fit_results[telescope]) == 0:
+        if len_fit_results == 0:
             raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(t=telescope,
                                                                                                    s=self.name))
         elif storage_key not in self._fit_results[telescope]:
