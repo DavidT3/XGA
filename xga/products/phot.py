@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 13:54. Copyright (c) The Contributors
 import gc
 import os
 import warnings
@@ -2739,7 +2739,7 @@ class RateMap(Image):
         #  mask as to whether you are on or off the sensor
         det_map = self.expmap.data.copy()
         det_map[det_map != 0] = 1
-        self._on_sensor_mask = det_map
+        self._on_sensor_mask = det_map.astype('int8')
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
