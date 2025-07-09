@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 11:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 12:59. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -5139,7 +5139,7 @@ class BaseSource:
 
                 if max(list(full_area[tel].values())) == 0:
                     # Everything has to be rejected in this case
-                    reject_dict = deepcopy(self.instruments[tel])
+                    reject_dict[tel] = deepcopy(self.instruments[tel])
                 else:
                     for o in area[tel]:
                         for i in area[tel][o]:
@@ -5155,7 +5155,6 @@ class BaseSource:
                             elif frac <= threshold_fraction and o in reject_dict[tel]:
                                 reject_dict[tel][o].append(i)
 
-        print(reject_dict)
         return reject_dict
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
