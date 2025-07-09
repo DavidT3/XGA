@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/07/2025, 22:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 11:38. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -39,8 +39,6 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         that this script is related to.
     :rtype: Tuple[Union[FITS, str], str, bool, list, list, str]
     """
-    if XSPEC_VERSION is None:
-        raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
 
     # We assume the output will be usable to start with
     usable = True
@@ -154,6 +152,11 @@ def xspec_call(xspec_func):
 
     @wraps(xspec_func)
     def wrapper(*args, **kwargs):
+
+        # We'll stop this process in its tracks if XGA cannot find an XSPEC installation
+        if XSPEC_VERSION is None:
+            raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
+
         # The first argument of all of these XSPEC functions will be the source object (or a list of),
         # so rather than return them from the XSPEC model function I'll just access them like this.
         if isinstance(args[0], BaseSource):
