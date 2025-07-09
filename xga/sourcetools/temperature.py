@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:03. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 16:01. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -547,7 +547,8 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
-                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met, stacked_spectra=stacked_spectra)
+                             lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met,
+                             stacked_spectra=stacked_spectra, telescope=telescope)
 
     return all_rads
 
@@ -703,7 +704,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
                              lo_en=temp_lo_en, hi_en=temp_hi_en, freeze_met=freeze_met,
-                             stacked_spectra=stacked_spectra)
+                             stacked_spectra=stacked_spectra, telescope=telescope)
 
     return all_rads
 
