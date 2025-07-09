@@ -26,3 +26,19 @@ class TestBaseSample(unittest.TestCase):
 
         assert len(Lx) == 2
         assert isinstance(Lx, Quantity)
+
+    def test_Lx_Tx_w_odd_telescope_sample(self):
+        """
+        Testing that for samples were sources dont have the same telescopes assigned, the Lx and Tx
+        can be retrieved.
+        """
+        self.test_smp[0].disassociate_obs('erosita')
+
+        single_temp_apec(self.test_smp, 'r500', stacked_spectra=True, spectrum_checking=False)
+
+        Lx = self.test_smp.Lx('r500', 'erosita', stacked_spectra=True)
+
+        print(Lx)
+
+        assert len(Lx) == 2
+        assert isinstance(Lx, Quantity)
