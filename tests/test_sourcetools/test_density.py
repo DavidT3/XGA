@@ -22,7 +22,7 @@ from .. import SRC_ALL_TELS
 
 class TestDensityFuncs(unittest.TestCase):
     def test_dens_setup(self):
-        res = _dens_setup(SRC_ALL_TELS, Quantity(600, 'kpc'), Quantity(100, 'kpc'), 'angr', 
+        res = _dens_setup(SRC_ALL_TELS, 'angr', Quantity(600, 'kpc'), Quantity(100, 'kpc'), 
                     Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)
         
         assert type(res[0][0]) == GalaxyCluster
