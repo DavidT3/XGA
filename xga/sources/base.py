@@ -4669,6 +4669,8 @@ class BaseSource:
             en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
         else:
             en_key = None
+        
+        print(self._luminosities[telescope][storage_key])
 
         try: 
             len_xspec_fits = len(self._luminosities[telescope])
