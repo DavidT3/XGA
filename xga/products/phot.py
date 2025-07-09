@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 13:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 14:00. Copyright (c) The Contributors
 import gc
 import os
 import warnings
@@ -2743,6 +2743,12 @@ class RateMap(Image):
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
+
+        # Finally, we unload the image and exposure map data that was used to build the ratemap array, as we
+        #  are less likely to need those data from now on, and we can save some memory. Note that we
+        #  don't unload the image/expmap headers though
+        self.image.unload(unload_data=True, unload_header=False)
+        self.expmap.unload(unload_data=True, unload_header=False)
 
     @property
     def shape(self) -> Tuple[int, int]:
