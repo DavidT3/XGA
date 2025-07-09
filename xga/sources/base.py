@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 12:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 14:08. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -3746,11 +3746,6 @@ class BaseSource:
         :return: The method returns both the source region and the associated background region.
         :rtype: Tuple[SkyRegion, SkyRegion]
         """
-        # Doing an initial check so I can throw a warning if the user wants a region-list region AND has supplied
-        #  custom central coordinates
-        if reg_type == "region" and central_coord is not None:
-            warn("You cannot use custom central coordinates with a region from supplied region files", stacklevel=2)
-
         if central_coord is None:
             central_coord = self._default_coord
 
@@ -3759,14 +3754,14 @@ class BaseSource:
         elif type(central_coord) == SkyCoord:
             centre = central_coord
         else:
-            raise TypeError("central_coord must be of type Quantity or SkyCoord.")
+            raise TypeError("The 'central_coord' argument must be of type Quantity or SkyCoord.")
 
         # In case combined gets passed as the ObsID at any point
         if obs_id == "combined":
             obs_id = None
 
         # The search radius won't be used by the user, just peak finding solutions
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "search", "point"]
+        allowed_rtype = ["r2500", "r500", "r200", "custom", "search", "point"]
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
@@ -3777,19 +3772,14 @@ class BaseSource:
                                                                                             s=self.name))
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-        elif reg_type == "region" and obs_id is None:
-            raise ValueError("ObsID and telescope cannot be None when getting region file regions.")
-        elif reg_type == "region" and obs_id is not None:
-            # TODO Do I even still use this attribute?
-            src_reg = self._regions[telescope][obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
             raise ValueError("There is no {r} associated with {s}".format(r=reg_type, s=self.name))
-        elif reg_type != "region" and reg_type in self._radii:
+        elif reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
             radius = self._radii[reg_type]
             src_reg = CircleSkyRegion(centre, radius.to('deg'))
-        elif reg_type != "region" and reg_type not in self._radii:
+        elif reg_type not in self._radii:
             raise ValueError("{} is a valid region type, but is not associated with this "
                              "source.".format(reg_type))
         else:
