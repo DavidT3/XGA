@@ -4664,8 +4664,14 @@ class BaseSource:
         else:
             en_key = None
 
+        try: 
+            len_xspec_fits = len(self._luminosities[telescope])
+        except KeyError:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
+                                              f"{self.name} so no luminosities can be retrieved.")
+
         # Checks that the requested region, model and energy band actually exist
-        if len(self._luminosities[telescope]) == 0:
+        if len_xspec_fits == 0:
             raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(s=self.name,
                                                                                                    t=telescope))
         elif storage_key not in self._luminosities[telescope]:

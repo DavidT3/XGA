@@ -12,7 +12,8 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
-from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, NotAssociatedError
+from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+                         NotAssociatedError, TelescopeNotAssociatedError
 from ..exceptions import NoValidObservationsError
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
@@ -441,7 +442,7 @@ class BaseSample:
                 else:
                     lums.append(lx_val)
 
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)
