@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 22:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 11:55. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -5155,6 +5155,7 @@ class BaseSource:
                             elif frac <= threshold_fraction and o in reject_dict[tel]:
                                 reject_dict[tel][o].append(i)
 
+        print(reject_dict)
         return reject_dict
 
     def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
