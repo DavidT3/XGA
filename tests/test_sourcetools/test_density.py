@@ -15,6 +15,9 @@ from xga.products.profile import SurfaceBrightness1D, GasDensity3D
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import tracemalloc
+
+tracemalloc.start()
 
 from .. import SRC_ALL_TELS
 
@@ -46,3 +49,10 @@ class TestDensityFuncs(unittest.TestCase):
 
         assert type(res['erosita'][0]) == GasDensity3D
         assert type(res['xmm'][0]) == GasDensity3D
+
+
+snapshot = tracemalloc.take_snapshot()
+top_stats = snapshot.statistics('lineno')
+
+for stat in top_stats[:10]:
+    print(stat)

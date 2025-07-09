@@ -31,6 +31,8 @@ class TestSetupFuncs(unittest.TestCase):
     def test_setup_global(self):
         res = _setup_global(SRC_ALL_TELS, Quantity(600, 'kpc'), Quantity(600, 'kpc'), 'angr', True,
                             5, None, None, NUM_CORES, 4, True)
+        print('in test_setup_global')
+        print(res)
         
         assert res[0][0] == GalaxyCluster
         assert type(res[1][0]) == Quantity
@@ -43,6 +45,8 @@ class TestSetupFuncs(unittest.TestCase):
                                               'beta', 'king', 'vikhlinin_temp', 
                                               Quantity(600, 'kpc'), 
                                               stacked_spectra=True)
+        print('in test_setup_inv_abel_dens_onion_temp')
+        print(res)
         
         assert type(res[0]) == list
         assert len(res[0]) == 1
