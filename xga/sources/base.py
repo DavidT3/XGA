@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 18:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 20:23. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -5104,8 +5104,11 @@ class BaseSource:
                         # Grabs exposure map data, then alters it so anything that isn't zero is a one. We
                         #  use the int8 datatype because we're about to convert the array to zeroes
                         #  and ones and saving as much memory as possible is important for eROSITA
-                        ex_data = ex.data.copy().astype('int8')
+                        ex_data = ex.data.copy()
                         ex_data[ex_data > 0] = 1
+                        # Probably won't really make a difference as we're deleting this array soon, but still
+                        #  trying to save memory!
+                        ex_data = ex_data.astype('int8')
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
                         #  with the XMM chips. Just mask the modified expmap, then sum.
                         area[tel][o][ex.instrument] = (ex_data * m).sum()
@@ -5116,10 +5119,6 @@ class BaseSource:
                         # Trying to make sure it is gone from memory
                         gc.collect()
                         ex.unload(unload_data=True, unload_header=False)
-
-                print(full_area)
-                print(area)
-                print('\n\n')
 
                 if max(list(full_area[tel].values())) == 0:
                     # Everything has to be rejected in this case
