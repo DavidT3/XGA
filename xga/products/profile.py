@@ -22,6 +22,9 @@ from ..products.phot import RateMap
 from ..sourcetools.deproj import shell_ann_vol_intersect
 from ..sourcetools.misc import ang_to_rad
 
+import tracemalloc
+
+tracemalloc.start()
 
 class SurfaceBrightness1D(BaseProfile1D):
     """
@@ -2864,3 +2867,8 @@ class Generic1D(BaseProfile1D):
 
 
 
+snapshot = tracemalloc.take_snapshot()
+top_stats = snapshot.statistics('lineno')
+
+for stat in top_stats[:10]:
+    print(stat)
