@@ -823,7 +823,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if not isinstance(sources, (BaseSample, list)):
         sources = [sources]
 
-    all_3d_temp_profs = {key : [None]*len(sources) for key in all_tels}
+    all_3d_temp_profs = {key : [None]*len(sources) for key in telescope}
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
         for tel in telescope:

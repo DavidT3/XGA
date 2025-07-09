@@ -30,7 +30,7 @@ class TestSetupFuncs(unittest.TestCase):
 
     def test_setup_global(self):
         res = _setup_global(SRC_ALL_TELS, Quantity(600, 'kpc'), Quantity(600, 'kpc'), 'angr', True,
-                            5, None, None, NUM_CORES, 4, True)
+                            5, None, None, NUM_CORES, 4, True, ['xmm', 'erosita'])
         print('in test_setup_global')
         print(res)
         
