@@ -1,17 +1,16 @@
-import unittest
-import sys
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:24. Copyright (c) The Contributors
+
 import os
+import sys
+import unittest
 
 from astropy.units import Quantity
 
-import xga
-from xga.sources import GalaxyCluster
-from xga.generate.esass.phot import evtool_image, expmap
-from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
-from xga.sourcetools.density import _dens_setup, _run_sb, inv_abel_fitted_model, \
-                                    ann_spectra_apec_norm
 from xga.products.profile import SurfaceBrightness1D, GasDensity3D
-
+from xga.sources import GalaxyCluster
+from xga.sourcetools.density import _dens_setup, _run_sb, inv_abel_fitted_model, \
+    ann_spectra_apec_norm
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -38,8 +37,7 @@ class TestDensityFuncs(unittest.TestCase):
         assert type(res) == SurfaceBrightness1D
     
     def test_inv_abel_fitted_model(self):
-        res = inv_abel_fitted_model(SRC_ALL_TELS, 'beta', use_peak=False, psf_corr=False, 
-                              stacked_spectra=True)
+        res = inv_abel_fitted_model(SRC_ALL_TELS, 'beta', use_peak=False, psf_corr=False, stacked_spectra=True)
 
         assert type(res['erosita'][0]) == GasDensity3D
         assert type(res['xmm'][0]) == GasDensity3D

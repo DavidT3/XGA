@@ -1,17 +1,15 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 15:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 14:14. Copyright (c) The Contributors
 
 from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
 
-from ._common import _write_xspec_script, _check_inputs, _parse_radii_input
+from ._common import _write_xspec_script, _check_inputs, _pregen_annular_spectra
 from ..run import xspec_call
 from ... import NUM_CORES
 from ...exceptions import ModelNotAssociatedError
-from ...generate.esass.spec import esass_spectrum_set
-from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -27,7 +25,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                              abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
                              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
                              num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                             timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False):
+                             timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
+                             telescope: Union[str, List[str]] = None):
     """
     A function that allows for the fitting of sets of annular spectra (generated from objects such as galaxy
     clusters) with an absorbed plasma emission model (tbabs*apec). This function fits the annuli completely
@@ -76,20 +75,13 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    # Avoiding circular import errors
-    from ...sourcetools._common import _get_all_telescopes
-    telescopes = _get_all_telescopes(sources)
-
-    radii = _parse_radii_input(telescopes, radii)
-    # TODO This will probably be replaced by a centralised function that generates annular spectra for many
-    #  different telescopes at some point
-    if 'xmm' in telescopes:
-        # We make sure the requested sets of annular spectra have actually been generated (for XMM)
-        spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
-
-    if 'erosita' in telescopes:
-        esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra)
+    # This makes sure that the annular spectra we need to exist for the requested fit to be performed, have
+    #  been generated
+    sources, radii, telescope = _pregen_annular_spectra(sources, radii, group_spec, min_counts, min_sn, over_sample,
+                                                        one_rmf, num_cores, stacked_spectra, telescope)
 
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
@@ -127,8 +119,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
         #  least in this current setup
         for tel in source.telescopes:
-            print('in single_temp_apec_profile')
-            print(tel)
+            if tel not in telescope:
+                continue
             # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
             # if stacked_spectra and tel == 'erosita':
             #     search_inst = 'combined'

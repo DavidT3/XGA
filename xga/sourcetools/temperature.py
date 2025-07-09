@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 15:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:03. Copyright (c) The Contributors
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -719,7 +719,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
-                           conf_level: int = 68.2, num_cores: int = NUM_CORES, stacked_spectra: bool = False) -> List[GasTemperature3D]:
+                           conf_level: int = 68.2, num_cores: int = NUM_CORES, stacked_spectra: bool = False,
+                           telescope: Union[str, List[str]] = None) -> List[GasTemperature3D]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -786,6 +787,9 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to produce deprojected temperature profiles from. Default is
+        None, in which case deprojected temperature profiles will be produced from all telescopes associated
+        with a source.
     :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
         successful an entry of None will be added to the list.
     :rtype: List[GasTemperature3D]
@@ -800,27 +804,29 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined, use_worst, lo_en,
                                           hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter, allow_negative,
                                           exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
-                                          abund_table, temp_lo_en, temp_hi_en, num_cores, stacked_spectra=stacked_spectra)
+                                          abund_table, temp_lo_en, temp_hi_en, num_cores,
+                                          stacked_spectra=stacked_spectra, telescope=telescope)
     elif annulus_method == 'min_cnt':
-        # This returns the boundary radii for the annuli, based on a minimum number of counts per annulus in a telescope dictionary
+        # This returns the boundary radii for the annuli, based on a minimum number of counts per
+        #  annulus in a telescope dictionary
         ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined, lo_en, hi_en,
                                           psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
                                           min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
-                                          num_cores, stacked_spectra=stacked_spectra)
+                                          num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
-    # getting all the associated telescopes for later use
-    all_tels = _get_all_telescopes(sources)
+    # Reading the relevant telescopes out of the annular radii return
+    telescope = list(ann_rads.keys())
 
     # So we can iterate through sources without worrying if there's more than one cluster
     if not isinstance(sources, (BaseSample, list)):
         sources = [sources]
 
-    all_3d_temp_profs = {key : [] for key in all_tels}
+    all_3d_temp_profs = {key : [None]*len(sources) for key in all_tels}
     # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof
     for src_ind, src in enumerate(sources):
-        for tel in src.telescopes:
+        for tel in telescope:
             cur_rads = ann_rads[tel][src_ind]
 
             try:
@@ -831,8 +837,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
                                                             min_sn, over_sample, telescope=tel)
             except NoProductAvailableError:
-                warn("{s} doesn't have a matching projected temperature profile, skipping.")
-                all_3d_temp_profs[tel].append(None)
+                # warn("{s} doesn't have a matching projected temperature profile, skipping.")
+                all_3d_temp_profs[tel][src_ind] = None
                 continue
 
             # We need to check if a matching 3D temperature profile has already been generated, as then we
@@ -841,7 +847,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             try:
                 existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident,
                                                                  telescope=tel)
-                all_3d_temp_profs[tel].append(existing_3d_temp_prof)
+                all_3d_temp_profs[tel][src_ind] = existing_3d_temp_prof
                 continue
             except NoProductAvailableError:
                 pass
@@ -884,12 +890,12 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                     temp_3d_reals[i, :] = interim
 
                 # Calculate the upper and lower confidence level values as specified by the user
-                med = np.percentile(temp_3d_reals, 50, axis=0)
-                upper = np.percentile(temp_3d_reals, 50 + (conf_level / 2), axis=0)
-                lower = np.percentile(temp_3d_reals, 50 - (conf_level / 2), axis=0)
+                med = np.nanpercentile(temp_3d_reals, 50, axis=0)
+                upper = np.nanpercentile(temp_3d_reals, 50 + (conf_level / 2), axis=0)
+                lower = np.nanpercentile(temp_3d_reals, 50 - (conf_level / 2), axis=0)
 
                 # Bit dodgy to do this but oh well
-                temp_3d_sigma = Quantity(np.average([med - lower, upper - med], axis=0), 'keV')
+                temp_3d_sigma = Quantity(np.nanmean([med - lower, upper - med], axis=0), 'keV')
 
                 # And finally actually set up a 3D temperature profile
                 temp_3d_prof = GasTemperature3D(proj_temp.radii, temp_3d, proj_temp.centre, src.name, obs_id, inst,
@@ -897,12 +903,12 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                                 proj_temp.associated_set_storage_key, proj_temp.deg_radii,
                                                 auto_save=True, telescope=tel)
                 src.update_products(temp_3d_prof)
-                all_3d_temp_profs[tel].append(temp_3d_prof)
+                all_3d_temp_profs[tel][src_ind] = temp_3d_prof
 
             else:
-                warn("The projected temperature profile for {src} is not considered usable by XGA".format(src=src.name),
-                    stacklevel=2)
-                all_3d_temp_profs[tel].append(None)
+                warn("The {t} projected temperature profile for {src} is not considered "
+                     "usable by XGA".format(src=src.name, t=tel), stacklevel=2)
+                all_3d_temp_profs[tel][src_ind] = None
 
     return all_3d_temp_profs
 

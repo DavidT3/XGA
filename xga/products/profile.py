@@ -1,10 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 14:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:17. Copyright (c) The Contributors
 
+import sys
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
-import sys
 
 import numpy as np
 from astropy.constants import k_B, G, m_p
@@ -1389,7 +1389,7 @@ class HydrostaticMass(BaseProfile1D):
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, auto_save: bool = False, telescope: str = None):
         """
         The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
@@ -2275,7 +2275,7 @@ class SpecificEntropy(BaseProfile1D):
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, auto_save: bool = False, telescope: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
