@@ -51,7 +51,7 @@ class BaseSample:
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, 
                  load_fits: bool = False, no_prog_bar: bool = False, 
                  telescope: Union[str, List[str]] = None, 
-                 search_distance: Union[Quantity, dict] = None, load_profiles: bool = False,):
+                 search_distance: Union[Quantity, dict] = None, load_profiles: bool = False):
         """
         The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
         interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
