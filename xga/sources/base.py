@@ -91,13 +91,16 @@ class BaseSource:
         time-consuming. This adds more nuance to the 'load_products' argument. If 'load_products' is False, then
         this will also be treated as False. If 'load_products' is True and this is False, then images, exposure
         maps, and lightcurves will be loaded, but spectra will not. Default is True.
+    :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, 
+                 load_fits: bool = False, in_sample: bool = False, 
+                 telescope: Union[str, List[str]] = None, 
                  search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
-                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 load_regions: bool = True, load_spectra: bool = True):
+                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05,
+                 back_out_rad_factor: float = 1.5, load_regions: bool = True, 
+                 load_spectra: bool = True, load_profiles: bool = False):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
@@ -146,6 +149,7 @@ class BaseSource:
             time-consuming. This adds more nuance to the 'load_products' argument. If 'load_products' is False, then
             this will also be treated as False. If 'load_products' is True and this is False, then images, exposure
             maps, and lightcurves will be loaded, but spectra will not. Default is True.
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
         #  behaviour of this init in some significant ways
@@ -1389,27 +1393,28 @@ class BaseSource:
 
             os.chdir(og_dir)
 
-            # Here we will load in existing xga profile objects
-            os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
-            saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
-            for pf in saved_profs:
-                try:
-                    with open(pf, 'rb') as reado:
-                        temp_prof = pickle.load(reado)
-                        try:
-                            self.update_products(temp_prof, update_inv=False)
-                        except (NotAssociatedError, AttributeError):
-                            pass
-                except (EOFError, pickle.UnpicklingError, AttributeError):
-                    warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
-                                "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
-                    if not self._samp_member:
-                        # If these errors have been raised then I think that the pickle file has been
-                        #  broken (see issue #935)
-                        warn(warn_text, stacklevel=2)
-                    else:
-                        self._supp_warn.append(warn_text)
-            os.chdir(og_dir)
+            if load_profiles:
+                # Here we will load in existing xga profile objects
+                os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
+                saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
+                for pf in saved_profs:
+                    try:
+                        with open(pf, 'rb') as reado:
+                            temp_prof = pickle.load(reado)
+                            try:
+                                self.update_products(temp_prof, update_inv=False)
+                            except (NotAssociatedError, AttributeError):
+                                pass
+                    except (EOFError, pickle.UnpicklingError, AttributeError):
+                        warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
+                                    "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
+                        if not self._samp_member:
+                            # If these errors have been raised then I think that the pickle file has been
+                            #  broken (see issue #935)
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
+                os.chdir(og_dir)
 
             # Here we load in any combined images and exposure maps that may have been generated
             os.chdir(OUTPUT + '{t}/combined'.format(t=tel))

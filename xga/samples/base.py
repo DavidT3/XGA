@@ -48,9 +48,10 @@ class BaseSample:
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 no_prog_bar: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, 
+                 load_fits: bool = False, no_prog_bar: bool = False, 
+                 telescope: Union[str, List[str]] = None, 
+                 search_distance: Union[Quantity, dict] = None, load_profiles: bool = False,):
         """
         The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
         interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
@@ -76,6 +77,7 @@ class BaseSample:
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
         if len(ra) == 0:
             raise ValueError("You have passed an empty array for the RA values.")
@@ -130,7 +132,7 @@ class BaseSample:
                     #  using in_sample=True
                     temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True, telescope,
                                       search_distance, null_load_products=False, load_regions=False,
-                                      load_spectra=False)
+                                      load_spectra=False, load_profiles=False)
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
