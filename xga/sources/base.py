@@ -100,7 +100,7 @@ class BaseSource:
                  search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
                  null_load_products: bool = False, back_inn_rad_factor: float = 1.05,
                  back_out_rad_factor: float = 1.5, load_regions: bool = True, 
-                 load_spectra: bool = True, load_profiles: bool = False):
+                 load_spectra: bool = True, load_profiles: bool = True):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
