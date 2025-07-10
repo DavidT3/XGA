@@ -447,7 +447,7 @@ class BaseSample:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)
-                lums.append(np.array([np.NaN, np.NaN, np.NaN]))
+                lums.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
         lums = Quantity(np.array(lums), 'erg / s')
