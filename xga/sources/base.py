@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 14:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 14:21. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -199,12 +199,16 @@ class BaseSource:
             gal_udc = SkyCoord(ra, dec, frame='fk5', unit='deg').galactic
             # Then check the galactic coordinate against these boundary conditions to determine if
             #  the UDC is within the eRASS DR1 footprint or not
-            if not (gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg')):
+            if gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg'):
                 # Failing this condition means we won't even look for eRASS data for this source
                 telescope = [t for t in telescope if t != eros_rel_name]
-            print(self._name)
-            print(telescope)
-            print(search_distance)
+
+                # We also have to change the search_distance argument to match
+                if search_distance is not None and eros_rel_name in search_distance:
+                    search_distance = {t: sd for t, sd in search_distance.items() if t != eros_rel_name}
+                    # And if we've actually removed all the entries, we set the search_distance to None
+                    if len(search_distance) == 0:
+                        search_distance = None
 
         # We use the separation match function to find data relevant to this source, searching within a
         #  telescope dependant radius. This function also validates the input given for 'telescope'. If
