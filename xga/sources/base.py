@@ -4686,7 +4686,7 @@ class BaseSource:
             raise ModelNotAssociatedError("These {t} spectra have no associated XSPEC fit to {s}.".format(t=telescope,
                                                                                                           s=self.name))
         elif model not in self._luminosities[telescope][storage_key]:
-            av_mods = ", ".join(self._luminosities[storage_key].keys())
+            av_mods = ", ".join(self._luminosities[telescope][storage_key].keys())
             raise ModelNotAssociatedError("{m} has not been fitted to these {t} spectra of {s}; "
                                           "available models are {a}".format(m=model, s=self.name, a=av_mods,
                                                                             t=telescope))
