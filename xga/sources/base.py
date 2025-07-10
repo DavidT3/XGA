@@ -510,7 +510,7 @@ class BaseSource:
         # The user does have control over whether this happens or not though.
         # This goes at the end of init to make sure everything necessary has been declared
         if os.path.exists(OUTPUT) and load_products:
-            self._existing_xga_products(load_fits, load_spectra)
+            self._existing_xga_products(load_fits, load_spectra, load_profiles)
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
         #  run _existing_xga_products again, same for load_products
@@ -1067,7 +1067,7 @@ class BaseSource:
 
         return obs_dict, reg_dict, att_dict
 
-    def _existing_xga_products(self, read_fits: bool, load_spectra: bool):
+    def _existing_xga_products(self, read_fits: bool, load_spectra: bool, load_profiles: bool):
         """
         A method specifically for searching an existing XGA output directory for relevant files and loading
         them in as XGA products. This will retrieve images, exposure maps, and spectra; then the source product
@@ -5050,7 +5050,7 @@ class BaseSource:
 
         # We attempt to load in matching XGA products if that was the behaviour set by load_products on init
         if self._load_products:
-            self._existing_xga_products(self._load_fits, True)
+            self._existing_xga_products(self._load_fits, True, True)
 
     def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
         """
