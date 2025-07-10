@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 15:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 12:01. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -1680,7 +1680,7 @@ class BaseSource:
             os.chdir(og_dir)
 
             # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
-            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits:
+            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits and load_spectra:
                 conv_factors = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
                                 for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
                                 if ".xcm" not in f and "conv_factors" in f]
@@ -1738,9 +1738,9 @@ class BaseSource:
                     # This triggers in the case of something like issue #738, where a previous fit used data that is
                     #  not loaded into this source (either because it was manually removed, or because the central
                     #  position has changed etc.)
-                    except NotAssociatedError:
-                        warn_text = "Existing fit for {s} could not be loaded due to a mismatch in available " \
-                                    "data".format(s=self.name)
+                    except (NotAssociatedError, NoProductAvailableError):
+                        warn_text = ("An existing XSPEC simulation result for {s} could not be loaded "
+                                     "due to a mismatch in available data".format(s=self.name))
                         if not self._samp_member:
                             warn(warn_text, stacklevel=2)
                         else:
