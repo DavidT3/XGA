@@ -2,6 +2,7 @@ import unittest
 import sys
 import os
 
+import numpy as np
 from astropy.units import Quantity
 
 import xga
@@ -19,6 +20,12 @@ class TestBaseSample(unittest.TestCase):
                                  CLUSTER_SMP["z"].values, CLUSTER_SMP["name"].values, 
                                  r500=Quantity(CLUSTER_SMP["r500"].values, 'kpc'), use_peak=False,
                                  search_distance={'erosita': Quantity(3.6, 'deg')})
+
+        cls.smp_odd_tels = ClusterSample(CLUSTER_SMP["ra"].values, CLUSTER_SMP["dec"].values, 
+                                 CLUSTER_SMP["z"].values, CLUSTER_SMP["name"].values, 
+                                 r500=Quantity(CLUSTER_SMP["r500"].values, 'kpc'), use_peak=False,
+                                 search_distance={'erosita': Quantity(3.6, 'deg')})
+        cls.smp_odd_tels[0].disassociate_obs('erosita')
     
     def test_Lx_w_stacked_spectra(self):
         single_temp_apec(self.test_smp, 'r500', stacked_spectra=True, spectrum_checking=False)
@@ -32,13 +39,10 @@ class TestBaseSample(unittest.TestCase):
         Testing that for samples were sources dont have the same telescopes assigned, the Lx and Tx
         can be retrieved.
         """
-        self.test_smp[0].disassociate_obs('erosita')
+        single_temp_apec(self.smp_odd_tels, 'r500', stacked_spectra=True, spectrum_checking=False)
 
-        single_temp_apec(self.test_smp, 'r500', stacked_spectra=True, spectrum_checking=False)
-
-        Lx = self.test_smp.Lx('r500', 'erosita', stacked_spectra=True)
-
-        print(Lx)
+        Lx = self.smp_odd_tels.Lx('r500', 'erosita', stacked_spectra=True)
 
         assert len(Lx) == 2
+        assert np.isnan(Lx[0][0].value)
         assert isinstance(Lx, Quantity)
