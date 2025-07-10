@@ -1,10 +1,10 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 13:30. Copyright (c) The Contributors
 
 import os
-import warnings
 from multiprocessing.dummy import Pool
 from typing import Tuple, Union
+from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
@@ -163,9 +163,9 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
             # Just warns the user that some of the images may not be valid
             for matched in match_images:
                 if "PrimeFullWindow" not in matched.header["SUBMODE"]:
-                    warnings.warn("PSF corrected images for {s}-{o}-{i} may not be valid, as the data was taken"
-                                  "in {m} mode".format(s=source.name, o=matched.obs_id, i=matched.instrument,
-                                                       m=matched.header["SUBMODE"]))
+                    warn("PSF corrected images for {s}-{o}-{i} may not be valid, as the data was taken in {m} "
+                         "mode".format(s=source.name, o=matched.obs_id, i=matched.instrument,
+                                       m=matched.header["SUBMODE"]), stacklevel=2)
 
             # For now just going to iterate through them, we'll see if I can improve it later
             for im in match_images:

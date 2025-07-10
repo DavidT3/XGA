@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 13:53. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 
@@ -287,6 +287,11 @@ def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = T
     #  set them to one
     if not keep_corners:
         comb[np.where((comb != 1) & (comb != 0))] = 1
+
+    # We alter the datatype of the combined array, seeing as the elements are low-value integers, we might as well
+    #  take up a little less memory (particularly relevant for large input arrays, such as those that can originate
+    #  from eROSITA)
+    comb = comb.astype('int8')
 
     return comb
 

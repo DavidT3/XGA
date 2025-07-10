@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 16:01. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -302,7 +302,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
     Internal function to parse the user input of the 'radii' argument of spectral fitting methods
     into spectrum generation functions.
 
-    :param List[str] telescopes: A list of telescopes associated to the sources.
+    :param List[str] telescopes: A list of telescopes associated with the sources.
     :param List[Quantity]/Quantity radii: A list of non-scalar quantities containing the boundary radii of the
         annuli for the sources. A single quantity containing at least three radii may be passed if one source
         is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
