@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 12:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 12:14. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -1738,7 +1738,7 @@ class BaseSource:
                     # This triggers in the case of something like issue #738, where a previous fit used data that is
                     #  not loaded into this source (either because it was manually removed, or because the central
                     #  position has changed etc.)
-                    except (NotAssociatedError, NoProductAvailableError):
+                    except (NotAssociatedError, IndexError):
                         warn_text = ("An existing XSPEC simulation result for {s} could not be loaded "
                                      "due to a mismatch in available data".format(s=self.name))
                         if not self._samp_member:
