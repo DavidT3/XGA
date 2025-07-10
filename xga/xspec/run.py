@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 11:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 11:21. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -10,6 +10,7 @@ from random import randint
 from shutil import rmtree
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
+from warnings import warn
 
 import fitsio
 import pandas as pd
@@ -209,7 +210,7 @@ def xspec_call(xspec_func):
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
         elif len(script_list) == 0:
-            warnings.warn("All XSPEC operations had already been run.", stacklevel=2)
+            warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
         for src_repr in results:
@@ -226,6 +227,7 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
+                print(res_set)
                 # res_set = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
@@ -400,9 +402,8 @@ def xspec_call(xspec_func):
                                 raise NotImplementedError("How have you even managed to fit this model to a "
                                                             "profile?! It's not supported yet.")
                         except ValueError:
-                            warnings.warn("{src} annular spectra profile fit was not successful for the {t} "
-                                            "telescope.".format(src=ann_spec.src_name, t=tel),
-                                        stacklevel=2)
+                            warn("{src} annular spectra profile fit was not successful for the {t} "
+                                 "telescope.".format(src=ann_spec.src_name, t=tel), stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
