@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 14:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 15:44. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -199,7 +199,7 @@ class BaseSource:
             gal_udc = SkyCoord(ra, dec, frame='fk5', unit='deg').galactic
             # Then check the galactic coordinate against these boundary conditions to determine if
             #  the UDC is within the eRASS DR1 footprint or not
-            if gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg'):
+            if not (gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg')):
                 # Failing this condition means we won't even look for eRASS data for this source
                 telescope = [t for t in telescope if t != eros_rel_name]
 
