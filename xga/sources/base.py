@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 15:29. Copyright (c) The Contributors
 import gc
 import os
 import pickle
@@ -33,8 +33,7 @@ from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
-    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX, \
-    check_telescope_choices
+    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -182,38 +181,10 @@ class BaseSource:
             self._name = coord_to_name(self.ra_dec)
 
         # ---------------------------------- Identifying relevant data ----------------------------------
-        # An initial, very specific, check is required to minimize headaches with sources along the eRASS DE:RU
-        #  border. We'll ensure that the user defined coordinates are actually in the eRASS:DE footprint, as
-        #  eRASS-DR1 initial software generates exposure maps that include IKI regions, which can falsely lead
-        #  us to believe that there are data we can use
-        # The separation_match function does call this, but we need a validated list of telescopes right now
-        #  unfortunately - the position check will just remove eRASS from consideration if the source doesn't pass
-        telescope = check_telescope_choices(telescope)
-        # TODO REMOVE THE SECOND PART OF THIS IF STATEMENT WHEN ERASS AND EROSITA ARE SEPARATE
-        #  TELESCOPES (SEE XGA ISSUE #1395)
-        if 'erass' in telescope or ('erass' not in ALLOWED_INST and 'erosita' in telescope):
-            # This can be removed when there is a clear split between eRASS and eROSITA
-            eros_rel_name = "erass" if "erass" in telescope else "erosita"
-
-            # Convert the RA-DEC UDC into a galactic lat-long
-            gal_udc = SkyCoord(ra, dec, frame='fk5', unit='deg').galactic
-            # Then check the galactic coordinate against these boundary conditions to determine if
-            #  the UDC is within the eRASS DR1 footprint or not
-            if not (gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg')):
-                # Failing this condition means we won't even look for eRASS data for this source
-                telescope = [t for t in telescope if t != eros_rel_name]
-
-                # We also have to change the search_distance argument to match
-                if search_distance is not None and eros_rel_name in search_distance:
-                    search_distance = {t: sd for t, sd in search_distance.items() if t != eros_rel_name}
-                    # And if we've actually removed all the entries, we set the search_distance to None
-                    if len(search_distance) == 0:
-                        search_distance = None
-
-        # We use the separation match function to find data relevant to this source, searching within a
-        #  telescope dependant radius. This function also validates the input given for 'telescope'. If
+        # Firstly, we use the separation match function to find data relevant to this source, searching within a
+        #  telescope dependant radius. This function also validates the input that was given for 'telescope'. If
         #  no named telescopes are valid, or no data is found, then an error is thrown.
-        # The returns are dictionaries, where the key is the telescope name. The values are dataframes of
+        # The returns are dictionaries, where the key is the telescope name, and the values are dataframes of
         #  matching ObsIDs (for the first return, matches), or completely blacklisted (observations with SOME
         #  blacklisted instruments aren't included in this) ObsIDs (the second return).
         if not null_source:
@@ -297,6 +268,7 @@ class BaseSource:
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict, self._att_files = self._initial_products(obs, load_regions, null_load_products)
 
+
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
         cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
@@ -322,9 +294,9 @@ class BaseSource:
                 for oi in obs[tel]:
                     self._products[tel][oi].update({i: {} for i in obs[tel][oi]})
 
-        # We now have the final set of initial observations, so we'll store them in an attribute. They may change, as
-        #  other source classes have different cleaning steps, but any observations will be removed through the
-        #  'disassociation' mechanism.
+        # We now have the final set of initial observations, so we'll store them in an attribute - note that they
+        #  may change later as other source classes have different cleaning steps, but any observations will be
+        #  removed through the 'disassociation' mechanism
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
         #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
         self._obs = {t: {o: obs[t][o] if COMBINED_INSTS[t] else [i for i in self._products[t][o]
@@ -336,7 +308,7 @@ class BaseSource:
         self._blacklisted_obs = blacklisted_obs
 
         # Pre-multimission XGA had an attribute that described whether a particular observation was 'on-axis' or
-        #  not, but that has less relevance for an all-sky survey (which we intend to support). Now we will
+        #  not, but that has less relevance for an all-sky survey (which we intend to support), so now we will
         #  store the separation of the centre of each ObsID region from the user defined coordinate
         self._obs_sep = {tel: {o: Quantity(matches[tel][matches[tel]['ObsID'] == o].iloc[0]['dist'], 'deg')
                                for o in self.obs_ids[tel]} for tel in self.obs_ids}
@@ -433,6 +405,7 @@ class BaseSource:
         # The nh_lookup function returns average and weighted average values, so just take the first. If this is a
         #  BaseSource and part of a sample then we're going to avoid the call to nh_lookup, for efficiency
         if in_sample and type(self) == BaseSource:
+            # FIXME: Compatability -- np.NaN deprecated and replaced by np.nan in numpy >= 2
             self._nH = Quantity(np.nan, 'cm^-2')
         else:
             self._nH = nh_lookup(self.ra_dec)[0]
@@ -1707,7 +1680,7 @@ class BaseSource:
             os.chdir(og_dir)
 
             # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
-            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits and load_spectra:
+            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits:
                 conv_factors = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
                                 for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
                                 if ".xcm" not in f and "conv_factors" in f]
@@ -1765,9 +1738,9 @@ class BaseSource:
                     # This triggers in the case of something like issue #738, where a previous fit used data that is
                     #  not loaded into this source (either because it was manually removed, or because the central
                     #  position has changed etc.)
-                    except (NotAssociatedError, IndexError):
-                        warn_text = ("An existing XSPEC simulation result for {s} could not be loaded "
-                                     "due to a mismatch in available data".format(s=self.name))
+                    except NotAssociatedError:
+                        warn_text = "Existing fit for {s} could not be loaded due to a mismatch in available " \
+                                    "data".format(s=self.name)
                         if not self._samp_member:
                             warn(warn_text, stacklevel=2)
                         else:
@@ -3897,8 +3870,7 @@ class BaseSource:
         return ret_reg
 
     def get_source_mask(self, reg_type: str, telescope: str, obs_id: str = None,
-                        central_coord: Quantity = None, lo_en: Quantity = None, 
-                        hi_en: Quantity = None, inst: str = None) -> Tuple[np.ndarray, np.ndarray]:
+                        central_coord: Quantity = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Method to retrieve source and background masks for the given region type.
 
@@ -3921,21 +3893,14 @@ class BaseSource:
 
         # I assume that if no ObsID is supplied, then the user wishes to have a mask for the combined data
         if obs_id is None:
-            comb_images = self.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope=telescope)
-            # TODO THESE CHANGES SHOULD NOT STAY, BUT I HAVE TO MAKE THIS SAFE - BEFORE I ALTERED THIS
-            #  IT COULD TRY TO DO A LEN OF AN IMAGE
-            if isinstance(comb_images, list):
+            comb_images = self.get_products("combined_image", telescope=telescope)
+            if len(comb_images) != 0:
                 mask_image = comb_images[0]
             else:
-                mask_image = comb_images
-
+                raise NoProductAvailableError("There are no combined products available to generate a mask for.")
         else:
-            mask_image = self.get_images(obs_id=obs_id, lo_en=lo_en, hi_en=hi_en, inst=inst,
-                                         telescope=telescope)
-            if isinstance(mask_image, list):
-                # Just grab the first instrument that comes out the get method, the masks should be
-                #  the same.
-                mask_image = mask_image[0]
+            # Just grab the first instrument that comes out the get method, the masks should be the same.
+            mask_image = self.get_products("image", obs_id, telescope=telescope)[0]
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
