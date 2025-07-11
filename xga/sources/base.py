@@ -5091,15 +5091,7 @@ class BaseSource:
                     if not isinstance(exp_maps, list):
                         exp_maps = [exp_maps]
 
-                    # erosita expmaps and images can change dimensions depending on inst, and energy
-                    if tel == 'erosita':
-                        m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
-                                                 lo_en=self._peak_lo_en, hi_en=self._peak_hi_en,
-                                                 inst='combined')[0]
-                    else:
-                        m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord,
-                                                 lo_en=self._peak_lo_en, hi_en=self._peak_hi_en)[0]
-
+                    m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord)[0]
                     full_area[tel][o] = m.sum()
 
                     for ex in exp_maps:
