@@ -74,7 +74,8 @@ class ExtendedSource(BaseSource):
                  cosmology: Cosmology = DEFAULT_COSMO,  load_products: bool = True, load_fits: bool = False,
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
                  telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
-                 clean_obs=True, clean_obs_reg="custom", clean_obs_threshold=0.3, regen_merged: bool = True):
+                 clean_obs=True, clean_obs_reg="custom", clean_obs_threshold=0.3, regen_merged: bool = True,
+                 load_profiles=False):
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
@@ -120,7 +121,7 @@ class ExtendedSource(BaseSource):
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
                          search_distance, back_inn_rad_factor=back_inn_rad_factor,
-                         back_out_rad_factor=back_out_rad_factor)
+                         back_out_rad_factor=back_out_rad_factor, load_profiles=load_profiles)
 
         self._custom_region_radius = None
         # Setting up the custom region radius attributes
