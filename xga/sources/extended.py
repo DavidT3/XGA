@@ -90,7 +90,7 @@ class GalaxyCluster(ExtendedSource):
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
                  telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
-                 include_core_pnt_srcs: bool = True):
+                 include_core_pnt_srcs: bool = True, load_profiles: bool = False):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
 
@@ -190,7 +190,7 @@ class GalaxyCluster(ExtendedSource):
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits,
                          peak_find_method, in_sample, telescope, search_distance, clean_obs, clean_obs_reg,
-                         clean_obs_threshold, regen_merged)
+                         clean_obs_threshold, regen_merged, load_profiles=load_profiles)
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.
