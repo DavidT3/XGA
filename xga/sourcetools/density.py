@@ -36,15 +36,21 @@ from ..xspec.fit import single_temp_apec
 ALLOWED_INV_ABEL = ['direct', 'basex', 'hansen_law_ho0', 'hansen_law_ho1', 'onion_bordas', 'onion_peeling',
                     'two_point', 'three_point', 'daun']
 
-def trace_memory(fn):
+def trace_memory(func):
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        snapshot1 = tracemalloc.take_snapshot()
-        result = fn(*args, **kwargs)
-        snapshot2 = tracemalloc.take_snapshot()
-        stats = snapshot2.compare_to(snapshot1, 'lineno')
-        print(f"Memory usage for {fn.__name__}")
-        for stat in stats[:5]:
+        tracemalloc.start()  # <== This must be called first
+
+        result = func(*args, **kwargs)
+
+        snapshot = tracemalloc.take_snapshot()
+        top_stats = snapshot.statistics('lineno')
+
+        print("[Top 10 lines with most memory usage]")
+        for stat in top_stats[:10]:
             print(stat)
+
+        tracemalloc.stop()  # optional, frees tracking overhead
         return result
     return wrapper
 
