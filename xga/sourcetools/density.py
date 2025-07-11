@@ -3,6 +3,7 @@
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
+import tracemalloc
 
 import numpy as np
 from abel.basex import basex_transform
@@ -35,6 +36,17 @@ from ..xspec.fit import single_temp_apec
 ALLOWED_INV_ABEL = ['direct', 'basex', 'hansen_law_ho0', 'hansen_law_ho1', 'onion_bordas', 'onion_peeling',
                     'two_point', 'three_point', 'daun']
 
+def trace_memory(fn):
+    def wrapper(*args, **kwargs):
+        snapshot1 = tracemalloc.take_snapshot()
+        result = fn(*args, **kwargs)
+        snapshot2 = tracemalloc.take_snapshot()
+        stats = snapshot2.compare_to(snapshot1, 'lineno')
+        print(f"Memory usage for {fn.__name__}")
+        for stat in stats[:5]:
+            print(stat)
+        return result
+    return wrapper
 
 def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, lo_en: Quantity,
                 hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
@@ -376,7 +388,7 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
 
     return sb_prof
 
-
+@trace_memory
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], fit_method: str = "mcmc",
                           outer_radius: Union[str, Quantity] = "r500", num_dens: bool = True, use_peak: bool = True,

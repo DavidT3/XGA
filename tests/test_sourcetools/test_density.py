@@ -17,18 +17,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from .. import SRC_ALL_TELS
 
-def trace_memory(fn):
-    def wrapper(*args, **kwargs):
-        snapshot1 = tracemalloc.take_snapshot()
-        result = fn(*args, **kwargs)
-        snapshot2 = tracemalloc.take_snapshot()
-        stats = snapshot2.compare_to(snapshot1, 'lineno')
-        print(f"Memory usage for {fn.__name__}")
-        for stat in stats[:5]:
-            print(stat)
-        return result
-    return wrapper
-
 class TestDensityFuncs(unittest.TestCase):
 #    def test_dens_setup(self):        
 #        res = _dens_setup(SRC_ALL_TELS, 'angr',Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)
@@ -43,7 +31,7 @@ class TestDensityFuncs(unittest.TestCase):
 #        assert type(res) == SurfaceBrightness1D
     
     def test_inv_abel_fitted_model(self):
-        @trace_memory
+
         inv_abel_fitted_model(SRC_ALL_TELS, 'beta', use_peak=False, psf_corr=False, stacked_spectra=True)
 
 #        assert type(res['erosita'][0]) == GasDensity3D
