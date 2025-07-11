@@ -22,10 +22,6 @@ from ..products.phot import RateMap
 from ..sourcetools.deproj import shell_ann_vol_intersect
 from ..sourcetools.misc import ang_to_rad
 
-import tracemalloc
-
-tracemalloc.start()
-
 class SurfaceBrightness1D(BaseProfile1D):
     """
     This class provides an interface to radially symmetric X-ray surface brightness profiles of extended objects.
@@ -2861,14 +2857,3 @@ class Generic1D(BaseProfile1D):
         self._y_axis_name = y_axis_label
 
 
-
-
-
-
-
-
-snapshot = tracemalloc.take_snapshot()
-top_stats = snapshot.statistics('lineno')
-
-for stat in top_stats[:10]:
-    print(stat)
