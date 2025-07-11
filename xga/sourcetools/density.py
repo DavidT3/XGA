@@ -15,6 +15,7 @@ from abel.onion_bordas import onion_bordas_transform
 from astropy.constants import m_p
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
+import functools
 
 from ._common import _get_all_telescopes
 from .misc import model_check
