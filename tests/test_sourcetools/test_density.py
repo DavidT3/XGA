@@ -24,9 +24,9 @@ class TestDensityFuncs(unittest.TestCase):
     def test_dens_setup(self):
         res = _dens_setup(SRC_ALL_TELS, 'angr',Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)
         
-        print(res)
         assert type(res[0][0]) == GalaxyCluster
-        assert type(res[1][0]) == Quantity
+        assert type(res[1]['erosita']) == Quantity
+        assert type(res[1]['xmm']) == Quantity
         assert set(res[2].keys()) == set(['erosita', 'xmm'])
         assert set(res[3].keys()) == set(['erosita', 'xmm'])
 
@@ -39,6 +39,13 @@ class TestDensityFuncs(unittest.TestCase):
     def test_inv_abel_fitted_model(self):
         res = inv_abel_fitted_model(SRC_ALL_TELS, 'beta', use_peak=False, psf_corr=False, stacked_spectra=True)
 
+        assert type(res['erosita'][0]) == GasDensity3D
+        assert type(res['xmm'][0]) == GasDensity3D
+
+    def test_inv_abel_fitted_model_stacked_spectrum_F(self):
+        res = inv_abel_fitted_model(SRC_ALL_TELS, 'beta', use_peak=False, psf_corr=False, stacked_spectra=False)
+
+        print(res)
         assert type(res['erosita'][0]) == GasDensity3D
         assert type(res['xmm'][0]) == GasDensity3D
     
