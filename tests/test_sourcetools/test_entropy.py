@@ -21,7 +21,7 @@ class TestEntropyFuncs(unittest.TestCase):
         res = entropy_inv_abel_dens_onion_temp(SRC_ALL_TELS, Quantity(600, 'kpc'), 'beta', 'king', 
                                                'vikhlinin_temp', Quantity(600, 'kpc'), 
                                                stacked_spectra=True)
-
+        print(res)
         assert type(res) == dict
         assert set(res.keys()) == set(['erosita', 'xmm'])
         assert type(res['erosita']) == SpecificEntropy

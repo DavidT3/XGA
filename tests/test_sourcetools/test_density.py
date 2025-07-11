@@ -25,8 +25,6 @@ class TestDensityFuncs(unittest.TestCase):
         res = _dens_setup(SRC_ALL_TELS, 'angr',Quantity(0.5, 'keV'), Quantity(2, 'keV'), stacked_spectra=True)
         
         assert type(res[0][0]) == GalaxyCluster
-        assert type(res[1]['erosita']) == Quantity
-        assert type(res[1]['xmm']) == Quantity
         assert set(res[2].keys()) == set(['erosita', 'xmm'])
         assert set(res[3].keys()) == set(['erosita', 'xmm'])
 

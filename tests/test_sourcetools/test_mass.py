@@ -22,7 +22,7 @@ class TestMassFuncs(unittest.TestCase):
     def test_inv_abel_dens_onion_temp(self):
         res = inv_abel_dens_onion_temp(SRC_ALL_TELS, Quantity(600, 'kpc'), 'beta', 'king', 
                                        'vikhlinin_temp', Quantity(600, 'kpc'), stacked_spectra=True)
-
+        print(res)
         assert type(res) == dict
         assert set(res.keys()) == set(['erosita', 'xmm'])
         assert type(res['erosita']) == HydrostaticMass
