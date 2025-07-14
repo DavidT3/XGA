@@ -2560,23 +2560,15 @@ class SpecificEntropy(BaseProfile1D):
                                   "using a smooth density model.")
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            print('radius')
-            print(radius)
-            print('len radius')
-            print(len(radius))
             dens = self._dens_model.get_realisations(radius)
-            print('len dens')
-            print(len(dens))
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
-            print("dens in this one here")
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
-            print("dens in this one here right here")
             # This uses the density profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
@@ -2587,9 +2579,6 @@ class SpecificEntropy(BaseProfile1D):
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
             dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
-
-            print('len dens interp')
-            print(len(dens_interp))
             # Restore the interpolated density profile realisations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
 
@@ -2597,10 +2586,8 @@ class SpecificEntropy(BaseProfile1D):
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
         #  just read out the density data points (and make N realisations of them) with no funny business required
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            print('dens in this special one')
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
         else:
-            print('dens in this oh so special one')
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
                                 self.density_profile.annulus_bounds[1:]]).T
 
@@ -2617,50 +2604,38 @@ class SpecificEntropy(BaseProfile1D):
         #  values that we are going to use in our entropy measurements; from models, data points, or interpolating
         #  from data points
         if not already_run and self.temperature_model is not None:
-            print("temp in this one")
             if not self.temperature_model.success:
                 raise XGAFitError("The temperature model fit was not successful, as such we cannot calculate entropy "
                                   "using a smooth temperature model.")
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
             temp = self._temp_model.get_realisations(radius)
-            print('radius')
-            print(radius)
-            print('len radius')
-            print(len(radius))
-            print('len temp')
-            print(len(temp))
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
         elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
               (self.density_profile.radii == self.temperature_profile.radii).all()):
-            print("temp in this one here")
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
-            print("temp in this one here right here")
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
 
-            print('len temp interp')
             print(len(temp_interp))
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
         elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            print('dens in this special one')
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
         # And here, the final option, we're doing a data-point based profile without interpolation, and we need
         #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
         #  temperature value - in practise this means that each density will be paired with the temperature
         #  realisations whose radial coverage they fall within.
         else:
-            print('dens in this oh so special one')
             t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
                                 self.temperature_profile.annulus_bounds[1:]]).T
 

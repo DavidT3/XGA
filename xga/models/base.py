@@ -214,7 +214,6 @@ class BaseModel1D(metaclass=ABCMeta):
             only a single x value is passed.
         :rtype: Quantity
         """
-        print('in get_realisations')
         if not x.unit.is_equivalent(self._x_unit):
             raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
                                       "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
@@ -227,9 +226,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
         if x.isscalar or (not x.isscalar and x.ndim == 1):
             realisations = self.model(x[..., None], *self._par_dists)
-            print('in this indent')
-            print('len realisations')
-            print(len(realisations))
+
         else:
             # This case is for marginalising over a radius distribution (or distributions), so in other words we want
             #  distribution(s) of N values out (where N is the number of values in the model parameter posterior
@@ -237,9 +234,6 @@ class BaseModel1D(metaclass=ABCMeta):
             # Note the lack of [..., None] on x here, this is what makes it different to the first part of the if
             #  statement
             realisations = self.model(x, *self._par_dists)
-            print('in this indent here')
-            print('len realisations')
-            print(len(realisations))
 
         return realisations
 
