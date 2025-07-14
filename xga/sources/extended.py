@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 07:25. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -920,8 +920,8 @@ class GalaxyCluster(ExtendedSource):
 
     def get_hydrostatic_mass_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
                                       dens_prof: GasDensity3D = None, dens_model_name: str = None,
-                                      radii: Quantity = None,
-                                      telescope: str = None) -> Union[HydrostaticMass, List[HydrostaticMass]]:
+                                      radii: Quantity = None, telescope: str = None) \
+            -> Union[HydrostaticMass, List[HydrostaticMass]]:
         """
         A get method for hydrostatic mass profiles associated with this galaxy cluster. This works in a slightly
         different way to the temperature and density profile get methods, as you can pass the gas temperature and
