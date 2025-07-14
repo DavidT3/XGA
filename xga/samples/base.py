@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 16:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 07:45. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -669,3 +669,13 @@ class BaseSample:
         # This function is specific to the Sample type, as some Sample classes have extra information stored
         #  that will need to be deleted.
         self._del_data(key)
+
+    def __contains__(self, name) -> bool:
+        """
+        Determines whether this sample contains a particular source name.
+
+        :param str name: The name of the source to check.
+        :return: True if a source with the given name is associated with this sample, False otherwise.
+        :rtype: bool
+        """
+        return name in self._names
