@@ -38,8 +38,9 @@ SRC_ALL_TELS = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r50
     
 SRC_XMM = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
-                                     telescope='xmm')
+                                     telescope='xmm', load_profiles=False)
 SRC_ERO = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      telescope='erosita',
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
+                                     search_distance={'erosita': Quantity(3.6, 'deg')},
+                                     load_profiles=False)
