@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/08/2024, 18:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
 from typing import Tuple
 from warnings import warn
 
@@ -141,7 +141,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         cosmology is a flat LambdaCDM concordance model.
     :param str telescope: The telescope whose data we should use for this run of the pipeline. We currently only
         support using one telescope at a time for this tool. Default is 'xmm'.
-    :param Quantity search_distance: The distance to search for observations within, the default is None in which
+    :param Quantity search_distance: The radius to search for observations within, the default is None in which
         case a standard search distance for the telescope specified by 'telescope' will be used.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for the
         XSPEC spectral fits. If a stacking procedure for a particular telescope is not supported, this function will

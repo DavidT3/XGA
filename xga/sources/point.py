@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
 
 from typing import Tuple, Dict, Union, List
 
@@ -60,7 +60,7 @@ class Star(PointSource):
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
         is None in which case standard search distances for different telescopes are used. The user may pass a
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -118,7 +118,7 @@ class Star(PointSource):
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
