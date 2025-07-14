@@ -18,7 +18,7 @@ from xga.sourcetools.temperature import _ann_bins_setup, _snr_bins, _cnt_bins, \
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from .. import SRC_ALL_TELS
+from .. import SRC_ERO, SRC_ALL_TELS
 
 class TestTempFuncs(unittest.TestCase):
     @classmethod
@@ -26,7 +26,8 @@ class TestTempFuncs(unittest.TestCase):
         """
         This is run once before all tests. Here we define class objects that we want to test.
         """
-        cls.test_src = SRC_ALL_TELS.disassociate_obs('xmm')
+        cls.test_src = SRC_ERO
+        cls.all_tels = SRC_ALL_TELS
 
     def test_ann_bins_setup_working_with_erosita(self):
         """
@@ -96,15 +97,15 @@ class TestTempFuncs(unittest.TestCase):
     def test_min_snr_proj_temp_prof_w_two_tscopes(self):
         
         # need combined ratemaps already generated for erosita
-        evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
-        expmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        evtool_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        expmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         # and for xmm
-        evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
-        eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
-        emosaic(SRC_ALL_TELS, 'image')
-        emosaic(SRC_ALL_TELS, 'expmap')
+        evselect_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        eexpmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        emosaic(self.all_tels, 'image')
+        emosaic(self.all_tels, 'expmap')
 
-        all_rads = min_snr_proj_temp_prof(SRC_ALL_TELS, Quantity(500, 'kpc'),
+        all_rads = min_snr_proj_temp_prof(self.all_tels, Quantity(500, 'kpc'),
                                           stacked_spectra=True)
         
         assert all_rads['erosita'][0].unit == 'arcsec'
@@ -114,15 +115,15 @@ class TestTempFuncs(unittest.TestCase):
     def test_min_cnt_proj_temp_prof_w_two_tscopes(self):
         
         # need combined ratemaps already generated for erosita
-        evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
-        expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        evtool_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        expmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         # and for xmm
-        evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
-        eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
-        emosaic(SRC_ALL_TELS, 'image')
-        emosaic(SRC_ALL_TELS, 'expmap')
+        evselect_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        eexpmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        emosaic(self.all_tels, 'image')
+        emosaic(self.all_tels, 'expmap')
 
-        all_rads = min_cnt_proj_temp_prof(SRC_ALL_TELS, Quantity(500, 'kpc'), 
+        all_rads = min_cnt_proj_temp_prof(self.all_tels, Quantity(500, 'kpc'), 
                                           stacked_spectra=True)
         
         assert all_rads['erosita'].unit == 'arcsec'
@@ -131,15 +132,15 @@ class TestTempFuncs(unittest.TestCase):
     def test_onion_deproj_temp_prof(self):
 
         # need combined ratemaps already generated for erosita
-        evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
-        expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        evtool_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
+        expmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         # and for xmm
-        evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
-        eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
-        emosaic(SRC_ALL_TELS, 'image')
-        emosaic(SRC_ALL_TELS, 'expmap')
+        evselect_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        eexpmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'))
+        emosaic(self.all_tels, 'image')
+        emosaic(self.all_tels, 'expmap')
 
-        res = onion_deproj_temp_prof(SRC_ALL_TELS, Quantity(600, 'kpc'), 
+        res = onion_deproj_temp_prof(self.all_tels, Quantity(600, 'kpc'), 
                                      stacked_spectra=True)
         
         assert type(res['xmm'][0]) == GasDensity3D
