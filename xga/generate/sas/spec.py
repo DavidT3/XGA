@@ -9,6 +9,7 @@ from typing import Union, List
 
 import numpy as np
 from astropy.units import Quantity
+from regions import CircleSkyRegion, EllipseSkyRegion
 
 from xga import OUTPUT, NUM_CORES
 from xga.exceptions import SASInputInvalid, NotAssociatedError, NoProductAvailableError, TelescopeNotAssociatedError
@@ -18,11 +19,38 @@ from ._common import region_setup, _gen_detmap_cmd
 from .misc import cifbuild
 from ..sas.run import sas_call
 
+def parse_custom_bkg_sas(region: Union[CircleSkyRegion, EllipseSkyRegion], within_radii: bool = False):
+    """
+    Parse a region object from the `regions` module and return the arguments needed
+    to call `get_annular_sas_region`.
+
+    :param region: A region from the `regions` module
+    :param str func: Which XGA function will this region be parsed to
+    :return: Tuple containing (inner_radius, outer_radius, central_coord, rot_angle)
+    """
+    if isinstance(region, CircleSkyRegion):
+        outer_radius = region.radius if not within_radii else region.radius*1.5
+        central_coord = Quantity([region.center.ra.deg, region.center.ra.deg], 'deg')
+        rot_angle = Quantity(0, 'deg')  # No rotation for circular regions
+
+    elif isinstance(region, EllipseSkyRegion):
+        outer_radius = Quantity([region.height / 2, region.width / 2]) if not within_radii \
+                        else Quantity((region.height/2)*1.5)
+        central_coord = region.center
+        rot_angle = Quantity(region.angle.to('deg').value, 'deg')
+
+    else:
+        raise TypeError(f"Unsupported region type: {type(region)}")
+
+    return outer_radius, central_coord, rot_angle
+
+        
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
-               num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
+               num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False,
+               custom_bkg: Union[CircleSkyRegion, EllipseSkyRegion] = None):
     """
     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
@@ -49,6 +77,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :param str custom_bkg: A string to be input into the backreg argument of srctool.
     """
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
@@ -221,17 +250,32 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  being the largest axis of the ellipse
                 interloper_regions = source.regions_within_radii(inner_radii[0][0], max(outer_radii[0]), 'xmm',
                                                                  reg_cen_coords)
-                back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
-                                                             max(outer_radii[0]) * source.background_radius_factors[1],
-                                                             'xmm', reg_cen_coords)
+                
+                if custom_bkg is None:
+                    back_inter_reg = source.regions_within_radii(max(outer_radii[0]) * source.background_radius_factors[0],
+                                                                max(outer_radii[0]) * source.background_radius_factors[1],
+                                                                'xmm', reg_cen_coords)
+                    b_reg = source.get_annular_sas_region(outer_radii[0] * source.background_radius_factors[0],
+                                                        outer_radii[0] * source.background_radius_factors[1], obs_id,
+                                                        inst, interloper_regions=back_inter_reg,
+                                                        central_coord=source.default_coord)
+                else:
+                    bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
+                    back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
+                                                                 bkg_coord)
+                    bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
+                    bkg_innr = Quantity(0, 'deg')
+                    b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
+                                                          interloper_regions=back_inter_reg, 
+                                                          central_coord=bkg_coord, 
+                                                          rot_angle=bkg_rot_angle)
+
+                                
 
                 reg = source.get_annular_sas_region(inner_radii[0], outer_radii[0], obs_id, inst,
                                                     interloper_regions=interloper_regions, central_coord=reg_cen_coords,
                                                     rot_angle=reg.angle)
-                b_reg = source.get_annular_sas_region(outer_radii[0] * source.background_radius_factors[0],
-                                                      outer_radii[0] * source.background_radius_factors[1], obs_id,
-                                                      inst, interloper_regions=back_inter_reg,
-                                                      central_coord=source.default_coord)
+                
                 # Explicitly read out the current inner radius and outer radius, useful for some bits later
                 src_inn_rad_str = 'and'.join(inner_radii[0].value.astype(str))
                 src_out_rad_str = 'and'.join(outer_radii[0].value.astype(str)) + "_region"
@@ -244,10 +288,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 reg = source.get_annular_sas_region(inner_radii[s_ind], outer_radii[s_ind], obs_id, inst,
                                                     interloper_regions=interloper_regions,
                                                     central_coord=source.default_coord)
-                b_reg = source.get_annular_sas_region(outer_radii[s_ind] * source.background_radius_factors[0],
-                                                      outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                      inst, interloper_regions=back_inter_reg,
-                                                      central_coord=source.default_coord)
+                if custom_bkg is None:
+                    b_reg = source.get_annular_sas_region(outer_radii[s_ind] * source.background_radius_factors[0],
+                                                        outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
+                                                        inst, interloper_regions=back_inter_reg,
+                                                        central_coord=source.default_coord)
+                else:
+                    bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
+                    bkg_innr = Quantity(0, 'deg')
+                    b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
+                                                          interloper_regions=back_inter_reg, 
+                                                          central_coord=bkg_coord, 
+                                                          rot_angle=bkg_rot_angle)
+
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
 
