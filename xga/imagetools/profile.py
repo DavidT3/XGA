@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 10:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 06:49. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -75,6 +75,9 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     elif all(rad_scal):
         inn_rad = np.array([inn_rad])
         out_rad = np.array([out_rad])
+
+    print(inn_rad)
+    print(out_rad)
 
     # This sets up the cartesian coordinate grid of x and y values
     arr_y, arr_x = np.ogrid[:shape[0], :shape[1]]
