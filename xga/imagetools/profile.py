@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:05. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -37,8 +37,8 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     if not centre.unit.is_equivalent('pix'):
         raise UnitConversionError("The 'centre' argument must be convertible to pixels.")
     # Split out the centre coordinates
-    cen_x = centre[0].to('pix').value
-    cen_y = centre[1].to('pix').value
+    cen_x = centre[0].to('pix').astype(int).value
+    cen_y = centre[1].to('pix').astype(int).value
 
     # Making use of the astropy units module, check that we are being pass actual angle values
     if start_ang.unit not in ['deg', 'rad']:
@@ -111,9 +111,6 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     # Should ensure that the central pixel will be 0 for annular masks that are bounded by zero.
     #  Sometimes they aren't because of custom angle choices
     if 0 in inn_rad:
-        print(inn_rad)
-        print(cen_y)
-        print(cen_x)
         where_zeros = np.where(inn_rad == 0)[0]
         ann_mask[cen_y, cen_x, where_zeros] = 1
 
