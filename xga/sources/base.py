@@ -4412,7 +4412,7 @@ class BaseSource:
         if inner_radius.isscalar and inner_radius.value != 0:
             print('annulus')
             # And we need to define a SAS string for the actual region of interest
-            sas_source_area = "(({t}) IN annulus({cx},{cy}ri},{,{ro}))"
+            sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
                                                      cy=xmm_central_coord[1].round(4).value,
                                                      ri=(inner_radius.value/sky_to_deg).round(4),

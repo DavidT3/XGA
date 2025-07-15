@@ -559,12 +559,10 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
     """
-    print('custom_bkg in evselect')
-    print(custom_bkg)
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
-                      num_cores, disable_progress, custom_bkg)
+                      num_cores, disable_progress, custom_bkg=custom_bkg)
 
 
 @sas_call
