@@ -213,7 +213,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                             outer_radii[s_ind] * source.background_radius_factors[1],
                                                             'xmm', source.default_coord)
             else:
-                _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
+
+                if isinstance(custom_bkg, dict):
+                    try:
+                        any_reg = next(iter(next(iter(custom_reg.values())).values()))
+                    except KeyError:
+                        raise KeyError("If inputting a custom_bkg dictionary, it should be a nested one, with obs_id top keys and instruments on the next level.")
+                else:
+                    any_reg = custom_bkg
+                
+                _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(any_reg, True)
                 back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
                                                                 bkg_coord)
             src_inn_rad_str = inner_radii[s_ind].value
@@ -268,10 +277,18 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
-                    _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
+                    if isinstance(custom_bkg, dict):
+                        try:
+                            use_custom_bkg = custom_bkg[obs_id][inst]
+                        except KeyError:
+                            raise KeyError(f"The obsID: {obs_id} and inst:{inst} isn't in the input dictionary of custom backgrounds.")
+                    else:
+                        use_custom_bkg = custom_bkg
+
+                    _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(use_custom_bkg, True)
                     back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
                                                                  bkg_coord)
-                    bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
+                    bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(use_custom_bkg)
                     b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
                                                           interloper_regions=back_inter_reg, 
                                                           central_coord=bkg_coord, 
@@ -301,7 +318,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
-                    bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
+                    if isinstance(custom_bkg, dict):
+                        try:
+                            use_custom_bkg = custom_bkg[obs_id][inst]
+                        except KeyError:
+                            raise KeyError(f"The obsID: {obs_id} and inst:{inst} isn't in the input dictionary of custom backgrounds.")
+                    else:
+                        use_custom_bkg = custom_bkg
+
+                    bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(use_custom_bkg)
                     b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
                                                           interloper_regions=back_inter_reg, 
                                                           central_coord=bkg_coord, 
