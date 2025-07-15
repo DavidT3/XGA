@@ -32,17 +32,19 @@ def parse_custom_bkg_sas(region: Union[CircleSkyRegion, EllipseSkyRegion], withi
         outer_radius = region.radius if not within_radii else region.radius*1.5
         central_coord = Quantity([region.center.ra.deg, region.center.dec.deg], 'deg')
         rot_angle = Quantity(0, 'deg')  # No rotation for circular regions
+        inner_radius = Quantity(0, 'deg')
 
     elif isinstance(region, EllipseSkyRegion):
         outer_radius = Quantity([region.height / 2, region.width / 2]) if not within_radii \
                         else Quantity((region.height/2)*1.5)
         central_coord = Quantity([region.center.ra.deg, region.center.dec.deg], 'deg')
         rot_angle = Quantity(region.angle.to('deg').value, 'deg')
+        inner_radius = Quantity([0, 0], 'deg')
 
     else:
         raise TypeError(f"Unsupported region type: {type(region)}")
 
-    return outer_radius, central_coord, rot_angle
+    return inner_radius, outer_radius, central_coord, rot_angle
 
         
 
@@ -79,8 +81,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
     """
-    print('custom_bkg')
-    print(custom_bkg)
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
@@ -213,7 +213,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                             outer_radii[s_ind] * source.background_radius_factors[1],
                                                             'xmm', source.default_coord)
             else:
-                bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
+                _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
                 back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
                                                                 bkg_coord)
             src_inn_rad_str = inner_radii[s_ind].value
@@ -268,12 +268,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
-                    print('in here')
-                    bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
+                    _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
                     back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
                                                                  bkg_coord)
-                    bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
-                    bkg_innr = Quantity(0, 'deg')
+                    bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
                     b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
                                                           interloper_regions=back_inter_reg, 
                                                           central_coord=bkg_coord, 
