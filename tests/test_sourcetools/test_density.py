@@ -4,7 +4,6 @@
 import os
 import sys
 import unittest
-import tracemalloc
 
 from astropy.units import Quantity
 
