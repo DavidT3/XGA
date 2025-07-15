@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 06:08. Copyright (c) The Contributors
 
 import sys
 from copy import copy
@@ -21,6 +21,7 @@ from ..products.base import BaseProfile1D
 from ..products.phot import RateMap
 from ..sourcetools.deproj import shell_ann_vol_intersect
 from ..sourcetools.misc import ang_to_rad
+
 
 class SurfaceBrightness1D(BaseProfile1D):
     """
@@ -85,7 +86,8 @@ class SurfaceBrightness1D(BaseProfile1D):
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
 
-        # Saves the reference to the RateMap this profile was generated from
+        # Saves the reference to the RateMap this profile was generated from - we make sure to unload the data
+        #  arrays from the ratemap first, otherwise pickling can save those data
         self._ratemap = rt
 
         print(f"Size of rt: {sys.getsizeof(self._ratemap)} bytes")
@@ -298,6 +300,22 @@ class SurfaceBrightness1D(BaseProfile1D):
         else:
             match = False
         return match
+
+    def save(self, save_path: str = None):
+        """
+        This method pickles and saves the surface brightness profile object. This will be called automatically
+        when the profile is initialised, and when changes are made to the profile (such as when a model is
+        fitted). The save file is a pickled version of this object. This method overwrites the implementation in
+        BaseProfile1D, so that we can ensure the originating RateMap's data arrays are unloaded prior to saving.
+
+        :param str save_path: The path where this surface brightness profile should be saved. By default this
+        is None, which means this method will use the save_path attribute of the profile.
+        """
+        # This will unload the RateMap data arrays from memory - should ensure that the save process (pickling)
+        #  will write out a smaller file to disk. This method will also unload the component image/expmap data
+        #  arrays if they are in memory
+        self._ratemap.unload(unload_data=True)
+        super().save(save_path=save_path)
 
 
 class GasMass1D(BaseProfile1D):

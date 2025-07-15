@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 09:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -427,7 +427,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         coordinate pairs, pass an array.
     :param float/np.ndarray src_dec: DEC coordinate(s) of the source(s), in degrees. To find matches for multiple
         coordinate pairs, pass an array.
-    :param Quantity/dict distance: The distance to search for observations within, the default is None in which case
+    :param Quantity/dict distance: The radius to search for observations within, the default is None in which case
         standard search distances for different telescopes are used. The user may pass a single Quantity to use for
         all telescopes, a dictionary with keys corresponding to ALL or SOME of the telescopes specified by the
         'telescope' argument. In the case where only SOME of the telescopes are specified in a distance dictionary,

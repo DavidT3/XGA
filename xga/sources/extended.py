@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/10/2024, 16:42. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -73,7 +73,7 @@ class GalaxyCluster(ExtendedSource):
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -135,7 +135,7 @@ class GalaxyCluster(ExtendedSource):
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
                 is None in which case standard search distances for different telescopes are used. The user may pass a
                 single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
                 telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -920,8 +920,8 @@ class GalaxyCluster(ExtendedSource):
 
     def get_hydrostatic_mass_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
                                       dens_prof: GasDensity3D = None, dens_model_name: str = None,
-                                      radii: Quantity = None,
-                                      telescope: str = None) -> Union[HydrostaticMass, List[HydrostaticMass]]:
+                                      radii: Quantity = None, telescope: str = None) \
+            -> Union[HydrostaticMass, List[HydrostaticMass]]:
         """
         A get method for hydrostatic mass profiles associated with this galaxy cluster. This works in a slightly
         different way to the temperature and density profile get methods, as you can pass the gas temperature and

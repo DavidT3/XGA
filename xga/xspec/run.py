@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/07/2025, 11:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 11:05. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -54,11 +54,8 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # I add exec to the beginning to make sure that the command inherits the same process ID as the shell, which
     #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
     #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
-    cmd = 'export PFILES="{};$HEADAS/syspfiles";'.format(tmp_hea_dir) + "exec xspec - {}".format(x_script)
+    cmd = 'export PFILES="{}:$HEADAS/syspfiles";'.format(tmp_hea_dir) + "exec xspec - {}".format(x_script)
     xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-
-    # Remove the temporary directory
-    rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
 
     # This makes sure the process is killed if it does timeout
     try:
@@ -73,6 +70,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
 
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
+
+    # Remove the temporary directory
+    rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
 
     # We ignore that particular string in the errors identified from stdout because if we don't just it being
     #  present in the if statement in the executed script is enough to make XGA think that the fit failed, even if

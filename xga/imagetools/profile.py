@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/07/2025, 21:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 10:05. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -33,9 +33,12 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     :return: The generated src_mask array.
     :rtype: np.ndarray
     """
+
+    if not centre.unit.is_equivalent('pix'):
+        raise UnitConversionError("The 'centre' argument must be convertible to pixels.")
     # Split out the centre coordinates
-    cen_x = centre[0].value
-    cen_y = centre[1].value
+    cen_x = centre[0].to('pix').value
+    cen_y = centre[1].to('pix').value
 
     # Making use of the astropy units module, check that we are being pass actual angle values
     if start_ang.unit not in ['deg', 'rad']:
@@ -63,6 +66,15 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
         # If it is a list, just quickly transform to a numpy array
         inn_rad = np.array(inn_rad)
         out_rad = np.array(out_rad)
+
+    # Now handle if single values for outer and inner radius have been passed - possible if the user
+    #  just wants to make a single annulus mask
+    rad_scal = [isinstance(inn_rad, (int, float)), isinstance(out_rad, (int, float))]
+    if any(rad_scal) and not all(rad_scal):
+        raise TypeError("When either 'inn_rad' or 'out_rad' are scalar, they both must be.")
+    elif all(rad_scal):
+        inn_rad = np.array([inn_rad])
+        out_rad = np.array([out_rad])
 
     # This sets up the cartesian coordinate grid of x and y values
     arr_y, arr_x = np.ogrid[:shape[0], :shape[1]]
