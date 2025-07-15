@@ -516,7 +516,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                      num_cores: int = NUM_CORES, disable_progress: bool = False):
+                      num_cores: int = NUM_CORES, disable_progress: bool = False, ):
     """
     A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -546,6 +546,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         slightly on position on the detector.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
