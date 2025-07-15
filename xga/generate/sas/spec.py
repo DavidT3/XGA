@@ -516,7 +516,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                      num_cores: int = NUM_CORES, disable_progress: bool = False, ):
+                      num_cores: int = NUM_CORES, disable_progress: bool = False, 
+                      custom_bkg: Union[CircleSkyRegion, EllipseSkyRegion] = None):
     """
     A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -551,7 +552,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
-                      num_cores, disable_progress)
+                      num_cores, disable_progress, custom_bkg)
 
 
 @sas_call
