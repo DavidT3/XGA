@@ -297,6 +297,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
+                    print('in this one')
                     bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(custom_bkg)
                     bkg_innr = Quantity(0, 'deg')
                     b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
