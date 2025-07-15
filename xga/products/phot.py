@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:42. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -3305,6 +3305,13 @@ class RateMap(Image):
         """
         # Call the Image-implemented unload method first
         super().unload(unload_data, unload_header)
+
+        # We also remove the arrays built to mask edges and act as a sensor mask, which can be quite large
+        #  themselves - and there is no point holding them in memory if the data arrays aren't
+        del self._on_sensor_mask
+        self._on_sensor_mask = None
+        del self._edge_mask
+        self._edge_mask = None
 
         # Then we do a little extra job of unloading the component image and exposure map data as well
         if unload_data or unload_header:
