@@ -4410,19 +4410,22 @@ class BaseSource:
         sas_interloper = [self._interloper_sas_string(i, rel_im, output_unit) for i in interloper_regions]
 
         if inner_radius.isscalar and inner_radius.value != 0:
+            print('annulus')
             # And we need to define a SAS string for the actual region of interest
-            sas_source_area = "(({t}) IN annulus({cx},{cy},{ri},{ro}))"
+            sas_source_area = "(({t}) IN annulus({cx},{cy}ri},{,{ro}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
                                                      cy=xmm_central_coord[1].round(4).value,
                                                      ri=(inner_radius.value/sky_to_deg).round(4),
                                                      ro=(outer_radius.value/sky_to_deg).round(4))
         # If the inner radius is zero then we write a circle region, because it seems that's a LOT faster in SAS
         elif inner_radius.isscalar and inner_radius.value == 0:
+            print('circle')
             sas_source_area = "(({t}) IN circle({cx},{cy},{r}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
                                                      cy=xmm_central_coord[1].round(4).value,
                                                      r=(outer_radius.value/sky_to_deg).round(4))
         elif not inner_radius.isscalar and inner_radius[0].value != 0:
+            print('elliptannulus')
             sas_source_area = "(({t}) IN elliptannulus({cx},{cy},{wi},{hi},{wo},{ho},{rot},{rot}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
                                                      cy=xmm_central_coord[1].round(4).value,
@@ -4432,6 +4435,7 @@ class BaseSource:
                                                      ho=(outer_radius[1].value/sky_to_deg).round(4),
                                                      rot=rot_angle.to('deg').round(4).value)
         elif not inner_radius.isscalar and inner_radius[0].value == 0:
+            print('elliopse')
             sas_source_area = "(({t}) IN ellipse({cx},{cy},{w},{h},{rot}))"
             sas_source_area = sas_source_area.format(t=c_str, cx=xmm_central_coord[0].round(4).value,
                                                      cy=xmm_central_coord[1].round(4).value,

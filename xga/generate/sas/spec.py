@@ -79,6 +79,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
     """
+    print('custom_bkg')
+    print(custom_bkg)
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
     #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
@@ -260,6 +262,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
+                    print('in here')
                     bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
                     back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
                                                                  bkg_coord)
