@@ -30,13 +30,13 @@ def parse_custom_bkg_sas(region: Union[CircleSkyRegion, EllipseSkyRegion], withi
     """
     if isinstance(region, CircleSkyRegion):
         outer_radius = region.radius if not within_radii else region.radius*1.5
-        central_coord = Quantity([region.center.ra.deg, region.center.ra.deg], 'deg')
+        central_coord = Quantity([region.center.ra.deg, region.center.dec.deg], 'deg')
         rot_angle = Quantity(0, 'deg')  # No rotation for circular regions
 
     elif isinstance(region, EllipseSkyRegion):
         outer_radius = Quantity([region.height / 2, region.width / 2]) if not within_radii \
                         else Quantity((region.height/2)*1.5)
-        central_coord = Quantity([region.center.ra.deg, region.center.ra.deg], 'deg')
+        central_coord = Quantity([region.center.ra.deg, region.center.dec.deg], 'deg')
         rot_angle = Quantity(region.angle.to('deg').value, 'deg')
 
     else:
