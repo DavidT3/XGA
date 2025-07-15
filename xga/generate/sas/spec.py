@@ -77,7 +77,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
-    :param str custom_bkg: A string to be input into the backreg argument of srctool.
+    :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
     """
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
