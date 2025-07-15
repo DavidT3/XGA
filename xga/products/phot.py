@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 10:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:19. Copyright (c) The Contributors
 import gc
 import os
 from copy import deepcopy
@@ -2826,6 +2826,32 @@ class RateMap(Image):
         if self._data is None:
             self._construct_on_demand()
         return self._data.copy()
+
+    @data.setter
+    def data(self, new_rt_arr: np.ndarray):
+        """
+        Property setter for the RateMap data.
+
+        :param np.ndarray new_rt_arr: The new ratemap data.
+        """
+        # Have to make sure the input is of the right type, and the right shape
+        if not isinstance(new_rt_arr, np.ndarray):
+            raise TypeError("You may only assign a numpy array to the data attribute.")
+        elif new_rt_arr.shape != self.shape:
+            raise ValueError("You may only assign a numpy array to the data attribute if it "
+                             "is the same shape as the original.")
+        else:
+            self._data = new_rt_arr
+
+    @data.deleter
+    def data(self):
+        """
+        Property deleter for data contained in this RateMap instance. The self._data array is removed from
+        memory, and then self._data is explicitly set to None so that self._construct_on_demand() will
+        be triggered if you ever want the data from this object again.
+        """
+        del self._data
+        self._data = None
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
