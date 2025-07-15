@@ -206,10 +206,16 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  degrees and as such only needs to be run once for all the different observations.
             interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], 'xmm',
                                                              source.default_coord)
-            # This finds any regions which
-            back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
-                                                         outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         'xmm', source.default_coord)
+            
+            if custom_bkg is None:
+                # This finds any regions which
+                back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
+                                                            outer_radii[s_ind] * source.background_radius_factors[1],
+                                                            'xmm', source.default_coord)
+            else:
+                bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(custom_bkg, True)
+                back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
+                                                                bkg_coord)
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
@@ -553,6 +559,8 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
     """
+    print('custom_bkg in evselect')
+    print(custom_bkg)
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
