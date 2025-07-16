@@ -10,7 +10,7 @@ from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
-from regions import CircleSkyRegion, EllispeSkyRegion
+from regions import CircleSkyRegion, EllipseSkyRegion
 
 from .misc import evtool_combine_evts
 from .phot import evtool_image
@@ -23,7 +23,7 @@ from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProduct
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 
-def parse_custom_bkg_esass(region: Union[CircleSkyRegion, EllispeSkyRegion], within_radii: bool = False):
+def parse_custom_bkg_esass(region: Union[CircleSkyRegion, EllipseSkyRegion], within_radii: bool = False):
     """
     Parse a region object from the `regions` module and return the arguments needed
     to call `get_annular_sas_region`.
