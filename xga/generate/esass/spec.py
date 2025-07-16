@@ -233,8 +233,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                     rot_angle=bkg_rot_angle)
                     print(b_reg)
 
-
-
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
 
@@ -637,6 +635,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             _append_spec_info(evt_list, s_ind)
 
 
+        print(sources_cmds)
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
         # This contains any other information that will be needed to instantiate the class
