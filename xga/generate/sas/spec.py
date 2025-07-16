@@ -142,7 +142,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     if over_sample is not None:
         extra_name += "_ovsamp{ov}".format(ov=over_sample)
     
-    if isinstance(custom_bkg, dict):
+    if isinstance(custom_bkg, (dict, CircleSkyRegion, EllipseSkyRegion)):
         custom_bkg = [custom_bkg]
 
     if isinstance(custom_bkg, list):
