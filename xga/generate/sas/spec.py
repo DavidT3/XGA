@@ -52,7 +52,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
                num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False,
-               custom_bkg: Union[CircleSkyRegion, EllipseSkyRegion] = None):
+               custom_bkg: Union[CircleSkyRegion, EllipseSkyRegion, dict, List] = None):
     """
     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
@@ -79,7 +79,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
-    :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
+    :param Union[CircleSkyRegion, EllipseSkyRegion, dict, List] custom_bkg: A region to extract the 
+        background spectrum from. If extracting a spectrum for a single source, and require unique
+        background regions for each obs_id and instrument, this argument can be input as a nested
+        dictionary with top level obs_id keys, and instrument keys on the next level 
+        ({obs_id: {inst: reg}}). If extracting spectra from a sample, and require unique regions for
+        each source, a list of dictionaries should be input, with an entry for each source. By 
+        default the background will be extracted from an annulus around the source.
     """
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
@@ -135,7 +141,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # And if it was oversampled during generation then we need to include that as well
     if over_sample is not None:
         extra_name += "_ovsamp{ov}".format(ov=over_sample)
+    
+    if isinstance(custom_bkg, dict):
+        custom_bkg = [custom_bkg]
 
+    if isinstance(custom_bkg, list):
+        if len(custom_bkg) != len(sources):
+            raise ValueError("If inputting a list of dictionaries into the 'custom_bkg' argument, the length "
+                             "of the list must be the same as the length of the sample.")
+    
     # Define the various SAS commands that need to be populated, for a useful spectrum you also need ARF/RMF
     spec_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; evselect table={e} withspectrumset=yes " \
                "spectrumset={s} energycolumn=PI spectralbinsize=5 withspecranges=yes specchannelmin=0 " \
@@ -214,13 +228,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                             'xmm', source.default_coord)
             else:
 
-                if isinstance(custom_bkg, dict):
+                if isinstance(custom_bkg[s_ind], dict):
                     try:
-                        any_reg = next(iter(next(iter(custom_bkg.values())).values()))
+                        any_reg = next(iter(next(iter(custom_bkg[s_ind].values())).values()))
                     except KeyError:
                         raise KeyError("If inputting a custom_bkg dictionary, it should be a nested one, with obs_id top keys and instruments on the next level.")
                 else:
-                    any_reg = custom_bkg
+                    any_reg = custom_bkg[s_ind]
                 
                 _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(any_reg, True)
                 back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
@@ -277,13 +291,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
-                    if isinstance(custom_bkg, dict):
+                    if isinstance(custom_bkg[s_ind], dict):
                         try:
-                            use_custom_bkg = custom_bkg[obs_id][inst]
+                            use_custom_bkg = custom_bkg[s_ind][obs_id][inst]
                         except KeyError:
                             raise KeyError(f"The obsID: {obs_id} and inst:{inst} isn't in the input dictionary of custom backgrounds.")
                     else:
-                        use_custom_bkg = custom_bkg
+                        use_custom_bkg = custom_bkg[s_ind]
 
                     _, bkg_outr, bkg_coord, _ = parse_custom_bkg_sas(use_custom_bkg, True)
                     back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 'xmm',
@@ -318,13 +332,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         inst, interloper_regions=back_inter_reg,
                                                         central_coord=source.default_coord)
                 else:
-                    if isinstance(custom_bkg, dict):
+                    if isinstance(custom_bkg[s_ind], dict):
                         try:
-                            use_custom_bkg = custom_bkg[obs_id][inst]
+                            use_custom_bkg = custom_bkg[s_ind][obs_id][inst]
                         except KeyError:
                             raise KeyError(f"The obsID: {obs_id} and inst:{inst} isn't in the input dictionary of custom backgrounds.")
                     else:
-                        use_custom_bkg = custom_bkg
+                        use_custom_bkg = custom_bkg[s_ind]
 
                     bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_sas(use_custom_bkg)
                     b_reg = source.get_annular_sas_region(bkg_innr, bkg_outr, obs_id=obs_id, inst=inst, 
@@ -579,6 +593,13 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param Union[CircleSkyRegion, EllipseSkyRegion] custom_bkg: A region to extract the background spectrum from.
+    :param Union[CircleSkyRegion, EllipseSkyRegion, dict, List] custom_bkg: A region to extract the 
+        background spectrum from. If extracting a spectrum for a single source, and require unique
+        background regions for each obs_id and instrument, this argument can be input as a nested
+        dictionary with top level obs_id keys, and instrument keys on the next level 
+        ({obs_id: {inst: reg}}). If extracting spectra from a sample, and require unique regions for
+        each source, a list of dictionaries should be input, with an entry for each source. By 
+        default the background will be extracted from an annulus around the source.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
