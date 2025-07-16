@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 13:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 13:37. Copyright (c) The Contributors
 
 import gc
 import os
@@ -3418,112 +3418,6 @@ class BaseSource:
 
         return matched_prods
 
-    def new_get_annular_spectra(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                            min_sn: float = None, over_sample: float = None, set_id: int = None,
-                            telescope: str = None) -> AnnularSpectra:
-        """
-        Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
-        Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
-        in spectrum_set, and the AnnularSpectra will be returned (if it exists). If no match is found then
-        a NoProductAvailableError will be raised. This method has an additional way of looking for a matching
-        spectrum, if the set ID is known then that can be passed by the user and used to find an exact match.
-
-        :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
-            that you wish to retrieve. By default this is None, which means the method will return annular
-            spectra with any radii.
-        :param bool group_spec: Was the spectrum set you wish to retrieve grouped?
-        :param float min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
-            the minimum number of counts?
-        :param float min_sn: If the spectrum set you wish to retrieve was grouped on minimum signal to
-            noise, what was the minimum signal to noise.
-        :param float over_sample: If the spectrum set you wish to retrieve was over sampled, what was the level of
-            over sampling used?
-        :param int set_id: The unique identifier of the annular spectrum set. Passing a value for this parameter
-            will override any other information that you have given this method.
-        :param str telescope: Optionally, a specific telescope to search for annular spectra can be supplied. The
-            default is None, which means all annular spectra matching the other criteria will be returned.
-        :return: An XGA AnnularSpectra object if there is an exact match.
-        :rtype: AnnularSpectra
-        """
-        # if group_spec and min_counts is not None:
-        #     extra_name = "_mincnt{}".format(min_counts)
-        # elif group_spec and min_sn is not None:
-        #     extra_name = "_minsn{}".format(min_sn)
-        # else:
-        #     extra_name = ''
-        #
-        # # And if it was oversampled during generation, then we need to include that as well
-        # if over_sample is not None:
-        #     extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        # Fetch all the annular spectra for the specified telescope
-        # TODO THIS MAY HAVE TO BE ALTERED FOR COMBINED AND NON-COMBINED ANNULAR SPECTRA AT SOME POINT
-        matched_prods = self.get_products('combined_annular_spectrum', telescope=telescope)
-
-        matched_prods : List[AnnularSpectra]
-
-        # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
-        #  here we're going to throw an error
-        if set_id is not None:
-            matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
-
-            # In this case there are no matching annular spectra
-            if len(matched_products) == 0:
-                # Sort out the message to show
-                if telescope is not None:
-                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
-                            "found.").format(si=set_id, t=telescope)
-                else:
-                    mess = "AnnularSpectra object with setID {si} cannot be found.".format(si=set_id, t=telescope)
-                raise NoProductAvailableError(mess)
-            # But if we get here then there is a match (and there can only be one)
-            else:
-                return matched_prods[0]
-
-        # If we get here, then the search for AnnularSpectra isn't as simple as just using a set identifier
-        # Like in _get_spec_prod, we'll match radii first to whittle down the possibilities - IF THE USER
-        #  SPECIFIED RADII
-        if radii is not None:
-            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
-            radii = self.convert_radius(radii, 'deg')
-
-            matched_prods = [m_prod for m_prod in matched_prods]
-
-        # And we need to check to find that annular spectra have the right central coordinates for the
-        #  current state of the source
-        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
-
-
-        # else:
-        #     # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-        #     #  and we'll look for partial matches
-        #     pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-        #     grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-        #     spec_storage_name = [pos_str, grp_str]
-        #
-        # # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        # #  properly constructed storage key
-        # if set_id is None and radii is not None:
-        #     matched_prods = self.get_products('combined_annular_spectrum',
-        #                                       extra_key=spec_storage_name, telescope=telescope)
-        # # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        # elif set_id is None and radii is None:
-        #     matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
-        #                      if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # # However if they have passed a setID then this over-rides everything else
-        # else:
-        #     # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
-        #     #  whatever the user passed in
-        #     matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
-        #                      if p.set_ident == set_id]
-
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("No matching AnnularSpectra can be found.")
-
-        return matched_prods
-
     def get_annular_spectra(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
                             min_sn: float = None, over_sample: float = None, set_id: int = None,
                             telescope: str = None) -> AnnularSpectra:
@@ -3551,57 +3445,74 @@ class BaseSource:
         :return: An XGA AnnularSpectra object if there is an exact match.
         :rtype: AnnularSpectra
         """
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
+        # Fetch all the annular spectra for the specified telescope
+        # TODO THIS MAY HAVE TO BE ALTERED FOR COMBINED AND NON-COMBINED ANNULAR SPECTRA AT SOME POINT
+        matched_prods = self.get_products('combined_annular_spectrum', telescope=telescope)
 
-        # And if it was oversampled during generation, then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+        # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
+        #  here we're going to throw an error
+        if set_id is not None:
+            matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
 
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
+            # In this case there are no matching annular spectra
+            if len(matched_products) == 0:
+                # Sort out the message to show
+                if telescope is not None:
+                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
+                            "found.").format(si=set_id, t=telescope)
+                else:
+                    mess = "AnnularSpectra object with setID {si} cannot be found.".format(si=set_id, t=telescope)
+                raise NoProductAvailableError(mess)
+            # But if we get here then there is a match (and there can only be one)
+            else:
+                return matched_prods[0]
+
+        # If we get here, then the search for AnnularSpectra isn't as simple as just using a set identifier
+        # Like in _get_spec_prod, we'll match radii first to whittle down the possibilities - IF THE USER
+        #  SPECIFIED RADII
         if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
+            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
+            radii = self.convert_radius(radii, 'deg')
 
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_annular_spectrum',
-                                              extra_key=spec_storage_name, telescope=telescope)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
-                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
-            #  whatever the user passed in
-            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
-                             if p.set_ident == set_id]
+            # First we'll check which annular spectra have the same number of radii as those that have
+            #  been passed in by the user
+            matched_prods = [m_prod for m_prod in matched_prods if len(m_prod.radii) == len(radii)]
+            # Then look for actual radii matches - we use the allclose() method here to check that the
+            #  radii of the spectra are all within a very small tolerance of the passed radii. This is
+            #  to head off problems we've had with float precision, the last digit of the float gets flipped
+            #  and then exact comparisons no longer work
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, m_prod.radii, rtol=0, atol=RAD_MATCH_PRECISION)]
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        # And we need to check to find that annular spectra have the right central coordinates for the
+        #  current state of the source
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
-        return matched_prods
+        return final_matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
                      radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
