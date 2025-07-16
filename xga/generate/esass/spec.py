@@ -100,7 +100,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         each source, a list of dictionaries should be input, with an entry for each source. By 
         default the background will be extracted from an annulus around the source.
     """
-    def _append_spec_info(evt_list):
+    def _append_spec_info(evt_list, s_ind):
         """
         Internal method to get the parameters required for the srctool spectral generation command.
         """
