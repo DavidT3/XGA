@@ -55,7 +55,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
                min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False,
                combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False,
-               custom_bkg: Union[str, List[str]] = None):
+               custom_bkg: Union[CircleSkyRegion, EllipseSkyRegion, dict, List] = None):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -92,7 +92,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool combine_obs: Setting this to False will generate an image for each associated observation, 
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
-    :param str custom_bkg: A string to be input into the backreg argument of srctool.
+    :param Union[CircleSkyRegion, EllipseSkyRegion, dict, List] custom_bkg: A region to extract the 
+        background spectrum from. If extracting a spectrum for a single source, and require unique
+        background regions for each obs_id and instrument, this argument can be input as a nested
+        dictionary with top level obs_id keys, and instrument keys on the next level 
+        ({obs_id: {inst: reg}}). If extracting spectra from a sample, and require unique regions for
+        each source, a list of dictionaries should be input, with an entry for each source. By 
+        default the background will be extracted from an annulus around the source.
     """
     def _append_spec_info(evt_list):
         """
@@ -738,7 +744,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
-                     disable_progress: bool = False, combine_tm: bool = True,  combine_obs: bool = True, force_gen: bool = False):
+                     disable_progress: bool = False, combine_tm: bool = True, 
+                     combine_obs: bool = True, force_gen: bool = False,
+                     custom_bkg: Union[CircleSkyRegion, EllipseSkyRegion, dict, List] = None):
     
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
@@ -775,11 +783,18 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
         telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
         survey data eROSITA takes. Default is True.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :param Union[CircleSkyRegion, EllipseSkyRegion, dict, List] custom_bkg: A region to extract the 
+        background spectrum from. If extracting a spectrum for a single source, and require unique
+        background regions for each obs_id and instrument, this argument can be input as a nested
+        dictionary with top level obs_id keys, and instrument keys on the next level 
+        ({obs_id: {inst: reg}}). If extracting spectra from a sample, and require unique regions for
+        each source, a list of dictionaries should be input, with an entry for each source. By 
+        default the background will be extracted from an annulus around the source.    
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores, disable_progress,
-                      combine_tm, combine_obs, force_gen=force_gen)
+                      combine_tm, combine_obs, force_gen=force_gen, custom_bkg=custom_bkg)
 
 
 # TODO I feel that I could combine this with the original SAS one, seeing as they essentially call existing
