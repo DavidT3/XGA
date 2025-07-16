@@ -509,13 +509,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         ex_src = False
         et = 'POINT'
 
-    if isinstance(custom_bkg, dict):
+    if isinstance(custom_bkg, (dict, CircleSkyRegion, EllipseSkyRegion)):
         custom_bkg = [custom_bkg]
 
     if isinstance(custom_bkg, list):
         if len(custom_bkg) != len(sources):
             raise ValueError("If inputting a list of dictionaries into the 'custom_bkg' argument, the length "
                              "of the list must be the same as the length of the sample.")
+    
     # TODO implement the det map EXTTPYE, at the moment this spectrum will treat the target as a point source
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
