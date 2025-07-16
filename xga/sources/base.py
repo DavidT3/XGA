@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 10:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 12:25. Copyright (c) The Contributors
 
 import gc
 import os
@@ -35,7 +35,7 @@ from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
     DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX, \
-    check_telescope_choices
+    check_telescope_choices, RAD_MATCH_PRECISION
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -3293,52 +3293,50 @@ class BaseSource:
         else:
             raise TypeError("You may only pass a quantity or a string as outer_radius")
 
-        if over_sample is not None:
-            over_sample = int(over_sample)
-        if min_counts is not None:
-            min_counts = int(min_counts)
-        if min_sn is not None:
-            min_sn = float(min_sn)
-
-        # Sets up the extra part of the storage key name depending on if grouping is enabled
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        if outer_radius != 'region':
-            # The key under which these spectra will be stored
-            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
-                                                         gr=group_spec)
-        else:
-            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
-
-        # Adds on the extra information about grouping to the storage key
-        spec_storage_name += extra_name
+        # Checking spectrum generation inputs, and making sure they are in the right types
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
 
         if obs_id == 'combined':
-            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst,
-                                              extra_key=spec_storage_name, telescope=telescope)
+            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
         else:
-            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                              telescope=telescope)
+            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        matched_prods : List[Spectrum]
+
+        # Checking for matching radii first - this will likely whittle down the spectra best of all. We have had
+        #  matching problems sometimes because of float precision (the last digit flips and is no longer an exact
+        #  match to the other radius)
+        matched_prods = [m_prod for m_prod in matched_prods
+                         if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)
+                         and np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
-        return matched_prods
-
+        return final_matched_prods
 
     def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
