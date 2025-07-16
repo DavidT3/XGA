@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 06:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 10:48. Copyright (c) The Contributors
 
 import gc
 import os
@@ -3326,11 +3326,11 @@ class BaseSource:
         spec_storage_name += extra_name
 
         if obs_id == 'combined':
-            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                          telescope=telescope)
+            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst,
+                                              extra_key=spec_storage_name, telescope=telescope)
         else:
             matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                          telescope=telescope)
+                                              telescope=telescope)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
