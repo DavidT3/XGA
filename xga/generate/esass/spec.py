@@ -317,6 +317,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # TODO allow user to chose tstep and xgrid
             bsrc_reg_str = b_reg
+            print('bsrc_reg_str')
+            print(bsrc_reg_str)
             # Defining the grouping keywords
             if group_spec and min_counts is not None:
                 group_type = 'min'
