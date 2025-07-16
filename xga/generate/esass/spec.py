@@ -94,11 +94,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     :param Union[CircleSkyRegion, EllipseSkyRegion, dict, List] custom_bkg: A region to extract the 
         background spectrum from. If extracting a spectrum for a single source, and require unique
-        background regions for each obs_id and instrument, this argument can be input as a nested
-        dictionary with top level obs_id keys, and instrument keys on the next level 
-        ({obs_id: {inst: reg}}). If extracting spectra from a sample, and require unique regions for
-        each source, a list of dictionaries should be input, with an entry for each source. By 
-        default the background will be extracted from an annulus around the source.
+        background regions for each obs_id, this argument can be input as a dictionary with obs_id 
+        keys, ie {'obs_id': reg}. If extracting spectra from a sample, and require unique regions for
+        each source, a list of dictionaries, or regs should be input, with an entry for each source. 
+        By  default the background will be extracted from an annulus around the source.
     """
     def _append_spec_info(evt_list, s_ind):
         """
