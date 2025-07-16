@@ -10,6 +10,7 @@ from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity
+from regions import CircleSkyRegion, EllispeSkyRegion
 
 from .misc import evtool_combine_evts
 from .phot import evtool_image
@@ -22,11 +23,39 @@ from ...exceptions import eROSITAImplentationError, eSASSInputInvalid, NoProduct
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 
+def parse_custom_bkg_esass(region: Union[CircleSkyRegion, EllispeSkyRegion], within_radii: bool = False):
+    """
+    Parse a region object from the `regions` module and return the arguments needed
+    to call `get_annular_sas_region`.
+
+    :param region: A region from the `regions` module
+    :param str func: Which XGA function will this region be parsed to
+    :return: Tuple containing (inner_radius, outer_radius, central_coord, rot_angle)
+    """
+    if isinstance(region, CircleSkyRegion):
+        outer_radius = region.radius if not within_radii else region.radius*1.5
+        central_coord = Quantity([region.center.ra.deg, region.center.dec.deg], 'deg')
+        rot_angle = Quantity(0, 'deg')  # No rotation for circular regions
+        inner_radius = Quantity(0, 'deg')
+
+    elif isinstance(region, EllipseSkyRegion):
+        outer_radius = Quantity([region.height / 2, region.width / 2]) if not within_radii \
+                        else Quantity((region.height/2)*1.5)
+        central_coord = Quantity([region.center.ra.deg, region.center.dec.deg], 'deg')
+        rot_angle = Quantity(region.angle.to('deg').value, 'deg')
+        inner_radius = Quantity([0, 0], 'deg')
+
+    else:
+        raise TypeError(f"Unsupported region type: {type(region)}")
+
+    return inner_radius, outer_radius, central_coord, rot_angle
+
 
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
                min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False,
-               combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False):
+               combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False,
+               custom_bkg: Union[str, List[str]] = None):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -63,6 +92,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool combine_obs: Setting this to False will generate an image for each associated observation, 
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :param str custom_bkg: A string to be input into the backreg argument of srctool.
     """
     def _append_spec_info(evt_list):
         """
@@ -164,11 +194,40 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
                                             interloper_regions=interloper_regions,
                                             central_coord=source.default_coord, rand_ident=rand_ident)
-                b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
-                                                outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                interloper_regions=back_inter_reg,
-                                                central_coord=source.default_coord, bkg_reg=True,
-                                                rand_ident=rand_ident)
+                
+                 # This finds any regions which
+                if custom_bkg is None:
+                    back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
+                                                                outer_radii[s_ind] * source.background_radius_factors[1],
+                                                                "erosita", source.default_coord)
+                    b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
+                                                    outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
+                                                    interloper_regions=back_inter_reg,
+                                                    central_coord=source.default_coord, bkg_reg=True,
+                                                    rand_ident=rand_ident)
+                else:
+                    if isinstance(custom_bkg[s_ind], dict):
+                        try:
+                            use_custom_bkg = custom_bkg[s_ind][obs_id]
+                        except KeyError:
+                            raise KeyError("If using a dictionary for the custom_bkg argument, there"
+                                           " must be an entry for every obs_id assigned to the source,"
+                                           " or the obs_id must be 'combined' if setting the combine_obs"
+                                           " argument to True.")
+                    else:
+                        use_custom_bkg = custom_bkg[s_ind]
+
+                    _ , bkg_outr, bkg_coord, _ = parse_custom_bkg_esass(use_custom_bkg, True)
+                    back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 
+                                                                'erosita', bkg_coord)
+                    bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_esass(use_custom_bkg)
+                    breg = get_annular_esass_region(source, bkg_innr, bkg_outr, obs_id, 
+                                                    interloper_regions=back_inter_reg,
+                                                    central_coord=bkg_coord, bkg_reg=True,
+                                                    rand_ident=rand_ident,
+                                                    rot_angle=bkg_rot_angle)
+
+
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
 
@@ -444,6 +503,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         ex_src = False
         et = 'POINT'
 
+    if isinstance(custom_bkg, dict):
+        custom_bkg = [custom_bkg]
+
+    if isinstance(custom_bkg, list):
+        if len(custom_bkg) != len(sources):
+            raise ValueError("If inputting a list of dictionaries into the 'custom_bkg' argument, the length "
+                             "of the list must be the same as the length of the sample.")
     # TODO implement the det map EXTTPYE, at the moment this spectrum will treat the target as a point source
     # Defining the various eSASS commands that need to be populated
     # There will be a different command for extended and point sources
@@ -528,14 +594,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         if outer_radius != 'region':
             # Finding interloper regions within the radii we have specified has been put here because it all works in
             #  degrees and as such only needs to be run once for all the different observations.
-            # TODO ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
             interloper_regions = source.regions_within_radii(inner_radii[s_ind], outer_radii[s_ind], "erosita",
                                                              source.default_coord)
-            # This finds any regions which
-            # TODO ASSUMPTION8 telescope agnostic version of the regions_within_radii will have telescope argument
-            back_inter_reg = source.regions_within_radii(outer_radii[s_ind] * source.background_radius_factors[0],
-                                                         outer_radii[s_ind] * source.background_radius_factors[1],
-                                                         "erosita", source.default_coord)
+
             src_inn_rad_str = inner_radii[s_ind].value
             src_out_rad_str = outer_radii[s_ind].value
             # The key under which these spectra will be stored
@@ -555,7 +616,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # This function then uses the evtlist to generate spec commands, final paths, 
                 # and extra info, it will then append them to the cmds, final_paths, and extrainfo lists
                 # that are defined above
-                _append_spec_info(evt_list)
+                _append_spec_info(evt_list, s_ind)
 
             
         else:
@@ -565,7 +626,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # This function then uses the evtlist to generate spec commands, final paths, 
             # and extra info, it will then append them to the cmds, final_paths, and extrainfo lists
             # that are defined above
-            _append_spec_info(evt_list)
+            _append_spec_info(evt_list, s_ind)
 
 
         sources_cmds.append(np.array(cmds))
