@@ -226,6 +226,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     back_inter_reg = source.regions_within_radii(Quantity(0, 'deg'), bkg_outr, 
                                                                 'erosita', bkg_coord)
                     bkg_innr, bkg_outr, bkg_coord, bkg_rot_angle = parse_custom_bkg_esass(use_custom_bkg)
+                    print(b_reg)
                     b_reg = get_annular_esass_region(source, bkg_innr, bkg_outr, obs_id, 
                                                     interloper_regions=back_inter_reg,
                                                     central_coord=bkg_coord, bkg_reg=True,
