@@ -216,7 +216,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
                 if isinstance(custom_bkg, dict):
                     try:
-                        any_reg = next(iter(next(iter(custom_reg.values())).values()))
+                        any_reg = next(iter(next(iter(custom_bkg.values())).values()))
                     except KeyError:
                         raise KeyError("If inputting a custom_bkg dictionary, it should be a nested one, with obs_id top keys and instruments on the next level.")
                 else:
