@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 16:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -117,7 +117,7 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
             out_expr = 1 / ((1 + (x / r_tran)**2)**(c_power / 2))
             result = t_zero * cool_expr * out_expr
         except ZeroDivisionError:
-            result = np.NaN
+            result = np.nan
 
         return result
 
@@ -269,7 +269,7 @@ class VikhlininTemperature1D(BaseModel1D):
             result = t_zero * t_cool * t_outer
 
         except ZeroDivisionError:
-            result = np.NaN
+            result = np.nan
 
         return result
 

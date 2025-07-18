@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 09:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 import gc
 import os
@@ -2317,6 +2317,98 @@ class BaseSource:
 
         return matched_prods
 
+    def _new_get_lc_prod(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
+                     inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     time_bin_size: Quantity = None, telescope: str = None) \
+            -> Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]:
+        """
+        A protected method to retrieve XGA LightCurve objects, the user should never interact with this directly.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(100, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all lightcurves matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the lightcurve (for instance 'point' would be acceptable for a PointSource, or Quantity(0, 'kpc')).
+            Default is None, meaning all lightcurves will be retrieved.
+        :param Quantity lo_en: The lower energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity hi_en: The upper energy limit of the lightcurves you wish to retrieve, the default
+            is None (which will retrieve all lightcurves regardless of energy limit).
+        :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
+            is None, in which case all lightcurves matching other criteria will be retrieved.
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all profiles matching the other criteria will be returned.
+        :return: An XGA LightCurve object (if there is an exact match), or a list of XGA LightCurve objects (if there
+            were multiple matching products), or a single/list of AggregateLightCurve objects.
+        :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
+        """
+        # We check the validity of the user inputs, before trying to retrieve any products
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        elif inner_radius is not None:
+            raise TypeError("You may only pass a quantity, a string, or None as 'inner_radius'")
+
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        elif outer_radius is not None:
+            raise TypeError("You may only pass a quantity, a string, or None as 'outer_radius'")
+
+        if time_bin_size is not None and not time_bin_size.unit.is_equivalent('s'):
+            raise UnitConversionError("The 'time_bin_size' argument must be convertible to seconds.")
+
+        if (lo_en is not None and not lo_en.unit.is_equivalent('keV')) or \
+                (hi_en is not None and not hi_en.unit.is_equivalent('keV')):
+            raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
+
+        # Set the search key to use for get_products
+        if obs_id == 'combined':
+            search_key = 'combined_lightcurve'
+        else:
+            search_key = 'lightcurve'
+        # Grabbing every single lightcurve that matches ObsID, instrument, and telescope passed by the
+        #  user (None by default) - we'll then sweep through whatever list is returned and narrow them down
+        matched_prods = self.get_products(search_key, obs_id, inst, telescope=telescope)
+
+        matched_prods: List[LightCurve]
+
+        # Checking for matching radii first - this will likely whittle down the LCs best of all. We have
+        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
+        #  an exact match to the other radius)
+        if inner_radius is not None:
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+        if outer_radius is not None:
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Now we match central coordinates
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord == self.default_coord).all()]
+
+        # Comparing the user-input energy bounds to the lightcurves, making sure we convert the input energy to keV
+        if lo_en is not None:
+            lo_en = lo_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[0] == lo_en]
+        if hi_en is not None:
+            hi_en = hi_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[1] == hi_en]
+
+        # And finally the time bin size matching
+        if time_bin_size is not None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.time_bin_size == time_bin_size]
+
+        if len(matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
+
+        return matched_prods
+
     def _get_lc_prod(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
                      inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None, hi_en: Quantity = None,
                      time_bin_size: Quantity = None, telescope: str = None) \
@@ -2393,9 +2485,8 @@ class BaseSource:
             search_key = 'combined_lightcurve'
         else:
             search_key = 'lightcurve'
-        # Grabbing every single lightcurve that matches ObsID and inst passed by the user (remember they could be
-        #  None values, indeed they are by default) - we'll then sweep through whatever list is returned and
-        #  narrow them down
+        # Grabbing every single lightcurve that matches ObsID, instrument, and telescope passed by the
+        #  user (None by default) - we'll then sweep through whatever list is returned and narrow them down
         all_lcs = self.get_products(search_key, obs_id, inst, telescope=telescope)
         # It was getting to the point where a list comprehension was less readable than a for loop, particularly
         #  with the pattern logic, so I changed it to this
