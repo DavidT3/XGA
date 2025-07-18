@@ -3865,6 +3865,9 @@ class BaseSource:
             print(crossover)
             print(self.name)
             reg_within = None
+        
+        del(crossover)
+        del(im)
 
         return reg_within
 
