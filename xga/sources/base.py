@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 13:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 09:11. Copyright (c) The Contributors
 
 import gc
 import os
@@ -546,6 +546,7 @@ class BaseSource:
         self._load_fits = load_fits
         self._load_products = load_products
         self._load_spectra = load_spectra
+        self._load_profiles = load_profiles
 
     # Firstly, we have all the properties
     @property
@@ -2275,33 +2276,44 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+        # Fetch all the matching profiles for the specified telescope
+        matched_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
 
-        if central_coord is None:
-            central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
+        matched_prods: List[BaseProfile1D]
 
+        # Matching the radii is going to take a maybe slightly (but practically not really) dangerous approach. The
+        #  radii passed here can either mean annulus bounds, or centres of those annuli. So we compare the passed
+        #  radii to both of those pieces of information for each profile.
         if radii is not None:
+            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
             radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
 
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False, telescope=telescope)
-        matched_prods = []
-        for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+            # First we'll check which profiles have the same number of radii as those that have
+            #  been passed in by the user
+            matched_prods = [m_prod for m_prod in matched_prods if len(radii) == len(m_prod.radii) or
+                             len(radii) == len(m_prod.annulus_bounds)]
+            # Then look for actual radii matches - we use the allclose() method here to check that the
+            #  radii of the annuli are all within a very small tolerance of the passed radii. This is
+            #  to head off problems we've had with float precision, the last digit of the float gets flipped
+            #  and then exact comparisons no longer work
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, m_prod.deg_radii, rtol=0, atol=RAD_MATCH_PRECISION)
+                             or np.allclose(radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
+                                            atol=RAD_MATCH_PRECISION)]
 
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
+        # Now onto matching to some of the other information that may have been passed to this method
+        # First the energy bounds, making sure we convert the input energy to keV
+        if lo_en is not None:
+            lo_en = lo_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[0] == lo_en]
+        if hi_en is not None:
+            hi_en = hi_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[1] == hi_en]
+
+        # The central coordinate is also checked against the current default coordinate if the
+        #  user didn't pass anything else in to override that
+        check_coord = self.default_coord if central_coord is None else central_coord
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.centre == check_coord).all()]
 
         return matched_prods
 
@@ -2927,8 +2939,8 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
-    def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
-                     extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
+                     just_obj: bool = True, telescope: str = None) -> Union[List[BaseProduct], List[BaseProfile1D]]:
         """
         This is the getter for the products data structure of Source objects. Passing a product type
         such as 'events' or 'images' will return every matching entry in the products data structure.
@@ -2941,7 +2953,7 @@ class BaseSource:
             or the other information that goes with it like ObsID and instrument.
         :param str telescope: Optionally, a specific telescope to search can be supplied.
         :return: List of matching products.
-        :rtype: List[BaseProduct]
+        :rtype: Union[List[BaseProduct], List[BaseProfile1D]]
         """
         def unpack_list(to_unpack: list):
             """
