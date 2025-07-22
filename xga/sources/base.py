@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 06:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:25. Copyright (c) The Contributors
 
 import gc
 import os
@@ -35,7 +35,7 @@ from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
     DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX, \
-    check_telescope_choices
+    check_telescope_choices, RAD_MATCH_PRECISION
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -546,6 +546,7 @@ class BaseSource:
         self._load_fits = load_fits
         self._load_products = load_products
         self._load_spectra = load_spectra
+        self._load_profiles = load_profiles
 
     # Firstly, we have all the properties
     @property
@@ -2275,33 +2276,44 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+        # Fetch all the matching profiles for the specified telescope
+        matched_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
 
-        if central_coord is None:
-            central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
+        matched_prods: List[BaseProfile1D]
 
+        # Matching the radii is going to take a maybe slightly (but practically not really) dangerous approach. The
+        #  radii passed here can either mean annulus bounds, or centres of those annuli. So we compare the passed
+        #  radii to both of those pieces of information for each profile.
         if radii is not None:
+            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
             radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
 
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False, telescope=telescope)
-        matched_prods = []
-        for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+            # First we'll check which profiles have the same number of radii as those that have
+            #  been passed in by the user
+            matched_prods = [m_prod for m_prod in matched_prods if len(radii) == len(m_prod.radii) or
+                             len(radii) == len(m_prod.annulus_bounds)]
+            # Then look for actual radii matches - we use the allclose() method here to check that the
+            #  radii of the annuli are all within a very small tolerance of the passed radii. This is
+            #  to head off problems we've had with float precision, the last digit of the float gets flipped
+            #  and then exact comparisons no longer work
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, m_prod.deg_radii, rtol=0, atol=RAD_MATCH_PRECISION)
+                             or np.allclose(radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
+                                            atol=RAD_MATCH_PRECISION)]
 
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
+        # Now onto matching to some of the other information that may have been passed to this method
+        # First the energy bounds, making sure we convert the input energy to keV
+        if lo_en is not None:
+            lo_en = lo_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[0] == lo_en]
+        if hi_en is not None:
+            hi_en = hi_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[1] == hi_en]
+
+        # The central coordinate is also checked against the current default coordinate if the
+        #  user didn't pass anything else in to override that
+        check_coord = self.default_coord if central_coord is None else central_coord
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.centre == check_coord).all()]
 
         return matched_prods
 
@@ -2334,64 +2346,63 @@ class BaseSource:
             were multiple matching products), or a single/list of AggregateLightCurve objects.
         :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
         """
-        # Set up search strings (for the product storage keys) for the inner and outer radii here. The default None
-        #  value just creates a key that looks for the 'ri' or 'ro' precursor to the value in the key, i.e. it doesn't
-        #  do anything - we also make sure that any radii passed by the user are converted properly
-        if inner_radius is not None and isinstance(inner_radius, Quantity):
-            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg').value)
-        elif inner_radius is not None and isinstance(inner_radius, str):
-            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg').value)
-        elif inner_radius is None:
-            inn_rad_search = "_ri"
-        else:
-            raise TypeError("You may only pass a quantity or a string as inner_radius")
+        # We check the validity of the user inputs, before trying to retrieve any products
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        elif inner_radius is not None:
+            raise TypeError("You may only pass a quantity, a string, or None as 'inner_radius'")
 
-        if outer_radius is not None and isinstance(outer_radius, Quantity):
-            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg').value)
-        elif outer_radius is not None and isinstance(outer_radius, str):
-            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg').value)
-        elif outer_radius is None:
-            out_rad_search = "_ro"
-        else:
-            raise TypeError("You may only pass a quantity or a string as outer_radius")
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        elif outer_radius is not None:
+            raise TypeError("You may only pass a quantity, a string, or None as 'outer_radius'")
 
-        # Check to make sure that the time bin size is a legal value, and set up a search string for the time bin
-        #  size in order to narrow down the lightcurves to just the ones that the user wants
         if time_bin_size is not None and not time_bin_size.unit.is_equivalent('s'):
             raise UnitConversionError("The 'time_bin_size' argument must be convertible to seconds.")
-        elif time_bin_size is None:
-            time_bin_search = '_timebin'
-        else:
-            time_bin_search = '_timebin{}'.format(time_bin_size.to('s').value)
 
-        # Setting up the energy band search string - if one bound is specified then the other has to be as well, I
-        #  didn't think it made sense otherwise
-        if any([lo_en is not None, hi_en is not None]) and not all([lo_en is not None, hi_en is not None]):
-            raise ValueError("The 'lo_en' and 'hi_en' values must either both be None, or both be an energy value.")
         if (lo_en is not None and not lo_en.unit.is_equivalent('keV')) or \
                 (hi_en is not None and not hi_en.unit.is_equivalent('keV')):
             raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
-        # If either is None then we know both are because we checked earlier
-        elif lo_en is None:
-            en_search = 'bound_'
-        elif lo_en is not None:
-            en_search = 'bound_{l}-{u}'.format(l=lo_en.to('keV').value, u=hi_en.to('keV').value)
 
+        # Set the search key to use for get_products
         if obs_id == 'combined':
             search_key = 'combined_lightcurve'
         else:
             search_key = 'lightcurve'
-        # Grabbing every single lightcurve that matches ObsID and inst passed by the user (remember they could be
-        #  None values, indeed they are by default) - we'll then sweep through whatever list is returned and
-        #  narrow them down
-        all_lcs = self.get_products(search_key, obs_id, inst, telescope=telescope)
-        # It was getting to the point where a list comprehension was less readable than a for loop, particularly
-        #  with the pattern logic, so I changed it to this
-        matched_prods = []
-        for lc in all_lcs:
-            if out_rad_search in lc.storage_key and inn_rad_search in lc.storage_key and \
-                    time_bin_search in lc.storage_key and en_search in lc.storage_key:
-                matched_prods.append(lc)
+        # Grabbing every single lightcurve that matches ObsID, instrument, and telescope passed by the
+        #  user (None by default) - we'll then sweep through whatever list is returned and narrow them down
+        matched_prods = self.get_products(search_key, obs_id, inst, telescope=telescope)
+
+        matched_prods: List[LightCurve]
+
+        # Checking for matching radii first - this will likely whittle down the LCs best of all. We have
+        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
+        #  an exact match to the other radius)
+        if inner_radius is not None:
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+        if outer_radius is not None:
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Now we match central coordinates
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord == self.default_coord).all()]
+
+        # Comparing the user-input energy bounds to the lightcurves, making sure we convert the input energy to keV
+        if lo_en is not None:
+            lo_en = lo_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[0] == lo_en]
+        if hi_en is not None:
+            hi_en = hi_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[1] == hi_en]
+
+        # And finally the time bin size matching
+        if time_bin_size is not None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.time_bin_size == time_bin_size]
 
         if len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
@@ -2927,8 +2938,8 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
-    def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
-                     extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
+                     just_obj: bool = True, telescope: str = None) -> Union[List[BaseProduct], List[BaseProfile1D]]:
         """
         This is the getter for the products data structure of Source objects. Passing a product type
         such as 'events' or 'images' will return every matching entry in the products data structure.
@@ -2941,7 +2952,7 @@ class BaseSource:
             or the other information that goes with it like ObsID and instrument.
         :param str telescope: Optionally, a specific telescope to search can be supplied.
         :return: List of matching products.
-        :rtype: List[BaseProduct]
+        :rtype: Union[List[BaseProduct], List[BaseProfile1D]]
         """
         def unpack_list(to_unpack: list):
             """
@@ -3293,52 +3304,51 @@ class BaseSource:
         else:
             raise TypeError("You may only pass a quantity or a string as outer_radius")
 
-        if over_sample is not None:
-            over_sample = int(over_sample)
-        if min_counts is not None:
-            min_counts = int(min_counts)
-        if min_sn is not None:
-            min_sn = float(min_sn)
-
-        # Sets up the extra part of the storage key name depending on if grouping is enabled
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        if outer_radius != 'region':
-            # The key under which these spectra will be stored
-            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
-                                                         gr=group_spec)
-        else:
-            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
-
-        # Adds on the extra information about grouping to the storage key
-        spec_storage_name += extra_name
+        # Checking spectrum generation inputs, and making sure they are in the right types
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
 
         if obs_id == 'combined':
-            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                          telescope=telescope)
+            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
         else:
-            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                          telescope=telescope)
+            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        # Checking for matching radii first - this will likely whittle down the spectra best of all. We have
+        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
+        #  an exact match to the other radius)
+        matched_prods = [m_prod for m_prod in matched_prods
+                         if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)
+                         and np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Now we match central coordinates
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
-        return matched_prods
-
+        return final_matched_prods
 
     def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
@@ -3415,7 +3425,7 @@ class BaseSource:
             raise NotImplementedError("Combined spectra are not implemented for XMM observations.")
 
         matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
-                                               min_counts, min_sn, over_sample, telescope)
+                                            min_counts, min_sn, over_sample, telescope)
 
         return matched_prods
 
@@ -3446,57 +3456,74 @@ class BaseSource:
         :return: An XGA AnnularSpectra object if there is an exact match.
         :rtype: AnnularSpectra
         """
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
+        # Fetch all the annular spectra for the specified telescope
+        # TODO THIS MAY HAVE TO BE ALTERED FOR COMBINED AND NON-COMBINED ANNULAR SPECTRA AT SOME POINT
+        matched_prods = self.get_products('combined_annular_spectrum', telescope=telescope)
 
-        # And if it was oversampled during generation, then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+        # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
+        #  here we're going to throw an error
+        if set_id is not None:
+            matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
 
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
+            # In this case there are no matching annular spectra
+            if len(matched_products) == 0:
+                # Sort out the message to show
+                if telescope is not None:
+                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
+                            "found.").format(si=set_id, t=telescope)
+                else:
+                    mess = "AnnularSpectra object with setID {si} cannot be found.".format(si=set_id, t=telescope)
+                raise NoProductAvailableError(mess)
+            # But if we get here then there is a match (and there can only be one)
+            else:
+                return matched_prods[0]
+
+        # If we get here, then the search for AnnularSpectra isn't as simple as just using a set identifier
+        # Like in _get_spec_prod, we'll match radii first to whittle down the possibilities - IF THE USER
+        #  SPECIFIED RADII
         if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
+            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
+            radii = self.convert_radius(radii, 'deg')
 
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_annular_spectrum',
-                                              extra_key=spec_storage_name, telescope=telescope)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
-                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
-            #  whatever the user passed in
-            matched_prods = [p for p in self.get_products('combined_annular_spectrum', telescope=telescope)
-                             if p.set_ident == set_id]
+            # First we'll check which annular spectra have the same number of radii as those that have
+            #  been passed in by the user
+            matched_prods = [m_prod for m_prod in matched_prods if len(m_prod.radii) == len(radii)]
+            # Then look for actual radii matches - we use the allclose() method here to check that the
+            #  radii of the spectra are all within a very small tolerance of the passed radii. This is
+            #  to head off problems we've had with float precision, the last digit of the float gets flipped
+            #  and then exact comparisons no longer work
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, m_prod.radii, rtol=0, atol=RAD_MATCH_PRECISION)]
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        # And we need to check to find that annular spectra have the right central coordinates for the
+        #  current state of the source
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
-        return matched_prods
+        return final_matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
                      radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 09:14. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -66,6 +66,7 @@ class ExtendedSource(BaseSource):
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
+    :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
@@ -75,7 +76,7 @@ class ExtendedSource(BaseSource):
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
                  telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
                  clean_obs=True, clean_obs_reg="custom", clean_obs_threshold=0.3, regen_merged: bool = True,
-                 load_profiles=False):
+                 load_profiles: bool = False):
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
@@ -117,6 +118,7 @@ class ExtendedSource(BaseSource):
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
