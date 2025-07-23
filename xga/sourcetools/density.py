@@ -42,9 +42,9 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                 conv_outer_radius: Quantity = "r500", conv_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
-        -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]],
-                 Union[Dict[str, str], Dict[str, list]], List[str]]:
+                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
+                xspec_timeout: Quantity = Quantity(300, 's')) \ 
+        -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]], Union[Dict[str, str], Dict[str, list]], List[str]]:
     """
     An internal function which exists because all the density profile methods that I have planned
     need the same product checking and setup steps. This function checks that all necessary
@@ -91,7 +91,9 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
-    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
+    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
+        to use.
+    :param Quantity xspec_timeout: How long xspec should run for before timing out. 
     :return: The source object(s)/sample that was passed in, a dictionary of an array of the
         calculated conversion factors to take the count-rate/volume to a number density of hydrogen
         for each telescope, the parsed obs_id variable, and the parsed inst variable.
@@ -223,7 +225,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         single_temp_apec(sources, conv_outer_radius, conv_inner_radius, abund_table=abund_table,
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                          over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
-                         telescope=telescope)
+                         telescope=telescope,
+                         timeout=xspec_timeout)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
