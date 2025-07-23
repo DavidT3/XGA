@@ -215,6 +215,7 @@ def xspec_call(xspec_func):
             warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
+        err_list = []
         for src_repr in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
@@ -228,11 +229,17 @@ def xspec_call(xspec_func):
             ann_obs_order = {}
             set_ident = {}
 
-            for res_set in results[src_repr]:
+            erred = False
+
+            for indi, res_set in enumerate(results[src_repr]):
                 # res_set = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
+                    print(res_set)
                     for err in res_set[2]:
-                        raise XSPECFitError(err + " - {s}".format(s=s.name))
+                        print('OI ERROR HERE', err, s.name)
+                        erred = True
+                        err_list.append(s.name)
+                    raise XSPECFitError(f"- {s.name}")
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
 
