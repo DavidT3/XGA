@@ -367,6 +367,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     # If they do not already exist, these commands should generate them.
     sources = evtool_image(sources, lo_en, hi_en, combine_obs=combine_obs)
 
+    expmap_cmd = ("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em} "
+                  "withweights=yes withdetmaps=yes; "
+                  "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
+                  "mv * ../; cd ..; rm -r {d}")
+
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, (list, BaseSample)):
@@ -444,10 +449,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 #  terminal, which causes 'device not available' errors
                 # withweights=yes will calculate the effective on axis exposure
                 # withdetmaps=yes will exclude bad pixels when calculating exposure
-                cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em} "
-                            "withweights=yes withdetmaps=yes; "
-                            "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
-                            "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
+                cmds.append(expmap_cmd.format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
                                                                 u=hi_en.value, em=exp_map, d=dest_dir))
 
                 # This is the products final resting place, if it exists at the end of this command
@@ -489,12 +491,9 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             os.mkdir(dest_dir)
 
             exp_map = "{r}_{l}-{u}keVexpmap.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
-
             # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
             #  terminal, which causes 'device not available' errors
-            cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
-                        "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
-                        "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
+            cmds.append(expmap_cmd.format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
                                                             u=hi_en.value, em=exp_map, d=dest_dir))
 
             # This is the products final resting place, if it exists at the end of this command
