@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 11:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 13:19. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -227,7 +227,6 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
-                print(res_set)
                 # res_set = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
