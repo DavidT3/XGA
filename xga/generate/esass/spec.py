@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 10:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 11:02. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -270,6 +270,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 group_scale = ''
 
             # Fills out the srctool command to make the main and background spectra
+            # WE NOTE THAT, BECAUSE WE CREATE EVENT LIST SYMLINKS TO SOLVE ISSUE #1400, THE EVENT LIST PATHS
+            #  ARE JUST THE BASE FILENAME OF THE EVENT LIST
             if isinstance(source, ExtendedSource):
                 try:
                     if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
@@ -278,20 +280,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     else:
                         # We only need the image path for extended source generation 
                         im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
-                            telescope='erosita')
+                                               telescope='erosita')
                     # We have a slightly different command for extended and point sources
-                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
-                                                    i=inst_no, ts=t_step, em=im.path, et=et)
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=os.path.basename(evt_list.path), sc=coord_str,
+                                                       reg=src_reg_str, i=inst_no, ts=t_step, em=im.path, et=et)
                 except:
                     raise ValueError(f"it was this sources {source.name}")
 
             else:
-                s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=evt_list.path, sc=coord_str, reg=src_reg_str,
-                                                i=inst_no, ts=t_step)
+                s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=os.path.basename(evt_list.path), sc=coord_str,
+                                                   reg=src_reg_str, i=inst_no, ts=t_step)
 
             # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
-            sb_cmd_str = bckgr_srctool_cmd.format(ef=evt_list.path, sc=coord_str, breg=bsrc_reg_str,
-                                                i=inst_no, ts=t_step*4)
+            sb_cmd_str = bckgr_srctool_cmd.format(ef=os.path.basename(evt_list.path), sc=coord_str, breg=bsrc_reg_str,
+                                                  i=inst_no, ts=t_step * 4)
             # Filling out the grouping command
             grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
 
