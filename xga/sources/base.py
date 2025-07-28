@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 12:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 12:58. Copyright (c) The Contributors
 
 import gc
 import os
@@ -4588,7 +4588,12 @@ class BaseSource:
             # from the get_spectra method
             specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
                                      min_sn, over_sample, telescope=telescope)
-        elif stacked_spectra:
+        elif stacked_spectra and telescope in ['erass', 'erosita'] and len(self.obs_ids[telescope]) == 1:
+            # This is a special case, and may change in the future if we alter how single-ObsID, stacked instrument
+            #  products are stored (see issue #1406) - here there is one eROSITA ObsID but combined instruments
+            specs = self.get_spectra(outer_radius, None, 'combined', inner_radius, group_spec,
+                                     min_counts, min_sn, over_sample, telescope=telescope)
+        else:
             # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
             specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec,
                                               min_counts, min_sn, over_sample, telescope=telescope)
