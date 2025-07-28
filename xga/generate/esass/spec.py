@@ -231,7 +231,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                     central_coord=bkg_coord, bkg_reg=True,
                                                     rand_ident=rand_ident,
                                                     rot_angle=bkg_rot_angle)
-                    print(b_reg)
 
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
@@ -317,8 +316,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # TODO allow user to chose tstep and xgrid
             bsrc_reg_str = b_reg
-            print('bsrc_reg_str')
-            print(bsrc_reg_str)
+
             # Defining the grouping keywords
             if group_spec and min_counts is not None:
                 group_type = 'min'
@@ -643,7 +641,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
-    print(sources_cmds)
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
