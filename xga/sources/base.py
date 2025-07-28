@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 12:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 12:52. Copyright (c) The Contributors
 
 import gc
 import os
@@ -2649,7 +2649,7 @@ class BaseSource:
 
                 # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
                 #  together - merged products do get a 'combined' prefix on their product type key though
-                if obs_id == "combined" or inst == 'combined':
+                if obs_id == "combined":
                     p_type = "combined_" + p_type
 
                 if tel not in self.telescopes:
@@ -4588,7 +4588,7 @@ class BaseSource:
             # from the get_spectra method
             specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
                                      min_sn, over_sample, telescope=telescope)
-        else:
+        elif stacked_spectra:
             # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
             specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec,
                                               min_counts, min_sn, over_sample, telescope=telescope)
