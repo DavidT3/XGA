@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 12:28. Copyright (c) The Contributors
 
 import gc
 import os
@@ -2649,7 +2649,7 @@ class BaseSource:
 
                 # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
                 #  together - merged products do get a 'combined' prefix on their product type key though
-                if obs_id == "combined":
+                if obs_id == "combined" or inst == 'combined':
                     p_type = "combined_" + p_type
 
                 if tel not in self.telescopes:
@@ -3384,14 +3384,14 @@ class BaseSource:
         """
 
         matched_prods = self._get_spec_prod(outer_radius, obs_id, inst, inner_radius, group_spec,
-                                               min_counts, min_sn, over_sample, telescope)
+                                            min_counts, min_sn, over_sample, telescope)
 
         return matched_prods
 
     def get_combined_spectra(self, outer_radius: Union[str, Quantity], inst: str = None,
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+                             inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                             min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                             telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
         """
         A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
         Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
@@ -4552,7 +4552,7 @@ class BaseSource:
                     stacked_spectra: bool = False):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
-        parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
+        parameter of a given region-model combination or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
@@ -4569,7 +4569,7 @@ class BaseSource:
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default, this is zero arcseconds, resulting in a
             circular spectrum.
         :param str par: The name of the parameter you want a result for.
-        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param bool group_spec: Whether the spectra fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
