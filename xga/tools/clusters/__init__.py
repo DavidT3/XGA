@@ -2,4 +2,3 @@
 #  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 14:51. Copyright (c) The Contributors
 
 from .LT import luminosity_temperature_pipeline
-from .LT import luminosity_temperature_pipeline_new
