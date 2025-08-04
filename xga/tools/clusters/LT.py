@@ -245,7 +245,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # Check whether the specified core_excised value matches that of the scaling relation
     if core_excised == ScalingRelation.core_excised:
         print("Your choice of 'core_excised' matches the ScalingRelation.")
-    else:
+    if core_excised != ScalingRelation.core_excised:
         raise TypeError("Mismatch: Your choice of 'core_excised' for iteration does not match the ScalingRelation.")
 
     # Trying to determine the targeted overdensity based on the name of the scaling relation y-axis label

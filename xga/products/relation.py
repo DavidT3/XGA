@@ -283,6 +283,7 @@ class ScalingRelation:
         self._third_dim_name = third_dim_name
         # !!! self.core_excises = False
 
+    
     @property
     def core_excised(self) -> bool:
         """
