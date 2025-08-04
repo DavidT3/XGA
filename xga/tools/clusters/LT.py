@@ -23,18 +23,19 @@ from xga.xspec import single_temp_apec
 LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
 
 
-# !!! A duplicate of the old LT pipeline
-# !!! BUT here the "core_excised" parameter controls whether a core-excised temperature is used 
-#     during the iterations. Previously, it only affected the *final* temperature, with all iterations 
-#     assuming a core-included temperature.
+# !!! Here the "core_excised" parameter controls whether a core-excised temperature is used 
+# during the iterations. Previously, it only affected the *final* temperature, with all iterations 
+# assuming a core-included temperature.
 # Didn't modify the original LT pipeline directly, since we likely need to run tests on other missions 
 # before making major changes to that function.
+# !!! Another new parameter is "core_size" which define the size of the cluster core; set it as 0.15xR_vir by default
 def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = True, freeze_nh: bool = True, freeze_met: bool = True,
-                                    freeze_temp: bool = False, start_temp: Quantity = Quantity(3.0, 'keV'),
+                                    core_excised: bool = True, core_size: float = 0.15, freeze_nh: bool = True, 
+                                    freeze_met: bool = True, freeze_temp: bool = False, 
+                                    start_temp: Quantity = Quantity(3.0, 'keV'),
                                     temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
                                     lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
                                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
@@ -244,7 +245,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
     # Check whether the specified core_excised value matches that of the scaling relation
     if core_excised == rad_temp_rel.core_excised or core_excised == temp_lum_rel.core_excised:
-        print("Your choice of 'core_excised' matches the ScalingRelation.")
+        print("Your choice of 'core_excised' matches the RT/LT ScalingRelation.")
+        if core_size != rad_temp_rel.core_size:
+            raise TypeError("Mismatch: Your choice of 'core_size' does not match the RT ScalingRelation.")
+        if core_size != temp_lum_rel.core_size:
+            raise TypeError("Mismatch: Your choice of 'core_size' does not match the LT ScalingRelation.")
+        else:
+            print("Your choice of 'core_size' matches the RT/LT ScalingRelation.")
     else:
         raise TypeError("Mismatch: Your choice of 'core_excised' for iteration does not match the ScalingRelation.")
 
