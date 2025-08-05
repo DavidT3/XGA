@@ -3965,10 +3965,13 @@ class BaseSource:
             mask_image = self.get_products("image", obs_id, telescope=telescope)[0]
 
         pprint.pprint(self._products)
-        pprint.pprint(mask_image)
+        pprint.pprint(mask_image.shape)
+        mask_image.view(out_path='/home/ko23871/x-ray_data_analysis/src/checks/mask_check.png')
+        pprint.pprint(mask_image.shape)
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-
+        
+        raise
         # If the masks are None, then they are set to an array of zeros
         if mask is None:
             mask = np.zeros(mask_image.shape)
