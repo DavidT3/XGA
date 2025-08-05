@@ -304,7 +304,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                         freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
                                         temp_hi_en=temp_hi_en, num_cores=num_cores, stacked_spectra=stacked_spectra,
                                         telescope=src_telescopes)
-
+    print("temp_profs")
+    print(temp_profs)
     # We are reorganising this temp_profs output so it is easier to cycle through in later functions
     # temp_prof_dict will have sources as keys, then a dictionary value, this dictionary has
     # telescope keys with values that are the profile object, ie. {src1: {'xmm' : Profile}}
@@ -316,7 +317,9 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             # temp_profs is of the form {'xmm': [Profile, Profile, etc.]}
             src_dict[tel] = temp_profs[tel][p_ind]
         temp_prof_dict[str(cut_sources[p_ind])] = src_dict
-
+    
+    print('temp_prof_dict')
+    print(temp_prof_dict)
     # Now we take only the sources that have successful 3D temperature profiles. 
     # We do the temperature profile stuff first because its more difficult, and why should we waste 
     # time on a density profile if the temperature profile cannot even be measured.
