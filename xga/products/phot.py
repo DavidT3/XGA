@@ -1402,7 +1402,8 @@ class Image(BaseProduct):
              manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
              radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
              stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None, custom_title: str = None):
+             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None, custom_title: str = None,
+             out_path = None):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -1458,6 +1459,10 @@ class Image(BaseProduct):
         cbar = plt.colorbar(ax.images[0])
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
+
+        if out_path is not None:
+            fig.savefig(out_path)
+
         # Display the image
         plt.show()
 
