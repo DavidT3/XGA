@@ -2803,8 +2803,8 @@ class RateMap(Image):
         # Finally, we unload the image and exposure map data that was used to build the ratemap array, as we
         #  are less likely to need those data from now on, and we can save some memory. Note that we
         #  don't unload the image/expmap headers though
-        # self.image.unload(unload_data=True, unload_header=False)
-        # self.expmap.unload(unload_data=True, unload_header=False)
+        self.image.unload(unload_data=True, unload_header=False)
+        self.expmap.unload(unload_data=True, unload_header=False)
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -3310,7 +3310,6 @@ class RateMap(Image):
             be removed.
         :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
         """
-        return None
         # Call the Image-implemented unload method first
         super().unload(unload_data, unload_header)
 
