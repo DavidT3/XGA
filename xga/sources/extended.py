@@ -978,7 +978,7 @@ class GalaxyCluster(ExtendedSource):
                                 yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
                                 hi_en: Quantity = Quantity(2.0, 'keV')):
         """
-        A method that generates and displays brightness profile objects for this galaxy cluster. Interloper
+        A method that generates brightness profile objects for this galaxy cluster. Interloper
         sources are excluded, and any fits performed to pre-existing brightness profiles which are being
         viewed will also be displayed. The profile will be generated using a RateMap between the energy bounds
         specified by lo_en and hi_en.
@@ -1087,6 +1087,22 @@ class GalaxyCluster(ExtendedSource):
                                 min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
                                 yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
                                 hi_en: Quantity = Quantity(2.0, 'keV')):
+        """
+        A wrapper for generate_brightness profile that the plots the result.
+
+        :param str reg_type: The region in which to view the radial brightness profile.
+        :param str telescope: Name of the telescope to view the brightness profile for.
+        :param Quantity central_coord: The central coordinate of the brightness profile.
+        :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+        :param float/int min_snr: The minimum signal-to-noise allowed for each radial bin. This is 0 by
+            default, which disables any automatic re-binning.
+        :param tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x-axis, default is log.
+        :param str yscale: The scaling to be applied to the y-axis, default is log.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param Quantity lo_en: The lower energy bound of the RateMap to generate the profile from.
+        :param Quantity hi_en: The upper energy bound of the RateMap to generate the profile from.
+        """
 
         sb_profile, draw_rads = self.generate_brightness_profile(reg_type, telescope, central_coord, pix_step,
                                 min_snr, figsize, xscale,
