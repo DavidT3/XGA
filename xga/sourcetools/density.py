@@ -42,9 +42,10 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                 conv_outer_radius: Quantity = "r500", conv_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
-                xspec_timeout: Quantity = Quantity(300, 's')) \ 
-        -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]], Union[Dict[str, str], Dict[str, list]], List[str]]:
+                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None, 
+                xspec_timeout: Quantity = Quantity(300, 's')) \
+        -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]],
+                 Union[Dict[str, str], Dict[str, list]], List[str]]:
     """
     An internal function which exists because all the density profile methods that I have planned
     need the same product checking and setup steps. This function checks that all necessary
@@ -224,9 +225,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         # calling this function will also make sure that they are generated
         single_temp_apec(sources, conv_outer_radius, conv_inner_radius, abund_table=abund_table,
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
-                         telescope=telescope,
-                         timeout=xspec_timeout)
+                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra, 
+                         telescope=telescope, timeout=xspec_timeout)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
