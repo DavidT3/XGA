@@ -258,7 +258,9 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
                                                        spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins,
                                                        stacked_spectra, src_telescopes)
-    
+    print("has_global_temp")
+    print(has_glob_temp)
+
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
     # This checks and sets up a predictable structure for the models needed for this measurement.
