@@ -139,7 +139,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             # Gets the set of radii for this particular source into a variable
             cur_radii = radii[tel][src_ind]
-            print(cur_radii)
 
             # This will fetch the annular_spec, get_annular_spectra will throw an error if no matches
             #  are found, though as we have run spectrum_set that shouldn't happen

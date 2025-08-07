@@ -75,12 +75,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             warn("Spectrum stacking is not currently supported for Chandra, and so combined spectra will not be "
                  "used for these XSPEC fits.", stacklevel=2)
             # Make sure we have Chandra spectra generated, so that we can fit them
-
-            # TODO DEAL WITH THIS
-            # Currently have to raise an error, because the name of the spectrum generation function, and how it is
-            #  called, are not currently finalised
-            # warn("Spectrum generation appears to be working for Chandra currently, but the actual command to call "
-            #      "has not been finalised, so this will need revisiting and updating later")
+            
             sources = specextract_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                                            num_cores)
 

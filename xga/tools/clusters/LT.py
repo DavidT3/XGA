@@ -23,12 +23,6 @@ from xga.xspec import single_temp_apec
 LT_REQUIRED_COLS = ['ra', 'dec', 'name', 'redshift']
 
 
-# !!! Here the "core_excised" parameter controls whether a core-excised temperature is used 
-# during the iterations. Previously, it only affected the *final* temperature, with all iterations 
-# assuming a core-included temperature.
-# Didn't modify the original LT pipeline directly, since we likely need to run tests on other missions 
-# before making major changes to that function.
-# !!! Another new parameter is "core_size" which define the size of the cluster core; set it as 0.15xR_vir by default
 def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Quantity, use_peak: bool = False,
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,

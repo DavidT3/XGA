@@ -119,8 +119,6 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             except NoProductAvailableError:
                 pass
             
-            ##### source.get_images(obs_id, inst, telescope='chandra')
-
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
@@ -154,7 +152,6 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             elif img_exist == False:
                 xygrid_dir = ""
 
-            print("xygrid_dir", xygrid_dir)
             # Skip generation if files already exist.
             # if all(os.path.exists(f) for f in [image_file, expmap_file, ratemap_file]):
             #     continue
