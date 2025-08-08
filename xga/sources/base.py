@@ -2702,6 +2702,8 @@ class BaseSource:
                     print('this line should happen')
                     self._products[tel][obs_id][inst][extra_key][p_type] = po
                     print(self._products[tel][obs_id][inst][extra_key][p_type])
+                    print('po.telescope')
+                    print(po.telescope)
 
                 elif extra_key is None and obs_id == "combined":
                     self._products[tel][obs_id][inst][p_type] = po
