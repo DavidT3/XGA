@@ -387,7 +387,7 @@ def xspec_call(xspec_func):
                         print('WHAT IS TEL - {t}'.format(t=tel))
                         # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                         #  the last spectra that was opened in the loop
-                        ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
+                        ann_spec = s.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
                         try:
                             print('adding fit data')
                             print('ann_spec._num_ann')
