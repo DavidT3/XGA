@@ -173,6 +173,8 @@ def xspec_call(xspec_func):
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
         script_list, paths, cores, run_type, src_inds, radii, timeout = xspec_func(*args, **kwargs)
+        print("radii in xspec")
+        print(radii)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
