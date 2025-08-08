@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/07/2025, 10:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/08/2025, 10:39. Copyright (c) The Contributors
 
 import json
 import os
@@ -353,6 +353,8 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
     :return: A list of telescope names (or a single name) that are valid and that have made it through the checks.
     :rtype: List[str]
     """
+    print("The passed telescope is", telescope)
+
     # If the telescope is set to None then the function will search all the telescopes for matching data, determining
     #  which are available by grabbing all the keys from the CENSUS dictionary
     if telescope is None:
@@ -370,6 +372,7 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
     else:
         telescope = [t.lower() for t in telescope]
 
+    print("The telescope at this point is", telescope)
     # Here we check if ANY of the passed telescopes aren't actually recognised by XGA, as I want to tell them
     #  that they have either made a typo or are labouring under a misconception about which telescopes are
     #  supported
