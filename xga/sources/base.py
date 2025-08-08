@@ -2699,6 +2699,7 @@ class BaseSource:
                 elif extra_key is not None and obs_id == "combined":
                     if extra_key not in self._products[tel][obs_id][inst]:
                         self._products[tel][obs_id][inst][extra_key] = {}
+                    print('this line should happen')
                     self._products[tel][obs_id][inst][extra_key][p_type] = po
 
                 elif extra_key is None and obs_id == "combined":
@@ -2918,6 +2919,7 @@ class BaseSource:
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
                 elif isinstance(po, BaseProfile1D) and obs_id == 'combined' and update_inv:
+                    print('in update products for baseprofile1D')
                     inven = pd.read_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name),
                                         dtype=str)
 
