@@ -289,6 +289,9 @@ def xspec_call(xspec_func):
                                               "_".join(radii[src_repr][tel].value.astype(str)) + second_part)
                                 ann_specs = s.get_products("combined_annular_spectrum",
                                                            extra_key=ann_sp_key, telescope=tel)
+                                print('ann_sp_key')
+                                print(ann_sp_key)
+
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
                                                                 "this is the developers fault, not yours.")
