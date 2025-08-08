@@ -1784,6 +1784,11 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+        print('[s.annulus_ident for s in spectra]')
+        print([s.annulus_ident for s in spectra])
+        print('[s.path for s in spectra]')
+        print([s.path for s in spectra])
+
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
                              "Spectra with IDs {p} have been "
