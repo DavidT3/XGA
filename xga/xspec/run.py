@@ -235,6 +235,8 @@ def xspec_call(xspec_func):
                         raise XSPECFitError(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
+                print('tel in xspec call')
+                print(tel)
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     print("res_set[0]")
