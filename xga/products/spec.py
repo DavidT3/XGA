@@ -2559,9 +2559,11 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
+            print('erroring here')
             raise ValueError("The dictionary passed in with the fit results in it does not have the same"
                              " number of entries as there are annuli.")
         elif len(lums) != self._num_ann:
+            print('erroring here instead')
             raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
                              " number of entries as there are annuli.")
 
