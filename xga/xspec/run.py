@@ -392,6 +392,8 @@ def xspec_call(xspec_func):
                             print('adding fit data')
                             print('ann_spec._num_ann')
                             print(ann_spec._num_ann)
+                            print('ann_spec.telescope')
+                            print(ann_spec.telescope)
                             ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                     ann_obs_order[tel])
                             print('added fit data')
