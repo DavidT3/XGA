@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 12:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/08/2025, 10:47. Copyright (c) The Contributors
 
 import gc
 import os
@@ -204,6 +204,13 @@ class BaseSource:
             if not (gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg')):
                 # Failing this condition means we won't even look for eRASS data for this source
                 telescope = [t for t in telescope if t != eros_rel_name]
+
+                # And we have to check that there is at least one telescope remaining, otherwise we'll get some
+                #  quite strange errors later on!
+                if len(telescope) == 0:
+                    raise NoValidObservationsError("Source {s} is outside the eRASS1:DE "
+                                                   "footprint, and no other telescopes "
+                                                   "were specified.".format(s=self.name, t=', '.join(telescope)))
 
                 # We also have to change the search_distance argument to match
                 if search_distance is not None and eros_rel_name in search_distance:
