@@ -1784,10 +1784,6 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
-        print('[s.annulus_ident for s in spectra]')
-        print([s.annulus_ident for s in spectra])
-        print('[s.path for s in spectra]')
-        print([s.path for s in spectra])
 
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
@@ -2564,16 +2560,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
-            print('len(tab_line)')
-            print(len(tab_line))
-            print(self._num_ann)
-            print('self._num_ann')
-
-            print('erroring here')
             raise ValueError("The dictionary passed in with the fit results in it does not have the same"
                              " number of entries as there are annuli.")
         elif len(lums) != self._num_ann:
-            print('erroring here instead')
             raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
                              " number of entries as there are annuli.")
 

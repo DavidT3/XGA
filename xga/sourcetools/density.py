@@ -233,8 +233,6 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
             for tel in src_telescopes:
                 try:
                     if tel == 'erosita':
-                        print('stacked_spectra')
-                        print(stacked_spectra)
                         # A temporary temperature variable
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
                                                         conv_inner_radius, group_spec, min_counts, min_sn,

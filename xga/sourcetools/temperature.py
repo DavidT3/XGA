@@ -700,7 +700,6 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if len(sources) == 1:
         sources = sources[0]
 
-    print("in min_cnt_proj_temp_prof")
     # This runs the fitting (and generation, if that has not already occurred) of the annular spectra.
     single_temp_apec_profile(sources, all_rads, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, one_rmf=one_rmf, num_cores=num_cores, abund_table=abund_table,
@@ -815,8 +814,6 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                           psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
                                           min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
                                           num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
-        print("ann_rads")
-        print(ann_rads)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
@@ -840,12 +837,10 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 # The normalisation profile(s) from the fit that produced the projected temperature profile.
                 apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
                                                             min_sn, over_sample, telescope=tel)
-                print("profiles here")
 
             except NoProductAvailableError:
                 # warn("{s} doesn't have a matching projected temperature profile, skipping.")
                 all_3d_temp_profs[tel][src_ind] = None
-                print("no profiles!")
                 continue
 
             # We need to check if a matching 3D temperature profile has already been generated, as then we
@@ -861,14 +856,10 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 
             obs_id = 'combined'
             inst = 'combined'
-            print(tel)
-            print("len(proj_temp)")
-            print(len(proj_temp))
             # There are reasons that a projected temperature profile can be considered unusable, so we must check. Also
             #  make sure to only use those profiles that have a minimum of 4 annuli. The len operator retrieves the number
             #  of radial data points a profile has
             if proj_temp.usable and len(proj_temp) > 3:
-                print("In here")
                 # Also make an Emission Measure profile, used for weighting the contributions from different
                 #  shells to annuli
                 em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,

@@ -89,7 +89,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             try:
                 if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
-                    print(inst)
                     check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
                                             min_counts, min_sn, telescope='erosita')
 

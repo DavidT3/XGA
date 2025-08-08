@@ -173,8 +173,6 @@ def xspec_call(xspec_func):
         # run_type describes the type of XSPEC script being run, for instance a fit or a fakeit run to measure
         #  countrate to luminosity conversion constants
         script_list, paths, cores, run_type, src_inds, radii, timeout = xspec_func(*args, **kwargs)
-        print("radii in xspec")
-        print(radii)
         src_lookup = {repr(src): src_ind for src_ind, src in enumerate(sources)}
         rel_src_repr = [repr(sources[src_ind]) for src_ind in src_inds]
 
@@ -235,12 +233,8 @@ def xspec_call(xspec_func):
                         raise XSPECFitError(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
-                print('tel in xspec call')
-                print(tel)
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
-                    print("res_set[0]")
-                    print(res_set[0])
                     with FITS(res_set[0]) as res_table:
                         global_results = res_table["RESULTS"][0]
                         model = global_results["MODEL"].strip(" ")
@@ -291,8 +285,6 @@ def xspec_call(xspec_func):
                                               "_".join(radii[src_repr][tel].value.astype(str)) + second_part)
                                 ann_specs = s.get_products("combined_annular_spectrum",
                                                            extra_key=ann_sp_key, telescope=tel)
-                                print('ann_sp_key')
-                                print(ann_sp_key)
 
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
@@ -384,27 +376,18 @@ def xspec_call(xspec_func):
 
             if ann_fit:
                 for tel in ann_results:
-                    print('WHAT IS TEL - {t}'.format(t=tel))
                     # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                     #  the last spectra that was opened in the loop
                     ann_spec = s.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
                     try:
-                        print('adding fit data')
-                        print('ann_spec._num_ann')
-                        print(ann_spec._num_ann)
-                        print('ann_spec.telescope')
-                        print(ann_spec.telescope)
                         ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                 ann_obs_order[tel])
-                        print('added fit data')
 
                         # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                         #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
                         #  generate a Tx profile automatically
                         if model == "constant*tbabs*apec":
                             temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
-                            print('ann_spec.storage_key')
-                            print(ann_spec.storage_key)
                             s.update_products(temp_prof)
 
                             # Normalisation profiles can be useful for many things, so we generate them too
