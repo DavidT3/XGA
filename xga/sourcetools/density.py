@@ -43,7 +43,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                 conv_outer_radius: Quantity = "r500", conv_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
                 num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None, 
-                xspec_timeout: Quantity = Quantity(300, 's')) \
+                timeout: Quantity = Quantity(300, 's')) \
         -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]],
                  Union[Dict[str, str], Dict[str, list]], List[str]]:
     """
@@ -94,7 +94,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         instead use individual spectra for an ObsID. The default is False.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
         to use.
-    :param Quantity xspec_timeout: How long xspec should run for before timing out. 
+    :param Quantity timeout: How long xspec should run for before timing out. 
     :return: The source object(s)/sample that was passed in, a dictionary of an array of the
         calculated conversion factors to take the count-rate/volume to a number density of hydrogen
         for each telescope, the parsed obs_id variable, and the parsed inst variable.
@@ -226,7 +226,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         single_temp_apec(sources, conv_outer_radius, conv_inner_radius, abund_table=abund_table,
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                          over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra, 
-                         telescope=telescope, timeout=xspec_timeout)
+                         telescope=telescope, timeout=timeout)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
@@ -393,7 +393,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           conv_inner_radius: Quantity = Quantity(0, 'arcsec'), inv_abel_method: str = None,
                           num_cores: int = NUM_CORES, show_warn: bool = True, stacked_spectra: bool = False,
                           telescope: Union[str, List[str]] = None,
-                          xspec_timeout: Quantity = Quantity(300, "s")) -> Dict[str, List[Union[GasDensity3D, None]]]:
+                          timeout: Quantity = Quantity(300, "s")) -> Dict[str, List[Union[GasDensity3D, None]]]:
     """
     A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile
     is fit with a model and an inverse abel transform is used to infer the 3D count-rate/volume
@@ -483,7 +483,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
         case density profiles will be produced from all telescopes associated with a source.
-    :parma Quantity xspec_timeout: Timeout argument for xspec functions.
+    :parma Quantity timeout: Timeout argument for xspec functions.
     :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
         names. The values are lists with one entry per source, even if the source in question doesn't have
         that telescope associated or the profile construction process failed.
@@ -494,7 +494,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     sources, conv_factors, obs_id, inst, telescope = _dens_setup(sources, abund_table, lo_en, hi_en, group_spec,
                                                                  min_counts, min_sn, over_sample, obs_id, inst,
                                                                  conv_temp, conv_outer_radius, conv_inner_radius,
-                                                                 num_cores, stacked_spectra, telescope, xspec_timeout)
+                                                                 num_cores, stacked_spectra, telescope, timeout)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius
     # values
@@ -647,7 +647,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                   conv_outer_radius: Quantity = "r500", conv_inner_radius: Quantity = Quantity(0, 'arcsec'),
                   num_cores: int = NUM_CORES, stacked_spectra: bool = False,
                   telescope: Union[str, List[str]] = None,
-                  xspec_timeout: Quantity = Quantity(300, "s") ) -> Dict[str, List[Union[GasDensity3D, None]]]:
+                  timeout: Quantity = Quantity(300, "s") ) -> Dict[str, List[Union[GasDensity3D, None]]]:
     """
     A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile inverse
     abel transformed, thus inferring the 3D count-rate/volume profile. Then a conversion factor calculated from
@@ -753,7 +753,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
         case density profiles will be produced from all telescopes associated with a source.
-    :parma Quantity xspec_timeout: Timeout argument for xspec functions.
+    :parma Quantity timeout: Timeout argument for xspec functions.
     :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
         names. The values are lists with one entry per source, even if the source in question doesn't have
         that telescope associated or the profile construction process failed.
@@ -764,7 +764,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     sources, conv_factors, obs_id, inst, telescope = _dens_setup(sources, abund_table, lo_en, hi_en, group_spec,
                                                                  min_counts, min_sn, over_sample, obs_id, inst,
                                                                  conv_temp, conv_outer_radius, conv_inner_radius,
-                                                                 num_cores, stacked_spectra, telescope, xspec_timeout)
+                                                                 num_cores, stacked_spectra, telescope, timeout)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
