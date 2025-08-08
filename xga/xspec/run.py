@@ -387,9 +387,10 @@ def xspec_call(xspec_func):
                         #  the last spectra that was opened in the loop
                         ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
                         try:
-                            print(ann_results[tel])
+                            print('adding fit data')
                             ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                     ann_obs_order[tel])
+                            print('added fit data')
 
                             # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                             #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
