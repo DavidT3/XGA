@@ -393,6 +393,8 @@ def xspec_call(xspec_func):
                             #  generate a Tx profile automatically
                             if model == "constant*tbabs*apec":
                                 temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
+                                print('ann_spec.storage_key')
+                                print(ann_spec.storage_key)
                                 s.update_products(temp_prof)
 
                                 # Normalisation profiles can be useful for many things, so we generate them too
