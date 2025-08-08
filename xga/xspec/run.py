@@ -388,8 +388,8 @@ def xspec_call(xspec_func):
                         ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
                         try:
                             print('adding fit data')
-                            print('ann_results[tel]')
-                            print(ann_results[tel])
+                            print('ann_spec._num_ann')
+                            print(ann_spec._num_ann)
                             ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                     ann_obs_order[tel])
                             print('added fit data')
