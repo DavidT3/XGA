@@ -689,7 +689,7 @@ ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).c
 ciao_out = ciao_out.decode("UTF-8")
 ciao_err = ciao_err.decode("UTF-8")
 
-if "ciaover: command not found" in ciao_err:
+if "not found" in ciao_err:
     warn("No CIAO installation detected on system, "
             "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
 else:
