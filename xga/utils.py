@@ -711,9 +711,17 @@ if CIAO_VERSION is not None and any('not installed' in s.lower() for s in split_
     warn("A Chandra CALDB installation cannot be identified on your system, and as such "
          "Chandra data cannot be processed.", stacklevel=2)
 elif CIAO_VERSION is not None:
-    # Strip out the CALDB version
-    CALDB_VERSION = split_out[5].split(':')[-1].strip()
-    CALDB_AVAIL = True
+    try:
+        # Strip out the CALDB version
+        CALDB_VERSION = split_out[5].split(':')[-1].strip()
+        CALDB_AVAIL = True
+    # For using XGA in the eSASS4EDR docker container - ciao is installed, but doesnt have the
+    # expected output, so split_out only has 2 entries. I am assuming the user will only be using 
+    # xga for eSASS in this docker container, so for the moment I'm not dealing with this output
+    # and just setting CALDB_AVAIL to false
+    except IndexError:
+        CALDB_AVAIL = False
+
 
 # We set up a mapping from telescope name to software version constant
 # Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
