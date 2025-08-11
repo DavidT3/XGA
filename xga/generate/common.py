@@ -45,7 +45,7 @@ def execute_cmd(cmd: str, p_type: str, p_path: list, extra_info: dict, src: str)
     err = err.decode("UTF-8", errors='ignore')
     print(out)
     print(err)
-
+    print(cmd)
     # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
     #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
     #  pre-existing image
