@@ -707,7 +707,7 @@ CALDB_VERSION = None
 # This checks for an installation of Ciao
 CALDB_AVAIL = False
 
-if CIAO_VERSION is not None and 'not installed' in split_out[5].lower():
+if CIAO_VERSION is not None and any('not installed' in s.lower() for s in split_out):
     warn("A Chandra CALDB installation cannot be identified on your system, and as such "
          "Chandra data cannot be processed.", stacklevel=2)
 elif CIAO_VERSION is not None:
