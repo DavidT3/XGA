@@ -358,10 +358,10 @@ def xspec_call(xspec_func):
                     # TODO this could be neater and better generalised
                     for comb in combos:
                         if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
-                            spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                            spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel == 'erosita':
-                            spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                            spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         else:
                             spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
