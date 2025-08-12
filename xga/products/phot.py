@@ -264,7 +264,6 @@ class Image(BaseProduct):
         from the NAXIS keywords.
         """
         if self._header is None:
-            print(self.path)
             # Reads only the header information
             self._header = read_header(self.path)
 
