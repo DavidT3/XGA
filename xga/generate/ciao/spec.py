@@ -95,6 +95,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         inner_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
         outer_r_arc = source.convert_radius(outer_radii[s_ind], 'arcmin')
 
+        # Replace plus sign because some pieces of software don't preperly open fits files with a plus sign in the name.
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
 
