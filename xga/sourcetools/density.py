@@ -275,9 +275,17 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
             # but if inst = None, we only want to retreive combined instrument spectra
-            if tel == 'erosita' and inst[tel][src_ind] is None:
-                lookup_obs = 'combined'
-                lookup_inst = 'combined'
+            if tel == 'erosita':
+                if inst[tel][src_ind] is None:
+                    lookup_inst = 'combined'
+                else:
+                    lookup_inst = inst[tel][src_ind]
+                
+                if len(src.obs_ids['erosita']) > 1:
+                    lookup_obs = 'combined'
+                else:
+                    lookup_obs = src.obs_ids['erosita'][0]
+
             else:
                 lookup_obs = obs_id[tel][src_ind]
                 lookup_inst = inst[tel][src_ind]
