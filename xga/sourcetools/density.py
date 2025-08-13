@@ -334,7 +334,7 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
 
     try:
         if telescope == 'erosita':
-            if len(src.obs_ids['erosita'] > 1):
+            if len(src.obs_ids['erosita']) > 1:
                 use_combined = True
             else:
                 use_combined = False
