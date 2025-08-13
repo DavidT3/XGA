@@ -25,7 +25,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                      spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
-                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None):
+                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
+                     force_gen: bool = False):
     """
     This is a convenience function for fitting an absorbed single temperature apec model (constant*tbabs*apec) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -88,12 +89,13 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
+    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
 
     # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
     sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
                                                                      min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope)
+                                                                     num_cores, stacked_spectra, telescope, force_gen)
 
     # Confirms that input parameters are legal, and nothing silly has been passed
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)

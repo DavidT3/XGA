@@ -78,7 +78,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                     inner_radius: Union[str, Quantity], group_spec: bool = True, min_counts: int = 5,
                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                    stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
+                    stacked_spectra: bool = False, telescope: Union[str, List[str]] = None, force_gen: bool = False) \
         -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str]]:
     """
     This pre-generates the spectra necessary for the requested fit (if they do not exist), and formats the input
@@ -111,6 +111,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
+    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     :return: The sources, inner radii, outer radii, and telescopes.
     :rtype: Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str]]
     """
@@ -140,11 +141,11 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             #  are generated, and because that function has a lot of radius parsing and checking that will
             #  tell us if the inputs aren't formatted correctly
             sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                                        over_sample, one_rmf, num_cores)
+                                        over_sample, one_rmf, num_cores, force_gen=force_gen)
         elif tel == 'erosita':
             # This is the spectrum generation tool that is specific to eROSITA
             sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores,
-                                       False, stacked_spectra)
+                                       False, stacked_spectra, force_gen=force_gen)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))
