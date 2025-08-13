@@ -333,21 +333,33 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
     """
 
     try:
-        if all([obs_id is None, inst is None]):
+        if telescope == 'erosita':
+            if len(src.obs_ids['erosita'] > 1):
+                use_combined = True
+            else:
+                use_combined = False
+        else:
+            if all([obs_id is None, inst is None]):
+                use_combined = True
+            elif all([obs_id is not None, inst is not None]):
+                use_combined = False
+            else:
+                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and " 
+                    "vice versa.")
+
+        if use_combined:
             rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                            psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope)
             comb = True
-        elif all([obs_id is not None, inst is not None]):
+        else:
             rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
                                   psf_algo, psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope, obs_id=obs_id)
             comb = False
-        else:
-            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and " 
-                             "vice versa.")
+
     except NoProductAvailableError:
         raise NoProductAvailableError("The RateMap required to measure the density profile has not "
                                       "been generated yet, possibly because you haven't generated " 
