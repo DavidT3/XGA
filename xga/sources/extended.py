@@ -1182,6 +1182,15 @@ class GalaxyCluster(ExtendedSource):
                                     min_sn=min_sn, over_sample=over_sample, inst=inst, telescope=telescope)
         else:
             # Grabbing the relevant spectra
+            print("or", outer_radius)
+            print("ir", inner_radius)
+            print("grp_spec", group_spec)
+            print("min cnt", min_counts)
+            print("min_sn", min_sn)
+            print("over smaple", over_sample)
+            print("obs id", obs_id)
+            print("tel", telescope)
+
             spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
                                     min_sn=min_sn, over_sample=over_sample, obs_id=obs_id, inst=inst, telescope=telescope)
 
