@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2024, 10:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2025, 13:38. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -17,9 +17,10 @@ from abel.onion_bordas import onion_bordas_transform
 from astropy.units import Quantity, Unit, UnitConversionError
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
-from scipy.misc import derivative
+# from scipy.misc import derivative
 from tabulate import tabulate
 
+from . import derivative
 from ..exceptions import XGAFitError
 
 
