@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2025, 13:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2025, 13:45. Copyright (c) The Contributors
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -20,7 +20,6 @@ from scipy.integrate import quad
 # from scipy.misc import derivative
 from tabulate import tabulate
 
-from . import derivative
 from ..exceptions import XGAFitError
 
 
@@ -281,6 +280,9 @@ class BaseModel1D(metaclass=ABCMeta):
             best fit parameters, or a distribution.
         :rtype: Quantity
         """
+        # Local import of the scipy.misc.derivative drop-in replacement - to avoid a circular import error
+        from . import derivative
+
         # Just checking that the units of x and dx aren't silly
         if not x.unit.is_equivalent(self._x_unit):
             raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
