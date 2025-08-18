@@ -559,7 +559,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
                      freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
                      min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
-                     num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
+                    num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
                      stacked_spectra=stacked_spectra)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk

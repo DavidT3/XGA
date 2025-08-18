@@ -91,7 +91,8 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(len(cmds), fill_value="spectrum"))
             continue
-
+        
+        # Convert the radius to arcmin
         inner_r_arc = source.convert_radius(inner_radii[s_ind], 'arcmin')
         outer_r_arc = source.convert_radius(outer_radii[s_ind], 'arcmin')
 
@@ -99,9 +100,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         source_name = source.name.replace("+", "x")
         ra_src, dec_src = source.default_coord[0], source.default_coord[1]
 
-        ra_src_str, dec_src_str = ra_src.value, dec_src.value
-        inner_radius_str = source.convert_radius(inner_radii[s_ind], 'deg').value
-        outer_radius_str = source.convert_radius(outer_radii[s_ind], 'deg').value
+        ra_src_deg, dec_src_deg = ra_src.value, dec_src.value
+        inner_radius_deg = inner_r_arc.value / 60
+        outer_radius_deg = outer_r_arc.value / 60
 
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
@@ -128,7 +129,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
 
             # Now we've established that we have retrieved a single bad pixel product, we extract the path from it
             badpix_file = badpix_prod[0].path
-
+            
+            # Retrieve the detector mask file for this ObsID. 
+            # The mask defines which detector pixels are valid.
             mask_prod = source.get_products("maskfile", telescope="chandra", obs_id=obs_id, inst=inst)
             if len(mask_prod) > 1:
                 raise ValueError("Found multiple mask files for Chandra {o}-{i}; this should not be "
@@ -175,41 +178,41 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             os.makedirs(temp_dir, exist_ok=True)
 
             # Just for group spec at this point, but need to add ungrouped later
-            spec_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_"
-                         f"ro{outer_radius_str}_grp{group_spec}{extra_file_name}_spec.fits")
+            spec_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_deg}_dec{dec_src_deg}_ri{inner_radius_deg}_"
+                         f"ro{outer_radius_deg}_grp{group_spec}{extra_file_name}_spec.fits")
             spec_file = os.path.join(dest_dir, spec_name)
             if group_spec is not None:
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_grp.pi")
             else:
                 spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.pi")
 
-            arf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_"
-                        f"ro{outer_radius_str}_grp{group_spec}{extra_file_name}.arf")
+            arf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_deg}_dec{dec_src_deg}_ri{inner_radius_deg}_"
+                        f"ro{outer_radius_deg}_grp{group_spec}{extra_file_name}.arf")
             arf_file = os.path.join(dest_dir, arf_name)
             arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.arf")
 
-            rmf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_"
-                        f"ro{outer_radius_str}_grp{group_spec}{extra_file_name}.rmf")
+            rmf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_deg}_dec{dec_src_deg}_ri{inner_radius_deg}_"
+                        f"ro{outer_radius_deg}_grp{group_spec}{extra_file_name}.rmf")
             rmf_file = os.path.join(dest_dir, rmf_name)
             rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}.rmf")
 
-            bkg_spec_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_"
-                             f"ro{outer_radius_str}_grp{group_spec}{extra_file_name}_backspec.fits")
+            bkg_spec_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_deg}_dec{dec_src_deg}_ri{inner_radius_deg}_"
+                             f"ro{outer_radius_deg}_grp{group_spec}{extra_file_name}_backspec.fits")
             bkg_spec_file = os.path.join(dest_dir, bkg_spec_name)
             bkg_spec_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.pi")
 
-            bkg_arf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_"
-                            f"ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.arf")
+            bkg_arf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_deg}_dec{dec_src_deg}_ri{inner_radius_deg}_"
+                            f"ro{outer_radius_deg}_grp{group_spec}{extra_file_name}_back.arf")
             bkg_arf_file = os.path.join(dest_dir, bkg_arf_name)
             bkg_arf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.arf")
 
-            bkg_rmf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_str}_dec{dec_src_str}_ri{inner_radius_str}_"
-                            f"ro{outer_radius_str}_grp{group_spec}{extra_file_name}_back.rmf")
+            bkg_rmf_name = (f"{obs_id}_{inst}_{source_name}_ra{ra_src_deg}_dec{dec_src_deg}_ri{inner_radius_deg}_"
+                            f"ro{outer_radius_deg}_grp{group_spec}{extra_file_name}_back.rmf")
             bkg_rmf_file = os.path.join(dest_dir, bkg_rmf_name)
             bkg_rmf_ciao_out = os.path.join(temp_dir, f"{obs_id}_{inst}_bkg.rmf")
 
+            # DS9 region files require RA/Dec in sexagesimal format
             coord = SkyCoord(ra=ra_src, dec=dec_src, frame='icrs')
-
             ra_hms = coord.ra.to_string(unit=u.hour, sep=':', precision=5)
             dec_dms = coord.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
@@ -238,8 +241,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     reg_dec = region.center.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
                     # Convert width and height to arcmin
-                    width_arc = region.width.to(u.arcmin).value
-                    height_arc = region.height.to(u.arcmin).value
+                    # DS9 region files takes two radius values in its ellipse definition (divided by 2)
+                    width_arc = region.width.to(u.arcmin).value / 2
+                    height_arc = region.height.to(u.arcmin).value / 2 
                     angle = region.angle.to(u.deg).value
 
                     # Write the exclusion region in ellipse format
@@ -260,8 +264,9 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
                     reg_dec = region.center.dec.to_string(unit=u.deg, sep=':', precision=5, alwayssign=True)
 
                     # Convert width and height to arcmin
-                    width_arc = region.width.to(u.arcmin).value
-                    height_arc = region.height.to(u.arcmin).value
+                    # DS9 region files takes two radius values in its ellipse definition (divided by 2)
+                    width_arc = region.width.to(u.arcmin).value / 2
+                    height_arc = region.height.to(u.arcmin).value / 2
                     angle = region.angle.to(u.deg).value
 
                     # Write the exclusion region in ellipse format

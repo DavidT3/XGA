@@ -82,6 +82,15 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
         cmds = []
         final_paths = []
         extra_info = []
+
+        # Skip sources that do not have Chandra data.
+        if 'chandra' not in source.telescopes:
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full((len(cmds), 3), ["image", "expmap", "ratemap"]))
+            continue
+
         # Iterate through Chandra event lists associated with the source.
         for product in source.get_products("events", telescope="chandra", just_obj=True):
             # Getting the current ObsID, instrument, and event file path
@@ -135,7 +144,9 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             final_image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVimg.fits")
             final_expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVexpmap.fits")
             final_ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVratemap.fits")
-
+            
+            # Check if a Chandra image exists.  
+            # If it does, use its size for the subsequent photometric products.
             img_exist = False
             try:
                 img_temp = source.get_images(obs_id, inst, telescope='chandra')
