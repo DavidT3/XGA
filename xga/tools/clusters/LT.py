@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:04. Copyright (c) The Contributors
-from typing import Tuple
+from typing import List, Union, Tuple
 from warnings import warn
 
 import numpy as np
@@ -27,8 +27,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = True, core_size: float = 0.15, freeze_nh: bool = True, 
-                                    freeze_met: bool = True, freeze_temp: bool = False, 
+                                    core_excised: bool = False, core_radius_fraction: float = None, 
+                                    outer_aperture: Union[str, Quantity] = None,
+                                    freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False, 
                                     start_temp: Quantity = Quantity(3.0, 'keV'),
                                     temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
                                     lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
@@ -238,28 +239,37 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                          "({mii}).".format(mai=max_iter, mii=min_iter))
 
     # Check whether the specified core_excised value matches that of the scaling relation
-    if core_excised == rad_temp_rel.core_excised or core_excised == temp_lum_rel.core_excised:
-        print("Your choice of 'core_excised' matches the RT/LT ScalingRelation.")
-        if core_size != rad_temp_rel.core_size:
-            raise TypeError("Mismatch: Your choice of 'core_size' does not match the RT ScalingRelation.")
-        if core_size != temp_lum_rel.core_size:
-            raise TypeError("Mismatch: Your choice of 'core_size' does not match the LT ScalingRelation.")
-        else:
-            print("Your choice of 'core_size' matches the RT/LT ScalingRelation.")
-    else:
-        raise TypeError("Mismatch: Your choice of 'core_excised' for iteration does not match the ScalingRelation.")
+    if core_excised == rad_temp_rel.core_excised and core_excised == temp_lum_rel.core_excised:
+        warn("Your choice of 'core_excised' matches the RT/LT ScalingRelation.")
+    elif core_radius_fraction != rad_temp_rel.core_radius_fraction:
+        raise TypeError("Mismatch: Your choice of 'core_radius_fraction' does not match the RT ScalingRelation.")
+    elif core_radius_fraction != temp_lum_rel.core_radius_fraction:
+        raise TypeError("Mismatch: Your choice of 'core_radius_fraction' does not match the LT ScalingRelation.")
 
-    # Trying to determine the targeted overdensity based on the name of the scaling relation y-axis label
-    y_name = rad_temp_rel.y_name.lower()
-    if 'r' in y_name and '2500' in y_name:
-        o_dens = 'r2500'
-    elif 'r' in y_name and '500' in y_name:
-        o_dens = 'r500'
-    elif 'r' in y_name and '200' in y_name:
-        o_dens = 'r200'
-    else:
-        raise ValueError("The y-axis label of the scaling relation ({ya}) does not seem to contain 2500, 500, or "
-                         "200; it has not been possible to determine the overdensity.".format(ya=rad_temp_rel.y_name))
+    # Check whether the specified outer_aperture value matches that of the scaling relation
+    if outer_aperture == rad_temp_rel.outer_apertured and core_excised == temp_lum_rel.outer_aperture:
+        warn("Your choice of the defination of 'outer_aperture' matches the RT/LT ScalingRelation.")
+    elif outer_aperture != rad_temp_rel.outer_apertured:
+        raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the RT ScalingRelation.")
+    elif core_excised != temp_lum_rel.outer_aperture:
+        raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the LT ScalingRelation.")
+    
+    # Trying to determine the targeted overdensity based on the name of the 'outer_aperture'
+    # The LT pipeline will not process if using a fixed aperture
+    # We've already checked teh string format when decalring a scaling relation
+    if isinstance(outer_aperture, Quantity):
+        raise TypeError("LT pipeline will not work if the 'outer_aperture' is a fixed number.")
+    elif isinstance(outer_aperture, str):
+        outer_aperture = outer_aperture.lower()
+        if 'r' in outer_aperture and '2500' in outer_aperture:
+            o_dens = 'r2500'
+        elif 'r' in outer_aperture and '500' in outer_aperture:
+            o_dens = 'r500'
+        elif 'r' in outer_aperture and '200' in outer_aperture:
+            o_dens = 'r200'
+        else:
+            raise ValueError("The 'outer_aperture' does not seem to contain 2500, 500, or "
+                             "200; it has not been possible to determine the overdensity.".format(ya=rad_temp_rel.outer_aperture))
 
     # Overdensity radius argument for the declaration of the sample
     o_dens_arg = {o_dens: start_aperture}
@@ -340,7 +350,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 #  just multiply the current radius by 0.15 and use that for the inner radius. 
                 # !!! Now the core_excised parameter control only during the iterations
                 if core_excised:
-                    evselect_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, num_cores=num_cores, 
+                    evselect_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, num_cores=num_cores, 
                                       one_rmf=False,
                                       group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
                                       over_sample=over_sample)
@@ -353,7 +363,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 #  just multiply the current radius by 0.15 and use that for the inner radius. 
                 # !!! Now the core_excised parameter control only during the iterations
                 if core_excised:
-                    srctool_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, group_spec=group_spec, 
+                    srctool_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, group_spec=group_spec, 
                                      min_counts=min_counts,
                                      min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
                 else:
@@ -364,7 +374,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 #  just multiply the current radius by 0.15 and use that for the inner radius. 
                 # !!! Now the core_excised parameter control only during the iterations
                 if core_excised:
-                    specextract_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, num_cores=num_cores,
+                    specextract_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, num_cores=num_cores,
                                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn)
                 else:
                     specextract_spectrum(samp, samp.get_radius(o_dens), num_cores=num_cores,
@@ -420,7 +430,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         #  just multiply the current radius by 0.15 and use that for the inner radius. 
         # !!! Now the core_excised parameter control only during the iterations
         if core_excised:
-            single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
+            single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, lum_en=lum_en,
                              freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
                              num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
@@ -556,10 +566,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     # At this point we've exited the loop - the final radii have been decided on. However, we cannot guarantee that
     #  the final radii have had spectra generated/fit for them, so we run single_temp_apec again one last time
     # !!! we make core_excised by dafult for the final run
-    single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * 0.15, lum_en=lum_en,
+    single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, lum_en=lum_en,
                      freeze_nh=freeze_nh, freeze_met=freeze_met, lo_en=lo_en, hi_en=hi_en, group_spec=group_spec,
                      min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, one_rmf=False,
-                    num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
+                     num_cores=num_cores, start_temp=start_temp, freeze_temp=freeze_temp,
                      stacked_spectra=stacked_spectra)
 
     # Now to assemble the final sample information dataframe - note that the sample does have methods for the bulk
@@ -648,7 +658,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     #  relation to be passed.
                     if not freeze_temp:
                         # Adding temperature value and uncertainties
-                        vals += list(rel_src.get_temperature(rel_rad, telescope, inner_radius=0.15*rel_rad,
+                        vals += list(rel_src.get_temperature(rel_rad, telescope, inner_radius=core_radius_fraction*rel_rad,
                                                              group_spec=group_spec, min_counts=min_counts,
                                                              min_sn=min_sn, over_sample=over_sample,
                                                              stacked_spectra=stacked_spectra).value)
@@ -656,7 +666,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                         cols += ['Tx' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     # The same process again for core-excised luminosities
-                    lce_res = rel_src.get_luminosities(rel_rad, telescope, inner_radius=0.15 * rel_rad,
+                    lce_res = rel_src.get_luminosities(rel_rad, telescope, inner_radius=core_radius_fraction * rel_rad,
                                                        group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                                        over_sample=over_sample,
                                                        stacked_spectra=stacked_spectra)
@@ -668,14 +678,14 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     # If we note that the metallicity and/or nH were left free to vary, we had better save those values
                     #  as well!
                     if not freeze_met:
-                        metce = rel_src.get_results(rel_rad, telescope, inner_radius=0.15 * rel_rad, par='Abundanc',
+                        metce = rel_src.get_results(rel_rad, telescope, inner_radius=core_radius_fraction * rel_rad, par='Abundanc',
                                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                                     over_sample=over_sample, stacked_spectra=stacked_spectra)
                         vals += list(metce)
                         cols += ['Zmet' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
 
                     if not freeze_nh:
-                        nhce = rel_src.get_results(rel_rad, telescope, inner_radius=0.15 * rel_rad, par='nH',
+                        nhce = rel_src.get_results(rel_rad, telescope, inner_radius=core_radius_fraction * rel_rad, par='nH',
                                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                                    over_sample=over_sample, stacked_spectra=stacked_spectra)
                         vals += list(nhce)

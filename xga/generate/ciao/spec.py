@@ -505,7 +505,7 @@ def ciao_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[
 
         spec_storage_name += extra_name
 
-        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='chandra')
+        exists = source.get_products('annular_spectrum', extra_key=spec_storage_name, telescope='chandra')
         if len(exists) == 0:
             # If it doesn't exist then we do need to call evselect_spectrum
             generate_spec = True
