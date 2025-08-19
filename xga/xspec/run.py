@@ -236,6 +236,7 @@ def xspec_call(xspec_func):
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
+                        print(res_set[0])
                         global_results = res_table["RESULTS"][0]
                         model = global_results["MODEL"].strip(" ")
 
