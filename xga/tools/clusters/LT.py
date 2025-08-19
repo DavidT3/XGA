@@ -27,7 +27,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = False, core_radius_fraction: float = None, 
+                                    core_excised: bool = False, core_radius_fraction: float = 0, 
                                     outer_aperture: Union[str, Quantity] = None,
                                     freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False, 
                                     start_temp: Quantity = Quantity(3.0, 'keV'),

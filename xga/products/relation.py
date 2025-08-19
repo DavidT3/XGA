@@ -101,7 +101,7 @@ class ScalingRelation:
                  scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None,
                  point_names: Union[np.ndarray, list] = None, third_dim_info: Union[np.ndarray, Quantity] = None,
                  third_dim_name: str = None, x_en_bounds: Quantity = None, y_en_bounds: Quantity = None,
-                 core_excised: bool = False, core_radius_fraction: float = None, outer_aperture: Union[str, Quantity] = None):
+                 core_excised: bool = False, core_radius_fraction: float = 0, outer_aperture: Union[str, Quantity] = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
