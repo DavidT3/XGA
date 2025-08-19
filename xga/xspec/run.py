@@ -387,6 +387,7 @@ def xspec_call(xspec_func):
                         #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
                         #  generate a Tx profile automatically
                         if model == "constant*tbabs*apec":
+                            print('in here xspec call')
                             temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
                             s.update_products(temp_prof)
 

@@ -807,6 +807,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                           exp_corr, group_spec, min_counts, min_sn, over_sample, one_rmf, freeze_met,
                                           abund_table, temp_lo_en, temp_hi_en, num_cores,
                                           stacked_spectra=stacked_spectra, telescope=telescope)
+        print('in here ann_rads')
+        print(ann_rads)
     elif annulus_method == 'min_cnt':
         # This returns the boundary radii for the annuli, based on a minimum number of counts per
         #  annulus in a telescope dictionary
@@ -814,6 +816,8 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                           psf_corr, psf_model, psf_bins, psf_algo, psf_iter, group_spec, min_counts,
                                           min_sn, over_sample, one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
                                           num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
+        print('in here ann_rads min_cnt')
+        print(ann_rads)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
@@ -831,6 +835,12 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             cur_rads = ann_rads[tel][src_ind]
 
             try:
+                print(cur_rads)
+                print(group_spec)
+                print(min_counts)
+                print(min_sn)
+                print(over_sample)
+                print(tel)
                 # The projected temperature profile we're going to use
                 proj_temp = src.get_proj_temp_profiles(cur_rads, group_spec, min_counts, min_sn,
                                                        over_sample, telescope=tel)
