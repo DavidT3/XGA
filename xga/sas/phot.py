@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/08/2024, 17:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 14:05. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -18,7 +18,6 @@ from ..imagetools import data_limits
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 from ..sources.base import NullSource
-from ..utils import energy_to_channel
 
 
 # TODO Perhaps remove the option to add to the SAS expression
@@ -49,10 +48,9 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     if lo_en > hi_en:
         raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
     else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+        # Converts the energies to channels for EPIC detectors, assuming one channel per eV
+        lo_chan = int(lo_en.to('eV').value)
+        hi_chan = int(hi_en.to('eV').value)
 
     expr = " && ".join([e for e in ["expression='(PI in [{l}:{u}])".format(l=lo_chan, u=hi_chan),
                                     add_expr] if e != ""]) + "'"
@@ -138,10 +136,9 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
     if lo_en > hi_en:
         raise ValueError("lo_en cannot be greater than hi_en")
     else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+        # Converts the energies to channels for EPIC detectors, assuming one channel per eV
+        lo_chan = int(lo_en.to('eV').value)
+        hi_chan = int(hi_en.to('eV').value)
 
     # These are crucial, to generate an exposure map one must have a ccf.cif calibration file, and a reference
     # image. If they do not already exist, these commands should generate them.

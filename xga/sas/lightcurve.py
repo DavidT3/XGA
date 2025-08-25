@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 14:05. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -14,7 +14,6 @@ from .. import OUTPUT, NUM_CORES
 from ..exceptions import NoProductAvailableError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
-from ..utils import energy_to_channel
 
 
 def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
@@ -76,10 +75,9 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     if lo_en >= hi_en:
         raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
     else:
-        # Calls a useful little function that takes an astropy energy quantity to the XMM channels
-        # required by SAS commands
-        lo_chan = energy_to_channel(lo_en)
-        hi_chan = energy_to_channel(hi_en)
+        # Converts the energies to channels for EPIC detectors, assuming one channel per eV
+        lo_chan = int(lo_en.to('eV').value)
+        hi_chan = int(hi_en.to('eV').value)
 
     pn_patt, pn_patt_name = check_pattern(pn_patt)
     mos_patt, mos_patt_name = check_pattern(mos_patt)
