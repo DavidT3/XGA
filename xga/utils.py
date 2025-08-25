@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/08/2025, 10:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:50. Copyright (c) The Contributors
 
 import json
 import os
@@ -37,7 +37,6 @@ def _deprecated(message):
     """
     # Shows the warning message - this makes sure it is shown on import as well as when the function is used.
     warn(message, DeprecationWarning)
-
     def deprecated_function(dep_func):
         """
         This ensures that the decorated, deprecated, function is actually still run.
@@ -48,10 +47,11 @@ def _deprecated(message):
         #  such as __name__, __doc__ (the docstring)
         @wraps(dep_func)
         def wrapper(*args, **kwargs):
-            dep_func(*args, **kwargs)
+            return dep_func(*args, **kwargs)
 
         return wrapper
     return deprecated_function
+
 
 
 # ------------- Defining functions useful in the rest of the setup process -------------
