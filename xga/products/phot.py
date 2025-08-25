@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2024, 14:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:44. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -99,7 +99,7 @@ class Image(BaseProduct):
             self._regions = self._process_regions(regs)
             self._reg_file_path = regs
         elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
-            warnings.warn("That region file path does not exist")
+            warnings.warn("That region file path does not exist", stacklevel=2)
             self._regions = {}
             self._reg_file_path = regs
         elif isinstance(regs, (list, dict)):
@@ -157,7 +157,6 @@ class Image(BaseProduct):
             elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
                 raise ValueError("If a combined image has not been made with emosaic, you have to "
                                  " pass ObsID and Instrument combinations using obs_inst_combs")
-
         else:
             self._comb_oi_pairs = None
 
