@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 14:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 14:45. Copyright (c) The Contributors
 
 import json
 import os
@@ -841,4 +841,21 @@ else:
 #  here usable in the rest of the current module
 CENSUS = CENSUS['xmm']
 BLACKLIST = BLACKLIST['xmm']
+
+# The multi-mission branch has different behaviours for the creation of output directories, and this chunk of
+#  code was removed, so it must be reinstated for XMM-only XGA
+# Make a storage directory where specific source name directories will then be created, there profile objects
+#  created for those sources will be saved
+if not os.path.exists(OUTPUT + "profiles"):
+    os.makedirs(OUTPUT + "profiles")
+
+# Also making a storage directory specifically for products which are combinations of different ObsIDs
+#  and instruments
+if not os.path.exists(OUTPUT + "combined"):
+    os.makedirs(OUTPUT + "combined")
+
+# And create an inventory file for that directory
+if not os.path.exists(OUTPUT + "combined/inventory.csv"):
+    with open(OUTPUT + "combined/inventory.csv", 'w') as inven:
+        inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 # ------------------------------------------------------------------------------------------
