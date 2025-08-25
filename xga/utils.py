@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 14:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 14:19. Copyright (c) The Contributors
 
 import json
 import os
@@ -830,4 +830,15 @@ else:
     # Going to allow multi-core processing to use 90% of available cores by default, but
     # this can be over-ridden in individual SAS calls.
     NUM_CORES = max(int(np.floor(os.cpu_count() * 0.9)), 1)  # Makes sure that at least one core is used
+# ------------------------------------------------------------------------------------------
+
+
+# -------------------- Making this utils.py compatible with XMM-only XGA -------------------
+# TODO REMOVE THIS ONCE MULTI-MISSION IS RELEASED
+# This version of utils.py was patched in from the multi-mission development branch, and as
+#  such is set up slightly differently (with telescope names as keys in the observation
+#  census for instance), so some small changes must be made to make the constants defined
+#  here usable in the rest of the current module
+CENSUS = CENSUS['xmm']
+BLACKLIST = BLACKLIST['xmm']
 # ------------------------------------------------------------------------------------------
