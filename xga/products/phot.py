@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/10/2024, 14:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:48. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det, find_all_wcs
+from ..utils import xmm_sky, xmm_det
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
@@ -99,7 +99,7 @@ class Image(BaseProduct):
             self._regions = self._process_regions(regs)
             self._reg_file_path = regs
         elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
-            warnings.warn("That region file path does not exist")
+            warnings.warn("That region file path does not exist", stacklevel=2)
             self._regions = {}
             self._reg_file_path = regs
         elif isinstance(regs, (list, dict)):
@@ -157,7 +157,6 @@ class Image(BaseProduct):
             elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
                 raise ValueError("If a combined image has not been made with emosaic, you have to "
                                  " pass ObsID and Instrument combinations using obs_inst_combs")
-
         else:
             self._comb_oi_pairs = None
 
@@ -197,6 +196,9 @@ class Image(BaseProduct):
         required more than the data for individual images (as the merged images are generally used
         for analysis), so this function is split out in the interests of efficiency.
         """
+        # Import here to avoid circular import woes
+        from ..imagetools.misc import find_all_wcs
+
         try:
             # Reads only the header information
             self._header = read_header(self.path)
