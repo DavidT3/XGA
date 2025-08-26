@@ -87,11 +87,12 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     if usable and len(err_out_lines) == 0 and len(err_err_lines) == 0:
         usable = True
     else:
-        print('this is why unusable')
         usable = False
 
     error = err_out_lines + err_err_lines + err_out_line_init
     warn = warn_out_lines + warn_err_lines
+    print('out_file')
+    print(out_file)
     if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
