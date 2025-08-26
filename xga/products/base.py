@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 16:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 17:53. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -45,8 +45,9 @@ class BaseProduct:
         accessible when defining a BaseProduct.
     :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
-        :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
-            datasets - e.g. to pass credentials to access an S3 bucket.
+    :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+        datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+        argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
     """
     def __init__(self, path: str, obs_id: str = "", instrument: str = "", stdout_str: str = "", stderr_str: str = "",
                  gen_cmd: str = "", extra_info: dict = None, force_remote: bool = False, fsspec_kwargs: dict = None):
@@ -67,7 +68,8 @@ class BaseProduct:
         :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
         :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
-            datasets - e.g. to pass credentials to access an S3 bucket.
+            datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+            argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
 
         # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
@@ -87,6 +89,10 @@ class BaseProduct:
         #  may be required in some warning/error messages later on
         self._force_remote = force_remote
 
+        # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
+        #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
+        if fsspec_kwargs is None:
+            fsspec_kwargs = {"anon": True}
         # We store the optional keyword arguments that the user can pass to facilitate access to
         #  remote files in an attribute
         self._fsspec_kwargs = fsspec_kwargs

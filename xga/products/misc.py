@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 16:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 17:53. Copyright (c) The Contributors
 from typing import List
 
 import fitsio
@@ -26,7 +26,8 @@ class EventList(BaseProduct):
     :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
     :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
-        datasets - e.g. to pass credentials to access an S3 bucket.
+        datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+        argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
     """
 
     def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
@@ -47,7 +48,8 @@ class EventList(BaseProduct):
         :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
         :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
-            datasets - e.g. to pass credentials to access an S3 bucket.
+            datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+            argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
         if hasattr(super(), 'telescope'):
             raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
@@ -131,13 +133,14 @@ class EventList(BaseProduct):
         This will read the event list header into memory, without loading the data from the event list main table. That
         way the user can get access to the summary information stored in the header without wasting a lot of memory.
         """
-        try:
-            # Reads only the header information
-            self._header = read_header(self.path)
-        except OSError:
-            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
-                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                    "with {s}.".format(f=self.path, s=self.src_name))
+
+        if self._local_file:
+            try:
+                # Reads only the header information
+                self._header = read_header(self.path)
+            except OSError:
+                raise FileNotFoundError("{f} header cannot be opened. This product (of type {t}) is associated "
+                                        "with {s}.".format(f=self.path, s=self.src_name, t=self.type))
 
     def _read_data_on_demand(self):
         """
