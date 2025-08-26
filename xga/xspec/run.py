@@ -153,6 +153,7 @@ def xspec_call(xspec_func):
 
     @wraps(xspec_func)
     def wrapper(*args, **kwargs):
+        print('in xspec call')
 
         # We'll stop this process in its tracks if XGA cannot find an XSPEC installation
         if XSPEC_VERSION is None:
