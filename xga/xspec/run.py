@@ -87,6 +87,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     if usable and len(err_out_lines) == 0 and len(err_err_lines) == 0:
         usable = True
     else:
+        print('this is why unusable')
         usable = False
 
     error = err_out_lines + err_err_lines + err_out_line_init
@@ -130,6 +131,8 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         usable = True
     else:
         res_tables = None
+        print('no this is why unusable')
+
         usable = False
 
     # This uses outfile name (which has a structure set by XGA, so this is reliable) to figure out which telescope
