@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 18:51. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 19:01. Copyright (c) The Contributors
 from typing import List
 
 import fitsio
@@ -71,11 +71,11 @@ class EventList(BaseProduct):
         # We attempt to automatically derive the telescope, ObsID, and instrument (if they haven't been
         #  passed by the user) from the event list header
         if telescope is None:
-            self._telescope = self.header['TELESCOP']
+            self._tele = self.header['TELESCOP']
         if obs_id is None:
-            self._obs_id = self.header['OBSID']
+            self._obs_id = self.header['OBS_ID']
         if instrument is None:
-            self._instrument = self.header['INSTRUME']
+            self._inst = self.header['INSTRUME']
 
         # Checking the formatting of the obs_ids argument
         if obs_ids is not None and (not isinstance(obs_ids, List) or
