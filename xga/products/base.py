@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 15:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 16:20. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -74,14 +74,18 @@ class BaseProduct:
         #  interact with it in the various product sub-classes
         if force_remote:
             # Here the user has forced us to treat the path as remote
-            self._file_local = False
+            self._local_file = False
         elif path[:5] == "s3://":
             # Here we assume that the file is remote because it starts with the s3 identifier - this is for use with
             #  resources like the HEASARC open S3 bucket
-            self._file_local = False
+            self._local_file = False
         else:
             # Otherwise we decide that the file is local
-            self._file_local = True
+            self._local_file = True
+
+        # Keep track of whether the user forced the path to be considered as a remote url or not, that information
+        #  may be required in some warning/error messages later on
+        self._force_remote = force_remote
 
         # We store the optional keyword arguments that the user can pass to facilitate access to
         #  remote files in an attribute
@@ -95,9 +99,9 @@ class BaseProduct:
         self._usable = True
 
         # Try to determine if the file exists - this will not currently check remote files
-        if self._file_local and os.path.exists(path):
+        if self._local_file and os.path.exists(path):
             self._path = path
-        elif self._file_local:
+        elif self._local_file:
             self._path = None
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
@@ -167,6 +171,41 @@ class BaseProduct:
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
         self._path = prod_path
+
+    @property
+    def local_file(self) -> bool:
+        """
+         A file is deemed remote by the presence of certain strings at the beginning of the path, or the
+         user passing 'force_remote=True' at product initialization, otherwise it is considered to be local.
+
+        :return: Returns a boolean flag describing if we think this product is pointed at a local file (True) or
+            a remote file (False).
+        :rtype: bool
+        """
+        return self._local_file
+
+    @property
+    def force_remote(self) -> bool:
+        """
+        A property providing the value of the 'force_remote' argument passed to this product at instantiation - that
+        value controls how the init treats the file path.
+
+        :return: The value of 'force_remote' argument passed to this product at instantiation.
+        :rtype: bool
+        """
+        return self._force_remote
+
+    @property
+    def fsspec_kwargs(self) -> Union[dict, None]:
+        """
+        Property getter for the attribute containing the fsspec keyword arguments passed to this
+        product at instantiation. These are for passing configuration information such as credentials for
+        the remote access of S3 buckets
+
+        :return: The fsspec keyword arguments passed to this product at instantiation.
+        :rtype: dict
+        """
+        return self._fsspec_kwargs
 
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
