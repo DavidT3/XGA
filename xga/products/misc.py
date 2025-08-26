@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 17:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 18:51. Copyright (c) The Contributors
 from typing import List
 
 import fitsio
 import pandas as pd
-from fitsio import FITSHDR, read_header
+from astropy.io import fits
+from fitsio import FITSHDR
 
 from . import BaseProduct
 from ..exceptions import XGADeveloperError
@@ -51,18 +52,32 @@ class EventList(BaseProduct):
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
+        # A validity check to help remind me to pass the telescope to the super-class init when this merges with
+        #  multi-mission XGA
         if hasattr(super(), 'telescope'):
             raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
                                     "call to BaseProduct init in EventList needs to be updated.")
+        else:
+            self._telescope = telescope
 
+        # Call the BaseProduct init, sets up some attributes
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None, force_remote, fsspec_kwargs)
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
         self._header = None
         self._data = None
-        self._telescope = telescope
 
+        # We attempt to automatically derive the telescope, ObsID, and instrument (if they haven't been
+        #  passed by the user) from the event list header
+        if telescope is None:
+            self._telescope = self.header['TELESCOP']
+        if obs_id is None:
+            self._obs_id = self.header['OBSID']
+        if instrument is None:
+            self._instrument = self.header['INSTRUME']
+
+        # Checking the formatting of the obs_ids argument
         if obs_ids is not None and (not isinstance(obs_ids, List) or
                                     (isinstance(obs_ids, List) and not all(isinstance(obs, str) for obs in obs_ids))):
             raise ValueError("The 'obs_ids' argument must be a list of strings.")
@@ -134,13 +149,25 @@ class EventList(BaseProduct):
         way the user can get access to the summary information stored in the header without wasting a lot of memory.
         """
 
+        # We could likely treat the remote and local file access identically, but we're doing it this way for
+        #  now out of an abundance of caution - I don't know how local files would behave using fsspec
         if self._local_file:
             try:
                 # Reads only the header information
-                self._header = read_header(self.path)
+                # self._header = read_header(self.path)
+                with fits.open(self.path, lazy_load_hdus=True) as fitso:
+                    self._header = fitso[0].header
             except OSError:
                 raise FileNotFoundError("{f} header cannot be opened. This product (of type {t}) is associated "
                                         "with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+        else:
+            try:
+                with fits.open(self.path, lazy_load_hdus=True, use_fsspec=True,
+                               fsspec_kwargs=self.fsspec_kwargs) as fitso:
+                    self._header = fitso[0].header
+            except OSError:
+                raise FileNotFoundError("The remote file's ({f}) header cannot be opened. This product (of type {t}) "
+                                        "is associated with {s}.".format(f=self.path, s=self.src_name, t=self.type))
 
     def _read_data_on_demand(self):
         """
