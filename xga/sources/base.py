@@ -3896,8 +3896,6 @@ class BaseSource:
         try:
             reg_within = np.array(self._interloper_regions[telescope])[crossover]
         except:
-            print(crossover)
-            print(self.name)
             reg_within = None
 
         return reg_within
