@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 17:34. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 16:25. Copyright (c) The Contributors
 from typing import List
 
 import fitsio
@@ -23,10 +23,15 @@ class EventList(BaseProduct):
     :param str gen_cmd: The command used to generate the event list.
     :param str telescope: The telescope that is the source of this event list. The default is None.
     :param List[str] obs_ids: The obs ids that were combined to make this event list. The default is None.
+    :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
+            a remote dataset, and to use fsspec to read/stream the data.
+    :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+        datasets - e.g. to pass credentials to access an S3 bucket.
     """
 
     def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
-                 stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None):
+                 stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None,
+                 force_remote: bool = False, fsspec_kwargs: dict = None):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -39,12 +44,16 @@ class EventList(BaseProduct):
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the event list.
         :param str telescope: The telescope that is the source of this event list. The default is None.
+        :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
+            a remote dataset, and to use fsspec to read/stream the data.
+        :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+            datasets - e.g. to pass credentials to access an S3 bucket.
         """
         if hasattr(super(), 'telescope'):
             raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
                                     "call to BaseProduct init in EventList needs to be updated.")
 
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None, force_remote, fsspec_kwargs)
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
