@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 23:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 15:16. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -7,9 +7,8 @@ from astropy.io import fits
 from astropy.table import Table
 
 from . import BaseProduct
+from .. import MISSION_COL_DB
 from ..exceptions import XGADeveloperError
-
-MAIN_EVT_TAB_NAME = {"rosat": "STDEVT"}
 
 
 class EventList(BaseProduct):
@@ -98,8 +97,8 @@ class EventList(BaseProduct):
 
         # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT for
         #  instance calls it STDEVT
-        self._evt_tab_name = "EVENTS" if self.telescope not in MAIN_EVT_TAB_NAME \
-            else MAIN_EVT_TAB_NAME[self.telescope]
+        self._evt_tab_name = "EVENTS" if self.telescope.lower() not in MISSION_COL_DB \
+            else MISSION_COL_DB[self.telescope.lower()]['events']
 
     @property
     def obs_ids(self) -> list:
@@ -321,3 +320,11 @@ class EventList(BaseProduct):
         # And if they want the header gone then we use the property delete method for header
         if unload_header:
             del self.header
+
+    def generate_image(self):
+        """
+
+        :return:
+        :rtype:
+        """
+        pass

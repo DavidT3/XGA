@@ -1,5 +1,5 @@
 {
-  "ASCA": {
+  "asca": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -126,7 +126,7 @@
       }
     }
   },
-  "Astro-E2": {
+  "suzaku": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -229,110 +229,7 @@
       "lststr": "ae*hxd_wel*.*"
     }
   },
-  "ASTRO-E2": {
-    "submkey": "NONE",
-    "instkey": "INSTRUME",
-    "dmodekey": "DATAMODE",
-    "mkf_def_expr": "ae*mkf*",
-    "mkf_rel_dir": "../aux",
-    "time": "TIME",
-    "tunits": "s",
-    "binsize": 16.0,
-    "x": "X",
-    "y": "Y",
-    "xsiz": "TLMAX",
-    "ysiz": "TLMAX",
-    "detx": "DETX",
-    "dety": "DETY",
-    "detxsiz": "TLMAX",
-    "detysiz": "TLMAX",
-    "rawxsiz": "TLMAX",
-    "rawysiz": "TLMAX",
-    "phamax": "TLMAX",
-    "gti": "GTI",
-    "events": "EVENTS",
-    "timeorder": "no",
-    "instruments": "XRS XIS-0 XIS-1 XIS-2 XIS-3 XIS-EM0 XIS-EM1 XIS-EM2 XIS-EM3 HXD",
-    "fbin": 1.0,
-    "hbin": 1.0,
-    "spbn": 1.0,
-    "ecol": "PI",
-    "ccol": "NONE",
-    "gcol": "NONE",
-    "imagecoord": "SKY",
-    "wmapcoord": "SKY",
-    "catnum": 1,
-    "grpstr": "NONE",
-    "lststr": "*.evt",
-    "ofilt": "NONE",
-    "wtmapb": "yes",
-    "wtmapfix": "yes",
-    "catcol": "OBJECT TELESCOP INSTRUME DATAMODE DATE-OBS TIME-OBS DATE-END TIME-END OBSERVER",
-    "dispcol": "OBJECT DATE-OBS TIME-OBS DATE-END TIME-END",
-    "extract": "extractor",
-    "respscript": "NONE",
-    "extendresp": "no",
-    "respneedreg": "no",
-    "XRS": {
-      "modes": "STANDARD",
-      "rawx": "PIXEL",
-      "rawy": "PIXEL",
-      "lststr": "ae*xrs*.*",
-      "ccol": "PIXEL"
-    },
-    "XIS-*": {
-      "rawx": "ACTX",
-      "rawy": "ACTY",
-      "gti": "STDGTI",
-      "rbnval": 2048,
-      "rbnmod": "LINEAR",
-      "catcol": "OBJECT TELESCOP INSTRUME DATAMODE EDITMODE DATE-OBS TIME-OBS DATE-END TIME-END OBSERVER",
-      "dispcol": "OBJECT DATE-OBS TIME-OBS DATE-END TIME-END EDITMODE",
-      "modes": "STANDARD TIMING"
-    },
-    "XIS-0": {
-      "lststr": "ae*xis0*.*"
-    },
-    "XIS-1": {
-      "lststr": "ae*xis1*.*"
-    },
-    "XIS-2": {
-      "lststr": "ae*xis2*.*"
-    },
-    "XIS-3": {
-      "lststr": "ae*xis3*.*"
-    },
-    "XIS-EM0": {
-      "lststr": "ae*xis0*.*"
-    },
-    "XIS-EM1": {
-      "lststr": "ae*xis1*.*"
-    },
-    "XIS-EM2": {
-      "lststr": "ae*xis2*.*"
-    },
-    "XIS-EM3": {
-      "lststr": "ae*xis3*.*"
-    },
-    "HXD": {
-      "x": "UNITID",
-      "y": "UNITID",
-      "detx": "UNITID",
-      "dety": "PIN_ID",
-      "rawx": "UNITID",
-      "rawy": "UNITID",
-      "fbin": 1,
-      "hbin": 1,
-      "wmapcoord": "DETECTOR",
-      "ecol": "PI_SLOW",
-      "modes": "WELL",
-      "wtmapfix": "no",
-      "rbnval": 1024,
-      "rbnmod": "LINEAR",
-      "lststr": "ae*hxd_wel*.*"
-    }
-  },
-  "ASTRO-H": {
+  "hitomi": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -426,7 +323,7 @@
       "modes": "CC_NORMAL1"
     }
   },
-  "ASTROSAT": {
+  "astrosat": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -515,7 +412,7 @@
       }
     }
   },
-  "AXAF": {
+  "chandra": {
     "submkey": "GRATING",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -584,7 +481,7 @@
       "rawy": "TDETY"
     }
   },
-  "BBXRT": {
+  "bbxrt": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "NONE",
@@ -627,7 +524,7 @@
     "dispcol": "OBJECT DATE-OBS TIME-OBS RA_OBJ DEC_OBJ",
     "extract": "extractor"
   },
-  "BURSTCUBE": {
+  "burstcube": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -672,7 +569,7 @@
     "extract": "extractor",
     "modes": "EVENT"
   },
-  "CALET": {
+  "calet": {
     "submkey": "NONE",
     "instkey": "DETNAM",
     "dmodekey": "DATAMODE",
@@ -717,7 +614,7 @@
     "extract": "extractor",
     "modes": "EVENT"
   },
-  "EINSTEIN": {
+  "einstein": {
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -753,5 +650,8 @@
     "catnum": 0,
     "grpstr": "NONE",
     "lststr": "*.xp*"
+  },
+  "rosat": {
+    "events": "STDEVT"
   }
 }
