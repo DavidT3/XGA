@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:28. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -119,9 +119,9 @@ class EventList(BaseProduct):
     @property
     def header(self) -> fits.Header:
         """
-        Property getter allowing access to the astropy fits header object of this event list.
+        The primary header object of this event list.
 
-        :return: The primary header of the event list header.
+        :return: The primary header of the event list.
         :rtype: fits.Header
         """
         # If the header attribute is None then we know we have to read the header in
@@ -138,6 +138,30 @@ class EventList(BaseProduct):
         """
         del self._header
         self._header = None
+
+    # This absolutely doesn't get a setter considering it's the header object
+    @property
+    def event_header(self) -> fits.Header:
+        """
+        The header object of the events table in this event list.
+
+        :return: The event table header of the event list.
+        :rtype: fits.Header
+        """
+        # If the header attribute is None then we know we have to read the header in
+        if self._header is None:
+            self._read_header_on_demand()
+        return self._header
+
+    @event_header.deleter
+    def event_header(self):
+        """
+        Property deleter for the event table header of this EventList instance. The self._event_header attribute is
+        removed from memory, and then self._event_header is explicitly set to None so that
+        self._read_header_on_demand() will be triggered if you ever want the header from this object again.
+        """
+        del self._event_header
+        self._event_header = None
 
     @property
     def data(self) -> pd.DataFrame:
