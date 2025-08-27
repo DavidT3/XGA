@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 15:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 19:01. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -31,7 +31,7 @@ from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
 
 class BaseProduct:
     """
-    The super class for all SAS generated products in XGA. Stores relevant file path information, parses the std_err
+    The super class for all X-ray products in XGA. Stores relevant file path information, parses the std_err
     output of the generation process, and stores the instrument and ObsID that the product was generated for.
 
     :param str path: The path to where the product file SHOULD be located.
@@ -43,9 +43,14 @@ class BaseProduct:
     :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
         object for later use by another processing step. It isn't intended for use by a user and will only be
         accessible when defining a BaseProduct.
+    :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
+            a remote dataset, and to use fsspec to read/stream the data.
+    :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+        datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+        argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None):
+    def __init__(self, path: str, obs_id: str = "", instrument: str = "", stdout_str: str = "", stderr_str: str = "",
+                 gen_cmd: str = "", extra_info: dict = None, force_remote: bool = False, fsspec_kwargs: dict = None):
         """
         The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
         Stores relevant file path information, parses the std_err output of the generation process, and stores the
@@ -60,25 +65,76 @@ class BaseProduct:
         :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
             object for later use by another processing step. It isn't intended for use by a user and will only be
             accessible when defining a BaseProduct.
+        :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
+            a remote dataset, and to use fsspec to read/stream the data.
+        :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+            datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+            argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
+
+        # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
+        #  interact with it in the various product sub-classes
+        if force_remote:
+            # Here the user has forced us to treat the path as remote
+            self._local_file = False
+        elif path[:5] == "s3://" or path[:5] == "gs://":
+            # Here we assume that the file is remote because it starts with the s3/gs identifier - this is for
+            #  use with resources like the HEASARC open S3 bucket
+            self._local_file = False
+        else:
+            # Otherwise we decide that the file is local
+            self._local_file = True
+
+        # Keep track of whether the user forced the path to be considered as a remote url or not, that information
+        #  may be required in some warning/error messages later on
+        self._force_remote = force_remote
+
+        # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
+        #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
+        if fsspec_kwargs is None:
+            fsspec_kwargs = {"anon": True}
+        # We store the optional keyword arguments that the user can pass to facilitate access to
+        #  remote files in an attribute
+        self._fsspec_kwargs = fsspec_kwargs
+
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
 
-        # So this flag indicates whether we think this data product can be used for analysis
+        # This flag indicates whether we think this data product can be used for analysis - it can be set to False
+        #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
-        if os.path.exists(path):
+
+        # Try to determine if the file exists - this will not currently check remote files
+        if self._local_file and os.path.exists(path):
             self._path = path
-        else:
+        elif self._local_file:
             self._path = None
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
-        # Saving this in attributes for future reference
+        else:
+            self._path = path
+
+        # Turning null stderr and stdouts (for instance, if the product is just being loaded in, as opposed to it
+        #  being generated by XGA and needing to be checked for process success) into empty strings
+        if stdout_str is None:
+            stdout_str = ""
+        if stderr_str is None:
+            stderr_str = ""
+        # Keeping them in class attributes
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
+        # Running checks on the stdout/err strings, looking for any obvious errors
         self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
+
+        # Storing more of the input information in attributes
         self._obs_id = obs_id
         self._inst = instrument
+
+        # Replacing a null input for the generation command with an empty string
+        if gen_cmd is None:
+            gen_cmd = ""
         self._og_cmd = gen_cmd
+
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
@@ -123,6 +179,41 @@ class BaseProduct:
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
         self._path = prod_path
+
+    @property
+    def local_file(self) -> bool:
+        """
+         A file is deemed remote by the presence of certain strings at the beginning of the path, or the
+         user passing 'force_remote=True' at product initialization, otherwise it is considered to be local.
+
+        :return: Returns a boolean flag describing if we think this product is pointed at a local file (True) or
+            a remote file (False).
+        :rtype: bool
+        """
+        return self._local_file
+
+    @property
+    def force_remote(self) -> bool:
+        """
+        A property providing the value of the 'force_remote' argument passed to this product at instantiation - that
+        value controls how the init treats the file path.
+
+        :return: The value of 'force_remote' argument passed to this product at instantiation.
+        :rtype: bool
+        """
+        return self._force_remote
+
+    @property
+    def fsspec_kwargs(self) -> Union[dict, None]:
+        """
+        Property getter for the attribute containing the fsspec keyword arguments passed to this
+        product at instantiation. These are for passing configuration information such as credentials for
+        the remote access of S3 buckets
+
+        :return: The fsspec keyword arguments passed to this product at instantiation.
+        :rtype: dict
+        """
+        return self._fsspec_kwargs
 
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
@@ -242,6 +333,16 @@ class BaseProduct:
         for error in self._other_error:
             if "warning" not in error:
                 raise UnknownCommandlineError("{}".format(error))
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def obs_id(self) -> str:
