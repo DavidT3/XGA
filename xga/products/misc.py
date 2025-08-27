@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 15:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:24. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
 from astropy.io import fits
 from astropy.table import Table
+from astropy.wcs import WCS
 
 from . import BaseProduct
 from .. import MISSION_COL_DB
@@ -67,6 +68,8 @@ class EventList(BaseProduct):
         #  information (again if read in).
         self._header = None
         self._data = None
+        # Also include another header attribute, specifically for the event table header
+        self._event_header = None
 
         # These attributes will store information about the currently loaded data, but also all the data that COULD
         #  be loaded. The idea being that we can tightly control which columns are being loaded and presented as
@@ -160,15 +163,25 @@ class EventList(BaseProduct):
         self._data = None
         self._data_col_subset = None
 
-    def _read_header_on_demand(self):
+    def _read_header_on_demand(self, table: str = None):
         """
-        This will read the event list header into memory, without loading the data from the event list main table. That
-        way the user can get access to the summary information stored in the header without wasting a lot of memory.
+        This will read the primary event list header into memory, without loading the data from the event
+        list main table. That way the user can get access to the summary information stored in the header
+        without wasting a lot of memory.
+
+        :param table: Optionally defines which table's header to read; default is to read the primary header. Other
+            options that may be passed are 'event', which loads and stores the event table header in _event_header.
         """
+        if table is None or table == 'primary':
+            table = 0
+        elif table == 'event':
+            table = self._evt_tab_name
+        else:
+            raise ValueError("The 'table' argument must be either 'primary' or 'event'.")
 
         # We could likely treat the remote and local file access identically, but we're doing it this way for
         #  now out of an abundance of caution - I don't know how local files would behave using fsspec
-        if self._header is None:
+        if (table == 0 and self._header is None) or (table == 'event' and self._event_header is None):
             # We alter the loading behaviours of astropy fits.open depending on whether this event list
             #  is pointed at a local file or not
             pass_use_fsspec = False if self._local_file else True
@@ -177,7 +190,11 @@ class EventList(BaseProduct):
                 # Reads only the header information
                 with fits.open(self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec,
                                fsspec_kwargs=pass_fsspec_kw) as fitso:
-                    self._header = fitso[0].header
+                    out_hdr = fitso[table].header
+                    if table == 0:
+                        self._header = out_hdr
+                    else:
+                        self._event_header = out_hdr
 
             except OSError:
                 if self._local_file:
@@ -327,4 +344,34 @@ class EventList(BaseProduct):
         :return:
         :rtype:
         """
-        pass
+        if self.telescope.lower() in MISSION_COL_DB:
+            rel_miss_info = MISSION_COL_DB[self.telescope.lower()]
+            if rel_miss_info['imagecoord'] is None:
+                raise ValueError("Observations taken by {t} may not contain spatial "
+                                 "information.".format(t=self.telescope))
+            elif rel_miss_info['imagecoord'] == 'SKY':
+                x_col = rel_miss_info["x"]
+                y_col = rel_miss_info["y"]
+            elif rel_miss_info['imagecoord'] == "DET":
+                x_col = rel_miss_info["detx"]
+                y_col = rel_miss_info["dety"]
+
+            #
+            en_col = rel_miss_info['ecol']
+            # WCS
+            radec_wcs = WCS(naxis=2)
+
+            radec_wcs.wcs.cdelt = [self.header[rel_miss_info['im_xdelt']], self.header[rel_miss_info['im_ydelt']]]
+            radec_wcs.wcs.crpix = [self.header[rel_miss_info['im_xcritpix']],
+                                   self.header[rel_miss_info['im_ycritpix']]]
+            radec_wcs.wcs.crval = [self.header[rel_miss_info['im_xcritval']],
+                                   self.header[rel_miss_info['im_ycritval']]]
+            radec_wcs.wcs.ctype = [self.header[rel_miss_info['im_xproj']], self.header[rel_miss_info['im_yproj']]]
+        else:
+            x_col = "X"
+            y_col = "Y"
+
+        print(radec_wcs)
+
+
+

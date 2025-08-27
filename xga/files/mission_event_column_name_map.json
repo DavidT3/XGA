@@ -127,6 +127,14 @@
     }
   },
   "suzaku": {
+    "im_xproj": "TCTYP10",
+    "im_xcritpix": "TCRPX10",
+    "im_xcritval": "TCRVL10",
+    "im_xdelt": "TCDLT10",
+    "im_yproj": "TCTYP11",
+    "im_ycritpix": "TCRPX11",
+    "im_ycritval": "TCRVL11",
+    "im_ydelt": "TCDLT11",
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -653,5 +661,19 @@
   },
   "rosat": {
     "events": "STDEVT"
+  },
+  "IXPE": {
+    "events": "EVENTS",
+    "imagecoord": "SKY",
+    "x": "X",
+    "y": "Y",
+    "im_xproj": "TCTYP7",
+    "im_xcritpix": "TCRPX7",
+    "im_xcritval": "TCRVL7",
+    "im_xdelt": "TCDLT7",
+    "im_yproj": "TCTYP8",
+    "im_ycritpix": "TCRPX8",
+    "im_ycritval": "TCRVL8",
+    "im_ydelt": "TCDLT8"
   }
 }
