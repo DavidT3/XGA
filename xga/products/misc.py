@@ -1,10 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 17:02. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
+from astropy import wcs
 from astropy.io import fits
 from astropy.table import Table
+from astropy.units import Quantity
 from astropy.wcs import WCS
 
 from . import BaseProduct
@@ -190,7 +192,7 @@ class EventList(BaseProduct):
         self._data_col_subset = None
 
     @property
-    def radec_sky_wcs(self):
+    def radec_sky_wcs(self) -> wcs.WCS:
         """
         WCS information that relates this event list's 'sky' coordinate system (or the system that is primary and
         used for imaging positions) to RA-Dec coordinates.
@@ -219,6 +221,19 @@ class EventList(BaseProduct):
                 raise NotImplementedError("We cannot yet determine WCS information without header entry names "
                                           "being specified in the 'mission_event_column_name_map.json' file.")
         return self._radec_sky_wcs
+
+    def deg_per_sky(self) -> Quantity:
+        """
+        Uses the Sky-RA/Dec WCS (accessible through the radec_sky_wcs property) to provide the angular
+        size of a pixel in the sky coordinate system - both x and y directions are returned, though they
+        are often the same.
+
+        :return: A two-entry non-scalar property, with the first entry being the x-direction sky pixel
+            scale and the second being the y-direction sky pixel scale.
+        :rtype: Quantity
+        """
+
+        return Quantity(self.radec_sky_wcs.wcs.cdelt, 'deg/pix')
 
     def _read_header_on_demand(self, table: str = None):
         """
