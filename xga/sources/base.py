@@ -1563,7 +1563,15 @@ class BaseSource:
             if len(ann_spec_constituents) != 0:
                 for set_id in ann_spec_constituents:
                     if ann_spec_usable[set_id]:
-                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                        # If an obsID used to generate an existing Annuluar Spectra was dissasociated
+                        # then the following line will lead to a value error, so we add in a try
+                        # except so that a source can still be declared if the AnnularSpectra
+                        # cant be declared
+                        try:
+                            ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+                        except ValueError:
+                            pass
+
                         if self._redshift is not None:
                             # If we know the redshift we will add the radii to the annular spectra in proper
                             #  distance units
