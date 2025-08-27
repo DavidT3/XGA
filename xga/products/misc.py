@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:32. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -149,9 +149,9 @@ class EventList(BaseProduct):
         :rtype: fits.Header
         """
         # If the header attribute is None then we know we have to read the header in
-        if self._header is None:
-            self._read_header_on_demand()
-        return self._header
+        if self._event_header is None:
+            self._read_header_on_demand('event')
+        return self._event_header
 
     @event_header.deleter
     def event_header(self):
@@ -385,12 +385,14 @@ class EventList(BaseProduct):
             # WCS
             radec_wcs = WCS(naxis=2)
 
-            radec_wcs.wcs.cdelt = [self.header[rel_miss_info['im_xdelt']], self.header[rel_miss_info['im_ydelt']]]
-            radec_wcs.wcs.crpix = [self.header[rel_miss_info['im_xcritpix']],
-                                   self.header[rel_miss_info['im_ycritpix']]]
-            radec_wcs.wcs.crval = [self.header[rel_miss_info['im_xcritval']],
-                                   self.header[rel_miss_info['im_ycritval']]]
-            radec_wcs.wcs.ctype = [self.header[rel_miss_info['im_xproj']], self.header[rel_miss_info['im_yproj']]]
+            radec_wcs.wcs.cdelt = [self.event_header[rel_miss_info['im_xdelt']],
+                                   self.event_header[rel_miss_info['im_ydelt']]]
+            radec_wcs.wcs.crpix = [self.event_header[rel_miss_info['im_xcritpix']],
+                                   self.event_header[rel_miss_info['im_ycritpix']]]
+            radec_wcs.wcs.crval = [self.event_header[rel_miss_info['im_xcritval']],
+                                   self.event_header[rel_miss_info['im_ycritval']]]
+            radec_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
+                                   self.event_header[rel_miss_info['im_yproj']]]
         else:
             x_col = "X"
             y_col = "Y"
