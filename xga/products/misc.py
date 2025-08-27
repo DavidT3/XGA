@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:45. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:56. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -103,6 +103,10 @@ class EventList(BaseProduct):
         self._evt_tab_name = "EVENTS" if self.telescope.lower() not in MISSION_COL_DB \
             else MISSION_COL_DB[self.telescope.lower()]['events']
 
+        # The user may want to use WCSes to convert between different coordinate systems (sky to RA-Dec for
+        #  instance), so when they are constructed they will be assigned to these attributes
+        self._radec_sky_wcs = None
+
     @property
     def obs_ids(self) -> list:
         """
@@ -184,6 +188,37 @@ class EventList(BaseProduct):
         del self._data
         self._data = None
         self._data_col_subset = None
+
+    @property
+    def radec_sky_wcs(self):
+        """
+        WCS information that relates this event list's 'sky' coordinate system (or the system that is primary and
+        used for imaging positions) to RA-Dec coordinates.
+
+        :return: The WCS information that relates this event list's 'sky' coordinate system to RA-Dec coordinates.
+        :rtype: astropy.wcs.WCS
+        """
+        # If we haven't already, we need to construct the WCS now
+        if self._radec_sky_wcs is None:
+            # Check whether the telescope has information in the mission file we maintain (derived from XSELECT's
+            #  mission database file) - if it does then we'll use that to specify the header columns that contain
+            #  the relevant WCS information.
+            if self.telescope.lower() in MISSION_COL_DB:
+                rel_miss_info = MISSION_COL_DB[self.telescope.lower()]
+                radec_wcs = WCS(naxis=2)
+                radec_wcs.wcs.cdelt = [self.event_header[rel_miss_info['im_xdelt']],
+                                       self.event_header[rel_miss_info['im_ydelt']]]
+                radec_wcs.wcs.crpix = [self.event_header[rel_miss_info['im_xcritpix']],
+                                       self.event_header[rel_miss_info['im_ycritpix']]]
+                radec_wcs.wcs.crval = [self.event_header[rel_miss_info['im_xcritval']],
+                                       self.event_header[rel_miss_info['im_ycritval']]]
+                radec_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
+                                       self.event_header[rel_miss_info['im_yproj']]]
+                self._radec_sky_wcs = radec_wcs
+            else:
+                raise NotImplementedError("We cannot yet determine WCS information without header entry names "
+                                          "being specified in the 'mission_event_column_name_map.json' file.")
+        return self._radec_sky_wcs
 
     def _read_header_on_demand(self, table: str = None):
         """
@@ -398,7 +433,7 @@ class EventList(BaseProduct):
             x_col = "X"
             y_col = "Y"
 
-        print(radec_wcs)
+        return
 
 
 
