@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 16:45. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -124,9 +124,8 @@ class EventList(BaseProduct):
         :return: The primary header of the event list.
         :rtype: fits.Header
         """
-        # If the header attribute is None then we know we have to read the header in
-        if self._header is None:
-            self._read_header_on_demand()
+        # Reads the header into memory (though this method does check to see if it already exists)
+        self._read_header_on_demand()
         return self._header
 
     @header.deleter
@@ -148,9 +147,8 @@ class EventList(BaseProduct):
         :return: The event table header of the event list.
         :rtype: fits.Header
         """
-        # If the header attribute is None then we know we have to read the header in
-        if self._event_header is None:
-            self._read_header_on_demand('event')
+        # This will read the header in if it does not already exist
+        self._read_header_on_demand('event')
         return self._event_header
 
     @event_header.deleter
@@ -197,15 +195,17 @@ class EventList(BaseProduct):
             options that may be passed are 'event', which loads and stores the event table header in _event_header.
         """
         if table is None or table == 'primary':
+            read_type = 'primary'
             table = 0
         elif table == 'event':
+            read_type = 'event'
             table = self._evt_tab_name
         else:
             raise ValueError("The 'table' argument must be either 'primary' or 'event'.")
 
         # We could likely treat the remote and local file access identically, but we're doing it this way for
         #  now out of an abundance of caution - I don't know how local files would behave using fsspec
-        if (table == 0 and self._header is None) or (table == 'event' and self._event_header is None):
+        if (read_type == 'primary' and self._header is None) or (read_type == 'event' and self._event_header is None):
             # We alter the loading behaviours of astropy fits.open depending on whether this event list
             #  is pointed at a local file or not
             pass_use_fsspec = False if self._local_file else True
@@ -214,10 +214,11 @@ class EventList(BaseProduct):
                 # Reads only the header information
                 with fits.open(self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec,
                                fsspec_kwargs=pass_fsspec_kw) as fitso:
+
                     out_hdr = fitso[table].header
-                    if table == 0:
+                    if read_type == 'primary':
                         self._header = out_hdr
-                    else:
+                    elif read_type == 'event':
                         self._event_header = out_hdr
 
             except OSError:
