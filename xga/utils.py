@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 14:12. Copyright (c) The Contributors
 
 import json
 import os
@@ -11,9 +11,9 @@ from subprocess import Popen, PIPE
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
 
+import importlib_resources
 import numpy as np
 import pandas as pd
-import pkg_resources
 from astropy.constants import m_p, m_e
 from astropy.cosmology import LambdaCDM
 from astropy.units import Quantity, def_unit, add_enabled_units
@@ -523,14 +523,16 @@ RAD_MATCH_PRECISION = Quantity(1e-8, 'deg')
 SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 # XSPEC file extraction (and base fit) scripts
-XGA_EXTRACT = pkg_resources.resource_filename(__name__, "xspec_scripts/xga_extract.tcl")
-BASE_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/general_xspec_fit.xcm")
-CROSS_ARF_XSPEC_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/crossarf_xspec_fit.xcm")
-COUNTRATE_CONV_SCRIPT = pkg_resources.resource_filename(__name__, "xspec_scripts/cr_conv_calc.xcm")
+XGA_EXTRACT = importlib_resources.files(__name__) / "xspec_scripts/xga_extract.tcl"
+BASE_XSPEC_SCRIPT = importlib_resources.files(__name__) / "xspec_scripts/general_xspec_fit.xcm"
+CROSS_ARF_XSPEC_SCRIPT = importlib_resources.files(__name__) / "xspec_scripts/crossarf_xspec_fit.xcm"
+COUNTRATE_CONV_SCRIPT = importlib_resources.files(__name__) / "xspec_scripts/cr_conv_calc.xcm"
+
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
-with open(pkg_resources.resource_filename(__name__, "files/xspec_model_pars.json5"), 'r') as filey:
+with open(importlib_resources.files(__name__) / "files/xspec_model_pars.json5", 'r') as filey:
     MODEL_PARS = json.load(filey)
-with open(pkg_resources.resource_filename(__name__, "files/xspec_model_units.json5"), 'r') as filey:
+
+with open(importlib_resources.files(__name__) / "files/xspec_model_units.json5", 'r') as filey:
     MODEL_UNITS = json.load(filey)
 # ---------------------------------------------------------------------------
 
@@ -587,7 +589,7 @@ else:
     try:
         # The XSPEC intro text includes the version, so I read that out and parse it. That null_script that I'm running
         #  does absolutely nothing, it's just a way for me to get the version out
-        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
+        null_path = importlib_resources.files(__name__) / "xspec_scripts/null_script.xcm"
         xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
                                      shell=True).communicate()
         # Got to parse the stdout to get the XSPEC version, which is what these two lines do
@@ -625,8 +627,9 @@ if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
     SAS_AVAIL = False
 
 # Here we read in files that list the errors and warnings in SAS
-errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
-warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
+errors = pd.read_csv(importlib_resources.files(__name__) / "files/sas_errors.csv", header="infer")
+warnings = pd.read_csv(importlib_resources.files(__name__) / "files/sas_warnings.csv", header="infer")
+
 # Just the names of the errors in two handy constants
 SASERROR_LIST = errors["ErrName"].values
 SASWARNING_LIST = warnings["WarnName"].values
