@@ -1,14 +1,16 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 19:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 23:33. Copyright (c) The Contributors
 from typing import List
 
 import fitsio
 import pandas as pd
 from astropy.io import fits
-from fitsio import FITSHDR
+from astropy.table import Table
 
 from . import BaseProduct
 from ..exceptions import XGADeveloperError
+
+MAIN_EVT_TAB_NAME = {"rosat": "STDEVT"}
 
 
 class EventList(BaseProduct):
@@ -68,6 +70,18 @@ class EventList(BaseProduct):
         self._header = None
         self._data = None
 
+        # These attributes will store information about the currently loaded data, but also all the data that COULD
+        #  be loaded. The idea being that we can tightly control which columns are being loaded and presented as
+        #  pandas dataframes. Just converting the whole events table isn't guaranteed to work (some include
+        #  columns that are arrays, which Pandas will not abide).
+        # We do not believe we can stream a subset of columns, so the purpose of these features is to save on
+        #  memory usage.
+        # This will be a boolean flag, if True then only a subset of columns from the event list table has
+        #  been loaded, if False then they all have.
+        self._data_col_subset = None
+        # Contains the names of ALL the columns in the events table that could be loaded
+        self._all_col_names = None
+
         # We attempt to automatically derive the telescope, ObsID, and instrument (if they haven't been
         #  passed by the user) from the event list header
         if telescope is None:
@@ -81,8 +95,12 @@ class EventList(BaseProduct):
         if obs_ids is not None and (not isinstance(obs_ids, List) or
                                     (isinstance(obs_ids, List) and not all(isinstance(obs, str) for obs in obs_ids))):
             raise ValueError("The 'obs_ids' argument must be a list of strings.")
-
         self._obs_ids = obs_ids
+
+        # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT for
+        #  instance calls it STDEVT
+        self._evt_tab_name = "EVENTS" if self.telescope not in MAIN_EVT_TAB_NAME \
+            else MAIN_EVT_TAB_NAME[self.telescope]
 
     @property
     def obs_ids(self) -> list:
@@ -98,12 +116,12 @@ class EventList(BaseProduct):
 
     # This absolutely doesn't get a setter considering it's the header object
     @property
-    def header(self) -> FITSHDR:
+    def header(self) -> fits.Header:
         """
         Property getter allowing access to the astropy fits header object of this event list.
 
         :return: The primary header of the event list header.
-        :rtype: FITSHDR
+        :rtype: fits.Header
         """
         # If the header attribute is None then we know we have to read the header in
         if self._header is None:
@@ -151,39 +169,121 @@ class EventList(BaseProduct):
 
         # We could likely treat the remote and local file access identically, but we're doing it this way for
         #  now out of an abundance of caution - I don't know how local files would behave using fsspec
-        if self._local_file:
+        if self._header is None:
+            # We alter the loading behaviours of astropy fits.open depending on whether this event list
+            #  is pointed at a local file or not
+            pass_use_fsspec = False if self._local_file else True
+            pass_fsspec_kw = None if self._local_file else self.fsspec_kwargs
             try:
                 # Reads only the header information
-                # self._header = read_header(self.path)
-                with fits.open(self.path, lazy_load_hdus=True) as fitso:
+                with fits.open(self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec,
+                               fsspec_kwargs=pass_fsspec_kw) as fitso:
                     self._header = fitso[0].header
+
             except OSError:
-                raise FileNotFoundError("{f} header cannot be opened. This product (of type {t}) is associated "
-                                        "with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+                if self._local_file:
+                    raise FileNotFoundError("{f} primary header cannot be opened. This product (of type {t}) is "
+                                            "associated with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+                else:
+                    raise FileNotFoundError("The remote file's ({f}) primary header cannot be opened. This "
+                                            "product (of type {t}) is associated "
+                                            "with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+
+    def _read_data_on_demand(self, columns: List[str] = None):
+        """
+        This will read the event list table into memory, allowing for the loading of a specific subset of columns, as
+        well as streaming data from remote files.
+        """
+        # This is rather inelegant, but if we already have the whole set of column names saved in an attribute (which
+        #  happens down below the first time the events table is accessed in any way); we'll check here if the
+        #  columns passed by the user are actually in the table. If we don't have that info this same check is
+        #  performed after a read of the events HDU
+        if self._all_col_names is not None and columns is not None:
+            # If there are any passed columns which aren't in the event list columns, we'll find them here and raise
+            #  an exception (usefully telling the user which columns are bad and which columns they have to choose
+            #  from).
+            bad_cols = [cc for cc in columns if cc not in self._all_col_names]
+            if len(bad_cols) > 0:
+                raise ValueError("The following column(s) are not available in this event "
+                                 "list; {c}. Please choose from; {a}.".format(c=",".join(bad_cols),
+                                                                              a=",".join(self._all_col_names)))
+
+        # In this case some data have already been loaded, but only a subset of columns, and a different subset
+        #  to what is being requested via the 'columns' argument now
+        if (self._data_col_subset is not None and self._data_col_subset and
+                columns is not None and set(list(self._data.colnames)) != set(columns)):
+            if all([cc in self._data.colnames for cc in columns]):
+                run_load = False
+            else:
+                # We'll update the columns argument so that the already loaded columns are loaded again - this is
+                #  a cumulative loading process in that regard
+                columns = list(set(columns + list(self._data.colnames)))
+                # Do we need to load anything
+                run_load = True
+                data_col_subset = True
+        # Here we have already loaded the whole event list table, and we aren't going to take any
+        #  columns away, even though only a subset has been requested this time, so we don't do anything
+        elif self._data_col_subset is not None and not self._data_col_subset and columns is not None:
+            run_load = False
+            data_col_subset = False
+            pass
+        # No data have been loaded yet, and we're loading a subset of columns
+        elif self._data_col_subset is None and columns is not None:
+            data_col_subset = True
+            run_load = True
+        # No data have been loaded yet, and we're loading the whole dataset
+        elif self._data_col_subset is None and columns is None:
+            data_col_subset = False
+            run_load = True
         else:
+            run_load = False
+            # raise XGADeveloperError("No user should see this, contact an XGA developer.")
+
+        # Now we try to load the requested data into this EventList instance (into memory) if necessary
+        if run_load:
             try:
-                with fits.open(self.path, lazy_load_hdus=True, use_fsspec=True,
-                               fsspec_kwargs=self.fsspec_kwargs) as fitso:
-                    self._header = fitso[0].header
+                # We alter the loading behaviours of astropy fits.open depending on whether this event list
+                #  is pointed at a local file or not
+                pass_use_fsspec = False if self._local_file else True
+                pass_fsspec_kw = None if self._local_file else self.fsspec_kwargs
+
+                # Opening the event list fits file - we'll only grab the events data though
+                with fits.open(self.path, lazy_load_hdus=True, use_fsspec=pass_use_fsspec,
+                               fsspec_kwargs=pass_fsspec_kw) as fitso:
+                    rel_tab = fitso[self._evt_tab_name]
+                    # For posterity, and convenience, we'll store the whole set of available column names
+                    if self._all_col_names is None:
+                        self._all_col_names = list(rel_tab.columns.names)
+
+                    # This is rather inelegant (see the top of this function for a similar check and an explanation)
+                    if columns is not None:
+                        # If there are any passed columns which aren't in the event list columns, we'll find them here
+                        #  and raise an exception (usefully telling the user which columns are bad and which columns
+                        #  they have to choose from).
+                        bad_cols = [cc for cc in columns if cc not in self._all_col_names]
+                        if len(bad_cols) > 0:
+                            raise ValueError("The following column(s) are not available in this event list; "
+                                             "{c}. Please choose from; {a}.".format(c=",".join(bad_cols),
+                                                                                    a=",".join(self._all_col_names)))
+
+                    # And finally, we read the event list data into this EventList instance - and if the user specified
+                    #  a set of columns we load only those
+                    if columns is not None:
+                        self._data = Table(rel_tab.data)[columns]
+                    else:
+                        self._data = Table(rel_tab.data)
+
+                    # And update the EventList's knowledge of it having a subset loaded
+                    self._data_col_subset = data_col_subset
+
             except OSError:
-                raise FileNotFoundError("The remote file's ({f}) header cannot be opened. This product (of type {t}) "
-                                        "is associated with {s}.".format(f=self.path, s=self.src_name, t=self.type))
-
-    def _read_data_on_demand(self):
-        """
-        This will read the event list table into memory.
-        """
-
-        try:
-            # reads the events table into a np.recarray
-            arr = fitsio.read(self.path, ext=1)
-            # nicer to return a df than an array
-            self._data = pd.DataFrame.from_records(arr)
-
-        except OSError:
-            raise FileNotFoundError("FITSIO read method cannot open {f}, possibly because there is a problem with "
-                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                    "with {s}.".format(f=self.path, s=self.src_name))
+                if self._local_file:
+                    raise FileNotFoundError("{f} events data cannot be opened. This product (of type {t}) is "
+                                            "associated with {s}.".format(f=self.path, s=self.src_name, t=self.type))
+                else:
+                    raise FileNotFoundError("The remote file's ({f}) events data cannot be opened. This product (of "
+                                            " type {t}) is associated with {s}.".format(f=self.path, s=self.src_name,
+                                                                                        t=self.type))
 
     def unload(self, unload_data: bool = True, unload_header: bool = True):
         """
