@@ -91,8 +91,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
 
     error = err_out_lines + err_err_lines + err_out_line_init
     warn = warn_out_lines + warn_err_lines
-    print('out_file')
-    print(out_file)
+
     if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
@@ -130,10 +129,12 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     elif os.path.exists(out_file) and run_type == "conv_factors" and usable:
         res_tables = out_file
         usable = True
+    elif not os.path.exists(out_file):
+        usable = False
+        res_tables = None
+        error.append('Results table not written.')
     else:
         res_tables = None
-        print('no this is why unusable')
-
         usable = False
 
     # This uses outfile name (which has a structure set by XGA, so this is reliable) to figure out which telescope
@@ -157,8 +158,6 @@ def xspec_call(xspec_func):
 
     @wraps(xspec_func)
     def wrapper(*args, **kwargs):
-        print('in xspec call')
-
         # We'll stop this process in its tracks if XGA cannot find an XSPEC installation
         if XSPEC_VERSION is None:
             raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
@@ -238,16 +237,6 @@ def xspec_call(xspec_func):
                         raise XSPECFitError(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
-
-                print('len(res_set)')
-                print(len(res_set))
-
-                print('res_set[1]')
-                print(res_set[1])
-            
-                print('run_type')
-                print(run_type)
-
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
