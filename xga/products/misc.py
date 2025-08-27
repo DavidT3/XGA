@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 23:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 23:40. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -285,6 +285,21 @@ class EventList(BaseProduct):
                                             " type {t}) is associated with {s}.".format(f=self.path, s=self.src_name,
                                                                                         t=self.type))
 
+    def get_columns_from_data(self, col_names: List[str]) -> pd.DataFrame:
+        """
+        This method allows you to retrieve specific columns from the event list table, without loading the whole table
+        into memory.
+
+        :param List[str] col_names: A list of column names to retrieve.
+        :return: A pandas DataFrame containing the specified columns.
+        :rtype: pd.DataFrame
+        """
+        # This will handle updating the loaded data, if another subset has already been loaded, and won't re-load
+        #  data unless it really needs to. Running this will result in changes to _data
+        self._read_data_on_demand(col_names)
+
+        return self.data[col_names].to_pandas()
+
     def unload(self, unload_data: bool = True, unload_header: bool = True):
         """
         This method allows you to safely remove the header and/or data information stored in memory.
@@ -306,18 +321,3 @@ class EventList(BaseProduct):
         # And if they want the header gone then we use the property delete method for header
         if unload_header:
             del self.header
-
-    def get_columns_from_data(self, col_names: List[str]) -> pd.DataFrame:
-        """
-        This method allows you to retrieve specific columns from the event list table, without loading the whole table
-        into memory.
-
-        :param List[str] col_names: A list of column names to retrieve.
-        :return: A pandas DataFrame containing the specified columns.
-        :rtype: pd.DataFrame
-        """
-        # This will handle updating the loaded data, if another subset has already been loaded, and won't re-load
-        #  data unless it really needs to. Running this will result in changes to _data
-        self._read_data_on_demand(col_names)
-
-        return self.data[col_names].to_pandas()
