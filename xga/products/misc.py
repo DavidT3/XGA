@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 17:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 17:04. Copyright (c) The Contributors
 from typing import List
 
 import pandas as pd
@@ -222,6 +222,7 @@ class EventList(BaseProduct):
                                           "being specified in the 'mission_event_column_name_map.json' file.")
         return self._radec_sky_wcs
 
+    @property
     def deg_per_sky(self) -> Quantity:
         """
         Uses the Sky-RA/Dec WCS (accessible through the radec_sky_wcs property) to provide the angular
