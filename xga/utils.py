@@ -18,6 +18,7 @@ from astropy.constants import m_p, m_e
 from astropy.cosmology import LambdaCDM
 from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
+from astropy.io import fits
 from fitsio import FITSHDR
 from fitsio import read_header
 from tqdm import tqdm
@@ -172,7 +173,13 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                     if os.path.exists(evt_path):
                         # Just read in the header of the events file - want to avoid reading a big old table of
                         #  events into memory, as we might be doing this a bunch of times
-                        evts_header = read_header(evt_path, ext="EVENTS")
+                        try:
+                            with fits.open(evt_path) as hdul:
+                                evts_header = hdul[0].header
+                        except Exception as exc:
+                            print(evt_path)
+                            raise exc
+                        # evts_header = read_header(evt_path, ext="EVENTS")
 
                         # For the eRASS fields it seems that RA_CEN and DEC_CEN are the best ways of defining where
                         #  the data is located on the sky. Non-survey modes however should use the RA_PNT and DEC_PNT

@@ -4,6 +4,7 @@
 import gc
 import os
 import pickle
+import pprint
 from copy import deepcopy
 from shutil import move, copyfile
 from typing import Tuple, List, Dict, Union
@@ -3974,7 +3975,7 @@ class BaseSource:
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-
+        
         # If the masks are None, then they are set to an array of zeros
         if mask is None:
             mask = np.zeros(mask_image.shape)
