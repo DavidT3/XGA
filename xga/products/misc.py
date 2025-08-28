@@ -1,7 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 17:04. Copyright (c) The Contributors
-from typing import List
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 21:32. Copyright (c) The Contributors
+from typing import List, Tuple
 
+import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.io import fits
@@ -9,7 +10,7 @@ from astropy.table import Table
 from astropy.units import Quantity
 from astropy.wcs import WCS
 
-from . import BaseProduct
+from . import BaseProduct, Image
 from .. import MISSION_COL_DB
 from ..exceptions import XGADeveloperError
 
@@ -216,6 +217,13 @@ class EventList(BaseProduct):
                                        self.event_header[rel_miss_info['im_ycritval']]]
                 radec_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
                                        self.event_header[rel_miss_info['im_yproj']]]
+
+                x_lims = (self.event_header[rel_miss_info['im_xlim_low']],
+                            self.event_header[rel_miss_info['im_xlim_upp']])
+                y_lims = (self.event_header[rel_miss_info['im_ylim_low']],
+                          self.event_header[rel_miss_info['im_ylim_upp']])
+                # Set the lower and upper limits of the sky pixel coordinate system
+                radec_wcs.pixel_bounds = [x_lims, y_lims]
                 self._radec_sky_wcs = radec_wcs
             else:
                 raise NotImplementedError("We cannot yet determine WCS information without header entry names "
@@ -234,7 +242,19 @@ class EventList(BaseProduct):
         :rtype: Quantity
         """
 
-        return Quantity(self.radec_sky_wcs.wcs.cdelt, 'deg/pix')
+        return np.abs(Quantity(self.radec_sky_wcs.wcs.cdelt, 'deg/pix'))
+
+    @property
+    def sky_pix_lims(self) -> Tuple[Quantity, Quantity]:
+        """
+        The X and Y pixel limits of the sky coordinate system (or the system that is primary and
+        used for imaging positions).
+
+        :return: Two non-scalar quantities, with the first representing the lower and upper allowed values
+            for the primary coordinate (usually sky) coordinate system x-axis, and the second being for the y-axis.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix'), Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix')
 
     def _read_header_on_demand(self, table: str = None):
         """
@@ -414,12 +434,14 @@ class EventList(BaseProduct):
         if unload_header:
             del self.header
 
-    def generate_image(self):
+    def generate_image(self, bin_size: Quantity = None, x_lims: Quantity = None, y_lims: Quantity = None,
+                       lo_en: Quantity = None, hi_en: Quantity = None, donor_image: Image = None):
         """
 
         :return:
         :rtype:
         """
+        #
         if self.telescope.lower() in MISSION_COL_DB:
             rel_miss_info = MISSION_COL_DB[self.telescope.lower()]
             if rel_miss_info['imagecoord'] is None:
@@ -431,25 +453,46 @@ class EventList(BaseProduct):
             elif rel_miss_info['imagecoord'] == "DET":
                 x_col = rel_miss_info["detx"]
                 y_col = rel_miss_info["dety"]
-
             #
             en_col = rel_miss_info['ecol']
-            # WCS
-            radec_wcs = WCS(naxis=2)
-
-            radec_wcs.wcs.cdelt = [self.event_header[rel_miss_info['im_xdelt']],
-                                   self.event_header[rel_miss_info['im_ydelt']]]
-            radec_wcs.wcs.crpix = [self.event_header[rel_miss_info['im_xcritpix']],
-                                   self.event_header[rel_miss_info['im_ycritpix']]]
-            radec_wcs.wcs.crval = [self.event_header[rel_miss_info['im_xcritval']],
-                                   self.event_header[rel_miss_info['im_ycritval']]]
-            radec_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
-                                   self.event_header[rel_miss_info['im_yproj']]]
         else:
+            raise NotImplementedError("'{t}' does not have an mission DB entry, and manual specification is not "
+                                      "supported yet.".format(t=self.telescope))
             x_col = "X"
             y_col = "Y"
 
-        return
+        # Making some arguments into quantities with an assumed unit if they were passed as integers.
+        # If a simple integer is passed, we assume that it is a bin size in pixels
+        if isinstance(bin_size, int):
+            bin_size = Quantity(bin_size, 'pix')
+        # Converting any non-quantity integer boundary limits to Quantity objects, assuming 'pix' units
+        if (not isinstance(x_lims, Quantity) and
+                (isinstance(x_lims, (list, np.ndarray)) and all([isinstance(xl, int) for xl in x_lims]))):
+            x_lims = Quantity(x_lims, 'pix')
+        if (not isinstance(y_lims, Quantity) and
+                (isinstance(y_lims, (list, np.ndarray)) and all([isinstance(yl, int) for yl in y_lims]))):
+            y_lims = Quantity(y_lims, 'pix')
 
+        # Parsing the user-specified data limits
+        if x_lims is not None and x_lims.diff() <= 0:
+            raise ValueError("The second element of 'x_lims' must be greater than the first.")
+        elif x_lims is not None and (x_lims.unit.is_equivalent('deg')):
+            # mid_dec =
+            x_lims = self.radec_sky_wcs.all_world2pix()
+
+        # Parsing the user-specified bin size, if indeed they did specify one - if not, then we
+        #  pull the default size for the mission
+        if bin_size is None and ('default_im_binsize' not in MISSION_COL_DB[self.telescope.lower()] or
+                                 MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is None):
+            raise ValueError("No default image bin size is defined for {t} in the mission database file, please "
+                             "pass the 'bin_size' argument".format(t=self.telescope))
+        elif bin_size is None and MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is None:
+            bin_size = Quantity(MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'])
+
+        #
+        if bin_size.unit.is_equivalent('deg'):
+            pass
+        elif bin_size.unit.is_equivalent('pix'):
+            pass
 
 
