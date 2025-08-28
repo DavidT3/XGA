@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 21:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 23:18. Copyright (c) The Contributors
 from typing import List, Tuple
 
 import numpy as np
@@ -254,7 +254,8 @@ class EventList(BaseProduct):
             for the primary coordinate (usually sky) coordinate system x-axis, and the second being for the y-axis.
         :rtype: Tuple[Quantity, Quantity]
         """
-        return Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix'), Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix')
+        return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix').astype(int),
+                    Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix').astype(int))
 
     def _read_header_on_demand(self, table: str = None):
         """
@@ -477,8 +478,34 @@ class EventList(BaseProduct):
         if x_lims is not None and x_lims.diff() <= 0:
             raise ValueError("The second element of 'x_lims' must be greater than the first.")
         elif x_lims is not None and (x_lims.unit.is_equivalent('deg')):
-            # mid_dec =
-            x_lims = self.radec_sky_wcs.all_world2pix()
+            mid_pos = self.radec_sky_wcs.all_pix2world(*Quantity([self.sky_pix_lims[0].mean(),
+                                                        self.sky_pix_lims[1].mean()]).value, 1)
+            low_x_lim = self.radec_sky_wcs.all_world2pix(x_lims[0].value, mid_pos[1], 1)[0]
+            upp_x_lim = self.radec_sky_wcs.all_world2pix(x_lims[1].value, mid_pos[1], 1)[0]
+            x_lims = np.sort(Quantity([low_x_lim, upp_x_lim]))
+            x_lims[0] = np.floor(x_lims[0])
+            x_lims[1] = np.ceil(x_lims[1])
+        elif x_lims is None:
+            x_lims = self.sky_pix_lims[0]
+        #
+        x_lims = x_lims.astype(int)
+
+
+        if y_lims is not None and y_lims.diff() <= 0:
+            raise ValueError("The second element of 'y_lims' must be greater than the first.")
+        elif y_lims is not None and (y_lims.unit.is_equivalent('deg')):
+            mid_pos = self.radec_sky_wcs.all_pix2world(*Quantity([self.sky_pix_lims[0].mean(),
+                                                        self.sky_pix_lims[1].mean()]).value, 1)
+            low_y_lim = self.radec_sky_wcs.all_world2pix(mid_pos[0], y_lims[0].value, 1)[1]
+            upp_y_lim = self.radec_sky_wcs.all_world2pix(mid_pos[0], y_lims[1].value, 1)[1]
+            y_lims = np.sort(Quantity([low_y_lim, upp_y_lim]))
+            y_lims[0] = np.floor(y_lims[0])
+            y_lims[1] = np.ceil(y_lims[1])
+        elif y_lims is None:
+            y_lims = self.sky_pix_lims[1]
+        #
+        x_lims = x_lims.astype(int)
+        y_lims = y_lims.astype(int)
 
         # Parsing the user-specified bin size, if indeed they did specify one - if not, then we
         #  pull the default size for the mission
@@ -486,13 +513,43 @@ class EventList(BaseProduct):
                                  MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is None):
             raise ValueError("No default image bin size is defined for {t} in the mission database file, please "
                              "pass the 'bin_size' argument".format(t=self.telescope))
-        elif bin_size is None and MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is None:
+        elif bin_size is None and MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is not None:
             bin_size = Quantity(MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'])
 
         #
         if bin_size.unit.is_equivalent('deg'):
-            pass
-        elif bin_size.unit.is_equivalent('pix'):
-            pass
+            # We enforce square pixels by using the first element of this calculation - though
+            #  in most cases the calculated bin size for x and y axes will be the same
+            bin_size = np.ceil((bin_size / self.deg_per_sky).to('pix'))[0]
+
+        # After all of this converting and dealing with different potential inputs for bin_size, we store
+        #  the final angular width/height of each pixel
+        ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
+
+        #
+        bin_size = bin_size.astype(int)
+        rel_evt_data = self.get_columns_from_data([x_col, y_col, en_col])
+
+        x_bins = np.arange(x_lims.value[0], x_lims.value[1]+bin_size.value, bin_size.value)
+        y_bins = np.arange(y_lims.value[0], y_lims.value[1]+bin_size.value, bin_size.value)
+
+        binned_data = np.histogram2d(rel_evt_data[y_col], rel_evt_data[x_col], bins=(y_bins, x_bins))[0]
+
+        # Setting up the new WCS
+        im_wcs = WCS(naxis=2)
+        im_wcs.wcs.cdelt = [np.sign(self.event_header[rel_miss_info['im_xdelt']])*ang_bin_size,
+                                np.sign(self.event_header[rel_miss_info['im_ydelt']])*ang_bin_size]
+
+        min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 1)
+        im_wcs.wcs.crpix = [1, 1]
+        im_wcs.wcs.crval = [min_bnd_radec[0], min_bnd_radec[1]]
+
+        im_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
+                               self.event_header[rel_miss_info['im_yproj']]]
+
+        # Set the lower and upper limits of the sky pixel coordinate system
+        im_wcs.pixel_bounds = [x_lims.value, y_lims.value]
+
+        return binned_data, im_wcs
 
 

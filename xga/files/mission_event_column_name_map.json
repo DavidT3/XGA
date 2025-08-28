@@ -139,6 +139,7 @@
     "im_ydelt": "TCDLT11",
     "im_ylim_low": "TLMIN11",
     "im_ylim_upp": "TLMAX11",
+    "default_im_binsize": "4 pix",
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
