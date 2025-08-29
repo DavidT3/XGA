@@ -139,7 +139,7 @@
     "im_ydelt": "TCDLT11",
     "im_ylim_low": "TLMIN11",
     "im_ylim_upp": "TLMAX11",
-    "default_im_binsize": "4 pix",
+    "default_im_binsize": "1 pix",
     "submkey": "NONE",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -667,7 +667,7 @@
   "rosat": {
     "events": "STDEVT"
   },
-  "IXPE": {
+  "ixpe": {
     "events": "EVENTS",
     "imagecoord": "SKY",
     "x": "X",
@@ -683,6 +683,7 @@
     "im_ycritval": "TCRVL8",
     "im_ydelt": "TCDLT8",
     "im_ylim_low": "TLMIN8",
-    "im_ylim_upp": "TLMAX8"
+    "im_ylim_upp": "TLMAX8",
+    "ecol": "PI"
   }
 }

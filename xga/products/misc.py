@@ -1,11 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 23:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/08/2025, 21:23. Copyright (c) The Contributors
+import os.path
 from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.io import fits
+from astropy.io.fits import PrimaryHDU, HDUList
 from astropy.table import Table
 from astropy.units import Quantity
 from astropy.wcs import WCS
@@ -436,7 +438,8 @@ class EventList(BaseProduct):
             del self.header
 
     def generate_image(self, bin_size: Quantity = None, x_lims: Quantity = None, y_lims: Quantity = None,
-                       lo_en: Quantity = None, hi_en: Quantity = None, donor_image: Image = None):
+                       lo_en: Quantity = None, hi_en: Quantity = None, donor_image: Image = None,
+                       save_path: str = None):
         """
 
         :return:
@@ -461,6 +464,15 @@ class EventList(BaseProduct):
                                       "supported yet.".format(t=self.telescope))
             x_col = "X"
             y_col = "Y"
+
+        ###################### Validating input configuration ######################
+
+        # Checking that the directory in which the image should be saved (if the user has specified that
+        #  it should be written to a file, and a directory is part of the save_path) actually exists
+        if (save_path is not None and
+                (os.path.dirname(save_path) != '' and not os.path.exists(os.path.dirname(save_path)))):
+            raise FileNotFoundError("The directory in which the image is to be saved "
+                                    "({d}) does not exist.".format(d=os.path.dirname(save_path)))
 
         # Making some arguments into quantities with an assumed unit if they were passed as integers.
         # If a simple integer is passed, we assume that it is a bin size in pixels
@@ -489,7 +501,6 @@ class EventList(BaseProduct):
             x_lims = self.sky_pix_lims[0]
         #
         x_lims = x_lims.astype(int)
-
 
         if y_lims is not None and y_lims.diff() <= 0:
             raise ValueError("The second element of 'y_lims' must be greater than the first.")
@@ -522,6 +533,8 @@ class EventList(BaseProduct):
             #  in most cases the calculated bin size for x and y axes will be the same
             bin_size = np.ceil((bin_size / self.deg_per_sky).to('pix'))[0]
 
+        ############################################################################
+
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
         ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
@@ -549,6 +562,16 @@ class EventList(BaseProduct):
 
         # Set the lower and upper limits of the sky pixel coordinate system
         im_wcs.pixel_bounds = [x_lims.value, y_lims.value]
+
+        # We validated the 'save_path' argument earlier, so we'll just get on and save the file
+        if save_path is not None:
+            # Setting up the header that we'll feed into the HDU that will become the image file - the WCS
+            #  is the most important part of that
+            im_hdr = im_wcs.to_header()
+            # Create a single-HDU fits file, just containing the image
+            im_hdu = PrimaryHDU(binned_data, im_hdr)
+            hdu_list = HDUList([im_hdu])
+            hdu_list.writeto(save_path)
 
         return binned_data, im_wcs
 
