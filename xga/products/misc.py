@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/08/2025, 21:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 19:05. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 
@@ -9,7 +9,7 @@ from astropy import wcs
 from astropy.io import fits
 from astropy.io.fits import PrimaryHDU, HDUList
 from astropy.table import Table
-from astropy.units import Quantity
+from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
 from . import BaseProduct, Image
@@ -111,6 +111,10 @@ class EventList(BaseProduct):
         # The user may want to use WCSes to convert between different coordinate systems (sky to RA-Dec for
         #  instance), so when they are constructed they will be assigned to these attributes
         self._radec_sky_wcs = None
+
+        # Here we store the mapping between channel and energy, used for the generation of images and
+        #  lightcurves. This can be pulled from the mission database file, or set by the user.
+        self._ev_per_channel = None
 
     @property
     def obs_ids(self) -> list:
@@ -258,6 +262,43 @@ class EventList(BaseProduct):
         """
         return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix').astype(int),
                     Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix').astype(int))
+
+    # @property
+    # def ev_per_channel(self) -> Quantity:
+    #     """
+    #     The mapping between channel values in the energy column of the notebook, and an absolute energy
+    #     value in eV. This is used in the construction of images and lightcurves from event lists.
+    #
+    #     :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
+    #         mapping value in the form of an astropy quantity in units of eV/chan.
+    #     :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
+    #     :rtype: Quantity
+    #     """
+    #     if self._ev_per_channel is None:
+    #         MISSION_COL_DB
+    #
+    #         self._ev_per_channel = None
+    #     return self._ev_per_channel
+    #
+    # @ev_per_channel.setter
+    # def ev_per_channel(self, new_val: Quantity):
+    #     """
+    #     The mapping between channel values in the energy column of the notebook, and an absolute energy
+    #     value in eV. This is used in the construction of images and lightcurves from event lists.
+    #
+    #     :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
+    #         mapping value in the form of an astropy quantity in units of eV/chan.
+    #     :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
+    #     :rtype: Quantity
+    #     """
+    #     # Validity checks on the input
+    #     if not isinstance(new_val, Quantity):
+    #         raise ValueError("The 'new_val' argument must be an astropy quantity.")
+    #     elif not new_val.unit.is_equivalent('eV/chan'):
+    #         raise UnitConversionError("The 'new_val' argument must be in units of eV/chan.")
+    #
+    #     # Converting to the expected units
+    #     self._ev_per_channel = new_val.to('eV/chan')
 
     def _read_header_on_demand(self, table: str = None):
         """
@@ -466,18 +507,21 @@ class EventList(BaseProduct):
             y_col = "Y"
 
         ###################### Validating input configuration ######################
-
+        ################## Checking the save path ##################
         # Checking that the directory in which the image should be saved (if the user has specified that
         #  it should be written to a file, and a directory is part of the save_path) actually exists
         if (save_path is not None and
                 (os.path.dirname(save_path) != '' and not os.path.exists(os.path.dirname(save_path)))):
             raise FileNotFoundError("The directory in which the image is to be saved "
                                     "({d}) does not exist.".format(d=os.path.dirname(save_path)))
+        ############################################################
 
+        ######### Converting ints to assumed pixel coords ##########
         # Making some arguments into quantities with an assumed unit if they were passed as integers.
         # If a simple integer is passed, we assume that it is a bin size in pixels
         if isinstance(bin_size, int):
             bin_size = Quantity(bin_size, 'pix')
+
         # Converting any non-quantity integer boundary limits to Quantity objects, assuming 'pix' units
         if (not isinstance(x_lims, Quantity) and
                 (isinstance(x_lims, (list, np.ndarray)) and all([isinstance(xl, int) for xl in x_lims]))):
@@ -485,7 +529,9 @@ class EventList(BaseProduct):
         if (not isinstance(y_lims, Quantity) and
                 (isinstance(y_lims, (list, np.ndarray)) and all([isinstance(yl, int) for yl in y_lims]))):
             y_lims = Quantity(y_lims, 'pix')
+        ############################################################
 
+        ########## Setting up x and y coordinate limits ############
         # Parsing the user-specified data limits
         if x_lims is not None and x_lims.diff() <= 0:
             raise ValueError("The second element of 'x_lims' must be greater than the first.")
@@ -517,7 +563,9 @@ class EventList(BaseProduct):
         #
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
+        ############################################################
 
+        ############### Setting up the binning size ################
         # Parsing the user-specified bin size, if indeed they did specify one - if not, then we
         #  pull the default size for the mission
         if bin_size is None and ('default_im_binsize' not in MISSION_COL_DB[self.telescope.lower()] or
@@ -532,6 +580,23 @@ class EventList(BaseProduct):
             # We enforce square pixels by using the first element of this calculation - though
             #  in most cases the calculated bin size for x and y axes will be the same
             bin_size = np.ceil((bin_size / self.deg_per_sky).to('pix'))[0]
+        ############################################################
+
+        ############### Setting up the energy limits ###############
+        # Initially check that both energy boundaries have been set
+        check_en = [lo_en is not None, hi_en is not None]
+        if any(check_en) and not all(check_en):
+            raise ValueError("If either 'lo_en' or 'hi_en' are specified, both must be.")
+        # Check that they are both in the correct units
+        elif lo_en is not None and any([not lo_en.unit.is_equivalent('eV'), not hi_en.unit.is_equivalent('eV')]):
+            raise UnitConversionError("Quantities passed to 'lo_en' and 'hi_en' must be convertible to eV.")
+        # Check validity of lower and upper energy limits
+        elif lo_en is not None and (lo_en >= hi_en):
+            raise ValueError("Value passed to 'lo_en' must be less than or equal to 'hi_en'.")
+
+        # phamax - mission database file keyword for the maximum allowable channel value
+
+        ############################################################
 
         ############################################################################
 
