@@ -1,9 +1,13 @@
 [build-system]
-requires = ["setuptools>=80.0.0", "wheel", "versioneer[toml]"]
+requires = ["setuptools>=80.0.0", "versioneer[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "xga"
+# A placeholder version to get past the hard requirement for a version field here - will be overwritten by
+#  versioneer
+#version = "0.0.0"
+dynamic = ["version"]
 description = "Python package to easily generate and analyse X-ray astronomy data products, ideal for investigating large samples."
 authors = [
     { name = "David J Turner", email = "djturner@umbc.edu" },
@@ -12,8 +16,7 @@ authors = [
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-urls = { Homepage = "https://github.com/DavidT3/XGA", Documentation = "https://xga.readthedocs.io/",
-         Issues = "https://github.com/DavidT3/XGA/issues"}
+urls = { Homepage = "https://github.com/DavidT3/XGA", Documentation = "https://xga.readthedocs.io/", Issues = "https://github.com/DavidT3/XGA/issues"}
 dependencies = [
     "astropy>=6.1.2",
     "numpy>=1.26.4",

@@ -1,5 +1,5 @@
 versioneer>=0.29
-setuptools>=71.0.4
+setuptools>=80.0.0
 numpy>=1.26.4
 astropy>=6.1.2
 tqdm>=4.66.4
