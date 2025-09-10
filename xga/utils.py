@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 21:52. Copyright (c) The Contributors
 
 import json
 import os
@@ -837,8 +837,12 @@ else:
 #  such is set up slightly differently (with telescope names as keys in the observation
 #  census for instance), so some small changes must be made to make the constants defined
 #  here usable in the rest of the current module
-CENSUS = CENSUS['xmm']
-BLACKLIST = BLACKLIST['xmm']
+if 'xmm' in CENSUS:
+    CENSUS = CENSUS['xmm']
+    BLACKLIST = BLACKLIST['xmm']
+else:
+    CENSUS = None
+    BLACKLIST = None
 
 # The multi-mission branch has different behaviours for the creation of output directories, and this chunk of
 #  code was removed, so it must be reinstated for XMM-only XGA
