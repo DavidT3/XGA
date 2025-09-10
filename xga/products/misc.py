@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 22:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 23:26. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 
@@ -263,42 +263,43 @@ class EventList(BaseProduct):
         return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix').astype(int),
                     Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix').astype(int))
 
-    # @property
-    # def ev_per_channel(self) -> Quantity:
-    #     """
-    #     The mapping between channel values in the energy column of the notebook, and an absolute energy
-    #     value in eV. This is used in the construction of images and lightcurves from event lists.
-    #
-    #     :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
-    #         mapping value in the form of an astropy quantity in units of eV/chan.
-    #     :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
-    #     :rtype: Quantity
-    #     """
-    #     if self._ev_per_channel is None:
-    #         MISSION_COL_DB
-    #
-    #         self._ev_per_channel = None
-    #     return self._ev_per_channel
-    #
-    # @ev_per_channel.setter
-    # def ev_per_channel(self, new_val: Quantity):
-    #     """
-    #     The mapping between channel values in the energy column of the notebook, and an absolute energy
-    #     value in eV. This is used in the construction of images and lightcurves from event lists.
-    #
-    #     :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
-    #         mapping value in the form of an astropy quantity in units of eV/chan.
-    #     :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
-    #     :rtype: Quantity
-    #     """
-    #     # Validity checks on the input
-    #     if not isinstance(new_val, Quantity):
-    #         raise ValueError("The 'new_val' argument must be an astropy quantity.")
-    #     elif not new_val.unit.is_equivalent('eV/chan'):
-    #         raise UnitConversionError("The 'new_val' argument must be in units of eV/chan.")
-    #
-    #     # Converting to the expected units
-    #     self._ev_per_channel = new_val.to('eV/chan')
+    @property
+    def ev_per_channel(self) -> Quantity:
+        """
+        The mapping between channel values in the energy column of the notebook, and an absolute energy
+        value in eV. This is used in the construction of images and lightcurves from event lists.
+
+        :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
+            mapping value in the form of an astropy quantity in units of eV/chan.
+        :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
+        :rtype: Quantity
+        """
+        raise NotImplementedError("This property is not yet implemented.")
+        if self._ev_per_channel is None:
+            MISSION_COL_DB
+
+            self._ev_per_channel = None
+        return self._ev_per_channel
+
+    @ev_per_channel.setter
+    def ev_per_channel(self, new_val: Quantity):
+        """
+        The mapping between channel values in the energy column of the notebook, and an absolute energy
+        value in eV. This is used in the construction of images and lightcurves from event lists.
+
+        :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
+            mapping value in the form of an astropy quantity in units of eV/chan.
+        :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
+        :rtype: Quantity
+        """
+        # Validity checks on the input
+        if not isinstance(new_val, Quantity):
+            raise ValueError("The 'new_val' argument must be an astropy quantity.")
+        elif not new_val.unit.is_equivalent('eV/chan'):
+            raise UnitConversionError("The 'new_val' argument must be in units of eV/chan.")
+
+        # Converting to the expected units
+        self._ev_per_channel = new_val.to('eV/chan')
 
     def _read_header_on_demand(self, table: str = None):
         """
@@ -486,7 +487,6 @@ class EventList(BaseProduct):
         :return:
         :rtype:
         """
-        raise NotImplementedError("Intrinsic generation of images from EventList instances is not fully implemented.")
         #
         if self.telescope.lower() in MISSION_COL_DB:
             rel_miss_info = MISSION_COL_DB[self.telescope.lower()]
