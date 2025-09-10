@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 21:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/09/2025, 17:24. Copyright (c) The Contributors
 
+import importlib
 import json
 import os
 import re
@@ -11,7 +12,6 @@ from subprocess import Popen, PIPE
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
 
-import importlib_resources
 import numpy as np
 import pandas as pd
 from astropy.constants import m_p, m_e
@@ -523,23 +523,23 @@ RAD_MATCH_PRECISION = Quantity(1e-8, 'deg')
 SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan", "yellow"]}
 
 # XSPEC file extraction (and base fit) scripts
-XGA_EXTRACT = importlib_resources.files(__name__) / "xspec_scripts/xga_extract.tcl"
-BASE_XSPEC_SCRIPT = importlib_resources.files(__name__) / "xspec_scripts/general_xspec_fit.xcm"
-CROSS_ARF_XSPEC_SCRIPT = importlib_resources.files(__name__) / "xspec_scripts/crossarf_xspec_fit.xcm"
-COUNTRATE_CONV_SCRIPT = importlib_resources.files(__name__) / "xspec_scripts/cr_conv_calc.xcm"
+XGA_EXTRACT = importlib.resources.files(__name__) / "xspec_scripts/xga_extract.tcl"
+BASE_XSPEC_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/general_xspec_fit.xcm"
+CROSS_ARF_XSPEC_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/crossarf_xspec_fit.xcm"
+COUNTRATE_CONV_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/cr_conv_calc.xcm"
 
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
-with open(importlib_resources.files(__name__) / "files/xspec_model_pars.json5", 'r') as filey:
+with open(importlib.resources.files(__name__) / "files/xspec_model_pars.json5", 'r') as filey:
     MODEL_PARS = json.load(filey)
 
-with open(importlib_resources.files(__name__) / "files/xspec_model_units.json5", 'r') as filey:
+with open(importlib.resources.files(__name__) / "files/xspec_model_units.json5", 'r') as filey:
     MODEL_UNITS = json.load(filey)
 
 # No longer XSPEC related constants/files, but here we read in a file that helps map column names in
 #  event files to mission-independent names (e.g. specifying which table name contains events in an
 #  event list). This is based on the mission database file for XSELECT, but has been modified
 #  quite a lot.
-with open(importlib_resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
+with open(importlib.resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
     MISSION_COL_DB = json.load(filey)
 # ---------------------------------------------------------------------------
 
@@ -596,7 +596,7 @@ else:
     try:
         # The XSPEC intro text includes the version, so I read that out and parse it. That null_script that I'm running
         #  does absolutely nothing, it's just a way for me to get the version out
-        null_path = importlib_resources.files(__name__) / "xspec_scripts/null_script.xcm"
+        null_path = importlib.resources.files(__name__) / "xspec_scripts/null_script.xcm"
         xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
                                      shell=True).communicate()
         # Got to parse the stdout to get the XSPEC version, which is what these two lines do
@@ -634,8 +634,8 @@ if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
     SAS_AVAIL = False
 
 # Here we read in files that list the errors and warnings in SAS
-errors = pd.read_csv(importlib_resources.files(__name__) / "files/sas_errors.csv", header="infer")
-warnings = pd.read_csv(importlib_resources.files(__name__) / "files/sas_warnings.csv", header="infer")
+errors = pd.read_csv(importlib.resources.files(__name__) / "files/sas_errors.csv", header="infer")
+warnings = pd.read_csv(importlib.resources.files(__name__) / "files/sas_warnings.csv", header="infer")
 
 # Just the names of the errors in two handy constants
 SASERROR_LIST = errors["ErrName"].values
