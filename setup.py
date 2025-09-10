@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 16:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 27/08/2025, 14:12. Copyright (c) The Contributors
 
 from os import path
 
@@ -23,7 +23,7 @@ setup(name='xga',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='David J Turner',
-      author_email='turne540@msu.edu',
+      author_email='djturner@umbc.edu',
       url='http://github.com/DavidT3/XGA',
       setup_requires=[],
       install_requires=["astropy>=6.1.2", "numpy>=1.26.4", "tqdm>=4.66.4", "regions>=0.9", "pandas>=2.2.2",
