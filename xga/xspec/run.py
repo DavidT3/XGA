@@ -240,7 +240,6 @@ def xspec_call(xspec_func):
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
-                        print(res_set[0])
                         global_results = res_table["RESULTS"][0]
                         model = global_results["MODEL"].strip(" ")
 
@@ -385,16 +384,13 @@ def xspec_call(xspec_func):
                     #  the last spectra that was opened in the loop
                     ann_spec = s.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
                     try:
-                        print('pre_fit_data')
                         ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                 ann_obs_order[tel])
-                        print('post_fit_data')
 
                         # The most likely reason for running XSPEC fits to a profile is to create a temp. profile
                         #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
                         #  generate a Tx profile automatically
                         if model == "constant*tbabs*apec":
-                            print('in here xspec call')
                             temp_prof = ann_spec.generate_profile(model, 'kT', 'keV')
                             s.update_products(temp_prof)
 

@@ -410,17 +410,13 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         # if the user has set combine_obs to True and there is only one observation, then we 
         # use the combine_obs = False functionality instead
         if use_combine_obs and len(source.obs_ids['erosita']) == 1:
-            print('should be in here')
             use_combine_obs = False
         
         if not use_combine_obs:
             # Check which event lists are associated with each individual source
             for pack in source.get_products("events",  telescope='erosita', just_obj=False):
-                print('should be in here as well')
                 obs_id = pack[1]
-                print(obs_id)
                 inst = pack[2]
-                print(inst)
                 # ASSUMPTION4 new output directory structure
                 if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
                     os.mkdir(OUTPUT + 'erosita/' + obs_id)

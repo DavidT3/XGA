@@ -541,8 +541,6 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
-                print(obs_id[tel][src_ind])
-                print(inst[tel][src_ind])
                 sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, use_psf_corr,
                                   psf_model, psf_bins, psf_algo, psf_iter, pix_step, min_snr,
                                   obs_id[tel][src_ind], inst[tel][src_ind])
