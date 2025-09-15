@@ -247,9 +247,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise TypeError("Mismatch: Your choice of 'core_radius_fraction' does not match the LT ScalingRelation.")
 
     # Check whether the specified outer_aperture value matches that of the scaling relation
-    if outer_aperture == rad_temp_rel.outer_apertured and core_excised == temp_lum_rel.outer_aperture:
+    if outer_aperture == rad_temp_rel.outer_aperture and core_excised == temp_lum_rel.outer_aperture:
         warn("Your choice of the defination of 'outer_aperture' matches the RT/LT ScalingRelation.")
-    elif outer_aperture != rad_temp_rel.outer_apertured:
+    elif outer_aperture != rad_temp_rel.outer_aperture:
         raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the RT ScalingRelation.")
     elif core_excised != temp_lum_rel.outer_aperture:
         raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the LT ScalingRelation.")
