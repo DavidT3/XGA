@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 13:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 16:47. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -258,7 +258,7 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
     :param str tel: The telescope to collect Spectrum objects for.
-    :param source BaseSource: The source object to collect Spectrum objects for.
+    :param BaseSource source: The source object to collect Spectrum objects for.
     :param List[Quantity] out_rad_vals: A list of outer radius quantities.
     :param int src_ind: The index of the lists of radii to be used for the source.
     :param List[Quantity] inn_rad_vals: A list of inner radius quantities.
