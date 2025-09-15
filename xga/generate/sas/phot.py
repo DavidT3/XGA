@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/03/2025, 10:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 09:50. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -45,7 +45,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
     if ((not isinstance(sources, list) and 'xmm' not in sources.telescopes) or
             (isinstance(sources, list) and 'xmm' not in sources[0].telescopes)):
         raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
-                                          "image cannot be generated.")
+                                          "images cannot be generated.")
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -243,7 +243,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             os.makedirs(dest_dir)
             cmds.append("cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; eexpmap eventset={e} "
                         "imageset={im} expimageset={eim} withdetcoords=no withvignetting=yes "
-                        "attitudeset={att} pimin={l} pimax={u}; mv * ../; cd ..; "
+                        "attitudeset={att} pimin={l} pimax={u}; rm ccf.cif; mv * ../; cd ..; "
                         "rm -r {d}".format(e=evt_list.path, im=ref_im.path, eim=exp_map, att=att, l=lo_chan,
                                            u=hi_chan, d=dest_dir, ccf=dest_dir + "ccf.cif"))
 
@@ -283,8 +283,7 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
     :param int psf_bins: If PSF corrected, the number of bins per side.
     :param str psf_algo: If PSF corrected, the algorithm used.
     :param int psf_iter: If PSF corrected, the number of algorithm iterations.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
-        90% of available.
+    :param int num_cores: The number of cores to use. Default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
@@ -389,11 +388,11 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
 
         # The files produced by this function will now be stored in the combined directory.
         final_dest_dir = OUTPUT + "xmm/combined/"
-        rand_ident = randint(0, int(1e+8))
+        rand_ident = randint(0, int(100_000_000))
         # Makes absolutely sure that the random integer hasn't already been used
         while len([f for f in os.listdir(final_dest_dir)
                    if str(rand_ident) in f.split(OUTPUT+"xmm/combined/")[-1]]) != 0:
-            rand_ident = randint(0, int(1e+8))
+            rand_ident = randint(0, int(100_000_000))
 
         dest_dir = os.path.join(final_dest_dir, "temp_emosaic_{}".format(rand_ident))
         os.mkdir(dest_dir)
@@ -600,7 +599,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                     total_cmd += "psfgen image={i} coordtype=EQPOS level={m} energy=1000 xsize=400 ysize=400 x={ra} " \
                                  "y={dec} output={p}; ".format(i=image.path, m=psf_model, ra=ra, dec=dec, p=psf_file)
 
-                total_cmd += "mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+                total_cmd += "rm ccf.cif; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
                 cmds.append(total_cmd)
                 # This is the products final resting place, if it exists at the end of this command
                 # In this case it just checks for the final PSF in the grid, all other files in the grid

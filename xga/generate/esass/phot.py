@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:56. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -25,7 +25,7 @@ def _img_params_from_evtlist(evt_list: EventList):
     Internal function to work out the XGA image size and centre position for eROSITA observations. This is done using 
     the minimum and maximum of the ra and dec, with a 1% buffer, as the corners of the image.
     
-    :param Eventlist evt_list: An EventList product object.
+    :param EventList evt_list: An EventList product object.
     """
 
     # returns a dataframe of only the RA and DEC columns
@@ -88,7 +88,7 @@ def _img_params_from_evtlist(evt_list: EventList):
 
         xsep = abs(xmin - xmax)
         ysep = abs(ymin - ymax)
-        
+
         xcen = int(xmin + (xsep/2))
         ycen = int(ymin + (ysep/2))
 
@@ -233,8 +233,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
                             "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
                                             xs=x_size, ys=y_size, c=centre_pos))
 
-                # This is the products final resting place, if it exists at the end of this command
-                # ASSUMPTION4 new output directory structure
+                # This is the product's final resting place, if it exists at the end of this command
                 final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
                 extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
                                 "telescope": "erosita"})
@@ -267,11 +266,11 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
 
             # The files produced by this function will now be stored in the combined directory.
             final_dest_dir = OUTPUT + "erosita/combined/"
-            rand_ident = randint(0, 1e+8)
+            rand_ident = randint(0, 100_000_000)
             # Makes absolutely sure that the random integer hasn't already been used
             while len([f for f in os.listdir(final_dest_dir)
                     if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
 
             dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -289,7 +288,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             # This is the products final resting place, if it exists at the end of this command
             final_paths.append(os.path.join(final_dest_dir, im))
             extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                            "telescope": "erosita"})
+                               "telescope": "erosita"})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -368,6 +367,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     # If they do not already exist, these commands should generate them.
     sources = evtool_image(sources, lo_en, hi_en, combine_obs=combine_obs)
 
+    expmap_cmd = ("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em} "
+                  "withweights=yes withdetmaps=yes; "
+                  "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
+                  "mv * ../; cd ..; rm -r {d}")
+
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, (list, BaseSample)):
@@ -418,10 +422,10 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                     os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
                 en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-                # ASSUMPTION5 source.get_products has a telescope parameter
                 exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
                                                                 telescope='erosita')
                         if en_id in match]
+
                 if len(exists) == 1 and exists[0][-1].usable:
                     continue
                 # Generating an exposure map requires a reference image.
@@ -443,9 +447,9 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 os.makedirs(dest_dir)
                 # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
                 #  terminal, which causes 'device not available' errors
-                cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
-                            "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
-                            "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
+                # withweights=yes will calculate the effective on axis exposure
+                # withdetmaps=yes will exclude bad pixels when calculating exposure
+                cmds.append(expmap_cmd.format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
                                                                 u=hi_en.value, em=exp_map, d=dest_dir))
 
                 # This is the products final resting place, if it exists at the end of this command
@@ -473,11 +477,11 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
 
             # The files produced by this function will now be stored in the combined directory.
             final_dest_dir = OUTPUT + "erosita/combined/"
-            rand_ident = randint(0, 1e+8)
+            rand_ident = randint(0, 100_000_000)
             # Makes absolutely sure that the random integer hasn't already been used
             while len([f for f in os.listdir(final_dest_dir)
                     if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
             
             dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
             # If something got interrupted and the temp directory still exists, this will remove it
@@ -487,12 +491,9 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
             os.mkdir(dest_dir)
 
             exp_map = "{r}_{l}-{u}keVexpmap.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
-
             # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
             #  terminal, which causes 'device not available' errors
-            cmds.append("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em}; "
-                        "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
-                        "mv * ../; cd ..; rm -r {d}".format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
+            cmds.append(expmap_cmd.format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
                                                             u=hi_en.value, em=exp_map, d=dest_dir))
 
             # This is the products final resting place, if it exists at the end of this command
@@ -520,7 +521,21 @@ def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str,
                       lo_en: Quantity = Quantity(0.2, 'keV'), hi_en: Quantity = Quantity(10, 'keV'),
                       num_cores: int = NUM_CORES,
                       disable_progress: bool = False):
-    # We check to see whether there is an eROSITA entry in the 'telescopes' property. 
+    """
+    A convenient Python wrapper for the eSASS evtool and expmap commands. Images or exposure maps
+    will be generated from all Obs IDs associated with the source, combined together (duplicate
+    events are removed).
+
+    :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources
+    :param str to_combine: The data type to produce, can be either image or expmap.
+    :param Quantity lo_en: The lower energy limit for the image or expmap, in astropy energy units.
+    :param Quantity hi_en: The upper energy limit for the image or expmap, in astropy energy units.
+    :param int num_cores: The number of cores to use (if running locally), default is set to
+        90% of available.
+    :param bool disable_progress: Setting this to true will turn off the eSASS generation progress
+        bar.
+    """
+    # We check to see whether there is an eROSITA entry in the 'telescopes' property.
     # If sources is a Source object, then that property contains the telescopes associated with 
     # that source, and if it is a Sample object then 'telescopes' contains the list of unique 
     # telescopes that are associated with at least one member source.

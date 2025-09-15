@@ -1,10 +1,11 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 17:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:42. Copyright (c) The Contributors
 
+import gc
 import os
-import warnings
 from copy import deepcopy
 from typing import Tuple, List, Union, Dict
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -65,13 +66,45 @@ class Image(BaseProduct):
         is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
+        left as they are, if False (the default) then they are set to zero.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None):
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None,
+                 allow_negative_vals: bool = False):
         """
-        The initialisation method for the Image class.
+        The initialisation method for the Image class. This class stores image data from X-ray observations. It also
+        allows easy, direct, access to that data, and implements many helpful methods with extra
+        functionality (including coordinate transforms, peak finders, and a powerful view method).
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str obs_id: The ObsID related to the Image being declared.
+        :param str instrument: The instrument related to the Image being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param Quantity lo_en: The lower energy bound used to generate this product.
+        :param Quantity hi_en: The upper energy bound used to generate this product.
+        :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
+        :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+            that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+            supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+            if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+            property. Default is None.
+        :param bool smoothed: Has this image been smoothed, default is False. This information can also be
+            set after the instantiation of an image.
+        :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
+            kernel used or a dictionary of information (required structure detailed in
+            parse_smoothing). Default is None
+        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+        :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
+            left as they are, if False (the default) then they are set to zero.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._shape = None
@@ -84,6 +117,9 @@ class Image(BaseProduct):
         self._header = None
         # Adding an attribute to tell the product what its data units are, as there are subclasses of Image
         self._data_unit = Unit("ct")
+
+        # Defining an attribute that tells an instance of the Image class how to treat negative values in data
+        self._allow_negative = allow_negative_vals
 
         # This is a flag to let XGA know that the Image object has been PSF corrected
         self._psf_corrected = False
@@ -100,7 +136,7 @@ class Image(BaseProduct):
             self._regions = self._process_regions(regs)
             self._reg_file_path = regs
         elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
             self._regions = {}
             self._reg_file_path = regs
         elif isinstance(regs, (list, dict)):
@@ -205,20 +241,40 @@ class Image(BaseProduct):
                 raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
                                         "the file, it doesn't exist, or maybe an SFTP problem? This product is "
                                         "associated with {s}.".format(f=self.path, s=self.src_name))
-            if self._data.min() < 0:
+            if not self._allow_negative and self._data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
-                warnings.warn("You are loading an {} with elements that are < 0, "
-                              "they will be set to 0.".format(self._prod_type))
+                warn("Negative values in {} data have been set to zero - this behaviour can be controlled using "
+                     "the 'allow_negative_vals' argument at initilisation.".format(self._prod_type), stacklevel=2)
                 self._data[self._data < 0] = 0
 
-            # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
-            self._shape = self._data.shape
+            # The shape can be set by the _read_header_on_demand method, but if it hasn't been set then we'll
+            #  do the job here
+            if self._shape is None:
+                self._shape = self._data.shape
+            # I'm being paranoid, but we'll check that the array and header derived shapes actually match, if the
+            #  header has already been loaded
+            elif self._shape != self._data.shape:
+                raise ValueError("Image shape from the FITS header does not match the data shape.")
         else:
             reasons = ", ".join(self.not_usable_reasons)
             raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
                                      "data from it; reason give is {}. Check the usable attribute next "
                                      "time".format(reasons))
+
+    def _read_header_on_demand(self):
+        """
+        Very specific method to just read the header of the fits file in. This also sets the '_shape' attribute
+        from the NAXIS keywords.
+        """
+        if self._header is None:
+            # Reads only the header information
+            self._header = read_header(self.path)
+
+            # We use the NAXIS entries to set the shape of the Image - this used to be
+            #  done by loading the data array and using shape on that, but this way avoids
+            #  a lot of overheads
+            self._shape = (int(self._header["NAXIS2"]), int(self._header["NAXIS1"]))
 
     def _read_wcs_on_demand(self):
         """
@@ -231,8 +287,7 @@ class Image(BaseProduct):
 
         errored = False
         try:
-            # Reads only the header information
-            self._header = read_header(self.path)
+            self._read_header_on_demand()
         except OSError as err:
 
             # This is really more specific than I would like, but in cases where eROSITA IKE-MPE border tile images
@@ -319,7 +374,7 @@ class Image(BaseProduct):
                     final_regs[o].append(reg)
                 else:
                     # Regions in sky coordinates need to be in pixels for overlaying on the image
-                    final_regs[o].append(reg.to_pixel(self._wcs_radec))
+                    final_regs[o].append(reg.to_pixel(self.radec_wcs))
 
         return final_regs
 
@@ -586,7 +641,7 @@ class Image(BaseProduct):
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
         # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""
@@ -631,26 +686,26 @@ class Image(BaseProduct):
     @property
     def shape(self) -> Tuple[int, int]:
         """
-        Property getter for the resolution of the image. Standard XGA settings will make this 512x512.
+        Property getter for the shape of the image data array.
 
         :return: The shape of the numpy array describing the image.
         :rtype: Tuple[int, int]
         """
-        # This has to be run first, to check the image is loaded, otherwise how can we know the shape?
-        # This if is here rather than in the method as some other properties of this class don't need the
-        # image object, just some products derived from it.
-        if self._data is None:
-            self._read_on_demand()
+        # This has to be run first, to check the image header is loaded - it sets the shape attribute using the NAXIS
+        #  header values from it. We used to get the shape of the data array, but just using the header means
+        #  that we don't have the overhead of loading a big data array.
+        if self.header is None:
+            self._read_header_on_demand()
+
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
         return self._shape
 
     @property
     def data(self) -> np.ndarray:
         """
-        Property getter for the actual image data, in the form of a numpy array. Doesn't include
-        any of the other stuff you get in a fits image, thats found in the hdulist property.
+        Property getter for the image data, in the form of a numpy array.
 
-        :return: A numpy array of shape self.shape containing the image data.
+        :return: A numpy array containing the image data.
         :rtype: np.ndarray
         """
         # Calling this ensures the image object is read into memory
@@ -662,19 +717,14 @@ class Image(BaseProduct):
     def data(self, new_im_arr: np.ndarray):
         """
         Property setter for the image data. As the fits image is loaded in read-only mode,
-        this won't alter the actual file (which is what I was going for), but it does allow
-        user alterations to the image data they are analysing.
+        this won't alter the file on disk, but it does allow user alterations to the image.
 
         :param np.ndarray new_im_arr: The new image data.
         """
-        # Calling this ensures the image object is read into memory
-        if self._data is None:
-            self._read_on_demand()
-
         # Have to make sure the input is of the right type, and the right shape
         if not isinstance(new_im_arr, np.ndarray):
             raise TypeError("You may only assign a numpy array to the data attribute.")
-        elif new_im_arr.shape != self._shape:
+        elif new_im_arr.shape != self.shape:
             raise ValueError("You may only assign a numpy array to the data attribute if it "
                              "is the same shape as the original.")
         else:
@@ -1078,6 +1128,9 @@ class Image(BaseProduct):
         if unload_header:
             del self.header
 
+        # Force garbage collection just to make sure the data are gone from memory
+        gc.collect()
+
     def get_count(self, at_coord: Quantity) -> float:
         """
         A simple method that converts the given coordinates to pixels, then finds the number of counts
@@ -1293,8 +1346,8 @@ class Image(BaseProduct):
             else:
                 # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                 #  it isn't essential, so I'll just display a warning
-                warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
-                              "pairs in it, or is otherwise the wrong shape.")
+                warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                     "the wrong shape.", stacklevel=2)
                 # Just in case annuli were also passed, I set the coordinate to None so that it knows something is wrong
                 pix_coord = None
 
@@ -1826,8 +1879,8 @@ class Image(BaseProduct):
                 else:
                     # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                     #  it isn't essential, so I'll just display a warning
-                    warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
-                                  "pairs in it, or is otherwise the wrong shape.")
+                    warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                         "the wrong shape.", stacklevel=2)
                     # Just in case annuli were also passed, I set the coordinate to None so that it knows something is
                     # wrong
                     pix_coord = None
@@ -2739,10 +2792,16 @@ class RateMap(Image):
         #  mask as to whether you are on or off the sensor
         det_map = self.expmap.data.copy()
         det_map[det_map != 0] = 1
-        self._on_sensor_mask = det_map
+        self._on_sensor_mask = det_map.astype('int8')
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
+
+        # Finally, we unload the image and exposure map data that was used to build the ratemap array, as we
+        #  are less likely to need those data from now on, and we can save some memory. Note that we
+        #  don't unload the image/expmap headers though
+        self.image.unload(unload_data=True, unload_header=False)
+        self.expmap.unload(unload_data=True, unload_header=False)
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -2771,6 +2830,32 @@ class RateMap(Image):
         if self._data is None:
             self._construct_on_demand()
         return self._data.copy()
+
+    @data.setter
+    def data(self, new_rt_arr: np.ndarray):
+        """
+        Property setter for the RateMap data.
+
+        :param np.ndarray new_rt_arr: The new ratemap data.
+        """
+        # Have to make sure the input is of the right type, and the right shape
+        if not isinstance(new_rt_arr, np.ndarray):
+            raise TypeError("You may only assign a numpy array to the data attribute.")
+        elif new_rt_arr.shape != self.shape:
+            raise ValueError("You may only assign a numpy array to the data attribute if it "
+                             "is the same shape as the original.")
+        else:
+            self._data = new_rt_arr
+
+    @data.deleter
+    def data(self):
+        """
+        Property deleter for data contained in this RateMap instance. The self._data array is removed from
+        memory, and then self._data is explicitly set to None so that self._construct_on_demand() will
+        be triggered if you ever want the data from this object again.
+        """
+        del self._data
+        self._data = None
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
@@ -3056,7 +3141,8 @@ class RateMap(Image):
         return edge_flag
 
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
-                        allow_negative: bool = False):
+                        allow_negative: bool = False, x_slice_lims: List[int] = None,
+                        y_slice_lims: List[int] = None):
         """
         A signal-to-noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
@@ -3071,50 +3157,70 @@ class RateMap(Image):
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+            masks, and as such have to be applied to the data array.
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+            masks, and as such have to be applied to the data array.
         :return: A signal-to-noise value for the source region.
         :rtype: float
         """
+        # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
+        #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
+        #  as well
+        if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
+            raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
+        elif x_slice_lims is None:
+            x_slice = slice(0, None)
+            y_slice = slice(0, None)
+        else:
+            x_slice = slice(*x_slice_lims)
+            y_slice = slice(*y_slice_lims)
+
+        # The shape of the data - we want to compare the mask shapes to make sure they can be applied. If the slicing
+        #  limits passed were None then it'll be the shape of the whole image
+        sel_shape = self.image.data[y_slice, x_slice].shape
+
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
-        if source_mask.shape != self.shape:
-            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        if source_mask.shape != sel_shape:
+            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
-        elif back_mask.shape != self.shape:
-            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif back_mask.shape != sel_shape:
+            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask*self.sensor_mask).sum()
-        back_area = (back_mask*self.sensor_mask).sum()
+        src_area = (source_mask*self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask*self.sensor_mask[y_slice, x_slice]).sum()
 
         # Exposure correction takes into account the different exposure times of the individual pixels
         if exp_corr:
             # Find an average background per pixel COUNT RATE by dividing the total cr in the background region by the
             #  number of pixels in the mask
-            av_back = (self.data * back_mask).sum() / back_area
+            av_back = (self.data[y_slice, x_slice] * back_mask).sum() / back_area
             # Then we use the exposure map to create a background COUNT map for the observation, by multiplying the
             #  average background count rate by the exposure map
-            scaled_source_back_counts = self.expmap.data * av_back * source_mask
+            scaled_source_back_counts = self.expmap.data[y_slice, x_slice] * av_back * source_mask
             # Then we create a background subtracted map of the source by subtracting the background map
-            source_map = (self.image.data * source_mask) - scaled_source_back_counts
+            source_map = (self.image.data[y_slice, x_slice] * source_mask) - scaled_source_back_counts
             # Some pixels could be negative now, but if we're not allowing negative values then they get
             #  set to zero
             if not allow_negative:
                 source_map[source_map < 0] = 0
             # Then we sum the source count map to find a total source count value, and divide that by the square root
             #  of the total number of counts (NON BACKGROUND SUBTRACTED) within the source mask
-            sn = source_map.sum() / np.sqrt((self.image.data * source_mask).sum())
+            sn = source_map.sum() / np.sqrt((self.image.data[y_slice, x_slice] * source_mask).sum())
         else:
             # Calculate an area normalisation so the background counts can be scaled to the source counts properly
             area_norm = src_area / back_area
             # Find the total counts within the source area
-            tot_cnt = (self.image.data * source_mask).sum()
+            tot_cnt = (self.image.data[y_slice, x_slice] * source_mask).sum()
             # Find the total counts within the background area
-            bck_cnt = (self.image.data * back_mask).sum()
+            bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
             # Signal to noise is then just finding the source counts by subtracting the area scaled background counts
             #  and dividing by the square root of the total counts within the source area
@@ -3122,50 +3228,99 @@ class RateMap(Image):
 
         return sn
 
-    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray) -> Quantity:
+    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray,
+                                     x_slice_lims: List[int] = None,
+                                     y_slice_lims: List[int] = None) -> Quantity:
         """
         This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
         drawn from the exposure map) to calculate the number of background-subtracted counts within the source
         region of the image used to construct this RateMap.
 
         The exposure map is used to construct a sensor mask, so that we know where the chip gaps are and take
-        them into account when calculating the ratio of areas of the source region to the background region. This
+        them into account when calculating the area ratio of the source region to the background region. This
         is why this method is built into the RateMap rather than Image class.
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+            masks, and as such have to be applied to the data array.
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+            masks, and as such have to be applied to the data array.
         :return: The background subtracted counts in the source region.
         :rtype: Quantity
         """
+        # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
+        #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
+        #  as well
+        if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
+            raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
+        elif x_slice_lims is None:
+            x_slice = slice(0, None)
+            y_slice = slice(0, None)
+        else:
+            x_slice = slice(*x_slice_lims)
+            y_slice = slice(*y_slice_lims)
+
+        # The shape of the data - we want to compare the mask shapes to make sure they can be applied. If the slicing
+        #  limits passed were None then it'll be the shape of the whole image
+        sel_shape = self.image.data[y_slice, x_slice].shape
+
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
-        if source_mask.shape != self.shape:
-            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        if source_mask.shape != sel_shape:
+            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
-        elif back_mask.shape != self.shape:
-            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif back_mask.shape != sel_shape:
+            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask * self.sensor_mask).sum()
-        back_area = (back_mask * self.sensor_mask).sum()
+        src_area = (source_mask * self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask * self.sensor_mask[y_slice, x_slice]).sum()
 
         # Calculate an area normalisation so the background counts can be scaled to the source counts properly
         area_norm = src_area / back_area
         # Find the total counts within the source area
-        tot_cnt = (self.image.data * source_mask).sum()
+        tot_cnt = (self.image.data[y_slice, x_slice] * source_mask).sum()
         # Find the total counts within the background area
-        bck_cnt = (self.image.data * back_mask).sum()
+        bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
         # Simple calculation, re-normalising the background counts with the area ratio and subtracting background
         #  from the source. Then storing it in an astropy quantity
         cnts = Quantity(tot_cnt - (bck_cnt*area_norm), 'ct')
 
         return cnts
+
+    def unload(self, unload_data: bool = True, unload_header: bool = False):
+        """
+        This method allows you to safely remove the data and/or header information contained in this
+        RateMap (and its component image and exposure map) from memory, while guaranteeing that it will be
+        read back in if required. We use the delete methods implemented for the data and header properties, which
+        can also be used directly by the user.
+
+        :param bool unload_data: Specifies whether the data should be unloaded from memory. Default is True, as the
+            data are liable to take up far more memory than the header, meaning it is more likely to need to
+            be removed.
+        :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
+        """
+        # Call the Image-implemented unload method first
+        super().unload(unload_data, unload_header)
+
+        # We also remove the arrays built to mask edges and act as a sensor mask, which can be quite large
+        #  themselves - and there is no point holding them in memory if the data arrays aren't
+        del self._on_sensor_mask
+        self._on_sensor_mask = None
+        del self._edge_mask
+        self._edge_mask = None
+
+        # Then we do a little extra job of unloading the component image and exposure map data as well
+        if unload_data or unload_header:
+            self.image.unload(unload_data, unload_header)
+            self.expmap.unload(unload_data, unload_header)
 
     @property
     def edge_mask(self) -> np.ndarray:
@@ -3256,7 +3411,7 @@ class RateMap(Image):
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
         # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""

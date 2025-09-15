@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2024, 14:36. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 06:08. Copyright (c) The Contributors
 
+import sys
 from copy import copy
 from typing import Tuple, Union, List
 from warnings import warn
@@ -85,7 +86,8 @@ class SurfaceBrightness1D(BaseProfile1D):
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
 
-        # Saves the reference to the RateMap this profile was generated from
+        # Saves the reference to the RateMap this profile was generated from - we make sure to unload the data
+        #  arrays from the ratemap first, otherwise pickling can save those data
         self._ratemap = rt
 
         # Set the internal type attribute to brightness profile
@@ -296,6 +298,22 @@ class SurfaceBrightness1D(BaseProfile1D):
         else:
             match = False
         return match
+
+    def save(self, save_path: str = None):
+        """
+        This method pickles and saves the surface brightness profile object. This will be called automatically
+        when the profile is initialised, and when changes are made to the profile (such as when a model is
+        fitted). The save file is a pickled version of this object. This method overwrites the implementation in
+        BaseProfile1D, so that we can ensure the originating RateMap's data arrays are unloaded prior to saving.
+
+        :param str save_path: The path where this surface brightness profile should be saved. By default this
+        is None, which means this method will use the save_path attribute of the profile.
+        """
+        # This will unload the RateMap data arrays from memory - should ensure that the save process (pickling)
+        #  will write out a smaller file to disk. This method will also unload the component image/expmap data
+        #  arrays if they are in memory
+        self._ratemap.unload(unload_data=True)
+        super().save(save_path=save_path)
 
 
 class GasMass1D(BaseProfile1D):
@@ -1386,7 +1404,7 @@ class HydrostaticMass(BaseProfile1D):
     def __init__(self, temperature_profile: GasTemperature3D, temperature_model: Union[str, BaseModel1D],
                  density_profile: GasDensity3D, density_model: Union[str, BaseModel1D], radii: Quantity,
                  radii_err: Quantity, deg_radii: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, auto_save: bool = False, telescope: str = None):
         """
         The init method for the HydrostaticMass class, uses temperature and density profiles, along with models, to
@@ -2272,7 +2290,7 @@ class SpecificEntropy(BaseProfile1D):
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, auto_save: bool = False, telescope: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
@@ -2618,6 +2636,7 @@ class SpecificEntropy(BaseProfile1D):
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
+
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
@@ -2823,11 +2842,5 @@ class Generic1D(BaseProfile1D):
                          set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
-
-
-
-
-
-
 
 

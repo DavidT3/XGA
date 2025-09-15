@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/07/2024, 14:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 from multiprocessing.dummy import Pool
 from typing import List, Tuple, Union
@@ -336,7 +336,7 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
             interp_brightness = np.interp(radii, scaled_radii, (sb_prof.values - sb_prof.background).value)
         except ValueError as ve:
             # This will mean that the profile is thrown away in a later step
-            interp_brightness = np.full(radii.shape, np.NaN)
+            interp_brightness = np.full(radii.shape, np.nan)
             # But will also raise a warning so the user knows
             warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
                  + " - profile set to NaNs.", stacklevel=2)
@@ -600,12 +600,12 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
                 model_brightness = fitted_model(model_radii)
 
             except XGAFitError:
-                model_brightness = np.full(radii.shape, np.NaN)
+                model_brightness = np.full(radii.shape, np.nan)
                 warn('Model fit for {s} failed - profile set to NaNs'.format(s=src_obj.name), stacklevel=2)
 
         except ValueError as ve:
             # This will mean that the profile is thrown away in a later step
-            model_brightness = np.full(radii.shape, np.NaN)
+            model_brightness = np.full(radii.shape, np.nan)
             # But will also raise a warning so the user knows
             warn(str(ve).replace("you're looking at", "{s} is".format(s=src_obj.name)).replace(".", "")
                  + " - profile set to NaNs.", stacklevel=2)

@@ -1,6 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:04. Copyright (c) The Contributors
-from typing import List, Union, Tuple
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
+from typing import Tuple
 from warnings import warn
 
 import numpy as np
@@ -27,9 +27,9 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     peak_find_method: str = "hierarchical", convergence_frac: float = 0.1,
                                     min_iter: int = 3, max_iter: int = 10, rad_temp_rel: ScalingRelation = arnaud_r500,
                                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                                    core_excised: bool = False, core_radius_fraction: float = 0, 
+                                    core_excised: bool = False, core_radius_fraction: float = 0,
                                     outer_aperture: Union[str, Quantity] = None,
-                                    freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False, 
+                                    freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False,
                                     start_temp: Quantity = Quantity(3.0, 'keV'),
                                     temp_lum_rel: ScalingRelation = xcs_sdss_r500_52_TL,
                                     lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
@@ -42,7 +42,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
                                     num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
-    
+
     """
     This is the XGA pipeline for measuring overdensity radii, and the temperatures and luminosities within the
     radii, for a sample of clusters. No knowledge of the overdensity radii of the clusters is required
@@ -145,7 +145,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         cosmology is a flat LambdaCDM concordance model.
     :param str telescope: The telescope whose data we should use for this run of the pipeline. We currently only
         support using one telescope at a time for this tool. Default is 'xmm'.
-    :param Quantity search_distance: The distance to search for observations within, the default is None in which
+    :param Quantity search_distance: The radius to search for observations within, the default is None in which
         case a standard search distance for the telescope specified by 'telescope' will be used.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for the
         XSPEC spectral fits. If a stacking procedure for a particular telescope is not supported, this function will
@@ -253,7 +253,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the RT ScalingRelation.")
     elif core_excised != temp_lum_rel.outer_aperture:
         raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the LT ScalingRelation.")
-    
+
     # Trying to determine the targeted overdensity based on the name of the 'outer_aperture'
     # The LT pipeline will not process if using a fixed aperture
     # We've already checked teh string format when decalring a scaling relation
@@ -347,10 +347,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             # Run the spectrum generation for the current values of the over density radius
             if telescope == 'xmm':
                 # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
-                #  just multiply the current radius by 0.15 and use that for the inner radius. 
+                #  just multiply the current radius by 0.15 and use that for the inner radius.
                 # !!! Now the core_excised parameter control only during the iterations
                 if core_excised:
-                    evselect_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, num_cores=num_cores, 
+                    evselect_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, num_cores=num_cores,
                                       one_rmf=False,
                                       group_spec=group_spec,  min_counts=min_counts, min_sn=min_sn,
                                       over_sample=over_sample)
@@ -360,10 +360,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                       over_sample=over_sample)
             elif telescope == 'erosita' or telescope == 'erass':
                 # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
-                #  just multiply the current radius by 0.15 and use that for the inner radius. 
+                #  just multiply the current radius by 0.15 and use that for the inner radius.
                 # !!! Now the core_excised parameter control only during the iterations
                 if core_excised:
-                    srctool_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, group_spec=group_spec, 
+                    srctool_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, group_spec=group_spec,
                                      min_counts=min_counts,
                                      min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
                 else:
@@ -371,7 +371,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                      min_sn=min_sn, num_cores=num_cores, combine_tm=stacked_spectra)
             elif telescope == 'chandra':
                 # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
-                #  just multiply the current radius by 0.15 and use that for the inner radius. 
+                #  just multiply the current radius by 0.15 and use that for the inner radius.
                 # !!! Now the core_excised parameter control only during the iterations
                 if core_excised:
                     specextract_spectrum(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, num_cores=num_cores,
@@ -427,7 +427,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
 
         # We generate and fit spectra for the current value of the overdensity radius
         # We also check to see whether the user requested core-excised measurements also be performed. If so then we'll
-        #  just multiply the current radius by 0.15 and use that for the inner radius. 
+        #  just multiply the current radius by 0.15 and use that for the inner radius.
         # !!! Now the core_excised parameter control only during the iterations
         if core_excised:
             single_temp_apec(samp, samp.get_radius(o_dens), samp.get_radius(o_dens) * core_radius_fraction, lum_en=lum_en,

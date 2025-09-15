@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/03/2025, 16:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 10:05. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -8,6 +8,7 @@ from warnings import warn
 
 import numpy as np
 from tqdm import tqdm
+import numpy as np
 
 from xga import CIAO_AVAIL, CALDB_AVAIL
 from xga.exceptions import ProductGenerationError, CIAONotFoundError, CALDBNotFoundError
@@ -83,7 +84,7 @@ def ciao_call(ciao_func):
         if to_execute and len(all_run) > 0:
             # Will run the commands locally in a pool
             prod_type_str = ", ".join(set(np.array(all_type).flatten().tolist()))
-            with tqdm(total=len(all_run), desc="Generating products of type(s) " + prod_type_str,
+            with tqdm(total=len(all_run), desc="Generating Chandra products of type(s) " + prod_type_str,
                       disable=disable) as gen, Pool(cores) as pool:
                 def callback(results_in: Tuple[BaseProduct, str]):
                     """

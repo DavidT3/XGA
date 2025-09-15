@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2024, 11:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 09:14. Copyright (c) The Contributors
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -56,7 +56,7 @@ class ExtendedSource(BaseSource):
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
         is None in which case standard search distances for different telescopes are used. The user may pass a
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -66,6 +66,7 @@ class ExtendedSource(BaseSource):
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
+    :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
@@ -74,7 +75,8 @@ class ExtendedSource(BaseSource):
                  cosmology: Cosmology = DEFAULT_COSMO,  load_products: bool = True, load_fits: bool = False,
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
                  telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
-                 clean_obs=True, clean_obs_reg="custom", clean_obs_threshold=0.3, regen_merged: bool = True):
+                 clean_obs=True, clean_obs_reg="custom", clean_obs_threshold=0.3, regen_merged: bool = True,
+                 load_profiles: bool = False):
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
@@ -106,7 +108,7 @@ class ExtendedSource(BaseSource):
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -116,11 +118,12 @@ class ExtendedSource(BaseSource):
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
         # Calling the BaseSource init method
         super().__init__(ra, dec, redshift, name, cosmology, load_products, load_fits, in_sample, telescope,
                          search_distance, back_inn_rad_factor=back_inn_rad_factor,
-                         back_out_rad_factor=back_out_rad_factor)
+                         back_out_rad_factor=back_out_rad_factor, load_profiles=load_profiles)
 
         self._custom_region_radius = None
         # Setting up the custom region radius attributes
@@ -175,7 +178,7 @@ class ExtendedSource(BaseSource):
                           for tel in self.telescopes}
 
         # Just creating a flat list of detection for all ObsIDs of all telescopes
-        flat_det = [~self._detected[tel][o] for tel in self._detected for o in self._detected[tel]]
+        flat_det = [not self._detected[tel][o] for tel in self._detected for o in self._detected[tel]]
         # If in some of the observations the source has not been detected, a warning will be raised
         if True in flat_det and False in flat_det:
             warn_text = "{n} has not been detected in all region files.".format(n=self.name)
@@ -205,12 +208,12 @@ class ExtendedSource(BaseSource):
             #  to go the long way around
             if 'xmm' in self.telescopes:
                 from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
             if 'erosita' in self.telescopes:
                 from ..generate.esass import combine_phot_prod
-                combine_phot_prod(self, 'image')
-                combine_phot_prod(self, 'expmap')
+                combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                combine_phot_prod(self, 'expmap', self._peak_lo_en, self._peak_hi_en, disable_progress=False)
 
         if clean_obs and clean_obs_reg in self._radii:
             # Use this method to figure out what data to throw away
@@ -226,8 +229,8 @@ class ExtendedSource(BaseSource):
                     # TODO Implement for eROSITA when merging is possible
                     if 'xmm' in self.telescopes:
                         from ..generate.sas import emosaic
-                        emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                        emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                        emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                        emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
                     self._all_peaks(peak_find_method, 'extended')
 
                     # And finally this sets the default coordinate to the peak if use peak is True
@@ -482,7 +485,7 @@ class PointSource(BaseSource):
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
         is None in which case standard search distances for different telescopes are used. The user may pass a
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -533,7 +536,7 @@ class PointSource(BaseSource):
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -586,8 +589,8 @@ class PointSource(BaseSource):
             #  to go the long way around
             if 'xmm' in self.telescopes:
                 from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
             if 'erosita' in self.telescopes:
                 from ..generate.esass import combine_phot_prod
                 combine_phot_prod(self, 'image')
@@ -607,8 +610,8 @@ class PointSource(BaseSource):
                 # TODO Generalise this to more telescopes once generation is better supported
                 if regen_merged and 'xmm' in self.telescopes:
                     from ..generate.sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
 
         # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak

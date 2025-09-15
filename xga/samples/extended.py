@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 from typing import List
 
@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .base import BaseSample
 from .. import DEFAULT_COSMO
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoProductAvailableError, NoValidObservationsError, NotAssociatedError
+    NoProductAvailableError, NoValidObservationsError, NotAssociatedError, TelescopeNotAssociatedError
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
@@ -60,7 +60,7 @@ class ClusterSample(BaseSample):
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
         is None in which case standard search distances for different telescopes are used. The user may pass a
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -122,7 +122,7 @@ class ClusterSample(BaseSample):
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -524,7 +524,7 @@ class ClusterSample(BaseSample):
             rad = gcs.get_radius(rad_name, 'kpc')
             # Result could be None, if the radius wasn't set for that clusters, have to account for that
             if rad is None:
-                rads.append(np.NaN)
+                rads.append(np.nan)
             else:
                 rads.append(rad)
 
@@ -613,8 +613,8 @@ class ClusterSample(BaseSample):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
-        :param bool stacked_spectra: Specify whether to retrieve the results for each cluster from a stacked spectrum
-            or from simultaneously fitted spectra. By default this method will retrieve the result from
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: A Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
@@ -656,8 +656,8 @@ class ClusterSample(BaseSample):
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
-        :param bool stacked_spectra: Specify whether to retrieve the results for each cluster from a stacked spectrum
-            or from simultaneously fitted spectra. By default this method will retrieve the result from
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
@@ -687,34 +687,35 @@ class ClusterSample(BaseSample):
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
                 if quality_checks and gcs_temp[0] > 25:
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
                          "fit by XGA".format(s=gcs.name, m=gcs_temp), stacklevel=2)
                 elif quality_checks and gcs_temp.min() < 0:
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
                          "measurement".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) <= 0):
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
                          " hard to use for scaling relations as values are often logged.".format(s=gcs.name),
                          stacklevel=2)
                 elif quality_checks and ((gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33):
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("One of the temperature uncertainty values for {s} is more than three times larger than "
                          "the other, this means the fit quality is suspect.".format(s=gcs.name), stacklevel=2)
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
-                    gcs_temp = np.array([np.NaN, np.NaN, np.NaN])
+                    gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("The temperature value - the average error goes below zero for {s}, this makes the "
                          "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name),
                          stacklevel=2)
                 temps.append(gcs_temp)
 
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
+                NotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)
-                temps.append(np.array([np.NaN, np.NaN, np.NaN]))
+                temps.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
         temps = Quantity(np.array(temps), 'keV')
@@ -818,29 +819,29 @@ class ClusterSample(BaseSample):
                     try:
                         cur_gmass = dens_profs.gas_mass(dens_model, gas_mass_rad)[0]
                         if quality_checks and (cur_gmass[1] > cur_gmass[0] or cur_gmass[2] > cur_gmass[0]):
-                            gms.append([np.NaN, np.NaN, np.NaN])
+                            gms.append([np.nan, np.nan, np.nan])
                         elif quality_checks and cur_gmass[0] < Quantity(1e+9, 'Msun'):
-                            gms.append([np.NaN, np.NaN, np.NaN])
+                            gms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s gas mass is less than 1e+12 solar masses", stacklevel=2)
                         elif quality_checks and cur_gmass[0] > Quantity(1e+16, 'Msun'):
-                            gms.append([np.NaN, np.NaN, np.NaN])
+                            gms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s gas mass is greater than 1e+16 solar masses", stacklevel=2)
                         else:
                             gms.append(cur_gmass.value)
                     except ModelNotAssociatedError:
-                        gms.append([np.NaN, np.NaN, np.NaN])
+                        gms.append([np.nan, np.nan, np.nan])
                     except ValueError:
-                        gms.append([np.NaN, np.NaN, np.NaN])
+                        gms.append([np.nan, np.nan, np.nan])
                         warn("{s}'s gas mass is negative", stacklevel=2)
 
                 else:
                     warn("Somehow there multiple matches for {s}'s density profile, this is the developer's "
                          "fault.".format(s=gcs.name), stacklevel=2)
-                    gms.append([np.NaN, np.NaN, np.NaN])
+                    gms.append([np.nan, np.nan, np.nan])
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
-                gms.append([np.NaN, np.NaN, np.NaN])
+                gms.append([np.nan, np.nan, np.nan])
                 warn("{s} doesn't have a density profile associated, please look at "
                      "sourcetools.density.".format(s=gcs.name), stacklevel=2)
 
@@ -900,23 +901,23 @@ class ClusterSample(BaseSample):
                     try:
                         cur_mass = mass_profs.mass(actual_rad)[0]
                         if quality_checks and (cur_mass[1] > cur_mass[0] or cur_mass[2] > cur_mass[0]):
-                            ms.append([np.NaN, np.NaN, np.NaN])
+                            ms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s mass uncertainties are larger than the mass value.", stacklevel=2)
                         elif quality_checks and cur_mass[0] < Quantity(1e+12, 'Msun'):
-                            ms.append([np.NaN, np.NaN, np.NaN])
+                            ms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s mass is less than 1e+12 solar masses", stacklevel=2)
                         elif quality_checks and cur_mass[0] > Quantity(1e+16, 'Msun'):
-                            ms.append([np.NaN, np.NaN, np.NaN])
+                            ms.append([np.nan, np.nan, np.nan])
                             warn("{s}'s mass is greater than 1e+16 solar masses", stacklevel=2)
                         else:
                             ms.append(cur_mass.value)
                     except ValueError:
                         warn("{s}'s mass is negative", stacklevel=2)
-                        ms.append([np.NaN, np.NaN, np.NaN])
+                        ms.append([np.nan, np.nan, np.nan])
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
-                ms.append([np.NaN, np.NaN, np.NaN])
+                ms.append([np.nan, np.nan, np.nan])
                 warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name),
                      stacklevel=2)
 
@@ -987,11 +988,11 @@ class ClusterSample(BaseSample):
                          "didn't bracket the requested overdensity radius. See the docs of overdensity_radius "
                          "method of HydrostaticMass for more info.".format(s=gcs.name), stacklevel=2)
 
-                    rs.append(np.NaN)
+                    rs.append(np.nan)
 
             except NoProductAvailableError:
                 # If no dens_prof has been run or something goes wrong then NaNs are added
-                rs.append(np.NaN)
+                rs.append(np.nan)
                 warn("{s} doesn't have a matching hydrostatic mass profile associated".format(s=gcs.name),
                      stacklevel=2)
 

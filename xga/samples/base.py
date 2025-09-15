@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -12,8 +12,8 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
-from ..exceptions import (NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, NotAssociatedError,
-                          NoValidObservationsError)
+from ..exceptions import (NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError)
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
@@ -40,15 +40,16 @@ class BaseSample:
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
         is None in which case standard search distances for different telescopes are used. The user may pass a
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 no_prog_bar: bool = False, telescope: Union[str, List[str]] = None,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True,
+                 load_fits: bool = False, no_prog_bar: bool = False,
+                 telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None):
         """
         The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
@@ -70,7 +71,7 @@ class BaseSample:
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -82,6 +83,14 @@ class BaseSample:
         # We run the telescope input check so that I know that telescope will be a list of telescope names, in case
         #  I need to use it for joining into a string at the end of this init
         telescope = check_telescope_choices(telescope)
+
+        # This check and warning is also contained in the separation_match function called by BaseSource init, but
+        #  the warning is disabled when called from BaseSource. This is to save us from a deluge of identical
+        #  warnings for every source.
+        # Instead, we check and warn just once here
+        if type(search_distance) == dict and any([t not in search_distance for t in telescope]):
+            warn("A dictionary of search distances that did not contain all requested telescopes has been "
+                 "passed, default values have been used for the missing telescopes.", stacklevel=2)
 
         # There used to be a set of attributes storing the basic information (ra, dec, and redshifts) about
         #  the sources in this sample, but for subclasses its actually way more convenient for the properties
@@ -121,7 +130,7 @@ class BaseSample:
                     #  using in_sample=True
                     temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True, telescope,
                                       search_distance, null_load_products=False, load_regions=False,
-                                      load_spectra=False)
+                                      load_spectra=False, load_profiles=False)
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
@@ -399,8 +408,8 @@ class BaseSample:
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.
-        :param bool stacked_spectra: Specify whether to retrieve the results for each source from a stacked spectrum
-            or from simultaneously fitted spectra. By default this method will retrieve the result from
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
@@ -433,11 +442,12 @@ class BaseSample:
                 else:
                     lums.append(lx_val)
 
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError) as err:
+            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
+                    NotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)
-                lums.append(np.array([np.NaN, np.NaN, np.NaN]))
+                lums.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
         lums = Quantity(np.array(lums), 'erg / s')
@@ -658,3 +668,13 @@ class BaseSample:
         # This function is specific to the Sample type, as some Sample classes have extra information stored
         #  that will need to be deleted.
         self._del_data(key)
+
+    def __contains__(self, name) -> bool:
+        """
+        Determines whether this sample contains a particular source name.
+
+        :param str name: The name of the source to check.
+        :return: True if a source with the given name is associated with this sample, False otherwise.
+        :rtype: bool
+        """
+        return name in self._names

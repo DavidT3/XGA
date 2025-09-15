@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:27. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -14,12 +14,14 @@ from abel.onion_bordas import onion_bordas_transform
 from astropy.constants import m_p
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
+import functools
 
 from ._common import _get_all_telescopes
 from .misc import model_check
 from .temperature import min_snr_proj_temp_prof, min_cnt_proj_temp_prof, ALLOWED_ANN_METHODS
 from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, \
     ParameterNotAssociatedError
+from ..generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
 from ..models import BaseModel1D
@@ -34,17 +36,15 @@ from ..xspec.fit import single_temp_apec
 ALLOWED_INV_ABEL = ['direct', 'basex', 'hansen_law_ho0', 'hansen_law_ho1', 'onion_bordas', 'onion_peeling',
                     'two_point', 'three_point', 'daun']
 
-
-def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
-                inner_radius: Union[str, Quantity], abund_table: str, lo_en: Quantity,
+def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, lo_en: Quantity,
                 hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                 over_sample: float = None, obs_id: Union[Dict[str, str], Dict[str, list]] = None,
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
-                conv_outer_radius: Quantity = "r500",
-                num_cores: int = NUM_CORES, stacked_spectra: bool = False) -> Tuple[Union[ClusterSample, List],
-                Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]],
-                Union[Dict[str, str], Dict[str, list]]]:
+                conv_outer_radius: Quantity = "r500", conv_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
+        -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]],
+                 Union[Dict[str, str], Dict[str, list]], List[str]]:
     """
     An internal function which exists because all the density profile methods that I have planned
     need the same product checking and setup steps. This function checks that all necessary
@@ -53,14 +53,6 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
 
     :param Union[GalaxyCluster, ClusterSample] sources: The source objects/sample object for which
         the density profile is being found.
-    :param str/Quantity outer_radius: The name or value of the outer radius of the spectra that
-        should be used to calculate conversion factors (for instance 'r200' would be acceptable for
-        a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
-        region files), then any inner radius will be ignored.
-    :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that
-        should be used to calculate conversion factors (for instance 'r500' would be acceptable for
-        a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in
-        a circular spectrum.
     :param str abund_table: Which abundance table should be used for the XSPEC fit, FakeIt run, and
         for the electron/hydrogen number density ratio.
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
@@ -93,21 +85,38 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
         measure temperatures for the conversion factor calculation, default is 'r500'. An astropy
         quantity may also be passed, with either a single value or an entry for each cluster being
         analysed.
+    :param str/Quantity conv_outer_radius: The inner radius of spectra from measure temperatures for the conversion
+        factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
+        a single value or an entry for each cluster being analysed.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
-    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
-        to use.
+    :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
     :return: The source object(s)/sample that was passed in, a dictionary of an array of the
         calculated conversion factors to take the count-rate/volume to a number density of hydrogen
         for each telescope, the parsed obs_id variable, and the parsed inst variable.
     :rtype: Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str],
         Dict[str, list]], Union[Dict[str, str], Dict[str, list]]]
     """
-    # storing all the telescopes in a list for later use
-    all_tels = _get_all_telescopes(sources)
-    # If its a single source I shove it in a list so I can just iterate over the sources parameter
-    #  like I do when its a Sample object
+
+    # Make sure that we have generated the ratemaps we're going to need
+    # TODO Once spectrum fitting functions have a telescope argument, then so will the _dens_setup function, and
+    #  then we can pass it through here
+    all_telescope_combined_images(sources, lo_en, hi_en, telescope=telescope, num_cores=num_cores)
+    all_telescope_combined_expmaps(sources, lo_en, hi_en, telescope=telescope, num_cores=num_cores)
+
+    # If the user didn't specify a particular telescope, or telescopes, from which we are to
+    #  produce spectra, we fetch all telescope names associated with at least one source
+    if telescope is None:
+        # returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
+        src_telescopes = _get_all_telescopes(sources)
+    elif isinstance(telescope, str):
+        src_telescopes = [telescope]
+    else:
+        src_telescopes = telescope
+
+    # If it's a single source, I shove it in a list, so I can just iterate over the 'sources' parameter
+    #  like I do when it's a Sample object
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -118,14 +127,14 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     if all([obs_id is not None, inst is not None]):
         if isinstance(obs_id, dict):
             # checking that there is a key for every telescope associated with the sample/source
-            if not set(all_tels) == set(obs_id.keys()):
-                raise KeyError("If setting the obs_id argument, there must be a key for each " 
+            if not set(src_telescopes) == set(obs_id.keys()):
+                raise KeyError("If setting the 'obs_id' argument, there must be a key for each " 
                                "telescope associated with the Sample/Source.")
 
             # if the dict has str values, making them into a list for use later
             if all(isinstance(obs_id[key], str) for key in obs_id):
                 if len(sources) > 1:
-                    raise ValueError("If multiple sources are being analysed, then the obs_id "
+                    raise ValueError("If multiple sources are being analysed, then the 'obs_id' "
                                     "argument must be input as a dictionary of lists, with one " 
                                     "entry per source.")
                 for key in obs_id:
@@ -133,11 +142,11 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
 
             elif all(isinstance(obs_id[key], list) for key in obs_id):
                 if any(len(obs_id[key]) != len(sources) for key in obs_id):
-                    raise ValueError("If you set the obs_id argument as a dictionary of lists, "
+                    raise ValueError("If you set the 'obs_id' argument as a dictionary of lists, "
                                      "there must be one entry per source being analysed in each " 
                                      "list.")
             else:
-                raise ValueError("If the obs_id argument is set, it must be a dictionary with "
+                raise ValueError("If the 'obs_id' argument is set, it must be a dictionary with "
                                  "telescope keys and values that are either a string of one ObsID "
                                  "if one source is being analysed, or a list with an ObsID for "
                                  "each source. If the telescope is not associated to a source put " 
@@ -145,8 +154,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
 
         if isinstance(inst, dict):
             # checking that there is a key for every telescope associated with the sample/source
-            if not set(all_tels) == set(inst.keys()):
-                raise KeyError("If setting the inst argument, there must be a key for each " 
+            if not set(src_telescopes) == set(inst.keys()):
+                raise KeyError("If setting the 'inst' argument, there must be a key for each " 
                                "telescope associated with the Sample/Source.")
 
             # if the dict has str values, making them into a list for use later
@@ -156,32 +165,31 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
 
             elif all(isinstance(inst[key], list) for key in inst):
                 if any(len(inst[key]) != len(sources) for key in inst):
-                    raise ValueError("If you set the inst argument as a dictionary of lists, there"
+                    raise ValueError("If you set the 'inst' argument as a dictionary of lists, there"
                                      " must be one entry per source being analysed in each list.")
 
             else:
-                raise ValueError("If the inst argument is set, it must be a dictionary with "
+                raise ValueError("If the 'inst' argument is set, it must be a dictionary with "
                                  "telescope keys and values that are either a string of one " 
                                  "instrument, or a list with an instrument for each source. If the "
                                  "telescope is not associated to a source put in an empty string.")
 
     elif all([obs_id is None, inst is None]):
-        obs_id = {key : [None]*len(sources) for key in all_tels}
-        inst = {key : [None]*len(sources) for key in all_tels}
+        obs_id = {tel : [None]*len(sources) for tel in src_telescopes}
+        inst = {tel : [None]*len(sources) for tel in src_telescopes}
     else:
-        raise ValueError("If a value is supplied for obs_id, then a value must be supplied for "
-                         "inst as well, and vice versa.")
+        raise ValueError("If a value is supplied for 'obs_id', then a value must be supplied for "
+                         "'inst' as well, and vice versa.")
 
     if not all([type(src) == GalaxyCluster for src in sources]):
-        raise TypeError("Only GalaxyCluster sources can be passed to cluster_density_profile.")
+        raise TypeError("Only GalaxyCluster sources can be passed to the density profile methods.")
 
-    # Triggers an exception if the abundance table name passed isn't recognised
+    # Triggers an exception if the abundance table name passed isn't recognized
     if abund_table not in ABUND_TABLES:
         ab_list = ", ".join(ABUND_TABLES)
-        raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(
-                                                                     abund_table, ab_list))
+        raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(abund_table, ab_list))
 
-    # This check will eventually become obselete, but I haven't yet implemented electron to proton
+    # This check will eventually become obsolete, but I haven't yet implemented electron to proton
     # ratios for all allowed abundance tables - so this just checks whether the chosen table has an
     # ratio associated.
     try:
@@ -189,73 +197,76 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
     except KeyError:
         raise NotImplementedError("That is an acceptable abundance table, but I haven't added the " 
                                   "conversion factor to the dictionary yet")
+
+    # Setting up the temperatures used for the calculation of the emissivity-to-density conversion factor
     if conv_temp is not None:
         if isinstance(conv_temp, Quantity):
             if not conv_temp.isscalar and len(conv_temp) != len(sources):
-                raise ValueError("If there are multiple entries in conv_temp, then there must be "
+                raise ValueError("If there are multiple entries in 'conv_temp', then there must be "
                                  "the same number of entries as there are sources being analysed.")
             # if conv_temp is input as a quantity, we will convert it to the correct format
-            temps = {key : conv_temp for key in all_tels}
+            temps = {key : conv_temp for key in src_telescopes}
 
         elif isinstance(conv_temp, dict):
             if any(not conv_temp[key].isscalar and len(conv_temp[key]) !=len(sources) \
                    for key in conv_temp):
-                raise ValueError("If there are multiple entries in conv_temp, then there must be "
+                raise ValueError("If there are multiple entries in 'conv_temp', then there must be "
                                  "the same number of entries as there are sources being analysed.")
             temps = conv_temp
         else:
-            raise ValueError("If conv_temp argument is set, it must be either a Quantity, or a "
+            raise ValueError("If 'conv_temp' argument is set, it must be either a Quantity, or a "
                              "dictionary of Quantities, with key for each telescope associated " 
                              "to the Source/Sample.")
     else:
         # Check that the spectra we will be relying on for conversion calculation have been fitted,
         # calling this function will also make sure that they are generated
-        single_temp_apec(sources, conv_outer_radius, inner_radius, abund_table=abund_table,
+        single_temp_apec(sources, conv_outer_radius, conv_inner_radius, abund_table=abund_table,
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra)
+                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
+                         telescope=telescope)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion
         # factor calculator - this may well change as I intend to let cluster_cr_conv grab
         # temperatures for itself at some point
-        temps = {key : [] for key in all_tels}
+        temps = {key : [] for key in src_telescopes}
         for src in sources:
-            for tel in src.telescopes:
+            for tel in src_telescopes:
                 try:
-                    if tel in ['erosita', 'erass']:
+                    if tel == 'erosita':
                         # A temporary temperature variable
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
-                                                        inner_radius, group_spec, min_counts, min_sn,
+                                                        conv_inner_radius, group_spec, min_counts, min_sn,
                                                         over_sample, stacked_spectra=stacked_spectra)[0]
                     else:
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
-                                                        inner_radius, group_spec, min_counts, min_sn,
+                                                        conv_inner_radius, group_spec, min_counts, min_sn,
                                                         over_sample)[0]
                 except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                    warn("{s}'s temperature fit is not valid, so I am defaulting to a temperature "
-                        "of 3keV".format(s=src.name))
+                    warn("{s}'s temperature fit is not valid, so we are defaulting to a temperature "
+                        "of 3keV".format(s=src.name), stacklevel=2)
                     temp_temp = Quantity(3, 'keV')
                 temps[tel].append(temp_temp.value)
 
         for key in temps:
-            # If there is only one source, then we dont want to parse a list into the Quantity object
+            # If there is only one source, then we don't want to parse a list into the Quantity object
             if len(temps[key]) == 1:
                 temps[key] = Quantity(temps[key][0], 'keV')
             else:
                 temps[key] = Quantity(temps[key], 'keV')
 
     # This call actually does the fakeit calculation of the conversion factors, then stores them in
-    # the  XGA Spectrum objects
-    cluster_cr_conv(sources, conv_outer_radius, inner_radius, temps, abund_table=abund_table,
+    # the XGA Spectrum objects
+    cluster_cr_conv(sources, conv_outer_radius, conv_inner_radius, temps, abund_table=abund_table,
                     num_cores=num_cores, group_spec=group_spec, min_counts=min_counts,
-                    min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra)
-
+                    min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra, telescope=telescope)
+    
     # This where the combined conversion factor that takes a count-rate/volume to a squared number
     # density of hydrogen
-    to_dens_convs = {key : [] for key in all_tels}
-    # These are from the distance and redshift, also the normalising 10^-14 (see my paper for
+    to_dens_convs = {key : [] for key in src_telescopes}
+    # These are from the distance and redshift, also the normalizing 10^-14 (see my paper for
     #  more of an explanation)
     for src_ind, src in enumerate(sources):
-        for tel in src.telescopes:
+        for tel in src_telescopes:
             src: GalaxyCluster
             # Both the angular_diameter_distance and redshift are guaranteed to be present here
             #  because redshift is REQUIRED to define GalaxyCluster objects
@@ -264,20 +275,28 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Unio
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
             # but if inst = None, we only want to retreive combined instrument spectra
-            if tel in ['erosita', 'erass'] and inst[tel][src_ind] == None:
-                lookup_obs = 'combined'
-                lookup_inst = 'combined'
+            if tel == 'erosita':
+                if inst[tel][src_ind] is None:
+                    lookup_inst = 'combined'
+                else:
+                    lookup_inst = inst[tel][src_ind]
+                
+                if len(src.obs_ids['erosita']) > 1:
+                    lookup_obs = 'combined'
+                else:
+                    lookup_obs = src.obs_ids['erosita'][0]
+
             else:
                 lookup_obs = obs_id[tel][src_ind]
                 lookup_inst = inst[tel][src_ind]
 
             total_factor = factor * src.norm_conv_factor(conv_outer_radius, tel, lo_en, hi_en,
-                                                         inner_radius, group_spec, min_counts,
+                                                         conv_inner_radius, group_spec, min_counts,
                                                          min_sn, over_sample, lookup_obs,
                                                          lookup_inst)
             to_dens_convs[tel].append(total_factor)
 
-    return sources, to_dens_convs, obs_id, inst
+    return sources, to_dens_convs, obs_id, inst, src_telescopes
 
 
 def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak: bool,
@@ -314,21 +333,35 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
     """
 
     try:
-        if all([obs_id is None, inst is None]):
+        if telescope == 'erosita':
+            if len(src.obs_ids['erosita']) > 1:
+                use_combined = True
+            else:
+                use_combined = False
+                obs_id = src.obs_ids['erosita'][0]
+
+        else:
+            if all([obs_id is None, inst is None]):
+                use_combined = True
+            elif all([obs_id is not None, inst is not None]):
+                use_combined = False
+            else:
+                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and " 
+                    "vice versa.")
+
+        if use_combined:
             rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                            psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope)
             comb = True
-        elif all([obs_id is not None, inst is not None]):
+        else:
             rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
                                   psf_algo, psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope, obs_id=obs_id)
             comb = False
-        else:
-            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and " 
-                             "vice versa.")
+
     except NoProductAvailableError:
         raise NoProductAvailableError("The RateMap required to measure the density profile has not "
                                       "been generated yet, possibly because you haven't generated " 
@@ -363,25 +396,20 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
 
     return sb_prof
 
-
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
-                          model: Union[str, List[str], BaseModel1D, List[BaseModel1D]],
-                          fit_method: str = "mcmc", outer_radius: Union[str, Quantity] = "r500",
-                          num_dens: bool = True, use_peak: bool = True, pix_step: int = 1,
-                          min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
-                          lo_en: Quantity = Quantity(0.5, 'keV'),
-                          hi_en: Quantity = Quantity(2.0, 'keV'),
-                          psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4,
-                          psf_algo: str = "rl", psf_iter: int = 15, num_walkers: int = 20,
-                          num_steps: int = 20000, num_samples: int = 10000,
-                          group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                          over_sample: float = None,
+                          model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], fit_method: str = "mcmc",
+                          outer_radius: Union[str, Quantity] = "r500", num_dens: bool = True, use_peak: bool = True,
+                          pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
+                          lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
+                          psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                          psf_iter: int = 15, num_walkers: int = 20, num_steps: int = 20000, num_samples: int = 10000,
+                          group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                           obs_id: Union[Dict[str, str], Dict[str, list]] = None,
-                          inst:Union[Dict[str, str], Dict[str, list]] = None,
-                          conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
-                          conv_outer_radius: Quantity = "r500", inv_abel_method: str = None,
-                          num_cores: int = NUM_CORES, show_warn: bool = True,
-                          stacked_spectra: bool = False) -> List[GasDensity3D]:
+                          inst: Union[Dict[str, str], Dict[str, list]] = None,
+                          conv_temp: Union[Quantity, Dict[str, Quantity]] = None, conv_outer_radius: Quantity = "r500",
+                          conv_inner_radius: Quantity = Quantity(0, 'arcsec'), inv_abel_method: str = None,
+                          num_cores: int = NUM_CORES, show_warn: bool = True, stacked_spectra: bool = False,
+                          telescope: Union[str, List[str]] = None) -> Dict[str, List[Union[GasDensity3D, None]]]:
     """
     A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile
     is fit with a model and an inverse abel transform is used to infer the 3D count-rate/volume
@@ -405,7 +433,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         has been passed).
     :param bool num_dens: If True then a number density profile will be generated, otherwise a mass
         density profile will be generated.
-    :param bool use_peak: If true the measured peak will be used as the central coordinate of the
+    :param bool use_peak: If True the measured peak will be used as the central coordinate of the
         profile.
     :param int pix_step: The width (in pixels) of each annular bin for the profiles, default is 1.
     :param int/float min_snr: The minimum allowed signal-to-noise for the surface brightness
@@ -455,6 +483,9 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         measure temperatures for the conversion factor calculation, default is 'r500'. An astropy
         quantity may also be passed, with either a single value or an entry for each cluster being
         analysed.
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from measure temperatures for the conversion
+        factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
+        a single value or an entry for each cluster being analysed.
     :param str inv_abel_method: The method which should be used for the inverse abel transform of
         model which is fitted to the surface brightness profile. This overrides the default method
         for the model, which is either 'analytical' for models with an analytical solution to the
@@ -462,21 +493,23 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         Default is None.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
         to use.
-    :param bool show_warn: Should fit warnings be shown on screen.
+    :param bool show_warn: Controls whether fit warnings are displayed. Default is False.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
-    :return: A list of the 3D gas density profiles measured by this function, though if the
-        measurement was not successful an entry of None will be added to the list.
-    :rtype: List[GasDensity3D]
+    :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
+        case density profiles will be produced from all telescopes associated with a source.
+    :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
+        names. The values are lists with one entry per source, even if the source in question doesn't have
+        that telescope associated or the profile construction process failed.
+    :rtype: Dict[str, List[Union[GasDensity3D, None]]]
     """
-    # Run the setup function, calculates the factors that translate 3D countrate to density
-    #  Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'),
-                                                      abund_table, lo_en, hi_en, group_spec,
-                                                      min_counts, min_sn, over_sample, obs_id, inst,
-                                                      conv_temp, conv_outer_radius, num_cores,
-                                                      stacked_spectra=stacked_spectra)
+    # Run the setup function, and calculates the factors that translate 3D countrate to density
+    # Also checks parameters and runs any spectra/fits that need running
+    sources, conv_factors, obs_id, inst, telescope = _dens_setup(sources, abund_table, lo_en, hi_en, group_spec,
+                                                                 min_counts, min_sn, over_sample, obs_id, inst,
+                                                                 conv_temp, conv_outer_radius, conv_inner_radius,
+                                                                 num_cores, stacked_spectra, telescope)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius
     # values
@@ -487,32 +520,33 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     # First we check the number of arguments passed for the model
     model = model_check(sources, model)
 
-    all_tels = _get_all_telescopes(sources)
+    # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
+    #  all telescopes yet. We also check this in the loop as we have to temporarily change
+    #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
+    #  multiple sources
+    if 'erosita' in telescope and psf_corr:
+        warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+             "brightness profiles will not be corrected.", stacklevel=2)
 
     # Setting up dict to store profiles in
-    final_dens_profs = {key : [] for key in all_tels}
+    final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in telescope}
 
     with tqdm(desc="Fitting data, inverse Abel transforming, and measuring densities",
               total=len(sources), position=0) as dens_prog:
-        # I need the ratio of electrons to protons here as well, so just fetch that for the current
-        # abundance table
+        # We need the ratio of electrons to protons, and fetch that for the current abundance table
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
-            for tel in src.telescopes:
-                if tel in ['erosita', 'erass'] and psf_corr:
-                    warn("PSF correction is not yet implemented for the erosita telescope."
-                        "Erosita surface brightness profiles will be done without PSF correction.")
-
+            for tel in telescope:
+                if tel == 'erosita' and psf_corr:
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
-
                 sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, use_psf_corr,
                                   psf_model, psf_bins, psf_algo, psf_iter, pix_step, min_snr,
                                   obs_id[tel][src_ind], inst[tel][src_ind])
 
                 if sb_prof is None:
-                    final_dens_profs[tel].append(None)
+                    final_dens_profs[tel][src_ind] = None
                     continue
                 else:
                     src.update_products(sb_prof)
@@ -566,8 +600,8 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                     num_dens_dist = np.sqrt(transformed * conv_factors[tel][src_ind])* \
                                     (1+e_to_p_ratio)
 
-                    med_num_dens = np.percentile(num_dens_dist, 50, axis=1)
-                    num_dens_err = np.std(num_dens_dist, axis=1)
+                    med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
+                    num_dens_err = np.nanstd(num_dens_dist, axis=1)
 
                     # Setting up the instrument and ObsID to pass into the density profile
                     # definition
@@ -590,7 +624,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                      telescope=tel)
                         else:
                             # TODO Check the origin of the mean molecular weight, see if there are
-                            # different values for different abundance tables
+                            #  different values for different abundance tables
                             # The mean molecular weight multiplied by the proton mass
                             conv_mass = MEAN_MOL_WEIGHT*m_p
                             dens_prof = GasDensity3D(dens_rads.to("kpc"),
@@ -601,190 +635,16 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                                                     deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
 
                         src.update_products(dens_prof)
-                        final_dens_profs[tel].append(dens_prof)
+                        final_dens_profs[tel][src_ind] = dens_prof
 
                     # If, for some reason, there are some inf/NaN values in any of the quantities
                     #  passed to the GasDensity3D declaration, this is where an error will be thrown
                     except ValueError:
-                        final_dens_profs[tel].append(None)
+                        final_dens_profs[tel][src_ind] = None
                         warn("One or more of the quantities passed to the init of {}'s density " 
                             "profile has a NaN or Inf value in it.".format(src.name), stacklevel=2)
                 else:
-                    final_dens_profs[tel].append(None)
-
-            dens_prog.update(1)
-
-    return final_dens_profs
-
-
-def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
-                          outer_radii: Union[Quantity, List[Quantity]], num_dens: bool = True,
-                          annulus_method: str = 'min_snr', min_snr: float = 30,
-                          min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
-                          min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
-                          use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
-                          hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False,
-                          psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                          psf_iter: int = 15, allow_negative: bool = False,
-                          exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
-                          min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                          freeze_met: bool = True, abund_table: str = "angr",
-                          temp_lo_en: Quantity = Quantity(0.3, 'keV'),
-                          temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 10000,
-                          sigma: int = 1, num_cores: int = NUM_CORES,
-                          stacked_spectra: bool = False) -> List[GasDensity3D]:
-    """
-    A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First
-    checks whether the required annular spectra already exist and have been fit using XSPEC, if not
-    then they are generated and fitted, and APEC normalisation profiles will be produced (with
-    projected temperature profiles also being made as a useful extra). Then the apec normalisation
-    profile will be used, with knowledge of the source's redshift and chosen analysis cosmology, to
-    produce a density profile from the APEC normalisation.
-
-    :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to calculate 3D
-        gas density profiles for.
-    :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation
-        of the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or
-        Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
-        inner radius will be ignored. If you are generating for multiple sources then you can also
-        pass a Quantity with one entry per source.
-    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass
-        density profile will be generated.
-    :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr'
-        (which will use the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the
-        min_cnt_proj_temp_prof function).
-    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if
-        annulus_method is set to 'min_snr'.
-    :param int/Quantity min_cnt: The minimum background subtracted counts which are allowable in a
-        given annulus, used if annulus_method is set to 'min_cnt'.
-    :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20
-        arcseconds to try and avoid PSF effects.
-    :param bool use_combined: If True (and annulus_method is set to 'min_snr') then the combined
-        RateMap will be used for signal-to-noise annulus calculations, this is overridden by
-        use_worst. If True (and annulus_method is set to 'min_cnt') then combined RateMaps will be
-        used for annulus count calculations, if False then the median observation (in terms of
-        counts) will be used.
-    :param bool use_worst: If True then the worst observation of the cluster (ranked by global
-        signal-to-noise) will be used for signal-to-noise annulus calculations. Used if
-        annulus_method is set to 'min_snr'.
-    :param Quantity lo_en: The lower energy bound of the RateMap to use for the signal-to-noise or
-        background subtracted count calculations.
-    :param Quantity hi_en: The upper energy bound of the RateMap to use for the signal-to-noise or
-        background subtracted count calculations.
-    :param bool psf_corr: Sets whether you wish to use a PSF corrected RateMap or not.
-    :param str psf_model: If the RateMap you want to use is PSF corrected, this is the PSF model
-        used.
-    :param int psf_bins: If the RateMap you want to use is PSF corrected, this is the number of PSFs
-        per side in the PSF grid.
-    :param str psf_algo: If the RateMap you want to use is PSF corrected, this is the algorithm
-        used.
-    :param int psf_iter: If the RateMap you want to use is PSF corrected, this is the number of
-        iterations.
-    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to
-        go below zero, which results in a lower signal-to-noise (and can result in a negative
-        signal-to-noise).
-    :param bool exp_corr: Should signal-to-noises be measured with exposure time correction, default
-            is True. I recommend that this be true for combined observations, as exposure time could
-            change quite dramatically across the combined product.
-    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts
-        per channel. To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
-        each channel. To disable minimum signal-to-noise set this parameter to None.
-    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
-        e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that
-        energy.
-    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a
-        particular ObsID-instrument combination - this is much faster in some circumstances, however
-        the RMF does depend slightly on position on the detector.
-    :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should
-        be frozen.
-    :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2
-        during density calculation, and the XSPEC fit.
-    :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
-    :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
-    :param int num_data_real: The number of random realisations to generate when propagating profile
-        uncertainties.
-    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
-    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of
-        available.
-    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
-        used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
-        supported, this function will instead use individual spectra for an ObsID. The default is
-        False.
-    :return: A list of the 3D gas density profiles measured by this function, though if the
-        measurement was not successful an entry of None will be added to the list.
-    :rtype: List[GasDensity3D]
-    """
-    if annulus_method not in ALLOWED_ANN_METHODS:
-        a_meth = ", ".join(ALLOWED_ANN_METHODS)
-        raise ValueError("That is not a valid method for deciding where to place annuli, please "
-                         "use one of these; {}".format(a_meth))
-
-    if annulus_method == 'min_snr':
-        # This returns the boundary radii for the annuli
-        ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined,
-                                          use_worst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
-                                          psf_algo, psf_iter, allow_negative, exp_corr, group_spec,
-                                          min_counts, min_sn, over_sample, one_rmf, freeze_met,
-                                          abund_table, temp_lo_en, temp_hi_en, num_cores,
-                                          stacked_spectra=stacked_spectra)
-    elif annulus_method == 'min_cnt':
-        # This returns the boundary radii for the annuli, based on a minimum number of counts per
-        # annulus
-        ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined,
-                                          lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                                          psf_iter, group_spec, min_counts, min_sn, over_sample,
-                                          one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
-                                          num_cores, stacked_spectra=stacked_spectra)
-    elif annulus_method == "growth":
-        raise NotImplementedError("This method isn't implemented yet")
-
-    # collecting all the associated telescopes here for later use
-    all_tels = _get_all_telescopes(sources)
-
-    # So we can iterate through sources without worrying if there's more than one cluster
-    if not isinstance(sources, ClusterSample):
-        sources = [sources]
-
-    # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
-    # the gas_density_profile method of APECNormalisation1D
-    final_dens_profs = {key : [] for key in all_tels}
-    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as \
-        dens_prog:
-        for src_ind, src in enumerate(sources):
-            for tel in src.telescopes:
-                cur_rads = ann_rads[tel][src_ind]
-
-                try:
-                    # The normalisation profile(s) from the fit that produced the projected
-                    # temperature profile.
-                    apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
-                                                                min_sn, over_sample, telescope=tel)
-
-                    obs_id = 'combined'
-                    inst = 'combined'
-                    # Seeing as we're here, I might as well make a density profile from the apec
-                    # normalisation profile
-                    dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo,
-                                                                   abund_table, num_data_real,
-                                                                   sigma, num_dens)
-                    # Then I store it in the source
-                    src.update_products(dens_prof)
-                    final_dens_profs[tel].append(dens_prof)
-
-                # It is possible that no normalisation profile exists because the spectral fitting
-                # failed, we account for that here
-                except NoProductAvailableError:
-                    warn("{s} doesn't have a matching apec normalisation profile, skipping.")
-                    final_dens_profs[tel].append(None)
-
-                # It's also possible that the gas_density_profile method of our normalisation
-                # profile is going to throw a ValueError because some values are infinite or NaNs
-                # - we have to catch that too
-                except ValueError:
-                    warn("{s}'s density profile has NaN values in it, skipping.", stacklevel=2)
-                    final_dens_profs[tel].append(None)
+                    final_dens_profs[tel][src_ind] = None
 
             dens_prog.update(1)
 
@@ -798,7 +658,9 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                   psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_samples: int = 10000,
                   group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                   obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
-                  conv_outer_radius: Quantity = "r500", num_cores: int = NUM_CORES) -> List[GasDensity3D]:
+                  conv_outer_radius: Quantity = "r500", conv_inner_radius: Quantity = Quantity(0, 'arcsec'),
+                  num_cores: int = NUM_CORES, stacked_spectra: bool = False,
+                  telescope: Union[str, List[str]] = None) -> Dict[str, List[Union[GasDensity3D, None]]]:
     """
     A count-rate-map-based galaxy cluster gas density calculation method where a surface brightness profile inverse
     abel transformed, thus inferring the 3D count-rate/volume profile. Then a conversion factor calculated from
@@ -874,29 +736,47 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for fakeit
         were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
-    :param str/list obs_id: A specific ObsID(s) to measure the density from. This should be a string if a single
-        source is being analysed, and a list of ObsIDs the same length as the number of sources otherwise. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param str/list inst: A specific instrument(s) to measure the density from. This can either be passed as a
-        single string (e.g. 'pn') if only one source is being analysed, or the same instrument should be used for
-        every source in a sample, or a list of strings if different instruments are required for each source. The
-        default is None, in which case the combined data will be used to measure the density profile.
-    :param Quantity conv_temp: If set this will override XGA measured temperatures within the conv_outer_radius, and
-        the fakeit run to calculate the normalisation conversion factor will use these temperatures. The quantity
-         should have an entry for each cluster being analysed. Default is None.
+    :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from.
+        This should be a dictionary of strings if a single source is being analysed, or a dictionary
+        of lists of ObsIDs the same length as the number of sources otherwise. The dictionary should
+        have keys for every telescope associated to the Source/Sample. If a source in a sample
+        doesn't have data associated to one of the telescopes, use an empty string for its place in
+        the list. The default is None, in which case the combined data will be used to measure the
+        density profile.
+    :param Dict[str, str]/Dict[str, list] inst: A specific instruments(s) to measure the density
+        from. This should be a dictionary of strings if a single source is being analysed, or if the
+        same instrument should be used for every source in the sample, or a dictionary of lists of
+        instruments the same length as the number of sources otherwise. The dictionary should have
+        keys for every telescope associated to the Source/Sample. The default is None, in which case
+        the combined data will be used to measure the density profile.
+    :param Quantity/Dict[str, Quantity] conv_temp: If set this will override XGA measured
+        temperatures within the conv_outer_radius, and the fakeit run to calculate the normalisation
+        conversion factor will use these temperatures. This can be set as a quantity, or a
+        dictionary of quantities with telescope keys to specify telescope specific temperatures.
+        The quantity should have an entry for each cluster being analysed. Default is None.
     :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
         a single value or an entry for each cluster being analysed.
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from measure temperatures for the conversion
+        factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
+        a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
-    :return: A list of the 3D gas density profiles measured by this function, though if the measurement was not
-        successful an entry of None will be added to the list.
-    :rtype: List[GasDensity3D]
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
+        case density profiles will be produced from all telescopes associated with a source.
+    :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
+        names. The values are lists with one entry per source, even if the source in question doesn't have
+        that telescope associated or the profile construction process failed.
+    :rtype: Dict[str, List[Union[GasDensity3D, None]]]
     """
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
-    sources, conv_factors, obs_id, inst = _dens_setup(sources, outer_radius, Quantity(0, 'arcsec'), abund_table, lo_en,
-                                                      hi_en, group_spec, min_counts, min_sn, over_sample, obs_id, inst,
-                                                      conv_temp, conv_outer_radius, num_cores)
+    sources, conv_factors, obs_id, inst, telescope = _dens_setup(sources, abund_table, lo_en, hi_en, group_spec,
+                                                                 min_counts, min_sn, over_sample, obs_id, inst,
+                                                                 conv_temp, conv_outer_radius, conv_inner_radius,
+                                                                 num_cores, stacked_spectra, telescope)
 
     # Calls the handy spectrum region setup function to make a predictable set of outer radius values
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
@@ -907,136 +787,331 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         raise ValueError("{p} is not a supported inverse-Abel transform method, please choose from; "
                          "{a}".format(p=inv_abel_method, a=all_str))
 
+    # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
+    #  all telescopes yet. We also check this in the loop as we have to temporarily change
+    #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
+    #  multiple sources
+    if 'erosita' in telescope and psf_corr:
+        warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+             "brightness profiles will not be corrected.", stacklevel=2)
+
+    # Setting up dict to store profiles in
+    final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in telescope}
+
     with tqdm(desc="Inverse Abel transforming data and measuring densities",
               total=len(sources), position=0) as dens_prog:
-        final_dens_profs = []
-        # I need the ratio of electrons to protons here as well, so just fetch that for the current abundance table
+        # Need the ratio of electrons to protons for the selected abundance table
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
-
-            sb_prof = _run_sb(src, out_rads[src_ind], use_peak, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
-                              psf_iter, pix_step, min_snr, obs_id[src_ind], inst[src_ind])
-            # It is possible for the above function to fail to produce an SB profile, in which case the return is
-            #  None, so we check for that and don't continue to the rest of this function (for this source anyway) if
-            #  it is None
-            if sb_prof is None:
-                final_dens_profs.append(None)
-                continue
-            else:
-                # If it is a good SB profile, we make sure to add it to the source's storage structure
-                src.update_products(sb_prof)
-
-            # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
-            force_change = False
-            if len(set(np.diff(sb_prof.radii.value).round(5))) != 1:
-                warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                     "the method to 'direct'", stacklevel=2)
-                inv_abel_method = 'direct'
-                force_change = True
-            else:
-                dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
-
-            realisations = sb_prof.generate_data_realisations(num_samples)
-            transform_res = np.zeros(realisations.shape)
-
-            for t_ind in range(0, realisations.shape[0]):
-                if inv_abel_method == 'direct' and force_change:
-                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
-                    #  zero - one of the PyAbel authors suggested padding out the data.
-                    to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
-                    temp_dr = (sb_prof.radii[-1] - sb_prof.radii[-2]).value
-                    mod_rad = np.concatenate([sb_prof.radii.value, np.array([sb_prof.radii.value[-1] + temp_dr])])
-                    transform_res[t_ind, :] = direct_transform(to_trans, r=mod_rad, backend='python',
-                                                               verbose=False)[:-1]
-                elif inv_abel_method == 'direct' and not force_change:
-                    # This is necessary (see issue #1164) for the direct method because the last value is by definition
-                    #  zero - one of the PyAbel authors suggested padding out the data.
-                    to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
-                    transform_res[t_ind, :] = direct_transform(to_trans, dr=dr, verbose=False, backend='python')[:-1]
-                elif inv_abel_method == 'basex':
-                    transform_res[t_ind, :] = basex_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'hansen_law_ho0':
-                    transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'hansen_law_ho1':
-                    transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, hold_order=1,
-                                                                  verbose=False)
-                elif inv_abel_method == 'onion_bordas':
-                    transform_res[t_ind, :] = onion_bordas_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'onion_peeling':
-                    transform_res[t_ind, :] = onion_peeling_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'two_point':
-                    transform_res[t_ind, :] = two_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'three_point':
-                    transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
-                elif inv_abel_method == 'daun':
-                    transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr, verbose=False)
-
-            # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
-            #  orient it properly
-            transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit).T
-
-            # Grab the radii that we need for the density profile we're about to set up
-            dens_rads = sb_prof.radii.copy()
-            dens_rads_errs = sb_prof.radii_err.copy()
-            dens_deg_rads = sb_prof.deg_radii.copy()
-
-            # Now need to make sure the units of the transformed model are what we need
-            if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
-                # If the SB profile is in count/s/arcmin^2 then the abel transform will have
-                #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
-                conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
-                                'kpc/arcmin')**2
-                transformed /= conv
-            elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
-                pass
-            else:
-                raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
-                                          "other units, don't really know how you even got here.")
-
-            # We convert the volume element to cm^3 now, this is the unit we expect for the density conversion
-            transformed = transformed.to('ct/(s*cm^3)')
-
-            # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
-            #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
-            num_dens_dist = np.sqrt(transformed * conv_factors[src_ind])*(1+e_to_p_ratio)
-
-            med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
-            num_dens_err = np.nanstd(num_dens_dist, axis=1)
-
-            # Setting up the instrument and ObsID to pass into the density profile definition
-            if obs_id[src_ind] is None:
-                cur_inst = "combined"
-                cur_obs = "combined"
-            else:
-                cur_inst = inst[src_ind]
-                cur_obs = obs_id[src_ind]
-
-            try:
-                # I now allow the user to decide if they want to generate number or mass density profiles using
-                #  this function, and here is where that distinction is made
-                if num_dens:
-                    dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
-                                             cur_inst, inv_abel_method, sb_prof, dens_rads_errs, num_dens_err,
-                                             deg_radii=dens_deg_rads, auto_save=True)
+            for tel in telescope:
+                # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
+                #  all telescopes yet
+                if tel == 'erosita' and psf_corr:
+                    use_psf_corr = False
                 else:
-                    # TODO Check the origin of the mean molecular weight, see if there are different values for
-                    #  different abundance tables
-                    # The mean molecular weight multiplied by the proton mass
-                    conv_mass = MEAN_MOL_WEIGHT*m_p
-                    dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
-                                             sb_prof.centre, src.name, cur_obs, cur_inst, inv_abel_method, sb_prof,
-                                             dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
-                                             deg_radii=dens_deg_rads, auto_save=True)
+                    use_psf_corr = psf_corr
 
-                src.update_products(dens_prof)
-                final_dens_profs.append(dens_prof)
+                # Run an internal function which sets up the surface brightness profile we'll use to infer density
+                sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, use_psf_corr,
+                                  psf_model, psf_bins, psf_algo, psf_iter, pix_step, min_snr,
+                                  obs_id[tel][src_ind], inst[tel][src_ind])
 
-                # If, for some reason, there are some inf/NaN values in any of the quantities passed to the GasDensity3D
-                #  declaration, this is where an error will be thrown
-            except ValueError:
-                final_dens_profs.append(None)
-                warn("One or more of the quantities passed to the init of {}'s density profile has a NaN or Inf value"
-                     " in it.".format(src.name), stacklevel=2)
+                # The above function can fail to produce an SB profile, in which case the return is None. We check
+                # for that and don't continue to the rest of this function (for this source anyway)
+                if sb_prof is None:
+                    final_dens_profs[tel][src_ind] = None
+                    continue
+                else:
+                    # If it is a good SB profile, we make sure to add it to the source's storage structure
+                    src.update_products(sb_prof)
+
+                # Sets up the resolution of the radial spatial sampling for the inverse-abel transform methods
+                force_change = False
+                if len(set(np.diff(sb_prof.radii.value).round(5))) != 1:
+                    warn("Most numerical methods for the abel transform require uniformly sampled radius "
+                         "values, setting the method to 'direct'", stacklevel=2)
+                    inv_abel_method = 'direct'
+                    force_change = True
+                else:
+                    dr = (sb_prof.radii[1] - sb_prof.radii[0]).value
+
+                realisations = sb_prof.generate_data_realisations(num_samples)
+                transform_res = np.zeros(realisations.shape)
+
+                for t_ind in range(0, realisations.shape[0]):
+                    if inv_abel_method == 'direct' and force_change:
+                        # This is necessary (see issue #1164) for the direct method because the last value
+                        #  is by definition zero - one of the PyAbel authors suggested padding out the data.
+                        to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
+                        temp_dr = (sb_prof.radii[-1] - sb_prof.radii[-2]).value
+                        mod_rad = np.concatenate([sb_prof.radii.value, np.array([sb_prof.radii.value[-1] + temp_dr])])
+                        transform_res[t_ind, :] = direct_transform(to_trans, r=mod_rad, backend='python',
+                                                                   verbose=False)[:-1]
+                    elif inv_abel_method == 'direct' and not force_change:
+                        # This is necessary (see issue #1164) for the direct method because the last value
+                        #  is by definition zero - one of the PyAbel authors suggested padding out the data.
+                        to_trans = np.concatenate([realisations[t_ind, :], np.array([0.0])])
+                        transform_res[t_ind, :] = direct_transform(to_trans, dr=dr, verbose=False,
+                                                                   backend='python')[:-1]
+                    elif inv_abel_method == 'basex':
+                        transform_res[t_ind, :] = basex_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'hansen_law_ho0':
+                        transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'hansen_law_ho1':
+                        transform_res[t_ind, :] = hansenlaw_transform(realisations[t_ind, :], dr=dr, hold_order=1,
+                                                                      verbose=False)
+                    elif inv_abel_method == 'onion_bordas':
+                        transform_res[t_ind, :] = onion_bordas_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'onion_peeling':
+                        transform_res[t_ind, :] = onion_peeling_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'two_point':
+                        transform_res[t_ind, :] = two_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'three_point':
+                        transform_res[t_ind, :] = three_point_transform(realisations[t_ind, :], dr=dr, verbose=False)
+                    elif inv_abel_method == 'daun':
+                        transform_res[t_ind, :] = daun_transform(realisations[t_ind, :], dr=dr, verbose=False)
+
+                # The result is NO LONGER an astropy quantity, so we need to set that up again - we also transpose to
+                #  orient it properly
+                transformed = Quantity(transform_res, sb_prof.values_unit / sb_prof.radii_unit).T
+
+                # Grab the radii that we need for the density profile we're about to set up
+                dens_rads = sb_prof.radii.copy()
+                dens_rads_errs = sb_prof.radii_err.copy()
+                dens_deg_rads = sb_prof.deg_radii.copy()
+
+                # Now need to make sure the units of the transformed model are what we need
+                if sb_prof.values_unit.is_equivalent('ct/(s*arcmin**2)'):
+                    # If the SB profile is in count/s/arcmin^2 then the abel transform will have
+                    #  units of ct/s/(arcmin^2 kpc), so I create a quantity which will convert the arcmin^2 to kpc^2
+                    conv = Quantity(ang_to_rad(Quantity(1, 'arcmin'), src.redshift, src.cosmo).to("kpc").value,
+                                    'kpc/arcmin')**2
+                    transformed /= conv
+                elif sb_prof.values_unit.is_equivalent('ct/(s*kpc**2)'):
+                    pass
+                else:
+                    raise NotImplementedError("Haven't yet added support for surface brightness profiles in "
+                                              "other units, don't really know how you even got here.")
+
+                # We convert the volume element to cm^3 now; this is the unit we expect for the density conversion
+                transformed = transformed.to('ct/(s*cm^3)')
+
+                # We multiply by the conversion factor that is unique to the cluster and calculated earlier to take
+                #  the transformed profile to a gas number density (n_gas as seen in Eckert et al. 2016, eq. 2).
+                num_dens_dist = np.sqrt(transformed * conv_factors[tel][src_ind])*(1+e_to_p_ratio)
+
+                med_num_dens = np.nanpercentile(num_dens_dist, 50, axis=1)
+                num_dens_err = np.nanstd(num_dens_dist, axis=1)
+
+                # Setting up the instrument and ObsID to pass into the density profile definition
+                if obs_id[tel][src_ind] is None:
+                    cur_inst = "combined"
+                    cur_obs = "combined"
+                else:
+                    cur_inst = inst[tel][src_ind]
+                    cur_obs = obs_id[tel][src_ind]
+
+                try:
+                    # I now allow the user to decide if they want to generate number or mass density profiles using
+                    #  this function, and here is where that distinction is made
+                    if num_dens:
+                        dens_prof = GasDensity3D(dens_rads.to("kpc"), med_num_dens, sb_prof.centre, src.name, cur_obs,
+                                                 cur_inst, inv_abel_method, sb_prof, dens_rads_errs, num_dens_err,
+                                                 deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
+                    else:
+                        # The mean molecular weight multiplied by the proton mass
+                        conv_mass = MEAN_MOL_WEIGHT*m_p
+                        dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
+                                                 sb_prof.centre, src.name, cur_obs, cur_inst, inv_abel_method, sb_prof,
+                                                 dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
+                                                 deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
+
+                    src.update_products(dens_prof)
+                    final_dens_profs[tel][src_ind] = dens_prof
+
+                    # If, for some reason, there are some inf/NaN values in any of the quantities
+                    #  passed to the GasDensity3D declaration, this is where an error will be thrown
+                except ValueError:
+                    final_dens_profs[tel][src_ind] = None
+                    warn("One or more of the quantities passed to the init of {}'s density profile "
+                         "has a NaN or Inf value in it.".format(src.name), stacklevel=2)
+
+            dens_prog.update(1)
+
+    return final_dens_profs
+
+
+def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
+                          outer_radii: Union[Quantity, List[Quantity]], num_dens: bool = True,
+                          annulus_method: str = 'min_snr', min_snr: float = 30,
+                          min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
+                          min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
+                          use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
+                          hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False,
+                          psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                          psf_iter: int = 15, allow_negative: bool = False,
+                          exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
+                          min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+                          freeze_met: bool = True, abund_table: str = "angr",
+                          temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                          temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 10000,
+                          sigma: int = 1, num_cores: int = NUM_CORES, stacked_spectra: bool = False,
+                          telescope: Union[str, List[str]] = None) -> List[GasDensity3D]:
+    """
+    A method of measuring density profiles using XSPEC fits of a set of Annular Spectra. First
+    checks whether the required annular spectra already exist and have been fit using XSPEC, if not
+    then they are generated and fitted, and APEC normalisation profiles will be produced (with
+    projected temperature profiles also being made as a useful extra). Then the apec normalisation
+    profile will be used, with knowledge of the source's redshift and chosen analysis cosmology, to
+    produce a density profile from the APEC normalisation.
+
+    :param GalaxyCluster/ClusterSample sources: An individual or sample of sources to calculate 3D
+        gas density profiles for.
+    :param str/Quantity outer_radii: The name or value of the outer radius to use for the generation
+        of the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or
+        Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
+        inner radius will be ignored. If you are generating for multiple sources, then you can also
+        pass a Quantity with one entry per source.
+    :param bool num_dens: If True then a number density profile will be generated, otherwise a mass
+        density profile will be generated.
+    :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr'
+        (which will use the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the
+        min_cnt_proj_temp_prof function).
+    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if
+        annulus_method is set to 'min_snr'.
+    :param int/Quantity min_cnt: The minimum background subtracted counts which are allowable in a
+        given annulus, used if annulus_method is set to 'min_cnt'.
+    :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20
+        arcseconds to try and avoid PSF effects.
+    :param bool use_combined: If True (and annulus_method is set to 'min_snr') then the combined
+        RateMap will be used for signal-to-noise annulus calculations, this is overridden by
+        use_worst. If True (and annulus_method is set to 'min_cnt') then combined RateMaps will be
+        used for annulus count calculations, if False then the median observation (in terms of
+        counts) will be used.
+    :param bool use_worst: If True then the worst observation of the cluster (ranked by global
+        signal-to-noise) will be used for signal-to-noise annulus calculations. Used if
+        annulus_method is set to 'min_snr'.
+    :param Quantity lo_en: The lower energy bound of the RateMap to use for the signal-to-noise or
+        background subtracted count calculations.
+    :param Quantity hi_en: The upper energy bound of the RateMap to use for the signal-to-noise or
+        background subtracted count calculations.
+    :param bool psf_corr: Sets whether you wish to use a PSF corrected RateMap or not.
+    :param str psf_model: If the RateMap you want to use is PSF corrected, this is the PSF model
+        used.
+    :param int psf_bins: If the RateMap you want to use is PSF corrected, this is the number of PSFs
+        per side in the PSF grid.
+    :param str psf_algo: If the RateMap you want to use is PSF corrected, this is the algorithm
+        used.
+    :param int psf_iter: If the RateMap you want to use is PSF corrected, this is the number of
+        iterations.
+    :param bool allow_negative: Should pixels in the background subtracted count map be allowed to
+        go below zero, which results in a lower signal-to-noise (and can result in a negative
+        signal-to-noise).
+    :param bool exp_corr: Should signal-to-noises be measured with exposure time correction, default
+            is True. I recommend that this be true for combined observations, as exposure time could
+            change quite dramatically across the combined product.
+    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
+    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts
+        per channel. To disable minimum counts, set this parameter to None.
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
+        each channel. To disable minimum signal-to-noise, set this parameter to None.
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
+        e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that
+        energy.
+    :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a
+        particular ObsID-instrument combination - this is much faster in some circumstances, however
+        the RMF does depend slightly on position on the detector.
+    :param bool freeze_met: Whether the metallicity parameter in the fits to annuli in XSPEC should
+        be frozen.
+    :param str abund_table: The abundance table to use both for the conversion from n_exn_p to n_e^2
+        during density calculation, and the XSPEC fit.
+    :param Quantity temp_lo_en: The lower energy limit for the XSPEC fits to annular spectra.
+    :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
+    :param int num_data_real: The number of random realisations to generate when propagating profile
+        uncertainties.
+    :param int sigma: What sigma uncertainties should newly created profiles have, the default is 2σ.
+    :param int num_cores: The number of cores to use (if running locally), default is set to 90% of
+        available.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
+        used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
+        supported, this function will instead use individual spectra for an ObsID. The default is
+        False.
+    :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
+        case density profiles will be produced from all telescopes associated with a source.
+    :return: A list of the 3D gas density profiles measured by this function, though if the
+        measurement was not successful, an entry of None will be added to the list.
+    :rtype: List[GasDensity3D]
+    """
+    if annulus_method not in ALLOWED_ANN_METHODS:
+        a_meth = ", ".join(ALLOWED_ANN_METHODS)
+        raise ValueError("That is not a valid method for deciding where to place annuli, please "
+                         "use one of these; {}".format(a_meth))
+
+    if annulus_method == 'min_snr':
+        # This returns the boundary radii for the annuli
+        ann_rads = min_snr_proj_temp_prof(sources, outer_radii, min_snr, min_width, use_combined,
+                                          use_worst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
+                                          psf_algo, psf_iter, allow_negative, exp_corr, group_spec,
+                                          min_counts, min_sn, over_sample, one_rmf, freeze_met,
+                                          abund_table, temp_lo_en, temp_hi_en, num_cores,
+                                          stacked_spectra=stacked_spectra, telescope=telescope)
+    elif annulus_method == 'min_cnt':
+        # This returns the boundary radii for the annuli, based on a minimum number of counts per
+        # annulus
+        ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined,
+                                          lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
+                                          psf_iter, group_spec, min_counts, min_sn, over_sample,
+                                          one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
+                                          num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
+    elif annulus_method == "growth":
+        raise NotImplementedError("This method isn't implemented yet")
+
+    # Collecting all the associated telescopes here for later use
+    telescope = list(ann_rads.keys())
+
+    # So we can iterate through sources without worrying if there's more than one cluster
+    if not isinstance(sources, ClusterSample):
+        sources = [sources]
+
+    # Don't need to check abundance table input because that happens in min_snr_proj_temp_prof and
+    # the gas_density_profile method of APECNormalisation1D
+    final_dens_profs = {tel : [None]*len(sources) for tel in telescope}
+    with tqdm(desc="Generating density profiles from annular spectra", total=len(sources)) as dens_prog:
+        for src_ind, src in enumerate(sources):
+            for tel in telescope:
+                cur_rads = ann_rads[tel][src_ind]
+
+                try:
+                    # The normalisation profile(s) from the fit that produced the projected
+                    # temperature profile.
+                    apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
+                                                                min_sn, over_sample, telescope=tel)
+
+                    obs_id = 'combined'
+                    inst = 'combined'
+                    # Seeing as we're here, I might as well make a density profile from the apec
+                    # normalisation profile
+                    dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo,
+                                                                   abund_table, num_data_real,
+                                                                   sigma, num_dens)
+                    # Then I store it in the source
+                    src.update_products(dens_prof)
+                    final_dens_profs[tel][src_ind] = dens_prof
+
+                # It is possible that no normalisation profile exists because the spectral fitting
+                # failed, we account for that here
+                except NoProductAvailableError:
+                    warn("The relevant APEC normalisation profile for {s} cannot be located, and a density "
+                         "profile cannot be calculated.".format(s=src.name), stacklevel=2)
+                    final_dens_profs[tel][src_ind] = None
+
+                # It's also possible that the gas_density_profile method of our normalisation
+                # profile is going to throw a ValueError because some values are infinite or NaNs
+                # - we have to catch that too
+                except ValueError:
+                    warn("The calculated density profile for {s} contains NaN values, and is considered "
+                         "invalid.".format(s=src.name), stacklevel=2)
+                    final_dens_profs[tel][src_ind] = None
 
             dens_prog.update(1)
 

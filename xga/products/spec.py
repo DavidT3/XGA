@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 16:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 11:31. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -1765,7 +1765,7 @@ class AnnularSpectra(BaseAggregateProduct):
     """
     def __init__(self, spectra: List[Spectrum]):
         """
-        The init method for the AnnularSpectrum class, performs checks and organises the spectra which
+        The init method for the AnnularSpectrum class, performs checks and organizes the spectra which
         have been passed in, for easy retrieval.
         """
         if len(set([s.telescope for s in spectra])) != 1:
@@ -1776,7 +1776,7 @@ class AnnularSpectra(BaseAggregateProduct):
             #  the telescope name from the first one
             telescope = spectra[0].telescope
 
-        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined", telescope=telescope)
+        super().__init__([s.path for s in spectra], 'annular_spectrum', "combined", "combined", telescope=telescope)
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
         #  have the same set ID
@@ -1790,6 +1790,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
                              "Spectra with IDs {p} have been "
@@ -2565,9 +2566,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
+            print('in first err')
+            print(len(tab_line))
+            print(self._num_ann)
             raise ValueError("The dictionary passed in with the fit results in it does not have the same"
                              " number of entries as there are annuli.")
         elif len(lums) != self._num_ann:
+            print('in second err')
+            print(len(lums))
+            print(self._num_ann)
             raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
                              " number of entries as there are annuli.")
 

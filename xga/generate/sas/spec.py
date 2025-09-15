@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 09:53. Copyright (c) The Contributors
 
 import os
 from copy import copy
@@ -314,7 +314,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Sets up the file names of the output files, adding a random number so that the
             #  function for generating annular spectra doesn't clash and try to use the same folder
             dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
-                                                                   r=randint(0, int(1e+8)))
+                                                                   r=randint(0, int(100_000_000)))
 
             # Sets up something very similar to the extra name variable above, but for the file names
             #  Stores some information about grouping in the file names
@@ -432,7 +432,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str += "; " + new_grp
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; rm ccf.cif; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
@@ -463,7 +463,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                      num_cores: int = NUM_CORES, disable_progress: bool = False):
+                      num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
     """
     A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -493,11 +493,12 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         slightly on position on the detector.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
-                      num_cores, disable_progress)
+                      num_cores, disable_progress, force_gen)
 
 
 @sas_call
@@ -634,7 +635,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             continue
 
         # This generates a random integer ID for this set of spectra
-        set_id = randint(0, int(1e+8))
+        set_id = randint(0, int(100_000_000))
 
         # I want to be sure that this configuration doesn't already exist
         if group_spec and min_counts is not None:
@@ -656,7 +657,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
 
         spec_storage_name += extra_name
 
-        exists = source.get_products('combined_spectrum', extra_key=spec_storage_name, telescope='xmm')
+        exists = source.get_products('combined_annular_spectrum', extra_key=spec_storage_name, telescope='xmm')
         if len(exists) == 0:
             # If it doesn't exist then we do need to call evselect_spectrum
             generate_spec = True
@@ -828,7 +829,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; {dmc} arfgen spectrumset={s} arfset={a} " \
                  "withrmfset=yes rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset " \
                  "detmaparray={ds} setbackscale=no badpixmaptype=dataset crossregionarf=yes " \
-                 "crossreg_spectrumset={crs}; mv * ../; cd ..; rm -r {d}"
+                 "crossreg_spectrumset={crs}; rm ccf.cif; mv * ../; cd ..; rm -r {d}"
 
     # These store the final output information needed to run the commands
     all_cmds = []
@@ -876,7 +877,7 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
                 evt_list = src.get_products('events', obs_id, inst, telescope='xmm')[0]
 
                 dest_dir = OUTPUT + "xmm/{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=src.name,
-                                                                       r=randint(0, int(1e+8)))
+                                                                       r=randint(0, int(100_000_000)))
 
                 if not os.path.exists(dest_dir):
                     os.makedirs(dest_dir)

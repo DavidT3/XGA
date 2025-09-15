@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/03/2025, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -98,18 +98,18 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                 #  function for generating annular spectra doesn't clash and try to use the same folder
                 # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
                 #  being removed) will be written to a different temporary folder using the same random identifier.
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
                 dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
                                                                                 r=rand_ident)
             else:
                 # The output files for combined observations have a different dir structure
                 # The files produced by this function will now be stored in the combined directory.
                 final_dest_dir = OUTPUT + "erosita/combined/"
-                rand_ident = randint(0, 1e+8)
+                rand_ident = randint(0, 100_000_000)
                 # Makes absolutely sure that the random integer hasn't already been used
                 while len([f for f in os.listdir(final_dest_dir)
                         if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
-                    rand_ident = randint(0, 1e+8)
+                    rand_ident = randint(0, 100_000_000)
 
                 dest_dir = os.path.join(final_dest_dir, "temp_srctool_{}".format(rand_ident))
 
@@ -249,7 +249,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     # This command just makes a standard XCS image, but will be used to generate images to debug the drilling
     #  out of regions, as the light curve expression will be supplied, so we can see exactly what data has been removed.
     # debug_im = "evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 " \
-    #            "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
+    #            "?>yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize " \
     #            "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 withyranges=yes {ex}"
 
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format

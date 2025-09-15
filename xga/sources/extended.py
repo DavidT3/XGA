@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 20:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -73,7 +73,7 @@ class GalaxyCluster(ExtendedSource):
         default is None, in which case all available telescopes will be used. The user can pass a single name
         (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
         telescopes), or a list of telescope names.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -81,6 +81,7 @@ class GalaxyCluster(ExtendedSource):
     :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
         (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
         sources will NOT be included in masks, in case they are a bright cool core.
+    :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -90,7 +91,7 @@ class GalaxyCluster(ExtendedSource):
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
                  peak_find_method: str = "hierarchical", in_sample: bool = False,
                  telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
-                 include_core_pnt_srcs: bool = True):
+                 include_core_pnt_srcs: bool = True, load_profiles: bool = True):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
 
@@ -135,7 +136,7 @@ class GalaxyCluster(ExtendedSource):
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
                 is None in which case standard search distances for different telescopes are used. The user may pass a
                 single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
                 telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -143,6 +144,7 @@ class GalaxyCluster(ExtendedSource):
         :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
             (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
             sources will NOT be included in masks, in case they are a bright cool core.
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
         # Store the passed value of 'include_core_pnt_srcs' in an attribute now, before we run the super-class init,
         #  as we want the GalaxyCluster _source_type_match method to be able to use it to determine if point
@@ -190,7 +192,7 @@ class GalaxyCluster(ExtendedSource):
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits,
                          peak_find_method, in_sample, telescope, search_distance, clean_obs, clean_obs_reg,
-                         clean_obs_threshold, regen_merged)
+                         clean_obs_threshold, regen_merged, load_profiles=load_profiles)
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.
@@ -438,11 +440,11 @@ class GalaxyCluster(ExtendedSource):
             wl_list = [self._wl_mass.value]
             wl_unit = self._wl_mass.unit
         else:
-            wl_list = [np.NaN]
+            wl_list = [np.nan]
             wl_unit = ''
 
         if self._wl_mass_err is None:
-            wl_list.append(np.NaN)
+            wl_list.append(np.nan)
         elif isinstance(self._wl_mass_err, Quantity) and not self._wl_mass_err.isscalar:
             wl_list += list(self._wl_mass_err.value)
         elif isinstance(self._wl_mass_err, Quantity) and self._wl_mass_err.isscalar:
@@ -462,10 +464,10 @@ class GalaxyCluster(ExtendedSource):
         if self._richness is not None:
             r_list = [self._richness]
         else:
-            r_list = [np.NaN]
+            r_list = [np.nan]
 
         if self._richness_err is None:
-            r_list.append(np.NaN)
+            r_list.append(np.nan)
         elif isinstance(self._richness_err, (float, int)):
             r_list.append(self._richness_err)
         elif isinstance(self._richness_err, list):
@@ -920,8 +922,8 @@ class GalaxyCluster(ExtendedSource):
 
     def get_hydrostatic_mass_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
                                       dens_prof: GasDensity3D = None, dens_model_name: str = None,
-                                      radii: Quantity = None,
-                                      telescope: str = None) -> Union[HydrostaticMass, List[HydrostaticMass]]:
+                                      radii: Quantity = None, telescope: str = None) \
+            -> Union[HydrostaticMass, List[HydrostaticMass]]:
         """
         A get method for hydrostatic mass profiles associated with this galaxy cluster. This works in a slightly
         different way to the temperature and density profile get methods, as you can pass the gas temperature and

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/03/2025, 17:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -552,9 +552,9 @@ class LightCurve(BaseProduct):
 
                 else:
                     self._bck_cnt_rate = Quantity(np.full(len(all_lc['RATE'].read_column('TIME')),
-                                                          np.NaN), 'ct/s')[good_ent]
+                                                          np.nan), 'ct/s')[good_ent]
                     self._bck_cnt_rate_err = Quantity(np.full(len(all_lc['RATE'].read_column('TIME')),
-                                                              np.NaN), 'ct/s')[good_ent]
+                                                              np.nan), 'ct/s')[good_ent]
 
                 # Grab the start, stop, and time assign values from the overall header of the light curve
                 hdr = all_lc['RATE'].read_header()

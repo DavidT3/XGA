@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/04/2025, 16:12. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 17:26. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -198,29 +198,62 @@ class BaseProduct:
                 with eSASS errors/warnings in.
             :rtype: Tuple[List[dict], List[str]]
             """
-            parsed_esass = []
-            # This is a crude way of looking for eSASS error/warning strings ONLY
-            if err_type == 'error':
-                esass_lines = [line for line in split_stderr if "**ERROR" in line or '**STOP' in line]
-            elif err_type == 'warning':
-                esass_lines = [line for line in split_stderr if "**WARN" in line]
+            # The substrings we're looking for are different depending on if we're searching for
+            #  errors or warnings
+            if err_type == "error":
+                indicators = np.array(["**ERROR", '**STOP', "Fortran runtime error", "NoSuchFile"])
+            else:
+                indicators = np.array(["**WARN"])
 
-            for err in esass_lines:
+            parsed_esass = []
+            rel_esass_lines = []
+            # Iterating through the lines
+            for line in split_stderr:
+                # Checking to see if any of the error/warning indicators are in the current line
+                pres_indic = np.array([cur_indic in line for cur_indic in indicators])
+                # If no indicators are present, we can stop looking at the current line
+                if not np.any(pres_indic):
+                    continue
+
+                # Make a note of the line, as it contains something relevant
+                rel_esass_lines.append(line)
+
+                # The relevant error or warning indicator(s) for the current line - I suspect that the vast majority
+                #  of the time this is going to be a one element array.
+                rel_indic = indicators[pres_indic]
+                # Just in case it isn't a one element array though, we add this to select a single indicator to
+                #  focus on
+                if len(rel_indic) != 1:
+                    rel_indic = rel_indic[0]
+
                 try:
-                    # This tries to split out the eSASS task that produced the error
-                    originator = err.split(" **")[0].split(":")[0].replace(" ", "")
-                    # The eROSITA errors don't seem to have specific names, so this will be the same for all
-                    err_ident = "eROSITAError"
-                    # Actual error message
-                    err_body = err.split(" **")[-1].split("** ")[-1]
+                    # More almost hard coding that makes me very uncomfortable
+                    if '**' in rel_indic:
+                        # This tries to split out the eSASS task that produced the error
+                        originator = line.split(" **")[0].split(":")[0].replace(" ", "")
+                        # The eROSITA errors don't seem to have specific names, so this will be the same for all
+                        err_ident = "eROSITAError"
+                        # Actual error message
+                        err_body = line.split(" **")[-1].split("** ")[-1]
+
+                    elif 'Fortran' in rel_indic:
+                        originator = 'fortran'
+                        err_ident = "eROSITAError"
+                        err_body = line
+
+                    else:
+                        originator = ""
+                        err_ident = "eROSITAError"
+                        err_body = line
 
                 except IndexError:
                     originator = ""
-                    err_ident = ""
-                    err_body = ""
+                    err_ident = "eROSITAError"
+                    err_body = line
 
                 parsed_esass.append({"originator": originator, "name": err_ident, "message": err_body})
-            return parsed_esass, esass_lines
+
+            return parsed_esass, rel_esass_lines
 
         def find_ciao(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
@@ -257,7 +290,6 @@ class BaseProduct:
             return parsed_ciao, ciao_lines
 
         # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
-
         # Defined as empty as they are returned by this method
         tel_errs_msgs = []
         parsed_tel_warns = []
@@ -294,12 +326,13 @@ class BaseProduct:
 
         elif self.telescope == 'erosita' or self.telescope == 'erass':
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
-            #  than stderr
-            # err_str being "" is ideal, hopefully means that nothing has gone wrong
-            if self.unprocessed_stdout != "":
+            #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
+            #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
+            #  so that has to be checked as well
+            if self.unprocessed_stdout != "" or self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in self.unprocessed_stdout.split('\n') if e != '']
+                err_lines = [e for e in (self.unprocessed_stdout+'\n'+self.unprocessed_stderr).split('\n') if e != '']
                 # Fingers crossed each line is a separate error
                 parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
                 parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
@@ -2193,9 +2226,9 @@ class BaseProfile1D:
         """
         if self._save_path is None and self._prof_type != "base" and self._tele is not None:
             temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
-            rand_prof_id = randint(0, int(1e+8))
+            rand_prof_id = randint(0, int(100_000_000))
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
-                rand_prof_id = randint(0, int(1e+8))
+                rand_prof_id = randint(0, int(100_000_000))
             self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
         elif self._tele is None:
             raise ValueError("Cannot create an XGA save path for this profile when it does not have "
@@ -2888,9 +2921,10 @@ class BaseAggregateProfile1D:
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
             if p.obs_id != 'combined':
-                p_name = p.src_name + " {o}-{i}".format(o=p.obs_id, i=p.instrument.upper())
+                p_name = p.src_name + " {t}-{o}-{i}".format(t=p.telescope, o=p.obs_id,
+                                                            i=p.instrument.upper())
             else:
-                p_name = p.src_name
+                p_name = p.src_name + " {t}".format(t=p.telescope)
 
             if p.type == "brightness_profile" and p.psf_corrected:
                 leg_label = p_name + " PSF Corrected"

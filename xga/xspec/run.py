@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 07/08/2025, 16:40. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -10,6 +10,7 @@ from random import randint
 from shutil import rmtree
 from subprocess import Popen, PIPE, TimeoutExpired
 from typing import Tuple, Union
+from warnings import warn
 
 import fitsio
 import pandas as pd
@@ -17,7 +18,7 @@ from fitsio import FITS
 from tqdm import tqdm
 
 from .. import XSPEC_VERSION
-from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError
+from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError, XGADeveloperError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -39,8 +40,6 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         that this script is related to.
     :rtype: Tuple[Union[FITS, str], str, bool, list, list, str]
     """
-    if XSPEC_VERSION is None:
-        raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
 
     # We assume the output will be usable to start with
     usable = True
@@ -48,18 +47,15 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # We're going to make a temporary pfiles directory which is a) local to the XGA directory, and thus sure to
     #  be on the same filesystem (can be a performance issue for HPCs I think), and b) is unique to a particular
     #  fit process, so there shouldn't be any clashes. The temporary file name is randomly generated
-    tmp_ident = str(randint(0, int(1e+8)))
+    tmp_ident = str(randint(0, int(100_000_000)))
     tmp_hea_dir = os.path.join(os.path.dirname(out_file), tmp_ident, 'pfiles/')
     os.makedirs(tmp_hea_dir)
 
     # I add exec to the beginning to make sure that the command inherits the same process ID as the shell, which
     #  allows the timeout to kill the XSPEC run rather than the shell process. Entirely thanks to slayton on
     #   https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
-    cmd = 'export PFILES="{};$HEADAS/syspfiles";'.format(tmp_hea_dir) + "exec xspec - {}".format(x_script)
+    cmd = 'export PFILES="{}:$HEADAS/syspfiles";'.format(tmp_hea_dir) + "exec xspec - {}".format(x_script)
     xspec_proc = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-
-    # Remove the temporary directory
-    rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
 
     # This makes sure the process is killed if it does timeout
     try:
@@ -75,11 +71,15 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
+    # Remove the temporary directory
+    rmtree(os.path.join(os.path.dirname(out_file), tmp_ident))
+
     # We ignore that particular string in the errors identified from stdout because if we don't just it being
     #  present in the if statement in the executed script is enough to make XGA think that the fit failed, even if
     #  that error message was never printed at all
     err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line
                      if "No acceptable spectra are left after the cleaning step" not in line]
+    err_out_line_init = [line for line in out if "You do not have an up-to-date version of Xspec.init" in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
     warn_err_lines = [line.split("***Warning: ")[-1] for line in err if "***Warning" in line]
@@ -89,8 +89,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     else:
         usable = False
 
-    error = err_out_lines + err_err_lines
+    error = err_out_lines + err_err_lines + err_out_line_init
     warn = warn_out_lines + warn_err_lines
+
     if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
         #  but life is full of extraordinary inconveniences and for some reason it didn't work if called from
@@ -128,6 +129,10 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     elif os.path.exists(out_file) and run_type == "conv_factors" and usable:
         res_tables = out_file
         usable = True
+    elif not os.path.exists(out_file):
+        usable = False
+        res_tables = None
+        error.append('Results table not written.')
     else:
         res_tables = None
         usable = False
@@ -153,6 +158,10 @@ def xspec_call(xspec_func):
 
     @wraps(xspec_func)
     def wrapper(*args, **kwargs):
+        # We'll stop this process in its tracks if XGA cannot find an XSPEC installation
+        if XSPEC_VERSION is None:
+            raise XSPECNotFoundError("There is no XSPEC installation detectable on this machine.")
+
         # The first argument of all of these XSPEC functions will be the source object (or a list of),
         # so rather than return them from the XSPEC model function I'll just access them like this.
         if isinstance(args[0], BaseSource):
@@ -192,13 +201,10 @@ def xspec_call(xspec_func):
                     """
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
-                    if results_in[0] is None:
-                        fit.update(1)
-                        return
-                    else:
-                        res_fits, rel_src, successful, err_list, warn_list, tel = results_in
-                        results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
-                        fit.update(1)
+
+                    res_fits, rel_src, successful, err_list, warn_list, tel = results_in
+                    results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
+                    fit.update(1)
 
                 for s_ind, s in enumerate(script_list):
                     pth = paths[s_ind]
@@ -208,7 +214,7 @@ def xspec_call(xspec_func):
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
         elif len(script_list) == 0:
-            warnings.warn("All XSPEC operations had already been run.", stacklevel=2)
+            warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
         for src_repr in results:
@@ -219,14 +225,19 @@ def xspec_call(xspec_func):
 
             # This flag tells this method if the current set of fits are part of an annular spectra or not
             ann_fit = False
-            ann_results = {tel : {} for tel in s.telescopes}
-            ann_lums = {tel : {} for tel in s.telescopes}
-            ann_obs_order = {tel : {} for tel in s.telescopes}
+            ann_results = {}
+            ann_lums = {}
+            ann_obs_order = {}
             set_ident = {}
 
             for res_set in results[src_repr]:
+                # res_set = res_table, if it is None then the xspec fit has failed
+                if res_set[0] is None:
+                    for err in res_set[2]:
+                        raise XSPECFitError(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
+
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
                         global_results = res_table["RESULTS"][0]
@@ -274,11 +285,14 @@ def xspec_call(xspec_func):
                                 sp_key = 'ra' + sp_key.split('_ident')[0]
                                 first_part = sp_key.split('ri')[0]
                                 second_part = "_" + "_".join(sp_key.split('ro')[-1].split("_")[1:])
-                                ann_sp_key = first_part + "ar" + "_".join(radii[src_repr][tel].value.astype(str)) + second_part
-                                ann_specs = s.get_products("combined_spectrum", extra_key=ann_sp_key, telescope=tel)
+                                ann_sp_key = (first_part + "ar" +
+                                              "_".join(radii[src_repr][tel].value.astype(str)) + second_part)
+                                ann_specs = s.get_products("combined_annular_spectrum",
+                                                           extra_key=ann_sp_key, telescope=tel)
+
                                 if len(ann_specs) > 1:
                                     raise MultipleMatchError("I have found multiple matches for that AnnularSpectra, "
-                                                             "this is the developers fault, not yours.")
+                                                                "this is the developers fault, not yours.")
                                 elif len(ann_specs) == 0:
                                     raise NoMatchFoundError("Somehow I haven't found the AnnularSpectra that you "
                                                             "fitted, this is the developers fault, not yours")
@@ -316,6 +330,12 @@ def xspec_call(xspec_func):
                             chosen_lums = processed_lums
 
                         if ann_fit:
+                            if tel not in ann_results.keys():
+                                ann_results[tel] = {}
+                            if tel not in ann_lums.keys():
+                                ann_lums[tel] = {}
+                            if tel not in ann_obs_order.keys():
+                                ann_obs_order[tel] = {}
                             set_ident[tel] = spec.set_ident
                             ann_results[tel][spec.annulus_ident] = global_results
                             ann_lums[tel][spec.annulus_ident] = chosen_lums
@@ -342,19 +362,31 @@ def xspec_call(xspec_func):
                     # TODO this could be neater and better generalised
                     for comb in combos:
                         if tel in ['erosita', 'erass'] and len(s.obs_ids[tel]) == 1:
-                            spec = s.get_products("spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                            spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel in ['erosita', 'erass']:
-                            spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                            spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
-                        # TODO THIS IS NOT GOING TO WORK FOR CHANDRA
+                        elif tel == 'chandra':
+                            # We know that only ACIS is supported by XGA currently, so we can split on it to
+                            #  get the correct ObsID (Chandra ObsIDs are not necessarily all the same
+                            #  length)
+                            search_sp_oi = comb.lower().split('acis')[0]
+                            # We will build in a safety check however, to catch us if we ever
+                            #  add proper HRC support to XGA
+                            if 'acis' not in comb:
+                                raise XGADeveloperError("No 'ACIS' string has been found in the combined "
+                                                        "ObsID-inst string ({c}) in a spectrum result row; has HRC "
+                                                        "support been added?".format(c=comb))
+
+                            spec = s.get_products("spectrum", search_sp_oi, 'acis', extra_key=storage_key,
+                                                  telescope=tel)[0]
                         else:
                             spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
                                             telescope=tel)[0]
-
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
-                                              res_table["rate_{}".format(comb)].values,
-                                              res_table["Lx_{}".format(comb)].values, model, tel)
+                                                res_table["rate_{}".format(comb)].values,
+                                                res_table["Lx_{}".format(comb)].values, model, tel)
 
                 elif len(res_set) != 0 and not res_set[1]:
                     for err in res_set[2]:
@@ -364,7 +396,7 @@ def xspec_call(xspec_func):
                 for tel in ann_results:
                     # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                     #  the last spectra that was opened in the loop
-                    ann_spec = s.get_annular_spectra(set_id=set_ident[tel])
+                    ann_spec = s.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
                     try:
                         ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
                                                 ann_obs_order[tel])
@@ -386,11 +418,10 @@ def xspec_call(xspec_func):
 
                         else:
                             raise NotImplementedError("How have you even managed to fit this model to a "
-                                                      "profile?! It's not supported yet.")
+                                                        "profile?! It's not supported yet.")
                     except ValueError:
-                        warnings.warn("{src} annular spectra profile fit was not successful for the {t} "
-                                      "telescope.".format(src=ann_spec.src_name, t=tel),
-                                    stacklevel=2)
+                        warn("{src} annular spectra profile fit was not successful for the {t} "
+                                "telescope.".format(src=ann_spec.src_name, t=tel), stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.

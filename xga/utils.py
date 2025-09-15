@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/03/2025, 18:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:50. Copyright (c) The Contributors
 
 import json
 import os
@@ -37,7 +37,6 @@ def _deprecated(message):
     """
     # Shows the warning message - this makes sure it is shown on import as well as when the function is used.
     warn(message, DeprecationWarning)
-
     def deprecated_function(dep_func):
         """
         This ensures that the decorated, deprecated, function is actually still run.
@@ -48,10 +47,11 @@ def _deprecated(message):
         #  such as __name__, __doc__ (the docstring)
         @wraps(dep_func)
         def wrapper(*args, **kwargs):
-            dep_func(*args, **kwargs)
+            return dep_func(*args, **kwargs)
 
         return wrapper
     return deprecated_function
+
 
 
 # ------------- Defining functions useful in the rest of the setup process -------------
@@ -523,7 +523,8 @@ ENERGY_BOUND_PRODUCTS = ["image", "expmap", "ratemap", "combined_image", "combin
 # These are the built-in profile types
 PROFILE_PRODUCTS = ["brightness_profile", "gas_density_profile", "gas_mass_profile", "1d_apec_norm_profile",
                     "1d_proj_temperature_profile", "gas_temperature_profile", "baryon_fraction_profile",
-                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile"]
+                    "1d_proj_metallicity_profile", "1d_emission_measure_profile", "hydrostatic_mass_profile",
+                    "specific_entropy_profile"]
 COMBINED_PROFILE_PRODUCTS = ["combined_"+pt for pt in PROFILE_PRODUCTS]
 # List of all products supported by XGA
 ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid", "ratemap", "combined_spectrum",
@@ -534,6 +535,9 @@ RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
 
 # Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
 DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
+
+# The maximum difference in radii to consider them a match (used in get methods to avoid radii not matching)
+RAD_MATCH_PRECISION = Quantity(1e-8, 'deg')
 
 # This defines the meaning of different colours of region - this will eventually be user configurable in the
 #  configuration file, but putting it here means that the user can still change the definitions programmatically

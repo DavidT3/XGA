@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2025, 11:19. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/08/2025, 10:47. Copyright (c) The Contributors
 
+import gc
 import os
 import pickle
 from copy import deepcopy
@@ -20,9 +21,10 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
                      Regions)
 
 from .. import xga_conf, BLACKLIST
-from ..exceptions import NotAssociatedError, NoValidObservationsError, NoProductAvailableError, ModelNotAssociatedError, \
-    ParameterNotAssociatedError, \
-    NotSampleMemberError, TelescopeNotAssociatedError, PeakConvergenceFailedError, XGADeveloperError
+from ..exceptions import (NotAssociatedError, NoValidObservationsError, NoProductAvailableError,
+                          ModelNotAssociatedError, ParameterNotAssociatedError, NotSampleMemberError,
+                          TelescopeNotAssociatedError, PeakConvergenceFailedError, PeakConvergenceFailedError,
+                          XGADeveloperError)
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -33,7 +35,8 @@ from ..sourcetools import separation_match, nh_lookup, ang_to_rad, rad_to_ang
 from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
-    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES
+    DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX, \
+    check_telescope_choices, RAD_MATCH_PRECISION
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -70,7 +73,7 @@ class BaseSource:
     :param List[str] sel_null_obs: If a NullSource is being declared, this argument controls the ObsIDs that are to
         be selected, in any other circumstances it has no effect. This argument should either be None (in which
         case all ObsIDs will be eligible) or a list of ObsIDs.
-    :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
         is None in which case standard search distances for different telescopes are used. The user may pass a
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -91,13 +94,16 @@ class BaseSource:
         time-consuming. This adds more nuance to the 'load_products' argument. If 'load_products' is False, then
         this will also be treated as False. If 'load_products' is True and this is False, then images, exposure
         maps, and lightcurves will be loaded, but spectra will not. Default is True.
+    :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True,
+                 load_fits: bool = False, in_sample: bool = False,
+                 telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
-                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 load_regions: bool = True, load_spectra: bool = True):
+                 null_load_products: bool = False, back_inn_rad_factor: float = 1.05,
+                 back_out_rad_factor: float = 1.5, load_regions: bool = True,
+                 load_spectra: bool = True, load_profiles: bool = True):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
@@ -125,7 +131,7 @@ class BaseSource:
             default is None, in which case all available telescopes will be used. The user can pass a single name
             (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
             telescopes), or a list of telescope names.
-        :param Union[Quantity, dict] search_distance: The distance to search for observations within, the default
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
             is None in which case standard search distances for different telescopes are used. The user may pass a
             single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
@@ -146,8 +152,8 @@ class BaseSource:
             time-consuming. This adds more nuance to the 'load_products' argument. If 'load_products' is False, then
             this will also be treated as False. If 'load_products' is True and this is False, then images, exposure
             maps, and lightcurves will be loaded, but spectra will not. Default is True.
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
-
         # This checks whether the overall source being declared is a NullSource - if it is that will affect the
         #  behaviour of this init in some significant ways
         if type(self) == NullSource:
@@ -178,14 +184,51 @@ class BaseSource:
             self._name = coord_to_name(self.ra_dec)
 
         # ---------------------------------- Identifying relevant data ----------------------------------
-        # Firstly, we use the separation match function to find data relevant to this source, searching within a
-        #  telescope dependant radius. This function also validates the input that was given for 'telescope'. If
+        # An initial, very specific, check is required to minimize headaches with sources along the eRASS DE:RU
+        #  border. We'll ensure that the user defined coordinates are actually in the eRASS:DE footprint, as
+        #  eRASS-DR1 initial software generates exposure maps that include IKI regions, which can falsely lead
+        #  us to believe that there are data we can use
+        # The separation_match function does call this, but we need a validated list of telescopes right now
+        #  unfortunately - the position check will just remove eRASS from consideration if the source doesn't pass
+        telescope = check_telescope_choices(telescope)
+
+        # TODO REMOVE THE SECOND PART OF THIS IF STATEMENT WHEN ERASS AND EROSITA ARE SEPARATE
+        #  TELESCOPES (SEE XGA ISSUE #1395)
+        if 'erass' in telescope or ('erass' not in ALLOWED_INST and 'erosita' in telescope):
+            # This can be removed when there is a clear split between eRASS and eROSITA
+            eros_rel_name = "erass" if "erass" in telescope else "erosita"
+
+            # Convert the RA-DEC UDC into a galactic lat-long
+            gal_udc = SkyCoord(ra, dec, frame='fk5', unit='deg').galactic
+            # Then check the galactic coordinate against these boundary conditions to determine if
+            #  the UDC is within the eRASS DR1 footprint or not
+            if not (gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg')):
+                # Failing this condition means we won't even look for eRASS data for this source
+                telescope = [t for t in telescope if t != eros_rel_name]
+
+                # And we have to check that there is at least one telescope remaining, otherwise we'll get some
+                #  quite strange errors later on!
+                if len(telescope) == 0:
+                    raise NoValidObservationsError("Source {s} is outside the eRASS1:DE "
+                                                   "footprint, and no other telescopes "
+                                                   "were specified.".format(s=self.name, t=', '.join(telescope)))
+
+                # We also have to change the search_distance argument to match
+                if search_distance is not None and eros_rel_name in search_distance:
+                    search_distance = {t: sd for t, sd in search_distance.items() if t != eros_rel_name}
+                    # And if we've actually removed all the entries, we set the search_distance to None
+                    if len(search_distance) == 0:
+                        search_distance = None
+
+        # We use the separation match function to find data relevant to this source, searching within a
+        #  telescope dependant radius. This function also validates the input given for 'telescope'. If
         #  no named telescopes are valid, or no data is found, then an error is thrown.
-        # The returns are dictionaries, where the key is the telescope name, and the values are dataframes of
+        # The returns are dictionaries, where the key is the telescope name. The values are dataframes of
         #  matching ObsIDs (for the first return, matches), or completely blacklisted (observations with SOME
         #  blacklisted instruments aren't included in this) ObsIDs (the second return).
         if not null_source:
-            matches, excluded = separation_match(ra, dec, search_distance, telescope)
+            matches, excluded = separation_match(ra, dec, search_distance, telescope,
+                                                 show_warnings=False if in_sample else True)
         else:
             # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
             #  entire census of the telescopes specified by the user
@@ -288,9 +331,9 @@ class BaseSource:
                 for oi in obs[tel]:
                     self._products[tel][oi].update({i: {} for i in obs[tel][oi]})
 
-        # We now have the final set of initial observations, so we'll store them in an attribute - note that they
-        #  may change later as other source classes have different cleaning steps, but any observations will be
-        #  removed through the 'disassociation' mechanism
+        # We now have the final set of initial observations, so we'll store them in an attribute. They may change, as
+        #  other source classes have different cleaning steps, but any observations will be removed through the
+        #  'disassociation' mechanism.
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
         #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
         self._obs = {t: {o: obs[t][o] if COMBINED_INSTS[t] else [i for i in self._products[t][o]
@@ -303,7 +346,7 @@ class BaseSource:
         self._blacklisted_obs = blacklisted_obs
 
         # Pre-multimission XGA had an attribute that described whether a particular observation was 'on-axis' or
-        #  not, but that has less relevance for an all-sky survey (which we intend to support), so now we will
+        #  not, but that has less relevance for an all-sky survey (which we intend to support). Now we will
         #  store the separation of the centre of each ObsID region from the user defined coordinate
         self._obs_sep = {tel: {o: Quantity(matches[tel][matches[tel]['ObsID'] == o].iloc[0]['dist'], 'deg')
                                for o in self.obs_ids[tel]} for tel in self.obs_ids}
@@ -400,7 +443,7 @@ class BaseSource:
         # The nh_lookup function returns average and weighted average values, so just take the first. If this is a
         #  BaseSource and part of a sample then we're going to avoid the call to nh_lookup, for efficiency
         if in_sample and type(self) == BaseSource:
-            self._nH = Quantity(np.NaN, 'cm^-2')
+            self._nH = Quantity(np.nan, 'cm^-2')
         else:
             self._nH = nh_lookup(self.ra_dec)[0]
 
@@ -504,13 +547,14 @@ class BaseSource:
         # The user does have control over whether this happens or not though.
         # This goes at the end of init to make sure everything necessary has been declared
         if os.path.exists(OUTPUT) and load_products:
-            self._existing_xga_products(load_fits, load_spectra)
+            self._existing_xga_products(load_fits, load_spectra, load_profiles)
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
         #  run _existing_xga_products again, same for load_products
         self._load_fits = load_fits
         self._load_products = load_products
         self._load_spectra = load_spectra
+        self._load_profiles = load_profiles
 
     # Firstly, we have all the properties
     @property
@@ -1120,7 +1164,7 @@ class BaseSource:
 
         return obs_dict, reg_dict
 
-    def _existing_xga_products(self, read_fits: bool, load_spectra: bool):
+    def _existing_xga_products(self, read_fits: bool, load_spectra: bool, load_profiles: bool):
         """
         A method specifically for searching an existing XGA output directory for relevant files and loading
         them in as XGA products. This will retrieve images, exposure maps, and spectra; then the source product
@@ -1181,7 +1225,7 @@ class BaseSource:
 
             return final_obj
 
-        def parse_lightcurve(inven_entry: pd.Series, telescope: str) -> LightCurve:
+        def parse_lightcurve(inven_entry: pd.Series, telescope: str, combined_obs: bool) -> LightCurve:
             """
             Very simple little function that takes information on an XGA-generated lightcurve (including a path to
             the file), and sets up a LightCurve product that can be added to the product storage structure
@@ -1196,13 +1240,40 @@ class BaseSource:
                 # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
                 #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
                 #  later to read in the data
+                if combined_obs:
+                    rel_obs_id = 'combined'
+                    # The inventory column names change depending on if it is combined or not
+                    inst_lookup = 'insts'
+                else:
+                    inst_lookup = 'inst'
+                    rel_obs_id = inven_entry['obs_id']
+
                 rel_path = cur_d + inven_entry['file_name']
-                rel_obs_id = inven_entry['obs_id']
-                rel_inst = inven_entry['inst']
+                rel_inst = inven_entry[inst_lookup]
+
+                if '/' in rel_inst:
+                    rel_inst = 'combined'
+
+                # checking for valid obs_ids and insts
+                valid = False
+                if (rel_obs_id == 'combined' and rel_inst == 'combined'):
+                    valid = True
+                elif rel_obs_id == 'combined':
+                    for inst_list in self.instruments[telescope].values():
+                        if rel_inst in inst_list:
+                            valid = True
+                elif rel_inst == 'combined':
+                    # rel_obs_id must exist in obs_ids
+                    if rel_obs_id in self.obs_ids[telescope]:
+                        valid = True
+                else:
+                    # Both are specific, must match directly
+                    if (rel_obs_id in self.obs_ids[telescope] and
+                        rel_inst in self.instruments[telescope].get(rel_obs_id, [])):
+                        valid = True
 
                 # Make sure that the current ObsID and instrument are actually associated with the source
-                if (rel_obs_id in self.obs_ids[telescope] and
-                        (rel_inst in self.instruments[telescope][rel_obs_id] or rel_inst == "combined")):
+                if valid:
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry['info_key'].split("_")
@@ -1230,7 +1301,6 @@ class BaseSource:
                     final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
                                            rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True,
                                            telescope=telescope)
-
                 else:
                     final_obj = None
 
@@ -1242,8 +1312,8 @@ class BaseSource:
         def parse_spectrum(row: pd.Series, combined_obs: bool):
             """
             Takes information from a row of the inventory csv and sets up a Spectrum product that can be added
-            to the product storage structure of the source. If the Spectrum is an annular spectrum
-            then relevant information such as the set id and the annulus id is returned.
+            to the product storage structure of the source. If the row represents an annular spectrum
+            then relevant information such as the set id and the annulus id are returned.
 
             :param pd.Series row: The inventory dataframe object:
             :param bool combined_obs:
@@ -1396,7 +1466,7 @@ class BaseSource:
                     for row_ind, row in lc_lines.iterrows():
                         # The parse lightcurve function does check to see if an inventory entry is relevant to this
                         #  source (using the source name), and if the ObsID and instrument are still associated.
-                        self.update_products(parse_lightcurve(row, tel), update_inv=False)
+                        self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
 
                     if load_spectra:
 
@@ -1420,27 +1490,28 @@ class BaseSource:
 
             os.chdir(og_dir)
 
-            # Here we will load in existing xga profile objects
-            os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
-            saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
-            for pf in saved_profs:
-                try:
-                    with open(pf, 'rb') as reado:
-                        temp_prof = pickle.load(reado)
-                        try:
-                            self.update_products(temp_prof, update_inv=False)
-                        except (NotAssociatedError, AttributeError):
-                            pass
-                except (EOFError, pickle.UnpicklingError, AttributeError):
-                    warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
-                                "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
-                    if not self._samp_member:
-                        # If these errors have been raised then I think that the pickle file has been
-                        #  broken (see issue #935)
-                        warn(warn_text, stacklevel=2)
-                    else:
-                        self._supp_warn.append(warn_text)
-            os.chdir(og_dir)
+            if load_profiles:
+                # Here we will load in existing xga profile objects
+                os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
+                saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
+                for pf in saved_profs:
+                    try:
+                        with open(pf, 'rb') as reado:
+                            temp_prof = pickle.load(reado)
+                            try:
+                                self.update_products(temp_prof, update_inv=False)
+                            except (NotAssociatedError, AttributeError):
+                                pass
+                    except (EOFError, pickle.UnpicklingError, AttributeError):
+                        warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
+                                    "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
+                        if not self._samp_member:
+                            # If these errors have been raised then I think that the pickle file has been
+                            #  broken (see issue #935)
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
+                os.chdir(og_dir)
 
             # Here we load in any combined images and exposure maps that may have been generated
             os.chdir(OUTPUT + '{t}/combined'.format(t=tel))
@@ -1485,6 +1556,11 @@ class BaseSource:
                     evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
                     self.update_products(evt_list, update_inv=False)
 
+            # now assigning combined lightcurves
+            rel_inven = inven[inven['type'] == 'lightcurve']
+            for row_ind, row in rel_inven.iterrows():
+                self.update_products(parse_lightcurve(row, tel, True), update_inv=False)
+
             if load_spectra:
                 rel_inven = inven[inven['type'] == 'spectrum']
                 for row_ind, row in rel_inven.iterrows():
@@ -1517,8 +1593,6 @@ class BaseSource:
                                 # And adding it to the source storage structure, but only if its not a member
                                 #  of an AnnularSpectra
                                 try:
-                                    print(self.name)
-                                    print(obj.path)
                                     self.update_products(obj, update_inv=False)
                                 except NotAssociatedError:
                                     pass
@@ -1549,12 +1623,21 @@ class BaseSource:
             if len(ann_spec_constituents) != 0:
                 for set_id in ann_spec_constituents:
                     if ann_spec_usable[set_id]:
-                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-                        if self._redshift is not None:
-                            # If we know the redshift we will add the radii to the annular spectra in proper
-                            #  distance units
-                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                        self.update_products(ann_spec_obj, update_inv=False)
+                        # If an obsID used to generate an existing Annuluar Spectra was dissasociated
+                        # then the following line will lead to a value error, so we add in a try
+                        # except so that a source can still be declared if the AnnularSpectra
+                        # cant be declared
+                        try:
+                            ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
+
+                            if self._redshift is not None:
+                                # If we know the redshift we will add the radii to the annular spectra in proper
+                                #  distance units
+                                ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
+                            self.update_products(ann_spec_obj, update_inv=False)
+
+                        except ValueError:
+                            pass
 
             os.chdir(og_dir)
 
@@ -1703,10 +1786,18 @@ class BaseSource:
             os.chdir(og_dir)
 
             # And finally loading in any conversion factors that have been calculated using XGA's fakeit interface
-            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits:
+            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits and load_spectra:
                 conv_factors = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
                                 for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
                                 if ".xcm" not in f and "conv_factors" in f]
+
+                # We figure out how long the ObsIDs should be for the current telescope, helps parse the
+                #  daft way I made XGA save these conversion files, and that I'm now too lazy to change
+                rel_re = OBS_ID_REGEX[tel]
+                # We're going to assume we always pad the ObsIDs out to their maximum allowable length
+                re_len_seg = rel_re.split("{")[-1].replace("}", '').replace("$", '').split(',')
+                rel_oi_len = max([int(re_len) for re_len in re_len_seg])
+
                 for conv_path in conv_factors:
                     res_table = pd.read_csv(conv_path, dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
@@ -1719,6 +1810,7 @@ class BaseSource:
                     #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
+                    # Parsing out the ObsID and instrument information
 
                     # Getting the spectra for each column, then assigning rates and luminosities.
                     # Due to the danger of a fit using a piece of data (an ObsID-instrument combo) that isn't currently
@@ -1727,7 +1819,21 @@ class BaseSource:
                     rel_spec = []
                     try:
                         for comb in combos:
-                            spec = self.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key)[0]
+                            # We figure out the ObsID and instrument we need to fetch the spectrum for
+                            if 'combinedcombined' in comb:
+                                rel_obsid = 'combined'
+                                rel_inst = 'combined'
+                                prod_fetch_key = 'combined_spectrum'
+                            elif comb[:8] == 'combined':
+                                rel_obsid = 'combined'
+                                rel_inst = comb[8:]
+                                prod_fetch_key = 'combined_spectrum'
+                            else:
+                                rel_obsid = comb[:rel_oi_len]
+                                rel_inst = comb[rel_oi_len:]
+                                prod_fetch_key = 'spectrum'
+
+                            spec = self.get_products(prod_fetch_key, rel_obsid, rel_inst, extra_key=storage_key)[0]
                             rel_spec.append(spec)
 
                         for comb_ind, comb in enumerate(combos):
@@ -1738,9 +1844,9 @@ class BaseSource:
                     # This triggers in the case of something like issue #738, where a previous fit used data that is
                     #  not loaded into this source (either because it was manually removed, or because the central
                     #  position has changed etc.)
-                    except NotAssociatedError:
-                        warn_text = "Existing fit for {s} could not be loaded due to a mismatch in available " \
-                                    "data".format(s=self.name)
+                    except (NotAssociatedError, IndexError):
+                        warn_text = ("An existing XSPEC simulation result for {s} could not be loaded "
+                                     "due to a mismatch in available data".format(s=self.name))
                         if not self._samp_member:
                             warn(warn_text, stacklevel=2)
                         else:
@@ -2246,33 +2352,44 @@ class BaseSource:
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if all([lo_en is None, hi_en is None]):
-            energy_key = "_"
-        elif all([lo_en is not None, hi_en is not None]):
-            energy_key = "bound_{l}-{h}_".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
-        else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+        # Fetch all the matching profiles for the specified telescope
+        matched_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
 
-        if central_coord is None:
-            central_coord = self.default_coord
-        cen_chunk = "ra{r}_dec{d}_".format(r=central_coord[0].value, d=central_coord[1].value)
+        matched_prods: List[BaseProfile1D]
 
+        # Matching the radii is going to take a maybe slightly (but practically not really) dangerous approach. The
+        #  radii passed here can either mean annulus bounds, or centres of those annuli. So we compare the passed
+        #  radii to both of those pieces of information for each profile.
         if radii is not None:
+            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
             radii = self.convert_radius(radii, 'deg')
-            rad_chunk = "r" + "_".join(radii.value.astype(str))
-            rad_info = True
-        else:
-            rad_info = False
 
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=False, telescope=telescope)
-        matched_prods = []
-        for p in broad_prods:
-            rad_str = p[-2].split("_st")[0].split(cen_chunk)[-1]
+            # First we'll check which profiles have the same number of radii as those that have
+            #  been passed in by the user
+            matched_prods = [m_prod for m_prod in matched_prods if len(radii) == len(m_prod.radii) or
+                             len(radii) == len(m_prod.annulus_bounds)]
+            # Then look for actual radii matches - we use the allclose() method here to check that the
+            #  radii of the annuli are all within a very small tolerance of the passed radii. This is
+            #  to head off problems we've had with float precision, the last digit of the float gets flipped
+            #  and then exact comparisons no longer work
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, m_prod.deg_radii, rtol=0, atol=RAD_MATCH_PRECISION)
+                             or np.allclose(radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
+                                            atol=RAD_MATCH_PRECISION)]
 
-            if cen_chunk in p[-2] and energy_key in p[-2] and rad_info and rad_str == rad_chunk:
-                matched_prods.append(p[-1])
-            elif cen_chunk in p[-2] and energy_key in p[-2] and not rad_info:
-                matched_prods.append(p[-1])
+        # Now onto matching to some of the other information that may have been passed to this method
+        # First the energy bounds, making sure we convert the input energy to keV
+        if lo_en is not None:
+            lo_en = lo_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[0] == lo_en]
+        if hi_en is not None:
+            hi_en = hi_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[1] == hi_en]
+
+        # The central coordinate is also checked against the current default coordinate if the
+        #  user didn't pass anything else in to override that
+        check_coord = self.default_coord if central_coord is None else central_coord
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.centre == check_coord).all()]
 
         return matched_prods
 
@@ -2305,64 +2422,63 @@ class BaseSource:
             were multiple matching products), or a single/list of AggregateLightCurve objects.
         :rtype: Union[LightCurve, List[LightCurve], AggregateLightCurve, List[AggregateLightCurve]]
         """
-        # Set up search strings (for the product storage keys) for the inner and outer radii here. The default None
-        #  value just creates a key that looks for the 'ri' or 'ro' precursor to the value in the key, i.e. it doesn't
-        #  do anything - we also make sure that any radii passed by the user are converted properly
-        if inner_radius is not None and isinstance(inner_radius, Quantity):
-            inn_rad_search = '_ri{}_'.format(self.convert_radius(inner_radius, 'deg').value)
-        elif inner_radius is not None and isinstance(inner_radius, str):
-            inn_rad_search = '_ri{}_'.format(self.get_radius(inner_radius, 'deg').value)
-        elif inner_radius is None:
-            inn_rad_search = "_ri"
-        else:
-            raise TypeError("You may only pass a quantity or a string as inner_radius")
+        # We check the validity of the user inputs, before trying to retrieve any products
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        elif inner_radius is not None:
+            raise TypeError("You may only pass a quantity, a string, or None as 'inner_radius'")
 
-        if outer_radius is not None and isinstance(outer_radius, Quantity):
-            out_rad_search = '_ro{}_'.format(self.convert_radius(outer_radius, 'deg').value)
-        elif outer_radius is not None and isinstance(outer_radius, str):
-            out_rad_search = '_ro{}_'.format(self.get_radius(outer_radius, 'deg').value)
-        elif outer_radius is None:
-            out_rad_search = "_ro"
-        else:
-            raise TypeError("You may only pass a quantity or a string as outer_radius")
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        elif outer_radius is not None:
+            raise TypeError("You may only pass a quantity, a string, or None as 'outer_radius'")
 
-        # Check to make sure that the time bin size is a legal value, and set up a search string for the time bin
-        #  size in order to narrow down the lightcurves to just the ones that the user wants
         if time_bin_size is not None and not time_bin_size.unit.is_equivalent('s'):
             raise UnitConversionError("The 'time_bin_size' argument must be convertible to seconds.")
-        elif time_bin_size is None:
-            time_bin_search = '_timebin'
-        else:
-            time_bin_search = '_timebin{}'.format(time_bin_size.to('s').value)
 
-        # Setting up the energy band search string - if one bound is specified then the other has to be as well, I
-        #  didn't think it made sense otherwise
-        if any([lo_en is not None, hi_en is not None]) and not all([lo_en is not None, hi_en is not None]):
-            raise ValueError("The 'lo_en' and 'hi_en' values must either both be None, or both be an energy value.")
         if (lo_en is not None and not lo_en.unit.is_equivalent('keV')) or \
                 (hi_en is not None and not hi_en.unit.is_equivalent('keV')):
             raise UnitConversionError("The 'lo_en' and 'hi_en' arguments must be convertible to keV.")
-        # If either is None then we know both are because we checked earlier
-        elif lo_en is None:
-            en_search = 'bound_'
-        elif lo_en is not None:
-            en_search = 'bound_{l}-{u}'.format(l=lo_en.to('keV').value, u=hi_en.to('keV').value)
 
+        # Set the search key to use for get_products
         if obs_id == 'combined':
             search_key = 'combined_lightcurve'
         else:
             search_key = 'lightcurve'
-        # Grabbing every single lightcurve that matches ObsID and inst passed by the user (remember they could be
-        #  None values, indeed they are by default) - we'll then sweep through whatever list is returned and
-        #  narrow them down
-        all_lcs = self.get_products(search_key, obs_id, inst, telescope=telescope)
-        # It was getting to the point where a list comprehension was less readable than a for loop, particularly
-        #  with the pattern logic, so I changed it to this
-        matched_prods = []
-        for lc in all_lcs:
-            if out_rad_search in lc.storage_key and inn_rad_search in lc.storage_key and \
-                    time_bin_search in lc.storage_key and en_search in lc.storage_key:
-                matched_prods.append(lc)
+        # Grabbing every single lightcurve that matches ObsID, instrument, and telescope passed by the
+        #  user (None by default) - we'll then sweep through whatever list is returned and narrow them down
+        matched_prods = self.get_products(search_key, obs_id, inst, telescope=telescope)
+
+        matched_prods: List[LightCurve]
+
+        # Checking for matching radii first - this will likely whittle down the LCs best of all. We have
+        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
+        #  an exact match to the other radius)
+        if inner_radius is not None:
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+        if outer_radius is not None:
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Now we match central coordinates
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord == self.default_coord).all()]
+
+        # Comparing the user-input energy bounds to the lightcurves, making sure we convert the input energy to keV
+        if lo_en is not None:
+            lo_en = lo_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[0] == lo_en]
+        if hi_en is not None:
+            hi_en = hi_en.to('keV')
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.energy_bounds[1] == hi_en]
+
+        # And finally the time bin size matching
+        if time_bin_size is not None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.time_bin_size == time_bin_size]
 
         if len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any lightcurves matching your input.")
@@ -2810,7 +2926,7 @@ class BaseSource:
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
                 elif isinstance(po, AnnularSpectra) and update_inv:
-                    # Don't want to store a None value as a string for the info_key
+
                     if extra_key is None:
                         info_key = ''
                     else:
@@ -2921,8 +3037,8 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
-    def get_products(self, p_type: str, obs_id: str = None, inst: str = None,
-                     extra_key: str = None, just_obj: bool = True, telescope: str = None) -> List[BaseProduct]:
+    def get_products(self, p_type: str, obs_id: str = None, inst: str = None, extra_key: str = None,
+                     just_obj: bool = True, telescope: str = None) -> Union[List[BaseProduct], List[BaseProfile1D]]:
         """
         This is the getter for the products data structure of Source objects. Passing a product type
         such as 'events' or 'images' will return every matching entry in the products data structure.
@@ -2935,7 +3051,7 @@ class BaseSource:
             or the other information that goes with it like ObsID and instrument.
         :param str telescope: Optionally, a specific telescope to search can be supplied.
         :return: List of matching products.
-        :rtype: List[BaseProduct]
+        :rtype: Union[List[BaseProduct], List[BaseProfile1D]]
         """
         def unpack_list(to_unpack: list):
             """
@@ -3287,52 +3403,51 @@ class BaseSource:
         else:
             raise TypeError("You may only pass a quantity or a string as outer_radius")
 
-        if over_sample is not None:
-            over_sample = int(over_sample)
-        if min_counts is not None:
-            min_counts = int(min_counts)
-        if min_sn is not None:
-            min_sn = float(min_sn)
-
-        # Sets up the extra part of the storage key name depending on if grouping is enabled
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
-
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
-
-        if outer_radius != 'region':
-            # The key under which these spectra will be stored
-            spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ri=inn_rad_num.value, ro=out_rad_num.value,
-                                                         gr=group_spec)
-        else:
-            spec_storage_name = "region_grp{gr}".format(gr=group_spec)
-
-        # Adds on the extra information about grouping to the storage key
-        spec_storage_name += extra_name
+        # Checking spectrum generation inputs, and making sure they are in the right types
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
 
         if obs_id == 'combined':
-            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                          telescope=telescope)
+            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
         else:
-            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, extra_key=spec_storage_name,
-                                          telescope=telescope)
+            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        # Checking for matching radii first - this will likely whittle down the spectra best of all. We have
+        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
+        #  an exact match to the other radius)
+        matched_prods = [m_prod for m_prod in matched_prods
+                         if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)
+                         and np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Now we match central coordinates
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any spectra matching your input.")
 
-        return matched_prods
-
+        return final_matched_prods
 
     def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
@@ -3368,14 +3483,14 @@ class BaseSource:
         """
 
         matched_prods = self._get_spec_prod(outer_radius, obs_id, inst, inner_radius, group_spec,
-                                               min_counts, min_sn, over_sample, telescope)
+                                            min_counts, min_sn, over_sample, telescope)
 
         return matched_prods
 
     def get_combined_spectra(self, outer_radius: Union[str, Quantity], inst: str = None,
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+                             inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                             min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                             telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
         """
         A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
         Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
@@ -3410,7 +3525,7 @@ class BaseSource:
                                       "observations.".format(t=telescope))
 
         matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
-                                               min_counts, min_sn, over_sample, telescope)
+                                            min_counts, min_sn, over_sample, telescope)
 
         return matched_prods
 
@@ -3441,56 +3556,74 @@ class BaseSource:
         :return: An XGA AnnularSpectra object if there is an exact match.
         :rtype: AnnularSpectra
         """
-        if group_spec and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
-        elif group_spec and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
-        else:
-            extra_name = ''
+        # Fetch all the annular spectra for the specified telescope
+        # TODO THIS MAY HAVE TO BE ALTERED FOR COMBINED AND NON-COMBINED ANNULAR SPECTRA AT SOME POINT
+        matched_prods = self.get_products('combined_annular_spectrum', telescope=telescope)
 
-        # And if it was oversampled during generation then we need to include that as well
-        if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+        # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
+        #  here we're going to throw an error
+        if set_id is not None:
+            matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
 
-        # Combines the annular radii into a string, and makes sure the radii are in degrees, as radii are in
-        #  degrees in the storage key
+            # In this case there are no matching annular spectra
+            if len(matched_products) == 0:
+                # Sort out the message to show
+                if telescope is not None:
+                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
+                            "found.").format(si=set_id, t=telescope)
+                else:
+                    mess = "AnnularSpectra object with setID {si} cannot be found.".format(si=set_id, t=telescope)
+                raise NoProductAvailableError(mess)
+            # But if we get here then there is a match (and there can only be one)
+            else:
+                return matched_prods[0]
+
+        # If we get here, then the search for AnnularSpectra isn't as simple as just using a set identifier
+        # Like in _get_spec_prod, we'll match radii first to whittle down the possibilities - IF THE USER
+        #  SPECIFIED RADII
         if radii is not None:
-            # We're dealing with the best case here, the user has passed radii, so we can generate an exact
-            #  storage key and look for a single match
-            ann_rad_str = "_".join(self.convert_radius(radii, 'deg').value.astype(str))
-            spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-            spec_storage_name = spec_storage_name.format(ra=self.default_coord[0].value,
-                                                         dec=self.default_coord[1].value,
-                                                         ar=ann_rad_str, gr=group_spec)
-            spec_storage_name += extra_name
-        else:
-            # This is a worse case, we don't have radii, so we split the known parts of the key into a list
-            #  and we'll look for partial matches
-            pos_str = "ra{ra}_dec{dec}".format(ra=self.default_coord[0].value, dec=self.default_coord[1].value)
-            grp_str = "grp{gr}".format(gr=group_spec) + extra_name
-            spec_storage_name = [pos_str, grp_str]
+            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
+            radii = self.convert_radius(radii, 'deg')
 
-        # If the user hasn't passed a set ID AND the user has passed radii then we'll go looking with out
-        #  properly constructed storage key
-        if set_id is None and radii is not None:
-            matched_prods = self.get_products('combined_spectrum', extra_key=spec_storage_name, telescope=telescope)
-        # But if the user hasn't passed an ID AND the radii are None then we look for partial matches
-        elif set_id is None and radii is None:
-            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
-                             if spec_storage_name[0] in p.storage_key and spec_storage_name[1] in p.storage_key]
-        # However if they have passed a setID then this over-rides everything else
-        else:
-            # With the set ID we fetch ALL annular spectra, then use their set_id property to match against
-            #  whatever the user passed in
-            matched_prods = [p for p in self.get_products('combined_spectrum', telescope=telescope)
-                             if p.set_ident == set_id]
+            # First we'll check which annular spectra have the same number of radii as those that have
+            #  been passed in by the user
+            matched_prods = [m_prod for m_prod in matched_prods if len(m_prod.radii) == len(radii)]
+            # Then look for actual radii matches - we use the allclose() method here to check that the
+            #  radii of the spectra are all within a very small tolerance of the passed radii. This is
+            #  to head off problems we've had with float precision, the last digit of the float gets flipped
+            #  and then exact comparisons no longer work
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, m_prod.radii, rtol=0, atol=RAD_MATCH_PRECISION)]
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        # And we need to check to find that annular spectra have the right central coordinates for the
+        #  current state of the source
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
 
-        return matched_prods
+        return final_matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
                      radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
@@ -3632,7 +3765,7 @@ class BaseSource:
                            for inst, patt in pattern[telescope].items()}
         elif isinstance(pattern, dict):
             if ('mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys())
-                    or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(0, 7)])):
+                    or any(['tm{}'.format(tm_i) in list(pattern.keys()) for tm_i in range(1, 8)])):
                 raise ValueError("Specific MOS/TM instruments do not need to be specified for 'pattern'; i.e. there "
                                  "should be one entry for 'mos' or 'tm'.")
             pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
@@ -3646,7 +3779,7 @@ class BaseSource:
             patt_search.update({'mos1': patt_search['mos'], 'mos2': patt_search['mos']})
 
         if 'tm' in patt_search:
-            patt_search.update({'tm{}'.format(tm_i): patt_search['tm'] for tm_i in range(0, 7)})
+            patt_search.update({'tm{}'.format(tm_i): patt_search['tm'] for tm_i in range(1, 8)})
 
         some_lcs = self._get_lc_prod(outer_radius, obs_id, inst, inner_radius, lo_en, hi_en, time_bin_size, telescope)
         matched_prods = []
@@ -3669,7 +3802,8 @@ class BaseSource:
     def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
                                  inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
                                  hi_en: Quantity = None, time_bin_size: Quantity = None,
-                                 pattern: Union[dict, str] = "default", telescope: str = None) \
+                                 pattern: Union[dict, str] = "default", telescope: str = None,
+                                 inst: str = None) \
             -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
         """
         A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at
@@ -3697,45 +3831,43 @@ class BaseSource:
             objects (if there were multiple matching products).
         :rtype: Union[AggregateLightCurve, List[AggregateLightCurve]]
         """
-        if telescope == 'xmm':
-            from ..generate.common import check_pattern
-        else:
-            raise NotImplementedError("Support for other telescopes has not yet been added to get_lightcurves")
+        from ..generate.common import check_pattern
 
         # TODO SO THIS IS THE LAST GET METHOD THAT NEEDS CONVERTING TO SUPPORT DIFFERENT TELESCOPES - HOWEVER THAT IS
         #  COMPLICATED BY THE FACT THAT WE DON'T CURRENTLY AUTO-CREATE AGGREGATE LIGHTCURVES, AND THEY MIGHT BE THE
         #  ONE THING THAT IS ALREADY ALLOWED TO BE MULTI-TELESCOPE
-
-        # TODO This is XMM specific because of the patterns currently
-        # This is where we set up the search string for the patterns specified by the user.
-        if pattern is None:
-            patt_search = "pattern"
-        elif isinstance(pattern, str):
-            pattern = {'pn': '<=4', 'mos': '<=12'}
-            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
-                           for inst, patt in pattern.items()}
-        elif isinstance(pattern, dict):
-            if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
-                raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
-                                 "should be one entry for 'mos'.")
-            pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
-            patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
-                           for inst, patt in pattern.items()}
-        else:
-            raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
-                            "instrument names and values are string patterns.")
-
-        # Use the internal function to find the combined light curves, then apply pattern checks after
-        some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
-        matched_prods = []
-        for lc in some_lcs:
-            if isinstance(patt_search, str):
-                rel_patt_search = [patt_search]
+        if telescope == 'xmm':
+            # TODO This is XMM specific because of the patterns currently
+            # This is where we set up the search string for the patterns specified by the user.
+            if pattern is None:
+                patt_search = "pattern"
+            elif isinstance(pattern, str):
+                pattern = {'pn': '<=4', 'mos': '<=12'}
+                patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                            for inst, patt in pattern.items()}
+            elif isinstance(pattern, dict):
+                if 'mos1' in list(pattern.keys()) or 'mos2' in list(pattern.keys()):
+                    raise ValueError("Specific MOS instruments do not need to be specified for 'pattern'; i.e. there "
+                                    "should be one entry for 'mos'.")
+                pattern = {inst: patt.replace(' ', '') for inst, patt in pattern.items()}
+                patt_search = {inst: "_{i}pattern".format(i=inst) + check_pattern(patt)[1]
+                            for inst, patt in pattern.items()}
             else:
-                rel_patt_search = [patt for inst, patt in patt_search.items()]
+                raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
+                                "instrument names and values are string patterns.")
 
-            if all([rps in lc.storage_key for rps in rel_patt_search]):
-                matched_prods.append(lc)
+            some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
+            matched_prods = []
+            for lc in some_lcs:
+                if isinstance(patt_search, str):
+                    rel_patt_search = [patt_search]
+                else:
+                    rel_patt_search = [patt for inst, patt in patt_search.items()]
+
+                if all([rps in lc.storage_key for rps in rel_patt_search]):
+                    matched_prods.append(lc)
+        else:
+            matched_prods = self._get_lc_prod(outer_radius, 'combined', inst, inner_radius, lo_en, hi_en, time_bin_size)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -3782,11 +3914,6 @@ class BaseSource:
         :return: The method returns both the source region and the associated background region.
         :rtype: Tuple[SkyRegion, SkyRegion]
         """
-        # Doing an initial check so I can throw a warning if the user wants a region-list region AND has supplied
-        #  custom central coordinates
-        if reg_type == "region" and central_coord is not None:
-            warn("You cannot use custom central coordinates with a region from supplied region files", stacklevel=2)
-
         if central_coord is None:
             central_coord = self._default_coord
 
@@ -3795,14 +3922,14 @@ class BaseSource:
         elif type(central_coord) == SkyCoord:
             centre = central_coord
         else:
-            raise TypeError("central_coord must be of type Quantity or SkyCoord.")
+            raise TypeError("The 'central_coord' argument must be of type Quantity or SkyCoord.")
 
         # In case combined gets passed as the ObsID at any point
         if obs_id == "combined":
             obs_id = None
 
         # The search radius won't be used by the user, just peak finding solutions
-        allowed_rtype = ["r2500", "r500", "r200", "region", "custom", "search", "point"]
+        allowed_rtype = ["r2500", "r500", "r200", "custom", "search", "point"]
         if type(self) == BaseSource:
             raise TypeError("BaseSource class does not have the necessary information "
                             "to select a source region.")
@@ -3813,19 +3940,14 @@ class BaseSource:
                                                                                             s=self.name))
         elif reg_type not in allowed_rtype:
             raise ValueError("The only allowed region types are {}".format(", ".join(allowed_rtype)))
-        elif reg_type == "region" and obs_id is None:
-            raise ValueError("ObsID and telescope cannot be None when getting region file regions.")
-        elif reg_type == "region" and obs_id is not None:
-            # TODO Do I even still use this attribute?
-            src_reg = self._regions[telescope][obs_id]
         elif reg_type in ["r2500", "r500", "r200"] and reg_type not in self._radii:
             raise ValueError("There is no {r} associated with {s}".format(r=reg_type, s=self.name))
-        elif reg_type != "region" and reg_type in self._radii:
+        elif reg_type in self._radii:
             # We know for certain that the radius will be in degrees, but it has to be converted to degrees
             #  before being stored in the radii attribute
             radius = self._radii[reg_type]
             src_reg = CircleSkyRegion(centre, radius.to('deg'))
-        elif reg_type != "region" and reg_type not in self._radii:
+        elif reg_type not in self._radii:
             raise ValueError("{} is a valid region type, but is not associated with this "
                              "source.".format(reg_type))
         else:
@@ -3870,7 +3992,11 @@ class BaseSource:
 
         crossover = np.array([region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
                               for r in self._interloper_regions[telescope]])
-        reg_within = np.array(self._interloper_regions[telescope])[crossover]
+
+        try:
+            reg_within = np.array(self._interloper_regions[telescope])[crossover]
+        except:
+            reg_within = None
 
         return reg_within
 
@@ -4167,7 +4293,7 @@ class BaseSource:
                                    telescope=telescope)
         else:
             raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
-                             " pass both 'obs_id' and 'inst'.".format(s=self.name))
+                             "pass both 'obs_id' and 'inst'.".format(s=self.name))
 
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
@@ -4533,7 +4659,7 @@ class BaseSource:
                     stacked_spectra: bool = False):
         """
         Important method that will retrieve fit results from the source object. Either for a specific
-        parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
+        parameter of a given region-model combination or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
@@ -4550,7 +4676,7 @@ class BaseSource:
             for a GalaxyCluster, or Quantity(300, 'kpc')). By default, this is zero arcseconds, resulting in a
             circular spectrum.
         :param str par: The name of the parameter you want a result for.
-        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param bool group_spec: Whether the spectra fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
@@ -4569,6 +4695,11 @@ class BaseSource:
             # from the get_spectra method
             specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
                                      min_sn, over_sample, telescope=telescope)
+        elif stacked_spectra and telescope in ['erass', 'erosita'] and len(self.obs_ids[telescope]) == 1:
+            # This is a special case, and may change in the future if we alter how single-ObsID, stacked instrument
+            #  products are stored (see issue #1406) - here there is one eROSITA ObsID but combined instruments
+            specs = self.get_spectra(outer_radius, None, 'combined', inner_radius, group_spec,
+                                     min_counts, min_sn, over_sample, telescope=telescope)
         else:
             # Otherwise we want the stacked spectrum result, so we retrieve the combined spectrum
             specs = self.get_combined_spectra(outer_radius, None, inner_radius, group_spec,
@@ -4580,8 +4711,14 @@ class BaseSource:
         else:
             storage_key = specs.storage_key
 
+        try:
+            len_fit_results = len(self._fit_results[telescope])
+        except KeyError:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
+                                              f"{self.name} so no results can be retrieved.")
+
         # Bunch of checks to make sure the requested results actually exist
-        if len(self._fit_results[telescope]) == 0:
+        if len_fit_results == 0:
             raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(t=telescope,
                                                                                                    s=self.name))
         elif storage_key not in self._fit_results[telescope]:
@@ -4688,15 +4825,21 @@ class BaseSource:
         else:
             en_key = None
 
+        try:
+            len_xspec_fits = len(self._luminosities[telescope])
+        except KeyError:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
+                                              f"{self.name} so no luminosities can be retrieved.")
+
         # Checks that the requested region, model and energy band actually exist
-        if len(self._luminosities[telescope]) == 0:
+        if len_xspec_fits == 0:
             raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(s=self.name,
                                                                                                    t=telescope))
         elif storage_key not in self._luminosities[telescope]:
             raise ModelNotAssociatedError("These {t} spectra have no associated XSPEC fit to {s}.".format(t=telescope,
                                                                                                           s=self.name))
         elif model not in self._luminosities[telescope][storage_key]:
-            av_mods = ", ".join(self._luminosities[storage_key].keys())
+            av_mods = ", ".join(self._luminosities[telescope][storage_key].keys())
             raise ModelNotAssociatedError("{m} has not been fitted to these {t} spectra of {s}; "
                                           "available models are {a}".format(m=model, s=self.name, a=av_mods,
                                                                             t=telescope))
@@ -4827,8 +4970,13 @@ class BaseSource:
                 if tel in self.telescopes:
                     to_remove[tel] = deepcopy(self.instruments[tel])
                 else:
-                    warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
-                         stacklevel=2)
+                    warn_text = ('{t} is not a telescope associated with {n} and is '
+                                 'being skipped.').format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
+
         # In this instance the value is a dictionary, and I have created a disgusting nested set of if statements
         #  and for loops to ensure that the user hasn't passed anything daft
         elif isinstance(to_remove, dict):
@@ -4841,9 +4989,14 @@ class BaseSource:
                 #  has been passed - in this case the current top level key isn't actually a valid telescope for this
                 #  source
                 if tel not in self.telescopes:
-                    warn('{t} is not a telescope associated with {n} and is being skipped.'.format(t=tel, n=self.name),
-                         stacklevel=2)
+                    warn_text = ('{t} is not a telescope associated with {n} and is '
+                                 'being skipped.').format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
                     continue
+
                 # If we get here we set up the to_remove dictionary that will be constructed
                 final_to_remove[tel] = {}
 
@@ -4851,9 +5004,14 @@ class BaseSource:
                 #  and add the instruments that are associated with it to our final_to_remove dict
                 if isinstance(val, str):
                     if val not in self.obs_ids[tel]:
-                        warn("{o} is not an ObsID associated with {t} for {n}, and is being "
-                             "skipped.".format(o=val, t=tel, n=self.name), stacklevel=2)
+                        warn_text = ("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                     "skipped.").format(o=val, t=tel, n=self.name)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
                         continue
+
                     final_to_remove[tel][val] = deepcopy(self.instruments[tel][val])
 
                 # This should only be a list of ObsIDs at this level, so we assume it is and check them against the
@@ -4861,9 +5019,14 @@ class BaseSource:
                 elif isinstance(val, (list, np.ndarray)):
                     for v_oi in val:
                         if v_oi not in self.obs_ids[tel]:
-                            warn("{o} is not an ObsID associated with {t} for {n}, and is being "
-                                 "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
+                            warn_text = ("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                         "skipped.").format(o=v_oi, t=tel, n=self.name)
+                            if not self._samp_member:
+                                warn(warn_text, stacklevel=2)
+                            else:
+                                self._supp_warn.append(warn_text)
                             continue
+
                         # At this point we add all the instruments associated with the current ObsID to the removal
                         #  dictionary
                         final_to_remove[tel][v_oi] = deepcopy(self.instruments[tel][v_oi])
@@ -4875,16 +5038,25 @@ class BaseSource:
                     for v_oi, insts in val.items():
                         # Check that the key is an ObsID, skipping if not
                         if v_oi not in self.obs_ids[tel]:
-                            warn("{o} is not an ObsID associated with {t} for {n}, and is being "
-                                 "skipped.".format(o=v_oi, t=tel, n=self.name), stacklevel=2)
+                            warn_text = ("{o} is not an ObsID associated with {t} for {n}, and is being "
+                                         "skipped.").format(o=v_oi, t=tel, n=self.name)
+                            if not self._samp_member:
+                                warn(warn_text, stacklevel=2)
+                            else:
+                                self._supp_warn.append(warn_text)
 
                         # Then if the value is a string it should be a single instrument, we check it is valid for
                         #  the current ObsID
                         if isinstance(insts, str):
                             if insts.lower() not in self.instruments[tel][v_oi]:
-                                warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
-                                     "skipped.".format(i=insts.lower(), t=tel, o=v_oi, n=self.name))
+                                warn_text = ("{i} is not an instrument associated with {t}-{o} for {n}, and is "
+                                             "being skipped.").format(i=insts.lower(), t=tel, o=v_oi, n=self.name)
+                                if not self._samp_member:
+                                    warn(warn_text, stacklevel=2)
+                                else:
+                                    self._supp_warn.append(warn_text)
                                 continue
+
                             # If it is then it is added to the removal dictionary
                             final_to_remove[tel][v_oi] = [insts.lower()]
 
@@ -4894,9 +5066,14 @@ class BaseSource:
                             final_inst_list = []
                             for inst in insts:
                                 if inst.lower() not in self.instruments[tel][v_oi] and inst != 'combined':
-                                    warn("{i} is not an instrument associated with {t}-{o} for {n}, and is being "
-                                         "skipped.".format(i=inst.lower(), t=tel, o=v_oi, n=self.name))
+                                    warn_text = ("{i} is not an instrument associated with {t}-{o} for {n}, and is "
+                                                 "being skipped.").format(i=inst.lower(), t=tel, o=v_oi, n=self.name)
+                                    if not self._samp_member:
+                                        warn(warn_text, stacklevel=2)
+                                    else:
+                                        self._supp_warn.append(warn_text)
                                     continue
+
                                 final_inst_list.append(inst.lower())
                             # Check to make sure our list of instruments actually has something in it
                             if len(final_inst_list) != 0:
@@ -5007,8 +5184,11 @@ class BaseSource:
                     if tel in self._obs_sep:
                         del self._obs_sep[tel]
 
-                    warn("All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name),
-                         stacklevel=2)
+                    warn_text = "All {t} observations have been disassociated from {n}.".format(t=tel, n=self.name)
+                    if not self._samp_member:
+                        warn(warn_text, stacklevel=2)
+                    else:
+                        self._supp_warn.append(warn_text)
 
             if whole_obsid_dis and tel in self._other_regions:
                 # We replace the interloper regions entry for this telescope (i.e. the combined list of contaminant
@@ -5030,7 +5210,7 @@ class BaseSource:
 
         # We attempt to load in matching XGA products if that was the behaviour set by load_products on init
         if self._load_products:
-            self._existing_xga_products(self._load_fits, True)
+            self._existing_xga_products(self._load_fits, True, True)
 
     def obs_check(self, reg_type: str, threshold_fraction: float = 0.5) -> Dict:
         """
@@ -5087,9 +5267,14 @@ class BaseSource:
                     full_area[tel][o] = m.sum()
 
                     for ex in exp_maps:
-                        # Grabs exposure map data, then alters it so anything that isn't zero is a one
+                        # Grabs exposure map data, then alters it so anything that isn't zero is a one. We
+                        #  use the int8 datatype because we're about to convert the array to zeroes
+                        #  and ones and saving as much memory as possible is important for eROSITA
                         ex_data = ex.data.copy()
                         ex_data[ex_data > 0] = 1
+                        # Probably won't really make a difference as we're deleting this array soon, but still
+                        #  trying to save memory!
+                        ex_data = ex_data.astype('int8')
                         # We do this because it then becomes very easy to calculate the intersection area of the mask
                         #  with the XMM chips. Just mask the modified expmap, then sum.
                         area[tel][o][ex.instrument] = (ex_data * m).sum()
@@ -5097,11 +5282,13 @@ class BaseSource:
                         # Desperately trying to make sure I don't get memory allocation errors, particularly with
                         #  eROSITA with their memory-hogging images/exposure maps
                         del ex_data
+                        # Trying to make sure it is gone from memory
+                        gc.collect()
                         ex.unload(unload_data=True, unload_header=False)
 
                 if max(list(full_area[tel].values())) == 0:
                     # Everything has to be rejected in this case
-                    reject_dict = deepcopy(self.instruments[tel])
+                    reject_dict[tel] = deepcopy(self.instruments[tel])
                 else:
                     for o in area[tel]:
                         for i in area[tel][o]:
@@ -5109,6 +5296,7 @@ class BaseSource:
                                 frac = (area[tel][o][i] / full_area[tel][o])
                             else:
                                 frac = 0
+
                             if frac <= threshold_fraction and tel not in reject_dict:
                                 reject_dict[tel] = {o: [i]}
                             elif frac <= threshold_fraction and o not in reject_dict[tel]:
@@ -5118,13 +5306,12 @@ class BaseSource:
 
         return reject_dict
 
-    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
-                    hi_en: Quantity = None, allow_negative: bool = False,
-                    telescope: Union[str, List[str]] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    def snr_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                    allow_negative: bool = False, telescope: Union[str, List[str]] = None,
+                    stacked_inst: bool = False) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the signal-to-noise measured for the
-        given region, with element zero being the lowest SNR, and element N being the highest. The standard
-        behaviour is to do this for all telescopes associated with this source.
+        given region, with element zero being the lowest SNR, and element N being the highest.
 
         :param Quantity/str outer_radius: The radius that SNR should be calculated within, this can either be a
             named radius such as r500, or an astropy Quantity.
@@ -5134,17 +5321,21 @@ class BaseSource:
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
-        :param str/List[str] telescope: The telescopes to return SNR rankings for - either a single string telescope
-            name, a list of strings, or None (the default). Passing None will include all telescopes associated
-            with the source.
-        :return: Two dictionaries with top level telescope keys, the first dictionary contains N by 2 array, with
-            the ObsID, Instrument combinations in order of ascending signal-to-noise, then a dictionary containing an
-            array containing the order SNR ratios.
+        :param str/List[str] telescope: The telescopes to calculate signal-to-noise rankings for. Default is
+            None, meaning all associated telescopes will be used.
+        :param bool stacked_inst: If True, then SNR-ranking will be performed at an ObsID level, using stacked
+            instrument data for each ObsID (if available). Default is False.
+        :return: Two dictionaries; the first contains ObsID-instrument information (as an Nx2 array) sorted by
+            ascending signal-to-noise, the second contains the signal-to-noise values. The top level keys of the
+            dictionaries are telescopes names.
         :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
-        # Nice and convenient, if the user doesn't pass a specific telescope then we just use all of them
+        # The user may have specified the telescope(s), or they may have left it as None. If None then we use all
+        #  telescopes associated with this source
         if telescope is None:
             telescope = self.telescopes
+        elif isinstance(telescope, str):
+            telescope = [telescope]
 
         # Catches the possibility of a single string name being passed and turns into a list with one element, as
         #  we wish to be able to iterate through it
@@ -5161,48 +5352,51 @@ class BaseSource:
 
         obs_inst_dict = {}
         snrs_dict = {}
-
         for tel in telescope:
-            # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
-            obs_inst = []
-            snrs = []
-            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-            for obs_id in self.instruments[tel]:
-                for inst in self.instruments[tel][obs_id]:
-                    try:
+            try:
+                # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+                obs_inst = []
+                snrs = []
+                # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
+                for obs_id in self.instruments[tel]:
+                    # If the stacked instrument argument is NOT true, then this is every instrument available for
+                    #  the current ObsID. Otherwise, it's just 'combined' (i.e. the stack of all instruments
+                    #  for the current ObsID)
+                    rel_insts = self.instruments[tel][obs_id] if not stacked_inst else ['combined']
+                    for inst in rel_insts:
                         # Use our handy get_snr method to calculate the SNRs we want, then add that and the
                         #  ObsID-inst combo into their respective lists
-                        cur_snr = self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst,
-                                               allow_negative)
-                    except NoProductAvailableError:
-                        # Catch a no product error from a get ratemaps call and make it a little more specific
-                        raise NoProductAvailableError("No {t}-{o}-{i} {l}-{u}keV ratemap is available for "
-                                                      "signal-to-noise calculation.".format(t=tel, o=obs_id,
-                                                                                            i=inst, l=lo_en.value,
-                                                                                            u=hi_en.value)) from None
-                    snrs.append(cur_snr)
-                    obs_inst.append([obs_id, inst])
+                        snrs.append(self.get_snr(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst,
+                                    allow_negative))
+                        obs_inst.append([obs_id, inst])
 
-            # Make our storage lists into arrays, easier to work with that way
-            obs_inst = np.array(obs_inst)
-            snrs = np.array(snrs)
+                # Make our storage lists into arrays, easier to work with that way
+                obs_inst = np.array(obs_inst)
+                snrs = np.array(snrs)
 
-            # We want to order the output by SNR, with the lowest being first and the highest being last, so we
-            #  use a numpy function to output the index order needed to re-order our two arrays
-            reorder_snrs = np.argsort(snrs)
-            # Then we use that to re-order them
-            snrs = snrs[reorder_snrs]
-            obs_inst = obs_inst[reorder_snrs]
+                # We want to order the output by SNR, with the lowest being first and the highest being last, so we
+                #  use a numpy function to output the index order needed to re-order our two arrays
+                reorder_snrs = np.argsort(snrs)
+                # Then we use that to re-order them
+                snrs = snrs[reorder_snrs]
+                obs_inst = obs_inst[reorder_snrs]
 
-            obs_inst_dict[tel] = obs_inst
-            snrs_dict[tel] = snrs
+                obs_inst_dict[tel] = obs_inst
+                snrs_dict[tel] = snrs
+            except NoProductAvailableError:
+                if not stacked_inst:
+                    warn("Individual ObsID-Instrument {t} ratemaps have not been generated "
+                         "for {s}".format(t=tel, s=self.name), stacklevel=2)
+                else:
+                    warn('Stacked-instrument whole ObsID {t} ratemaps have not been '
+                         'generated for {s}'.format(t=tel, s=self.name), stacklevel=2)
 
         # And return our ordered dictionaries
         return obs_inst_dict, snrs_dict
 
-    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None,
-                      hi_en: Quantity = None,
-                      telescope: Union[str, List[str]] = None) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    def count_ranking(self, outer_radius: Union[Quantity, str], lo_en: Quantity = None, hi_en: Quantity = None,
+                      telescope: Union[str, List[str]] = None,
+                      stacked_inst: bool = False) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
         given region, with element zero being the lowest counts, and element N being the highest. The standard
@@ -5214,67 +5408,68 @@ class BaseSource:
             in which case the lower energy bound for peak finding will be used (default is 0.5keV).
         :param Quantity hi_en: The upper energy bound of the ratemap to use to calculate the counts. Default is None,
             in which case the upper energy bound for peak finding will be used (default is 2.0keV).
-        :param str/List[str] telescope: The telescopes to return count rankings for - either a single string telescope
-            name, a list of strings, or None (the default). Passing None will include all telescopes associated
-            with the source.
-        :return: Two arrays, the first an N by 2 array, with the ObsID, Instrument combinations in order
-            of ascending counts, then an array containing the order counts ratios.
-        :rtype: Tuple[np.ndarray, Quantity]
+        :param str/List[str] telescope: The telescopes to calculate count rankings for. Default is
+            None, meaning all associated telescopes will be used.
+        :param bool stacked_inst: If True, then count-ranking will be performed at an ObsID level, using stacked
+            instrument data for each ObsID (if available). Default is False.
+        :return: Two dictionaries; the first contains ObsID-instrument information (as an Nx2 array) sorted by
+            ascending count, the second contains the count values. The top level keys of the
+            dictionaries are telescopes names.
+        :rtype: Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]
         """
-        # Nice and convenient, if the user doesn't pass a specific telescope then we just use all of them
+
+        # The user may have specified the telescope(s), or they may have left it as None. If None then we use all
+        #  telescopes associated with this source
         if telescope is None:
             telescope = self.telescopes
-
-        # Catches the possibility of a single string name being passed and turns into a list with one element, as
-        #  we wish to be able to iterate through it
         elif isinstance(telescope, str):
             telescope = [telescope]
 
-        # Checking if the user passed any energy limits of their own - the get_snr method we call would actually
-        #  have done this itself, but it is nice to have the actual values in here for an informative error
-        #  message
-        if lo_en is None:
-            lo_en = self._peak_lo_en
-        if hi_en is None:
-            hi_en = self._peak_hi_en
-
+        # These dictionaries will have telescope name as top level keys, and will store the calculated counts
+        #  and the ObsID-inst combos
         obs_inst_dict = {}
         cnts_dict = {}
-
         for tel in telescope:
-            # Set up some lists for the ObsID-Instrument combos and their counts respectively
-            obs_inst = []
-            cnts = []
-            # We loop through the ObsIDs associated with this source and the instruments associated with those ObsIDs
-            for obs_id in self.instruments[tel]:
-                for inst in self.instruments[tel][obs_id]:
-                    try:
-                        # Use our handy get_counts method to calculate the countss we want, then add that and the
+            try:
+                # Set up some lists for the ObsID-Instrument combos and their SNRs respectively
+                obs_inst = []
+                cnts = []
+                # We loop through the ObsIDs associated with this source and the instruments
+                #  associated with those ObsIDs
+                for obs_id in self.instruments[tel]:
+                    # If the stacked instrument argument is NOT true, then this is every instrument available for
+                    #  the current ObsID. Otherwise, it's just 'combined' (i.e. the stack of all instruments
+                    #  for the current ObsID)
+                    rel_insts = self.instruments[tel][obs_id] if not stacked_inst else ['combined']
+                    # Iterating through the instruments
+                    for inst in rel_insts:
+                        # Use a built-in source method to calculate the relevant counts, then add that and the
                         #  ObsID-inst combo into their respective lists
-                        cur_cnt = self.get_counts(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst)
-                    except NoProductAvailableError:
-                        # Catch a no product error from a get ratemaps call and make it a little more specific
-                        raise NoProductAvailableError("No {t}-{o}-{i} {l}-{u}keV image is available for count "
-                                                      "calculation.".format(t=tel, o=obs_id, i=inst,
-                                                                            l=lo_en.value, u=hi_en.value)) from None
-                    cnts.append(cur_cnt)
-                    obs_inst.append([obs_id, inst])
+                        cnts.append(self.get_counts(outer_radius, tel, self.default_coord, lo_en, hi_en, obs_id, inst))
+                        obs_inst.append([obs_id, inst])
 
-            # Make our storage lists into arrays, easier to work with that way
-            obs_inst = np.array(obs_inst)
-            cnts = Quantity(cnts)
+                # Make our storage lists into arrays, easier to work with that way
+                obs_inst = np.array(obs_inst)
+                cnts = Quantity(cnts)
 
-            # We want to order the output by count, with the lowest being first and the highest being last, so we
-            #  use a numpy function to output the index order needed to re-order our two arrays
-            reorder_cnts = np.argsort(cnts)
-            # Then we use that to re-order them
-            cnts = cnts[reorder_cnts]
-            obs_inst = obs_inst[reorder_cnts]
+                # We want to order the output by counts, with the lowest being first and the highest being last, so we
+                #  use a numpy function to output the index order needed to re-order our two arrays
+                reorder_cnts = np.argsort(cnts)
+                # Then we use that to re-order them
+                cnts = cnts[reorder_cnts]
+                obs_inst = obs_inst[reorder_cnts]
 
-            obs_inst_dict[tel] = obs_inst
-            cnts_dict[tel] = cnts
+                obs_inst_dict[tel] = obs_inst
+                cnts_dict[tel] = cnts
+            except NoProductAvailableError:
+                if not stacked_inst:
+                    warn("Individual ObsID-Instrument {t} ratemaps have not been generated "
+                         "for {s}".format(t=tel, s=self.name), stacklevel=2)
+                else:
+                    warn('Stacked-instrument whole ObsID {t} ratemaps have not been '
+                         'generated for {s}'.format(t=tel, s=self.name), stacklevel=2)
 
-        # And return our ordered dictionaries'
+        # And return our ordered dictionaries
         return obs_inst_dict, cnts_dict
 
     def offset(self, off_unit: Union[Unit, str] = "arcmin") -> Quantity:
@@ -5556,5 +5751,5 @@ class NullSource(BaseSource):
         super().__init__(0, 0, None, "AllObservations", load_products=load_products, telescope=telescope,
                          sel_null_obs=obs, null_load_products=null_load_products)
 
-        self._ra_dec = np.array([np.NaN, np.NaN])
-        self._nH = Quantity(np.NaN, self._nH.unit)
+        self._ra_dec = np.array([np.nan, np.nan])
+        self._nH = Quantity(np.nan, self._nH.unit)

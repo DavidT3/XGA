@@ -82,7 +82,7 @@ if {{($norm_scale == True) && ([lindex $par_names 0] != "factor")}} {{
 
 # The confidence interval for parameter error estimation, I don't quite know what the parameter corresponds to,
 #  but the tutorials say that 2.706 is equivalent to the 90% confidence region, 9.0 is equivalent to the 3 sigma
-#  range, and 1.0 is equivelant to 1sigma
+#  range, and 1.0 is equivalent to 1sigma
 set delta_fit_stat {el}
 
 # Now the parameters that xga_extract needs
@@ -248,7 +248,7 @@ if {{$run_pre_check == True}} {{
 
     # We iterate through all the parameters, and find which ones we are checking so we can calculate errors for them
     for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
-        # Find the equivelant parameter name for the current ipar
+        # Find the equivalent parameter name for the current ipar
         scan [tcloutr pinfo $ipar] "%s %s" pname punit
 
         # Check if that parameter name appears in the list of parameters we're meant to be quality checking
@@ -264,7 +264,7 @@ if {{$run_pre_check == True}} {{
             set lo_err [expr $par_val-$lo_conf_lim]
             set hi_err [expr $hi_conf_lim-$par_val]
 
-            # Read out the equivelant spectrum path for this particular parameter
+            # Read out the equivalent spectrum path for this particular parameter
             set cur_sp [lindex $par_spec [expr $ipar-1]]
             # And the number of noticed channels for this spectrum
             set cur_chan [lindex $par_spec_chan [expr $ipar-1]]

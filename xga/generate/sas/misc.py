@@ -93,7 +93,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
             dest_dir = "{out}xmm/{obs}/".format(out=OUTPUT, obs=obs_id)
-            temp_name = "tempdir_{}".format(randint(0, int(1e+8)))
+            temp_name = "tempdir_{}".format(randint(0, int(100_000_000)))
             temp_dir = dest_dir + temp_name + "/"
 
             final_path = dest_dir + "ccf.cif"
