@@ -107,8 +107,14 @@ class Spectrum(BaseProduct):
         self._central_coord = central_coord
 
         # Storing the region information
-        self._inner_rad = inn_rad
-        self._outer_rad = out_rad
+        # Firstly, we'll ensure that those radii have been passed in the right kind of units, and then convert
+        #  them to degrees - all XGA spectrum filenames have degree radii in them, and more importantly the source
+        #  storage structures all expect the storage keys to have degree radii
+        if not all([inn_rad.unit.is_equivalent('deg'), out_rad.unit.is_equivalent('deg')]):
+            raise UnitConversionError("The 'inn_rad' and 'out_rad' arguments must be in angular distance units.")
+
+        self._inner_rad = inn_rad.to('deg')
+        self._outer_rad = out_rad.to('deg')
         # And also the shape of the region
         if self._inner_rad.isscalar:
             self._shape = 'circular'
@@ -287,7 +293,7 @@ class Spectrum(BaseProduct):
                 if src_spec:
                     # Make this variable so the FileNotFoundError can work
                     rel_path = self.path
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._spec_counts = all_dat['COUNTS']
                     self._spec_channels = all_dat['CHANNEL']
                     # If the spectrum has not been grouped it may not have this column
@@ -304,7 +310,7 @@ class Spectrum(BaseProduct):
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
                     rel_path = self.background
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._back_counts = all_dat['COUNTS']
                     self._back_channels = all_dat['CHANNEL']
 

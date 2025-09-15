@@ -5,6 +5,7 @@ from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
+from xga.generate.ciao import ciao_spectrum_set
 
 from ._common import _write_xspec_script, _check_inputs, _pregen_annular_spectra
 from ..run import xspec_call
@@ -13,6 +14,7 @@ from ...exceptions import ModelNotAssociatedError
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
+
 
 
 @xspec_call

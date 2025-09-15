@@ -183,7 +183,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             try:
                 # TODO THIS MIGHT BE WRONG - STACKED_SPEC IS AN ARGUMENT FOR A REASON
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
@@ -353,7 +353,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
@@ -510,7 +510,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
@@ -656,7 +656,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:
@@ -805,7 +805,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             # If the fit has already been performed, we do not wish to perform it again
             try:
                 # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
+                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
                                          min_counts, min_sn, over_sample, stacked_spec)
             except ModelNotAssociatedError:

@@ -1,5 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:42. Copyright (c) The Contributors
+
 import gc
 import os
 from copy import deepcopy
@@ -200,7 +201,7 @@ class Image(BaseProduct):
 
             # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
             #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
-            elif telescope == 'erosita' and self.header['INSTRUME'] == 'merged':
+            elif (telescope == 'erosita' or telescope == 'erass') and self.header['INSTRUME'] == 'merged':
 
                 # We search for the instrument names of the various components
                 ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
@@ -210,6 +211,9 @@ class Image(BaseProduct):
 
                 # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
                 self._comb_oi_pairs = oi_pairs
+
+            # TODO MAY NEED SOME CHANDRA SPECIFIC INTERVENTION HERE, BUT HAVEN'T MADE COMBINED PHOTOMETRIC PRODUCTS
+            #  YET SO UNSURE RIGHT NOW
 
             # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
             elif telescope == 'xmm':

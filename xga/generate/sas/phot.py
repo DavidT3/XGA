@@ -54,8 +54,8 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         sources = [sources]
 
     # Don't do much value checking in this module, but this one is so fundamental that I will do it
-    if lo_en > hi_en:
-        raise ValueError("The 'lo_en' argument cannot be greater than 'hi_en'.")
+    if lo_en >= hi_en:
+        raise ValueError("The 'lo_en' argument cannot be greater than or equal to 'hi_en'.")
     else:
         # Converts the energies to channels for EPIC detectors, assuming one channel per eV
         lo_chan = int(lo_en.to('eV').value)
@@ -76,7 +76,7 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
-        #  bugs occuring in the sas_call wrapper
+        #  bugs occurring in the sas_call wrapper
         if 'xmm' not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))

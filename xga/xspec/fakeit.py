@@ -128,12 +128,12 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
 
             # Find matching spectrum objects associated with the current source,
             # and checking if they are valid
-            if stacked_spectra and tel == 'erosita':
+            if stacked_spectra and tel in ['erosita', 'erass']:
                 search_inst = 'combined'
             else:
                 search_inst = None
 
-            if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
+            if tel in ['erosita', 'erass'] and len(source.obs_ids[tel]) > 1:
                 # For eROSITA we need to use the spectrum generated from combined observations, so that there
                 # are no duplicated events
                 spec_objs = source.get_combined_spectra(out_rad_vals[s_ind], inst=search_inst,

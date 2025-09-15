@@ -12,9 +12,8 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
-from ..exceptions import NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NotAssociatedError, TelescopeNotAssociatedError
-from ..exceptions import NoValidObservationsError
+from ..exceptions import (NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
+    NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError)
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
@@ -48,9 +47,9 @@ class BaseSample:
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, 
-                 load_fits: bool = False, no_prog_bar: bool = False, 
-                 telescope: Union[str, List[str]] = None, 
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True,
+                 load_fits: bool = False, no_prog_bar: bool = False,
+                 telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None):
         """
         The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
@@ -404,8 +403,8 @@ class BaseSample:
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
         :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal to noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal to noise.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool quality_checks: Whether the quality checks to make sure a returned value is good enough
             to use should be performed.

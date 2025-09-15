@@ -578,7 +578,7 @@ class GalaxyCluster(ExtendedSource):
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
@@ -618,7 +618,7 @@ class GalaxyCluster(ExtendedSource):
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The requested luminosity value, and uncertainties.
         """
@@ -654,7 +654,7 @@ class GalaxyCluster(ExtendedSource):
             desired result were grouped by minimum signal to noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The temperature value, and uncertainties.
         """
@@ -1177,15 +1177,17 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                              "vice versa.")
 
-        if telescope == 'erosita' and len(self.obs_ids['erosita']) > 1:
-            spec = self.get_combined_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                    min_sn=min_sn, over_sample=over_sample, inst=inst, telescope=telescope)
+        if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
+            spec = self.get_combined_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                             inst=inst, telescope=telescope)
         else:
             # Grabbing the relevant spectra
-            spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                    min_sn=min_sn, over_sample=over_sample, obs_id=obs_id, inst=inst, telescope=telescope)
+            spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                    min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, obs_id=obs_id,
+                                    inst=inst, telescope=telescope)
 
-        # Its just easier if we know that the spectra are in a list
+        # It's just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):
             spec = [spec]
 

@@ -6,9 +6,11 @@ from multiprocessing.dummy import Pool
 from typing import Tuple
 from warnings import warn
 
+import numpy as np
 from tqdm import tqdm
+import numpy as np
 
-from xga import CIAO_AVAIL, CIAO_VERSION, CALDB_AVAIL, CALDB_VERSION
+from xga import CIAO_AVAIL, CALDB_AVAIL
 from xga.exceptions import ProductGenerationError, CIAONotFoundError, CALDBNotFoundError
 from xga.generate.common import execute_cmd
 from xga.products import BaseProduct, AnnularSpectra
@@ -51,6 +53,7 @@ def ciao_call(ciao_func):
         all_path = []  # Combined expected path list for all sources
         all_extras = []  # Combined extra information list for all sources
         source_rep = []  # For repr calls of each source object, needed for assigning products to sources
+
         for ind in range(len(cmd_list)):
             source = sources[ind]
             if len(cmd_list[ind]) > 0:
@@ -60,6 +63,10 @@ def ciao_call(ciao_func):
 
             # If we do want to execute the commands this time round, we read them out for all sources
             # and add them to these master lists
+            # This all_type variable is a special case, because we need to account for single and multiple product
+            #  types being produced - but we also want to be able to use a set to derive which types are being
+            #  produced for the progress bar message (I think I probably could have come up with a more
+            #  elegant solution but oh well).
             if to_execute:
                 to_run, expected_type, expected_path, extras = source.get_queue()
                 all_run += to_run
@@ -76,7 +83,7 @@ def ciao_call(ciao_func):
         prod_type_str = ""
         if to_execute and len(all_run) > 0:
             # Will run the commands locally in a pool
-            prod_type_str = ", ".join(set(all_type))
+            prod_type_str = ", ".join(set(np.array(all_type).flatten().tolist()))
             with tqdm(total=len(all_run), desc="Generating Chandra products of type(s) " + prod_type_str,
                       disable=disable) as gen, Pool(cores) as pool:
                 def callback(results_in: Tuple[BaseProduct, str]):
@@ -91,8 +98,13 @@ def ciao_call(ciao_func):
                         gen.update(1)
                         return
                     else:
+                        # This is a little bit of a bodge right now, there may come a time when execute_cmd will
+                        #  always return a list, but not yet
                         prod_obj, rel_src = results_in
-                        results[rel_src].append(prod_obj)
+                        if isinstance(prod_obj, list):
+                            results[rel_src] += prod_obj
+                        else:
+                            results[rel_src].append(prod_obj)
                         gen.update(1)
 
                 def err_callback(err):
@@ -109,11 +121,11 @@ def ciao_call(ciao_func):
                         # We used a memory address laden source name representation when we adjusted the error
                         #  message in execute_cmd, so we'll replace it with an actual name here
                         # Again it matters how many arguments the error has
-                        if len(err.args) == 1:
+                        if len(err.args) == 1 and ' is the associated source' in err.args[0]:
                             err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0].replace(err_src_rep, act_src_name),)
-                        else:
+                        elif ' is the associated source' in err.args[0]:
                             err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
@@ -129,7 +141,7 @@ def ciao_call(ciao_func):
                     exp_path = all_path[cmd_ind]
                     ext = all_extras[cmd_ind]
                     src = source_rep[cmd_ind]
-                    pool.apply_async(execute_cmd, args=(str(cmd), str(exp_type), exp_path, ext, src),
+                    pool.apply_async(execute_cmd, args=(str(cmd), exp_type, exp_path, ext, src),
                                      error_callback=err_callback, callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.

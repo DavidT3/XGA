@@ -42,7 +42,7 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
     return all_telescopes
 
 
-def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool, 
+def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool,
                   min_counts: int, min_sn: float, over_sample: float, num_cores: int, psf_bins: int,
                   stacked_spectra: bool, telescope: List[str]):
     """
@@ -51,28 +51,28 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     of the annular bins of profiles. This method is used in _setup_inv_abel_dens_onion_temp, which
     is then used in entropy and mass profile functions.
 
-    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to check whether a global 
+    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to check whether a global
         temperature is measured.
-    :param str/Quantity outer_radius: The radius out to which you wish to measure gas density and 
-        temperature profiles. This can either be a string radius name (like 'r500') or an astropy 
+    :param str/Quantity outer_radius: The radius out to which you wish to measure gas density and
+        temperature profiles. This can either be a string radius name (like 'r500') or an astropy
         quantity. That quantity should have as many entries as there are sources.
-    :param str/Quantity global_radius: This is a radius for a 'global' temperature measurement, 
-        which is both used as an initial check of data quality, and feeds into the conversion factor 
-        required for density measurements. This may also be passed as either a named radius or a 
+    :param str/Quantity global_radius: This is a radius for a 'global' temperature measurement,
+        which is both used as an initial check of data quality, and feeds into the conversion factor
+        required for density measurements. This may also be passed as either a named radius or a
         quantity.
-    :param str abund_table: The abundance table to use for fitting, and the conversion factor 
+    :param str abund_table: The abundance table to use for fitting, and the conversion factor
         required during density calculations.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts 
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts
         per channel. To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in 
+    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in
         each channel. To disable minimum signal to noise set this parameter to None.
-    :param float over_sample: The minimum energy resolution for each group, set to None to disable. 
-        e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at 
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable.
+        e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at
         that energy.
-    :param int num_cores: The number of cores on your local machine which this function is allowed, 
+    :param int num_cores: The number of cores on your local machine which this function is allowed,
         default is 90% of the cores in your system.
-    :param int psf_bins: The number of bins per side when generating a grid of PSFs for image 
+    :param int psf_bins: The number of bins per side when generating a grid of PSFs for image
         correction prior to surface brightness profile (and thus density) measurements.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
         used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
@@ -81,9 +81,9 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     :param List[str] telescope: The telescopes to set up global absorbed plasma emission fits for.
     :return: A tuple. The first elements are the sources. The second are the Quantity objects
         describing the outer_radii of the regions used for annular bins. The third is a dictionary
-        with telescope keys, containing a list of Trues and Falses, depending on if the source 
+        with telescope keys, containing a list of Trues and Falses, depending on if the source
         has a global temperature or not.
-    :rtype Tuple[BaseSource/List[BaseSource]/BaseSample, Tuple[Union[BaseSource, BaseSample], 
+    :rtype Tuple[BaseSource/List[BaseSource]/BaseSample, Tuple[Union[BaseSource, BaseSample],
         List[Quantity], List[Quantity]], dict]:
     """
 
@@ -123,7 +123,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
         # has_glob_temp is the same length
         for tel in src_telescopes:
             try:
-                if tel == 'erosita' and len(src.obs_ids['erosita']) > 1:
+                if tel in ['erosita', 'erass'] and len(src.obs_ids[tel]) > 1:
                     # A temporary temperature variable
                     src.get_temperature(global_out_rads[src_ind], tel, "constant*tbabs*apec", 
                                         group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, 
@@ -165,7 +165,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     Internal function to run the common setup functions that are needed for mass and entropy profile
     measurements.
 
-    :param GalaxyCluster/ClusterSample sources: The galaxy cluster, or sample of galaxy clusters, 
+    :param GalaxyCluster/ClusterSample sources: The galaxy cluster, or sample of galaxy clusters,
         that are having their hydrostatic masses/entropy measured.
     :param str/Quantity outer_radius: The radius out to which you wish to measure gas density and temperature
         profiles. This can either be a string radius name (like 'r500') or an astropy quantity. That quantity should
@@ -237,11 +237,11 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     :param str/List[str] telescope: Telescope(s) that the user wants to use to produce a profile. Default is
         None, in which case profiles will be produced from all telescopes associated with a source.
     :return: A tuple. The first elements are the sources. The second is a dens_prof_dict with source
-    strings as keys, and values of dictionaries with telescope keys and values of the density 
+    strings as keys, and values of dictionaries with telescope keys and values of the density
     profile objects (ie. {src_string: {tel : dens_prof}}). The third is a temp_prof_dict with source
     strings as keys, and values of dictionaries with telescope keys and values of the temperature
-    profile objects (ie. {src_string: {tel : temp_prof}}). The fourth is a dens_model_dict, with 
-    source strings as keys and density models as values. The fifth is a temp_model_dict, with 
+    profile objects (ie. {src_string: {tel : temp_prof}}). The fourth is a dens_model_dict, with
+    source strings as keys and density models as values. The fifth is a temp_model_dict, with
     source strings as keys and temperature models as values. The sixth is the list of telescopes we're working on.
     :rtype: Tuple[Union[BaseSource, List[BaseSource], BaseSample], dict, dict, dict, dict, List[str]]
     """
@@ -304,7 +304,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                         freeze_met=freeze_met, abund_table=abund_table, temp_lo_en=temp_lo_en,
                                         temp_hi_en=temp_hi_en, num_cores=num_cores, stacked_spectra=stacked_spectra,
                                         telescope=src_telescopes)
-                                
+
     # We are reorganising this temp_profs output so it is easier to cycle through in later functions
     # temp_prof_dict will have sources as keys, then a dictionary value, this dictionary has
     # telescope keys with values that are the profile object, ie. {src1: {'xmm' : Profile}}
@@ -316,7 +316,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
             # temp_profs is of the form {'xmm': [Profile, Profile, etc.]}
             src_dict[tel] = temp_profs[tel][p_ind]
         temp_prof_dict[str(cut_sources[p_ind])] = src_dict
-    
+
 
     # Now we take only the sources that have successful 3D temperature profiles. 
     # We do the temperature profile stuff first because its more difficult, and why should we waste 

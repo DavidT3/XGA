@@ -1,14 +1,6 @@
 sas
 ===
 
-sas.misc module
----------------
-
-.. automodule:: xga.generate.sas.misc
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 sas.phot module
 ---------------
 
@@ -17,18 +9,10 @@ sas.phot module
    :undoc-members:
    :show-inheritance:
 
-sas.run module
---------------
-
-.. automodule:: xga.generate.sas.run
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 sas.spec module
 ---------------
 
-.. automodule:: xga.sas.generate.spec
+.. automodule:: xga.generate.sas.spec
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,7 +20,23 @@ sas.spec module
 sas.lightcurve module
 ---------------
 
-.. automodule:: xga.sas.generate.lightcurve
+.. automodule:: xga.generate.sas.lightcurve
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+sas.misc module
+---------------
+
+.. automodule:: xga.generate.sas.misc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+sas.run module
+--------------
+
+.. automodule:: xga.generate.sas.run
    :members:
    :undoc-members:
    :show-inheritance:

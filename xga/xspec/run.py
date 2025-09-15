@@ -18,7 +18,7 @@ from fitsio import FITS
 from tqdm import tqdm
 
 from .. import XSPEC_VERSION
-from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError
+from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError, XGADeveloperError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
@@ -170,7 +170,7 @@ def xspec_call(xspec_func):
             sources = args[0]
         else:
             raise TypeError("Please pass a source object, or a list of source objects.")
-        
+
         # This is the output from whatever function this is a decorator for
         # First return is a list of paths of XSPEC scripts to execute, second is the expected output paths,
         #  and 3rd is the number of cores to use.
@@ -276,7 +276,7 @@ def xspec_call(xspec_func):
                                 if not comb_spec:
                                     # Finds the appropriate matching spectrum object for the current table line
                                     spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
-                                                        telescope=tel)[0]
+                                                          telescope=tel)[0]
                                 else:
                                     spec = s.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0]
                             else:
@@ -361,12 +361,26 @@ def xspec_call(xspec_func):
                     # Getting the spectra for each column, then assigning rates and lums
                     # TODO this could be neater and better generalised
                     for comb in combos:
-                        if tel == 'erosita' and len(s.obs_ids['erosita']) == 1:
+                        if tel in ['erosita', 'erass'] and len(s.obs_ids[tel]) == 1:
                             spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
-                        elif tel == 'erosita':
+                        elif tel in ['erosita', 'erass']:
                             spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
+                        elif tel == 'chandra':
+                            # We know that only ACIS is supported by XGA currently, so we can split on it to
+                            #  get the correct ObsID (Chandra ObsIDs are not necessarily all the same
+                            #  length)
+                            search_sp_oi = comb.lower().split('acis')[0]
+                            # We will build in a safety check however, to catch us if we ever
+                            #  add proper HRC support to XGA
+                            if 'acis' not in comb:
+                                raise XGADeveloperError("No 'ACIS' string has been found in the combined "
+                                                        "ObsID-inst string ({c}) in a spectrum result row; has HRC "
+                                                        "support been added?".format(c=comb))
+
+                            spec = s.get_products("spectrum", search_sp_oi, 'acis', extra_key=storage_key,
+                                                  telescope=tel)[0]
                         else:
                             spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
                                             telescope=tel)[0]

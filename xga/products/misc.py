@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/04/2025, 20:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 16:43. Copyright (c) The Contributors
 
 from typing import List
 
@@ -56,7 +56,7 @@ class EventList(BaseProduct):
     @property
     def obs_ids(self) -> list:
         """
-        Property getter for the ObsIDs that are involved in this Eventlist, if combined. Otherwise 
+        Property getter for the ObsIDs that are involved in this Eventlist, if combined. Otherwise
         will return a list with one element, the single relevant ObsID.
 
         :return: List of ObsIDs involved in this EventList.
@@ -162,7 +162,7 @@ class EventList(BaseProduct):
         # And if they want the header gone then we use the property delete method for header
         if unload_header:
             del self.header
-    
+
     def get_columns_from_data(self, col_names: List[str]) -> pd.DataFrame:
         """
         This method allows you to retrieve specific columns from the event list table, without loading the whole table 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 16:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 16:47. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -9,9 +9,11 @@ from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
 from ...exceptions import NoProductAvailableError
+from ...generate.ciao.spec import specextract_spectrum, ciao_spectrum_set
 from ...generate.esass import srctool_spectrum
 from ...generate.esass.spec import esass_spectrum_set
-from ...generate.sas import evselect_spectrum, region_setup, spectrum_set
+from ...generate.sas import evselect_spectrum, region_setup
+from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, PointSource
@@ -117,6 +119,8 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     """
     # Have to import here to avoid a circular import error
     from ...sourcetools._common import _get_all_telescopes
+    # This returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
+    all_telescopes = _get_all_telescopes(sources)
 
     # If the user didn't specify a particular telescope, or telescopes, from which we are to
     #  produce spectra, we fetch all telescope names associated with at least one source
@@ -142,7 +146,15 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             #  tell us if the inputs aren't formatted correctly
             sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                                         over_sample, one_rmf, num_cores, force_gen=force_gen)
-        elif tel == 'erosita':
+        elif tel == 'chandra':
+            warn("Spectrum stacking is not currently supported for Chandra, and so combined spectra will not be "
+                 "used for these XSPEC fits.", stacklevel=2)
+            # Make sure we have Chandra spectra generated, so that we can fit them
+
+            sources = specextract_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
+                                           num_cores)
+
+        elif tel == 'erosita' or tel == 'erass':
             # This is the spectrum generation tool that is specific to eROSITA
             sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores,
                                        False, stacked_spectra, force_gen=force_gen)
@@ -222,11 +234,12 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
                      "spectra will not be used for these XSPEC fits.", stacklevel=2)
             # We make sure the requested sets of annular spectra have actually been generated (for XMM)
             spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
-
-        elif tel == 'erosita':
+        elif tel in ['erosita', 'erass']:
             # The annular spectrum tool specific to eROSITA
             esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores,
                                combine_tm=stacked_spectra)
+        elif tel == 'chandra':
+            ciao_spectrum_set(sources, radii['chandra'], group_spec, min_counts, min_sn, over_sample, False, num_cores)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))
@@ -235,7 +248,7 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
 
 
 def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
-                    src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: float,
+                    src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: int,
                     min_sn: float, over_sample: float) -> str: 
     """
     Internal function that collects relevant spectrum objects per telescope. This is used in 
@@ -245,7 +258,7 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
     :param str tel: The telescope to collect Spectrum objects for.
-    :param source BaseSource: The source object to collect Spectrum objects for.
+    :param BaseSource source: The source object to collect Spectrum objects for.
     :param List[Quantity] out_rad_vals: A list of outer radius quantities.
     :param int src_ind: The index of the lists of radii to be used for the source.
     :param List[Quantity] inn_rad_vals: A list of inner radius quantities.
@@ -259,13 +272,13 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
 
     """
     # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-    if stacked_spectra and tel == 'erosita':
+    if stacked_spectra and tel in ['erosita', 'erass']:
         search_inst = 'combined'
     else:
         search_inst = None
 
     try:
-        if (tel == 'erosita') and (len(source.obs_ids['erosita']) > 1):
+        if tel in ['erosita', 'erass'] and (len(source.obs_ids[tel]) > 1):
             # For erosita we need to use the spectrum generated from combined observations, so that there
             # are no duplicated events
             spec_objs = source.get_combined_spectra(out_rad_vals[src_ind], inst=search_inst,
@@ -371,7 +384,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
                     "each telescope. In this case the radii argument has been given as a "
                     "dictionary but with the incorrect format. Please change the radii "
                     " input so that it matches one of the given options.")
-        
+
     return output_dict
 
 

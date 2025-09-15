@@ -177,7 +177,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                         # For the eRASS fields it seems that RA_CEN and DEC_CEN are the best ways of defining where
                         #  the data is located on the sky. Non-survey modes however should use the RA_PNT and DEC_PNT
                         #  headers, as RA_CEN etc. are 0 (conversely RA_PNT etc. are 0 for eRASS).
-                        if tel == 'erosita' and evts_header['OBS_MODE'] == 'SURVEY':
+                        if tel in ['erosita', 'erass'] and evts_header['OBS_MODE'] == 'SURVEY':
                             if evts_header['RA_CEN'] == 0.0 and evts_header['RA_OBJ'] != 0.0:
                                 # THIS is a failure mode of some processed eRASS event lists (no idea why it happens)
                                 #  where the central coordinate info gets split across the *_CEN, which is where it
@@ -436,7 +436,8 @@ OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "chandra": '^[0-9
 #  there may be multi-level dictionaries
 # TODO when I chuck ROSAT in here add an entry like 'rosat': {'PSPCB': Quantity(60, 'arcmin'),
 #  'PSPCC': Quantity(60, 'arcmin'), 'HRI': Quantity(19, 'arcmin'), 'RASS': Quantity(3, 'deg')}}
-DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'), 'erosita': Quantity(60, 'arcmin'), 'chandra': Quantity(30, 'arcmin')}
+DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'), 'erosita': Quantity(60, 'arcmin'),
+                            'chandra': Quantity(30, 'arcmin')}
 
 # This defines where the observation census files would be located for each of the allowed telescopes (the top level
 #  keys of ALLOWED_INST are telescope/mission names) - not every telescope is guaranteed to have a file created, it
@@ -500,13 +501,15 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
 
 # The information required to use Chandra data
 CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
-                 "clean_acis_evts": "/this/is/required/{obs_id}/events/obsid{obs_id}-instACIS-subexpE001-en-cleanevents.fits",
-                 "attitude_file": "/this/is/required/{obs_id}/misc/obsid{obs_id}-instACIS-subexpE001-aspectsolution.fits",
-                 "lo_en": ['0.50', '2.00'],
-                 "hi_en": ['2.00', '10.00'],
-                 "acis_image": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-image.fits",
-                 "acis_expmap": "/this/is/optional/{obs_id}/images/obsid{obs_id}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-expmap.fits",
-                 "region_file": "/this/is/optional/chandra_obs/regions/obsid{obs_id}/regions.reg"}
+                 "clean_acis_evts": "/this/is/required/{obs_id}/{obs_id}_ACIS_evts.fits",
+                 "acis_badpix_file": "/this/is/required/{obs_id}/{obs_id}_badpix.fits",
+                 "acis_mask_file": "/this/is/required/{obs_id}/{obs_id}_mask.fits",
+                 "attitude_file": "/this/is/required/{obs_id}/{obs_id}_asol.fits",
+                 "lo_en": ['0.5'],
+                 "hi_en": ['7.0'],
+                 "acis_image": "/this/is/optional/{obs_id}/{obs_id}-ACIS-{lo_en}-{hi_en}keV_img.fits",
+                 "acis_expmap": "/this/is/optional/{obs_id}/{obs_id}-ACIS-{lo_en}-{hi_en}keV_expmap.fits",
+                 "region_file": "/this/is/optional/chandra_obs/regions/{obs_id}/regions.reg"}
 
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
 tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'chandra': CHANDRA_FILES}
@@ -588,8 +591,10 @@ r2500 = def_unit('r2500', format={'latex': r"\mathrm{R_{2500}}"})
 #  they don't convert to anything, but they still let us work within the astropy coordinate framework
 xmm_sky = def_unit("xmm_sky")
 xmm_det = def_unit("xmm_det")
+#
 erosita_sky = def_unit("erosita_sky")
 erosita_det = def_unit("erosita_det")
+#
 chandra_sky = def_unit("chandra_sky")
 chandra_det = def_unit("chandra_det")
 
@@ -601,134 +606,6 @@ except ValueError:
     #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
     add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandra_det])
 # ---------------------------------------------------------------
-
-
-# ------------- Defining constants to do with backend software -------------
-# Various parts of XGA can rely on different pieces of backend software, so we have this section to set up constants
-#  that tell the relevant parts of XGA whether the software is installed, and what version it is
-
-# Here we check to see whether XSPEC is installed (along with all the necessary paths)
-XSPEC_VERSION = None
-# Got to make sure we can access command line XSPEC.
-if shutil.which("xspec") is None:
-    warn("Unable to locate an XSPEC installation.", stacklevel=2)
-else:
-    try:
-        # The XSPEC intro text includes the version, so I read that out and parse it. That null_script that I'm running
-        #  does absolutely nothing, it's just a way for me to get the version out
-        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
-        xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
-                                     shell=True).communicate()
-        # Got to parse the stdout to get the XSPEC version, which is what these two lines do
-        xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
-        XSPEC_VERSION = xspec_vline.split(': ')[-1]
-    # I know broad exceptions are a sin, but if anything goes wrong here then XGA needs to assume that XSPEC
-    #  is messed up in some way
-    except:
-        # Not necessary as the default XSPEC_VERSION value is None, but oh well - something has to be here!
-        XSPEC_VERSION = None
-# Then I setup these constants of fit methods and abundance tables - just so I can pre-check a user's choice in any
-#  of the XSPEC interface parts of XGA, rather than failing unhelpfully when they try to run the fit
-XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
-ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
-
-# Next up, we check to see what version of SAS (if any) is installed - for the XMM-Newton mission
-# Here we check to see whether SAS is installed (along with all the necessary paths)
-SAS_VERSION = None
-if "SAS_DIR" not in os.environ:
-    warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
-         "all functions in xga.sas will not work.")
-    SAS_VERSION = None
-    SAS_AVAIL = False
-else:
-    # This way, the user can just import the SAS_VERSION from this utils code
-    sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-    SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
-    SAS_AVAIL = True
-
-# This checks for the CCF path, which is required to use cifbuild, which is required to do basically
-#  anything with SAS
-if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
-    warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
-         "functions in xga.sas will not work.")
-    SAS_AVAIL = False
-
-# Here we read in files that list the errors and warnings in SAS
-errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
-warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
-# Just the names of the errors in two handy constants
-SASERROR_LIST = errors["ErrName"].values
-SASWARNING_LIST = warnings["WarnName"].values
-
-# TODO THIS WILL BE FLESHED OUT INTO A SECTION FOR eROSITA
-ESASS_VERSION = None
-# This checks for an installation of eSASS
-eSASS_AVAIL = False
-which_evtool = shutil.which("evtool")
-if which_evtool is None:
-    warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.",
-         stacklevel=2)
-else:
-    eSASS_AVAIL = True
-    if 'ESASS4EDR' in which_evtool.upper():
-        ESASS_VERSION = 'ESASS4EDR'
-    elif 'ESASS4DR1' in which_evtool.upper():
-        ESASS_VERSION = 'ESASS4DR1'
-    else:
-        warn("Unknown eSASS installation detected on system, as such some functions in xga.generate.esass may not work.",
-             stacklevel=2)
-
-# Then, we check to see what version of CIAO (if any) is installed - for the Chandra mission
-# Here we check to see whether CIAO is installed (along with all the necessary paths)
-CIAO_VERSION = None
-# This checks for an installation of Ciao
-CIAO_AVAIL = False
-
-ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
-# Just turn those pesky byte outputs into strings
-ciao_out = ciao_out.decode("UTF-8")
-ciao_err = ciao_err.decode("UTF-8")
-
-if "not found" in ciao_err:
-    warn("No CIAO installation detected on system, "
-            "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
-else:
-    # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
-    #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
-    #  the ciao version
-    split_out = [en.strip(' ') for en in ciao_out.split('\n')]
-    # Strip the CIAO version out of the ciaover output
-    CIAO_VERSION = split_out[1].split(':')[-1].split('CIAO')[-1].strip(' ').split(' ')[0]
-    CIAO_AVAIL = True
-
-# Finally, we check to see what version of CALDB (if any) is installed - for the Chandra mission
-# Here we check to see whether CALDB is installed (along with all the necessary paths)
-CALDB_VERSION = None
-# This checks for an installation of Ciao
-CALDB_AVAIL = False
-
-if CIAO_VERSION is not None and any('not installed' in s.lower() for s in split_out):
-    warn("A Chandra CALDB installation cannot be identified on your system, and as such "
-         "Chandra data cannot be processed.", stacklevel=2)
-elif CIAO_VERSION is not None:
-    try:
-        # Strip out the CALDB version
-        CALDB_VERSION = split_out[5].split(':')[-1].strip()
-        CALDB_AVAIL = True
-    # For using XGA in the eSASS4EDR docker container - ciao is installed, but doesnt have the
-    # expected output, so split_out only has 2 entries. I am assuming the user will only be using 
-    # xga for eSASS in this docker container, so for the moment I'm not dealing with this output
-    # and just setting CALDB_AVAIL to false
-    except IndexError:
-        CALDB_AVAIL = False
-
-
-# We set up a mapping from telescope name to software version constant
-# Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
-#  file. Previously a warning for missing software would be shown at the time of checking, but now we wait to see
-#  which telescopes are configured in the XGA config file before warning that telescope software is missing
-tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION, 'chandra': CIAO_VERSION}
-# --------------------------------------------------------------------------
 
 
 # ------------- Creating/checking the entries in the configuration file -------------
@@ -902,6 +779,128 @@ for tel in USABLE:
     else:
         COMBINED_INSTS[tel] = False
 # -----------------------------------------------------------------------------------------
+
+
+# ------------- Defining constants to do with backend software -------------
+# Various parts of XGA can rely on different pieces of backend software, so we have this section to set up constants
+#  that tell the relevant parts of XGA whether the software is installed, and what version it is
+
+# Here we check to see whether XSPEC is installed (along with all the necessary paths)
+XSPEC_VERSION = None
+# Got to make sure we can access command line XSPEC.
+if shutil.which("xspec") is None:
+    warn("Unable to locate an XSPEC installation.", stacklevel=2)
+else:
+    try:
+        # The XSPEC intro text includes the version, so I read that out and parse it. That null_script that I'm running
+        #  does absolutely nothing, it's just a way for me to get the version out
+        null_path = pkg_resources.resource_filename(__name__, "xspec_scripts/null_script.xcm")
+        xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
+                                     shell=True).communicate()
+        # Got to parse the stdout to get the XSPEC version, which is what these two lines do
+        xspec_vline = [line for line in xspec_out.decode("UTF-8").split('\n') if 'XSPEC version' in line][0]
+        XSPEC_VERSION = xspec_vline.split(': ')[-1]
+    # I know broad exceptions are a sin, but if anything goes wrong here then XGA needs to assume that XSPEC
+    #  is messed up in some way
+    except:
+        # Not necessary as the default XSPEC_VERSION value is None, but oh well - something has to be here!
+        XSPEC_VERSION = None
+# Then I setup these constants of fit methods and abundance tables - just so I can pre-check a user's choice in any
+#  of the XSPEC interface parts of XGA, rather than failing unhelpfully when they try to run the fit
+XSPEC_FIT_METHOD = ["leven", "migrad", "simplex"]
+ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+
+# We will only check for software relevant to those telescopes which XGA setup has deemed usable
+# --- XMM ---
+SAS_VERSION = None
+SAS_AVAIL = False
+if 'xmm' in USABLE and USABLE['xmm']:
+    # Next up, we check to see what version of SAS (if any) is installed - for the XMM-Newton mission
+    # Here we check to see whether SAS is installed (along with all the necessary paths)
+    if "SAS_DIR" not in os.environ:
+        warn("SAS_DIR environment variable is not set, unable to verify SAS is present on system, as such "
+             "all functions in xga.sas will not work.", stacklevel=2)
+        SAS_VERSION = None
+        SAS_AVAIL = False
+    else:
+        # This way, the user can just import the SAS_VERSION from this utils code
+        sas_out, sas_err = Popen("sas --version", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+        SAS_VERSION = sas_out.decode("UTF-8").strip("]\n").split('-')[-1]
+        SAS_AVAIL = True
+
+    # This checks for the CCF path, which is required to use cifbuild, which is required to do basically
+    #  anything with SAS
+    if SAS_AVAIL and "SAS_CCFPATH" not in os.environ:
+        warn("SAS_CCFPATH environment variable is not set, this is required to generate calibration files. As such "
+             "functions in xga.sas will not work.", stacklevel=2)
+        SAS_AVAIL = False
+
+# Here we read in files that list the errors and warnings in SAS
+errors = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_errors.csv"), header="infer")
+warnings = pd.read_csv(pkg_resources.resource_filename(__name__, "files/sas_warnings.csv"), header="infer")
+# Just the names of the errors in two handy constants
+SASERROR_LIST = errors["ErrName"].values
+SASWARNING_LIST = warnings["WarnName"].values
+# -----------
+
+# --- eROSITA ---
+ESASS_VERSION = None
+eSASS_AVAIL = False
+if ('erosita' in USABLE and USABLE['erosita']) or ('erass' in USABLE and USABLE['erass']):
+    # TODO will have to handle the whole eSASS4DR1 and the original eSASS release thing at some point... sigh
+    # This checks for an installation of eSASS
+    if shutil.which("evtool") is None:
+        warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.",
+             stacklevel=2)
+    else:
+        eSASS_AVAIL = True
+# ---------------
+
+# --- Chandra ---
+# Then, we check to see what version of CIAO (if any) is installed - for the Chandra mission
+# Here we check to see whether CIAO is installed (along with all the necessary paths)
+CIAO_VERSION = None
+# This checks for an installation of Ciao
+CIAO_AVAIL = False
+# Now for the accompanying CALDB
+CALDB_VERSION = None
+CALDB_AVAIL = False
+
+if 'chandra' in USABLE and USABLE['chandra']:
+    ciao_out, ciao_err = Popen("ciaover -v", stdout=PIPE, stderr=PIPE, shell=True).communicate()
+    # Just turn those pesky byte outputs into strings
+    ciao_out = ciao_out.decode("UTF-8")
+    ciao_err = ciao_err.decode("UTF-8")
+
+    if "ciaover: command not found" in ciao_err:
+            warn("No CIAO installation detected on system, "
+                 "as such all functions in xga.generate.ciao will not work.", stacklevel=2)
+    else:
+        # The ciaover output is over a series of lines, with different info on each - this is a little bit of a hard
+        #  code cheesy method to do this, but we'll split them on lines and selected the 2nd line to get
+        #  the ciao version
+        split_out = [en.strip(' ') for en in ciao_out.split('\n')]
+        # Strip the CIAO version out of the ciaover output
+        CIAO_VERSION = split_out[1].split(':')[-1].split('CIAO')[-1].strip(' ').split(' ')[0]
+        CIAO_AVAIL = True
+
+        # Finally, we check to see what version of CALDB (if any) is installed - for the Chandra mission
+        # Here we check to see whether CALDB is installed (along with all the necessary paths)
+        if 'not installed' in split_out[5].lower():
+            warn("A Chandra CALDB installation cannot be identified on your system, and as such "
+                 "Chandra data cannot be processed.", stacklevel=2)
+        else:
+            # Strip out the CALDB version
+            CALDB_VERSION = split_out[5].split(':')[-1].strip()
+            CALDB_AVAIL = True
+# ---------------
+
+# We set up a mapping from telescope name to software version constant
+# Don't really expect the user to use this, hence why it isn't a constant, more for checks at the end of this
+#  file. Previously a warning for missing software would be shown at the time of checking, but now we wait to see
+#  which telescopes are configured in the XGA config file before warning that telescope software is missing
+tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION, 'chandra': CIAO_VERSION}
+# --------------------------------------------------------------------------
 
 
 # ------------- Final setup of important constants from the configuration file -------------

@@ -1,34 +1,34 @@
-esass
-===
+CIAO
+====
 
-esass.phot module
+ciao.phot module
 ---------------
 
-.. automodule:: xga.generate.esass.phot
+.. automodule:: xga.generate.ciao.phot
    :members:
    :undoc-members:
    :show-inheritance:
 
-esass.spec module
+ciao.spec module
 ---------------
 
-.. automodule:: xga.generate.esass.spec
+.. automodule:: xga.generate.ciao.spec
    :members:
    :undoc-members:
    :show-inheritance:
 
-esass.lightcurve module
+ciao.lightcurve module
 ---------------
 
-.. automodule:: xga.generate.esass.lightcurve
+.. automodule:: xga.generate.ciao.lightcurve
    :members:
    :undoc-members:
    :show-inheritance:
 
-esass.run module
+ciao.run module
 --------------
 
-.. automodule:: xga.generate.esass.run
+.. automodule:: xga.generate.ciao.run
    :members:
    :undoc-members:
    :show-inheritance:

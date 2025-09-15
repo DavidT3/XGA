@@ -115,11 +115,11 @@ def sas_call(sas_func):
                         # We used a memory address laden source name representation when we adjusted the error
                         #  message in execute_cmd, so we'll replace it with an actual name here
                         # Again it matters how many arguments the error has
-                        if len(err.args) == 1:
+                        if len(err.args) == 1 and ' is the associated source' in err.args[0]:
                             err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0].replace(err_src_rep, act_src_name),)
-                        else:
+                        elif ' is the associated source' in err.args[0]:
                             err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
                             act_src_name = sources[src_lookup[err_src_rep]].name
                             err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
@@ -135,7 +135,8 @@ def sas_call(sas_func):
                     exp_path = all_path[cmd_ind]
                     ext = all_extras[cmd_ind]
                     src = source_rep[cmd_ind]
-                    pool.apply_async(execute_cmd, args=(str(cmd), str(exp_type), exp_path, ext, src),
+
+                    pool.apply_async(execute_cmd, args=(str(cmd), exp_type, exp_path, ext, src),
                                      error_callback=err_callback, callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.

@@ -23,7 +23,8 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from .. import xga_conf, BLACKLIST
 from ..exceptions import (NotAssociatedError, NoValidObservationsError, NoProductAvailableError,
                           ModelNotAssociatedError, ParameterNotAssociatedError, NotSampleMemberError,
-                          TelescopeNotAssociatedError, PeakConvergenceFailedError)
+                          TelescopeNotAssociatedError, PeakConvergenceFailedError, PeakConvergenceFailedError,
+                          XGADeveloperError)
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -96,12 +97,12 @@ class BaseSource:
     :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, 
-                 load_fits: bool = False, in_sample: bool = False, 
-                 telescope: Union[str, List[str]] = None, 
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True,
+                 load_fits: bool = False, in_sample: bool = False,
+                 telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
                  null_load_products: bool = False, back_inn_rad_factor: float = 1.05,
-                 back_out_rad_factor: float = 1.5, load_regions: bool = True, 
+                 back_out_rad_factor: float = 1.5, load_regions: bool = True,
                  load_spectra: bool = True, load_profiles: bool = True):
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
@@ -285,7 +286,7 @@ class BaseSource:
         cur_obs_nums = {tel: len(obs[tel]) for tel in obs}
         if sum(cur_obs_nums.values()) == 0:
             raise NoValidObservationsError("All {t} observations identified for {s} are either unusable or "
-                                           "blacklisted.".format(s=self.name, t=', '.join(telescope)))
+                                           "blacklisted.".format(s=self.name, t=', '.join(list(obs.keys()))))
         # In this case one of the telescopes has no observations that are relevant, so we must remove the key
         #  in 'obs' that refers to it
         elif 0 in cur_obs_nums.values():
@@ -304,24 +305,23 @@ class BaseSource:
 
         # Now we run the method which takes those initially identified observations and goes looking for their
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
-        self._products, region_dict, self._att_files = self._initial_products(obs, load_regions, null_load_products)
+        self._products, region_dict = self._initial_products(obs, load_regions, null_load_products)
 
         # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
         #  all those files cannot be found
         cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
         if sum(cur_obs_nums.values()) == 0:
             raise NoValidObservationsError("None of the {t} observations identified for this {s} have valid event "
-                                           "lists associated with them.".format(s=self.name, t='/'.join(telescope)))
+                                           "lists associated with them.".format(s=self.name,
+                                                                                t=', '.join(list(obs.keys()))))
         elif 0 in cur_obs_nums.values():
             # Cut out any mention of a telescope with no loaded files
             new_obs = {tel: obs[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_prods = {tel: self._products[tel] for tel, num in cur_obs_nums.items() if num != 0}
             new_regs = {tel: region_dict[tel] for tel, num in cur_obs_nums.items() if num != 0}
-            new_atts = {tel: self._att_files[tel] for tel, num in cur_obs_nums.items() if num != 0}
             # Then assign the new cut down dictionaries to their original names
             obs = new_obs
             self._products = new_prods
-            self._att_files = new_atts
             region_dict = new_regs
 
         # This is somewhat inelegant, but oh well; it ensures that there are individual instrument entries for each
@@ -337,7 +337,8 @@ class BaseSource:
         # NOTE that this attribute has changed considerably since the pre-multi mission version of XGA, as the
         #  instruments attribute has been consolidated into it - plus there is an extra level for telescope names
         self._obs = {t: {o: obs[t][o] if COMBINED_INSTS[t] else [i for i in self._products[t][o]
-                                                                 if len(self._products[t][o][i]) != 0]
+                                                                 if len(self._products[t][o][i]) != 0 and
+                                                                 i != 'combined']
                          for o in self._products[t]} for t in self._products}
 
         # Set the blacklisted observation attribute with our dictionary - if all has gone well then this will be a
@@ -856,6 +857,24 @@ class BaseSource:
         """
         return np.array([self._back_inn_factor, self._back_out_factor])
 
+    @background_radius_factors.setter
+    def background_radius_factors(self, new_val: ndarray):
+        """
+        The factors by which to multiply outer radius by to get inner and outer radii for background regions.
+
+        :param ndarray new_val: A two element array. The first entry should be the inner background radius
+            factor, and the second should be the outer.
+        """
+        if len(new_val) != 2:
+            raise ValueError("The 'background_radius_factors' argument must have two elements, the first being "
+                             "the factor to set the inner radius of the background annulus, and the second being "
+                             "for the outer.")
+        elif new_val[1] <= new_val[0]:
+            raise ValueError("The second element of the 'background_radius_factors' argument must be "
+                             "larger than the first.")
+        else:
+            self._back_inn_factor, self._back_out_factor = new_val
+
     @property
     def suppressed_warnings(self) -> List[str]:
         """
@@ -882,10 +901,10 @@ class BaseSource:
         :return: The fiducial X-ray peak coordinates.
         :rtype: Quantity
         """
-        if any([tel not in ['xmm', 'erosita'] for tel in self.telescopes]):
-            raise NotImplementedError("This property will not work if there are any telescopes apart from XMM and "
-                                      "eROSITA associated - this should never be seen by a non-developer, but if it "
-                                      "please get in touch.")
+        if any([tel not in ['xmm', 'erosita', 'erass', 'chandra'] for tel in self.telescopes]):
+            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM and "
+                                    "eROSITA associated - this should never be seen by a non-developer, but if it "
+                                    "please get in touch.")
 
         if len(self.telescopes) > 1:
             warn_text = ("Multiple telescopes are associated with source {n} - we do not yet support combining "
@@ -908,10 +927,10 @@ class BaseSource:
 
         :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
         """
-        if any([tel not in ['xmm', 'erosita'] for tel in self.telescopes]):
-            raise NotImplementedError("This property will not work if there are any telescopes apart from XMM and "
-                                      "eROSITA associated - this should never be seen by a non-developer, but if it "
-                                      "please get in touch.")
+        if any([tel not in ['xmm', 'erosita', 'erass', 'chandra'] for tel in self.telescopes]):
+            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM and "
+                                    "eROSITA associated - this should never be seen by a non-developer, but if it "
+                                    "please get in touch.")
 
         if not new_peak.unit.is_equivalent("deg"):
             raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
@@ -946,7 +965,7 @@ class BaseSource:
 
     # Next up we define the protected methods of the class
     def _initial_products(self, init_obs: dict, load_regions: bool = True, load_products: bool = True) \
-            -> Tuple[dict, dict, dict]:
+            -> Tuple[dict, dict]:
         """
         Assembles the initial dictionary structure of existing data products, for all selected
         telescopes, associated with this source.
@@ -958,9 +977,9 @@ class BaseSource:
             default is True.
         :param bool load_products: This controls whether products OTHER THAN EVENT LISTS are declared and stored in
             the XGA source product structure.
-        :return: A dictionary structure detailing the data products available at initialisation, another
-            dictionary containing paths to region files, and another dictionary containing paths to attitude files.
-        :rtype: Tuple[dict, dict, dict]
+        :return: A dictionary structure detailing the data products available at initialisation, and another
+            dictionary containing paths to region files.
+        :rtype: Tuple[dict, dict]
         """
 
         def read_default_products(en_lims: tuple) -> Tuple[str, dict]:
@@ -976,8 +995,8 @@ class BaseSource:
                 dictionary of file paths.
             :rtype: tuple[str, dict]
             """
-            not_these = ["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file"] + \
-                        [k for k in rel_sec if 'evts' in k]
+            not_these = (["root_{}_dir".format(tel), "lo_en", "hi_en", "attitude_file", "region_file", "mask_file"] +
+                         [k for k in rel_sec if 'evts' in k])
 
             # Define the energy limits as astropy quantities, these have originally been retrieved from the
             #  configuration file
@@ -989,17 +1008,19 @@ class BaseSource:
             if not COMBINED_INSTS[tel]:
                 # Formats the generic paths given in the config file for this particular obs and energy range
                 files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
-                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these
-                         and inst in k}
+                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these and
+                         'badpix' not in k and 'mask' not in k and inst in k}
             else:
                 files = {k.split('_')[1]: v.format(lo_en=en_lims[0], hi_en=en_lims[1], obs_id=obs_id)
-                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these}
+                         for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these and
+                         'badpix' not in k and 'mask' not in k}
 
             # It is not necessary to check that the files exist, as this happens when the product classes
             # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
             # you should use it for analysis using the .usable attribute
             # This looks up the class which corresponds to the key (which is the product ID in this case
             #  e.g. image), then instantiates an object of that class
+
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
                          for key, file in files.items() if os.path.exists(file)}
@@ -1022,8 +1043,6 @@ class BaseSource:
         # Regions will get their own dictionary, I don't care about keeping the reg_file paths as
         # an attribute because they get read into memory in the init of this class
         reg_dict = {tel: {} for tel in init_obs}
-        # Attitude files also get their own dictionary, they won't be read into memory by XGA
-        att_dict = {tel: {} for tel in init_obs}
 
         for tel in init_obs:
             # Grab the dictionary relevant to the current telescope, for readability purposes
@@ -1067,12 +1086,45 @@ class BaseSource:
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
                 #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
-                if 'attitude_file' in rel_sec:
-                    att_file = rel_sec["attitude_file"].format(obs_id=obs_id)
-                else:
-                    att_file = None
+                if 'attitude_file' in rel_sec and ('combined' not in obs_dict[tel][obs_id] or
+                                                   'attitude' not in obs_dict[tel][obs_id]['combined']):
+                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, 'combined', '',
+                                           '', '', telescope=tel)
+                    # Makes sure there is a combined entry if there wasn't already
+                    obs_dict[tel][obs_id].setdefault('combined', {})
+                    obs_dict[tel][obs_id]['combined']['attitude'] = att_prod
+                # Here we deal with a hypothetical case where different instruments have different attitude files
+                #  (though this isn't something we've actually come across yet)
+                elif '{i}_attitude_file'.format(i=inst) in rel_sec:
+                    obs_dict[tel][obs_id].setdefault(inst, {})
 
-                if (att_file is not None and os.path.exists(att_file)) or att_file is None:
+                    temp_pth = rel_sec['{i}_attitude_file'.format(i=inst)]
+                    att_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '',
+                                           '', '', telescope=tel)
+                    obs_dict[tel][obs_id][inst]['attitude'] = att_prod
+                else:
+                    att_prod = None
+
+                # Some missions require a path to the badpixel file to be passed in whenever their backend-software
+                #  product generation functions are called, and some just access that information from an event
+                #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
+                if '{i}_badpix_file'.format(i=inst) in rel_sec:
+                    temp_pth = rel_sec['{i}_badpix_file'.format(i=inst)]
+                    badpix_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                              telescope=tel)
+                else:
+                    badpix_prod = None
+
+                # Exactly the same deal as bad-pixel files above, some telescope's backend software needs
+                #  'mask file' to be accessible
+                if '{i}_mask_file'.format(i=inst) in rel_sec:
+                    temp_pth = rel_sec['{i}_mask_file'.format(i=inst)]
+                    mask_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '',
+                                            telescope=tel)
+                else:
+                    mask_prod = None
+
+                if (att_prod is not None and att_prod.usable) or att_prod is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
                     # Otherwise nothing can be done with it.
                     evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
@@ -1080,12 +1132,20 @@ class BaseSource:
                     if not evt_list.usable:
                         continue
 
-                    obs_dict[tel][obs_id][inst] = {"events": evt_list}
-                    att_dict[tel][obs_id] = att_file
+                    # Start off with the events list going in - make sure there is an inst entry first
+                    obs_dict[tel][obs_id].setdefault(inst, {})
+                    obs_dict[tel][obs_id][inst]["events"] = evt_list
+
                     if load_products:
                         # Dictionary updated with derived product names
                         map_ret = map(read_default_products, en_comb)
                         obs_dict[tel][obs_id][inst].update({gen_return[0]: gen_return[1] for gen_return in map_ret})
+
+                    # Now we'll do a couple of housekeeping files
+                    if badpix_prod is not None:
+                        obs_dict[tel][obs_id][inst]['badpix'] = badpix_prod
+                    if mask_prod is not None:
+                        obs_dict[tel][obs_id][inst]['maskfile'] = mask_prod
 
                     # The path to the region file, as specified in the configuration file, is added to the returned
                     #  dictionary if it exists - we'll make a copy in _load_regions because the BaseSource init
@@ -1102,7 +1162,7 @@ class BaseSource:
             # Cleans any observations that don't have at least one instrument associated with them
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
 
-        return obs_dict, reg_dict, att_dict
+        return obs_dict, reg_dict
 
     def _existing_xga_products(self, read_fits: bool, load_spectra: bool, load_profiles: bool):
         """
@@ -1190,10 +1250,10 @@ class BaseSource:
 
                 rel_path = cur_d + inven_entry['file_name']
                 rel_inst = inven_entry[inst_lookup]
-                
+
                 if '/' in rel_inst:
                     rel_inst = 'combined'
-                
+
                 # checking for valid obs_ids and insts
                 valid = False
                 if (rel_obs_id == 'combined' and rel_inst == 'combined'):
@@ -1267,7 +1327,7 @@ class BaseSource:
                 # The inventory column names change depending on if it is combined or not
                 inst_lookup = 'inst'
 
-            if tel == 'erosita' and not combined_obs:
+            if tel in ['erosita', 'erass'] and not combined_obs:
                 obs_id = str(obs_id).zfill(6)
 
             inst = row[inst_lookup]
@@ -1336,7 +1396,7 @@ class BaseSource:
             arf = prod_gen_path + '.arf'
             back = prod_gen_path + '_backspec.fits'
 
-            if tel == 'erosita':
+            if tel in ['erosita', 'erass']:
                 back_rmf = prod_gen_path + '_backspec.rmf'
                 back_arf = prod_gen_path + '_backspec.arf'
                 rmf = prod_gen_path + '.rmf'
@@ -1495,7 +1555,7 @@ class BaseSource:
                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                     evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
                     self.update_products(evt_list, update_inv=False)
-            
+
             # now assigning combined lightcurves
             rel_inven = inven[inven['type'] == 'lightcurve']
             for row_ind, row in rel_inven.iterrows():
@@ -2455,24 +2515,44 @@ class BaseSource:
                     emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
                     comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
-                elif self._use_peak and tel == 'erosita':
-                    warn_text = ("Generating the combined images required for this is not supported for eROSITA - we "
-                                 "will use the highest exposure ObsID instead - associated with source "
+
+                # This part deals with eROSITA data - have to account for the fact that there may not be a combined
+                #  image because it could just be on a single sky tile, and we haven't had to merge anything
+                elif self._use_peak and (tel == 'erosita' or tel == 'erass'):
+                    from xga.generate.esass import evtool_image, expmap, combine_phot_prod
+                    combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+
+                    # Fetch the ratemap we wish to use - checking to see if there are multiple observations or not
+                    if len(self.obs_ids[tel]) > 1:
+                        comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
+                    else:
+                        comb_rt = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+
+                # This part deals with Chandra data
+                elif self._use_peak and tel == 'chandra':
+                    warn_text = ("Generating the combined images required for this is not yet supported for "
+                                 "Chandra - we will use the highest exposure ObsID instead - associated with source "
                                  "{n}").format(t=tel, n=self.name)
                     if not self._samp_member:
                         warn(warn_text, stacklevel=2)
                     else:
                         self._supp_warn.append(warn_text)
 
-                    from xga.generate.esass import evtool_image, expmap
-                    evtool_image(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    expmap(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
+                    # Imports here are because of circular import issues, but this function will make us the
+                    #  individual images and exposure maps we need
+                    from xga.generate.ciao import chandra_image_expmap
+                    chandra_image_expmap(self, self._peak_lo_en, self._peak_hi_en, disable_progress=True)
 
+                    # This snippet is how we deal with not being able to make combined ratemaps for Chandra right
+                    #  now - it'll figure out which observation has the highest exposure at the source coord.
                     rel_rts = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
                     if not isinstance(rel_rts, list):
                         rel_rts = [rel_rts]
                     comb_rt = np.array(rel_rts)[np.argmax([rt.expmap.get_exp(self.ra_dec).to('s').value
                                                            for rt in rel_rts])]
+
+                # Here we include a catch-all for when we might be developing and incorporating support for a new
+                #  telescope (or one new to XGA at least)
                 elif self._use_peak:
                     warn_text = ("Generating the combined images required for this is not supported for {t} "
                                  "currently - associated with source {n}").format(t=tel, n=self.name)
@@ -2591,8 +2671,10 @@ class BaseSource:
             extras = []
         elif len(self.queue.shape) == 1 or self.queue.shape[1] <= 1:
             processed_cmds = list(self.queue)
+            # types = self.queue_type.flatten().tolist()
             types = list(self.queue_type)
-            paths = [[str(path)] for path in self.queue_path]
+            # The expected output paths can now be either a string or a list - hence the ternary logic
+            paths = [[path] if isinstance(path, str) else list(path) for path in self.queue_path]
             extras = list(self.queue_extra_info)
         else:
             processed_cmds = [";".join(col) for col in self.queue.T]
@@ -2844,6 +2926,7 @@ class BaseSource:
                 # Here we make sure to store a record of the added product in the relevant inventory file
                 # TODO update this for all BaseAggregateProducts - I think the iteration method is acting strangley
                 elif isinstance(po, AnnularSpectra) and update_inv:
+
                     if extra_key is None:
                         info_key = ''
                     else:
@@ -3437,8 +3520,9 @@ class BaseSource:
         :rtype: Union[Spectrum, List[Spectrum]]
         """
 
-        if telescope == 'xmm':
-            raise NotImplementedError("Combined spectra are not implemented for XMM observations.")
+        if telescope in ['xmm', 'chandra']:
+            raise NotImplementedError("Combined spectra are not implemented for {t} "
+                                      "observations.".format(t=telescope))
 
         matched_prods = self._get_spec_prod(outer_radius, 'combined', inst, inner_radius, group_spec,
                                             min_counts, min_sn, over_sample, telescope)
@@ -3770,8 +3854,8 @@ class BaseSource:
                             for inst, patt in pattern.items()}
             else:
                 raise TypeError("The 'pattern' argument must be either 'default', or a dictionary where the keys are "
-                                "instrument names and values are string patterns.")            
-            
+                                "instrument names and values are string patterns.")
+
             some_lcs = self._get_lc_prod(outer_radius, 'combined', None, inner_radius, lo_en, hi_en, time_bin_size)
             matched_prods = []
             for lc in some_lcs:
@@ -3792,22 +3876,29 @@ class BaseSource:
 
         return matched_prods
 
-    def get_att_file(self, obs_id: str, telescope: str) -> str:
+    def get_att_file(self, obs_id: str, telescope: str, inst: str = None) -> str:
         """
         Fetches the path to the attitude file for an observation associated with this source.
 
         :param str obs_id: The ObsID to fetch the attitude file for.
         :param str telescope: The telescope to fetch the attitude file for.
+        :param str inst: The instrument to fetch an attitude file for (though most missions do not have
+            separate attitude files for different instruments).
         :return: The path to the attitude file.
         :rtype: str
         """
-        if telescope not in self.telescopes:
-            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+        att_files = self.get_products('attitude', obs_id, telescope=telescope, inst=inst)
 
-        elif obs_id not in self.obs_ids[telescope]:
-            raise NotAssociatedError("{t}-{o} is not associated with {s}".format(t=telescope, o=obs_id, s=self.name))
-        else:
-            return self._att_files[telescope][obs_id]
+        # Perform some checks on the number of attitude files being returned
+        if len(att_files) > 1 and inst is None:
+            raise ValueError("Multiple attitude files have been identified for {t}-{o}, you may need to "
+                             "specify an instrument in the argument of this function.".format(t=telescope, o=obs_id))
+        elif len(att_files) > 1:
+            raise ValueError("Multiple attitude files have been identified for {t}-{o}-{i}, please "
+                             "contact the developer.".format(t=telescope, o=obs_id, i=inst))
+
+        # Now just return the path to the attitude file, so we're compatible with the behaviour of this method
+        return att_files[0].path
 
     def source_back_regions(self, reg_type: str, telescope: str, obs_id: str = None,
                             central_coord: Quantity = None) -> Tuple[SkyRegion, SkyRegion]:
@@ -4269,8 +4360,8 @@ class BaseSource:
             rt = self.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo, psf_iter,
                                    telescope=telescope)
         else:
-            raise ValueError("If you wish to use a specific ratemap for {s}'s signal to noise calculation, please "
-                             " pass both obs_id and inst.".format(s=self.name))
+            raise ValueError("If you wish to use a specific ratemap for {s}'s count calculation, please "
+                             " pass both 'obs_id' and 'inst'.".format(s=self.name))
 
         if isinstance(outer_radius, str):
             # Grabs the interloper removed source and background region masks. If the ObsID is None the get_mask
@@ -4342,7 +4433,8 @@ class BaseSource:
             return edge_coords
 
         if deg_central_coord.unit != deg:
-            raise UnitConversionError("The central coordinate must be in degrees for this function.")
+            raise UnitConversionError("The central coordinate ('deg_central_coord') must be in degrees for "
+                                      "this function.")
 
         if telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
@@ -4356,7 +4448,8 @@ class BaseSource:
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
         if inner_radius >= outer_radius:
-            raise ValueError("inner_radius cannot be larger than or equal to outer_radius".format(s=self.name))
+            raise ValueError("The 'inner_radius' argument cannot be larger than or equal to "
+                             "'outer_radius'.".format(s=self.name))
 
         # I think my last attempt at this type of function was made really slow by something to with the regions
         #  module, so I'm going to try and move away from that here
@@ -4590,7 +4683,7 @@ class BaseSource:
             desired result were grouped by minimum signal-to-noise.
         :param float over_sample: The level of oversampling applied on the spectra that were fitted.
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
-            a simultaneously fitted spectra. By default this method will retrieve the result from
+            simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
@@ -4732,7 +4825,7 @@ class BaseSource:
         else:
             en_key = None
 
-        try: 
+        try:
             len_xspec_fits = len(self._luminosities[telescope])
         except KeyError:
             raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
@@ -5142,11 +5235,13 @@ class BaseSource:
         # TODO This will need a redo once the functions to generate exposure maps are implemented for other telescopes
         # TODO Also just double check I've implemented this right
         for tel in self.telescopes:
-            if tel not in ['xmm', 'erosita']:
+            if tel not in ['xmm', 'erosita', 'erass', 'chandra']:
                 warn("The features required for observation checking are not implemented for telescopes "
                      "other than XMM and eROSITA - though it is a priority.", stacklevel=2)
                 continue
             else:
+                # We step through the telescopes we've incorporated so far - calling their exposure map
+                #  generating functions
                 if tel == 'xmm':
                     # Again don't particularly want to do this local import, but its just easier
                     from xga.generate.sas import eexpmap
@@ -5154,9 +5249,12 @@ class BaseSource:
                     # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
                     #  first, then checking where the source lies on the exposure map
                     eexpmap(self, self._peak_lo_en, self._peak_hi_en)
-                elif tel == 'erosita':
+                elif tel == 'erosita' or tel == 'erass':
                     from xga.generate.esass import expmap
                     expmap(self, self._peak_lo_en, self._peak_hi_en)
+                elif tel == 'chandra':
+                    from xga.generate.ciao import chandra_image_expmap
+                    chandra_image_expmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:
                     # Exposure maps of the peak finding energy range for this ObsID
@@ -5165,7 +5263,6 @@ class BaseSource:
                     # Just making sure that the exp_maps variable can be iterated over
                     if not isinstance(exp_maps, list):
                         exp_maps = [exp_maps]
-
                     m = self.get_source_mask(reg_type, tel, o, central_coord=self._default_coord)[0]
                     full_area[tel][o] = m.sum()
 
@@ -5240,6 +5337,19 @@ class BaseSource:
         elif isinstance(telescope, str):
             telescope = [telescope]
 
+        # Catches the possibility of a single string name being passed and turns into a list with one element, as
+        #  we wish to be able to iterate through it
+        elif isinstance(telescope, str):
+            telescope = [telescope]
+
+        # Checking if the user passed any energy limits of their own - the get_snr method we call would actually
+        #  have done this itself, but it is nice to have the actual values in here for an informative error
+        #  message
+        if lo_en is None:
+            lo_en = self._peak_lo_en
+        if hi_en is None:
+            hi_en = self._peak_hi_en
+
         obs_inst_dict = {}
         snrs_dict = {}
         for tel in telescope:
@@ -5289,7 +5399,8 @@ class BaseSource:
                       stacked_inst: bool = False) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         """
         This method generates a list of ObsID-Instrument pairs, ordered by the counts measured for the
-        given region, with element zero being the lowest counts, and element N being the highest.
+        given region, with element zero being the lowest counts, and element N being the highest. The standard
+        behaviour is to do this for all telescopes associated with this source.
 
         :param Quantity/str outer_radius: The radius that counts should be calculated within, this can either be a
             named radius such as r500, or an astropy Quantity.
