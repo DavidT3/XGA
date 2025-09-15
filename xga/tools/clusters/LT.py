@@ -247,12 +247,13 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         raise TypeError("Mismatch: Your choice of 'core_radius_fraction' does not match the LT ScalingRelation.")
 
     # Check whether the specified outer_aperture value matches that of the scaling relation
-    if outer_aperture == rad_temp_rel.outer_aperture and core_excised == temp_lum_rel.outer_aperture:
+    if outer_aperture.lower() == rad_temp_rel.outer_aperture.lower() and core_excised.lower() == temp_lum_rel.outer_aperture.lower():
         warn("Your choice of the defination of 'outer_aperture' matches the RT/LT ScalingRelation.")
-    elif outer_aperture != rad_temp_rel.outer_aperture:
+    elif outer_aperture.lower() != rad_temp_rel.outer_aperture.lower():
         raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the RT ScalingRelation.")
-    elif core_excised != temp_lum_rel.outer_aperture:
+    elif core_excised.lower() != temp_lum_rel.outer_aperture.lower():
         raise TypeError("Mismatch: Your choice of the defination of 'outer_aperture' does not match the LT ScalingRelation.")
+
     
     # Trying to determine the targeted overdensity based on the name of the 'outer_aperture'
     # The LT pipeline will not process if using a fixed aperture
