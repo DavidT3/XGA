@@ -1,15 +1,15 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/08/2024, 12:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 14:01. Copyright (c) The Contributors
 
 import inspect
 import pickle
+import re
 from copy import deepcopy
 from datetime import date
 from typing import List, Union, Tuple
 from warnings import warn
 
 import numpy as np
-import re
 import scipy.odr as odr
 from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
@@ -143,12 +143,12 @@ class ScalingRelation:
         # It can either be a string like 'R500' or 'R2500', or a Quantity (e.g. 300 * u.kpc).
         # If it's a string, it must start with 'R' followed by digits only.
         if outer_aperture is not None:
-            if isinstance(outer_aperture, str):
-                outer_aperture = outer_aperture.lower()
-                if outer_aperture not in {"r200", "r500", "r2500"}:
-                    raise ValueError("If a string, 'outer_aperture' must be 'R200', 'R500', or 'R2500'.")
+            if isinstance(outer_aperture, str) and bool(re.search(r'r|R\d+', outer_aperture)):
+                raise ValueError("If a string, 'outer_aperture' must represent an over density "
+                                 "radius; e.g. 'R200', 'R500', 'R...'.")
             elif not isinstance(outer_aperture, Quantity):
-                raise TypeError("outer_aperture must be a string ('R200', 'R500', 'R2500') or an astropy.units.Quantity")
+                raise TypeError("'outer_aperture' must be a string ('R200', 'R500', 'R2500') or an "
+                                "astropy Quantity.")
 
         self._outer_aperture = outer_aperture
 
