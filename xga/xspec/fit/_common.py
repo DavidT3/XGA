@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 16:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 13:36. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -9,11 +9,11 @@ from astropy.units import Quantity, UnitConversionError
 
 from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
 from ...exceptions import NoProductAvailableError
-from ...generate.ciao.spec import specextract_spectrum
+from ...generate.ciao.spec import specextract_spectrum, ciao_spectrum_set
 from ...generate.esass import srctool_spectrum
 from ...generate.esass.spec import esass_spectrum_set
-from ...generate.sas import evselect_spectrum, region_setup, spectrum_set
 from ...generate.sas import evselect_spectrum, region_setup
+from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, PointSource
@@ -234,11 +234,12 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
                      "spectra will not be used for these XSPEC fits.", stacklevel=2)
             # We make sure the requested sets of annular spectra have actually been generated (for XMM)
             spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
-
-        elif tel == 'erosita':
+        elif tel in ['erosita', 'erass']:
             # The annular spectrum tool specific to eROSITA
             esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores,
                                combine_tm=stacked_spectra)
+        elif tel == 'chandra':
+            ciao_spectrum_set(sources, radii['chandra'], group_spec, min_counts, min_sn, over_sample, False, num_cores)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))
