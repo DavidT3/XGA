@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 14:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 15:20. Copyright (c) The Contributors
 
 import inspect
 import pickle
@@ -27,7 +27,7 @@ PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateb
 
 # Given the existing structure of this part of XGA, I would have written a BaseRelation class in xga.products.base,
 #  but I can't think of a reason why individual scaling relations should have their own classes. One general class
-#  should be enough. Also I don't want relations to be able to be stored in source objects - these are for samples
+#  should be enough. Also, I don't want relations to be able to be stored in source objects - these are for samples
 #  only
 
 
@@ -90,8 +90,11 @@ class ScalingRelation:
     :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
         the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
-    :param bool core_excised: Indicates whether the core is excised. If True, the relation follows a core-excised model; 
-        if False, a core-included model is used. Defaults to True (core excised).
+    :param float core_radius_fraction: If the scaling relation is built using core-excised quantities, the radius
+        of the core defined as a fraction of the outer aperture.
+    :param float outer_aperture: The aperture within which the quantities used to build this relation are
+        measured, either a numerical fixed aperture in the form of an astropy quantity (e.g. Quantity(500, 'kpc')) or
+        a named overdensity (e.g. 'R500').
     """
     def __init__(self, fit_pars: np.ndarray, fit_par_errs: np.ndarray, model_func, x_norm: Quantity, y_norm: Quantity,
                  x_name: str, y_name: str, dim_hubb_ind=None, fit_method: str = 'unknown', x_data: Quantity = None,
@@ -101,7 +104,7 @@ class ScalingRelation:
                  scatter_par: np.ndarray = None, scatter_chain: np.ndarray = None, model_colour: str = None,
                  point_names: Union[np.ndarray, list] = None, third_dim_info: Union[np.ndarray, Quantity] = None,
                  third_dim_name: str = None, x_en_bounds: Quantity = None, y_en_bounds: Quantity = None,
-                 core_excised: bool = False, core_radius_fraction: float = 0, outer_aperture: Union[str, Quantity] = None):
+                 core_radius_fraction: float = 0., outer_aperture: Union[str, Quantity] = None):
         """
         The init for the ScalingRelation class, all information necessary to enable the different functions of
         this class will be supplied by the user here.
@@ -132,12 +135,13 @@ class ScalingRelation:
         #  if the fit was performed by XGA then something more useful can be passed
         self._fit_method = fit_method
 
-        # The default is core included (False), but this can be set to True to use core-excised relations
-        self._core_excised = core_excised
-
         # The default core size is None, but this can be set to a different size or core included (0)
         if core_radius_fraction is not None:
             self._core_radius_fraction = core_radius_fraction
+            self._core_excised = True
+        else:
+            self._core_radius_fraction = 0.
+            self._core_excised = False
 
         # The outer_aperture defines the outer radius used for the scaling relation.
         # It can either be a string like 'R500' or 'R2500', or a Quantity (e.g. 300 * u.kpc).
@@ -146,6 +150,9 @@ class ScalingRelation:
             if isinstance(outer_aperture, str) and bool(re.search(r'r|R\d+', outer_aperture)):
                 raise ValueError("If a string, 'outer_aperture' must represent an over density "
                                  "radius; e.g. 'R200', 'R500', 'R...'.")
+            elif isinstance(outer_aperture, str):
+                # We make sure that an overdensity name has the 'R' in lowercase
+                outer_aperture = outer_aperture.lower()
             elif not isinstance(outer_aperture, Quantity):
                 raise TypeError("'outer_aperture' must be a string ('R200', 'R500', 'R2500') or an "
                                 "astropy Quantity.")
