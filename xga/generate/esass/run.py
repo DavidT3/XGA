@@ -27,8 +27,8 @@ def esass_call(esass_func):
     @wraps(esass_func)
     def wrapper(*args, **kwargs):
         # Checking eSASS is installed and available on the system
-        if not eSASS_AVAIL:
-            raise eSASSNotFoundError("No eSASS installation has been found on this machine.")
+        #if not eSASS_AVAIL:
+        #    raise eSASSNotFoundError("No eSASS installation has been found on this machine.")
 
         # The first argument of all of these eSASS functions will be the source object (or a list of),
         # so rather than return them from the eSASS function I'll just access them like this.
