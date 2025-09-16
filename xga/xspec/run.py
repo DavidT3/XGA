@@ -231,6 +231,7 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
+                
                 # res_set = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
@@ -362,14 +363,10 @@ def xspec_call(xspec_func):
                     # TODO this could be neater and better generalised
                     for comb in combos:
                         if tel in ['erosita', 'erass'] and len(s.obs_ids[tel]) == 1:
-                            print('single obs')
-                            print(comb)
                             spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel in ['erosita', 'erass']:
-                            print('combined obs')
-                            print(comb)
-                            spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
+                            spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel == 'chandra':
                             # We know that only ACIS is supported by XGA currently, so we can split on it to
