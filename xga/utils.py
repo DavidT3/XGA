@@ -712,6 +712,7 @@ for tel in TELESCOPES:
     #  actually exists
     # This variable keeps track of if the root_dir for this telescope actually exists
     root_dir_exists = False
+    print(cur_sec['root_{t}_dir'.format(t=tel)])
     if os.path.exists(cur_sec['root_{t}_dir'.format(t=tel)]):
         root_dir_exists = True
 
