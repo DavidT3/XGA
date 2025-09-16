@@ -48,10 +48,7 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
-    print(p_path)
-    print(p_type)
-    print(type(p_path))
-    print(type(p_type))
+
     # Trying to make sure that any passed arrays get smoothed out into the list type we want
     if type(p_path) == np.ndarray:
         p_path = list(p_path)
@@ -67,12 +64,6 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         # In some instances the type(p_path[0]) can be a numpy string, so Im making it be a normal 
         # string so that its type can match type(p_type)
         p_path = str(p_path[0])
-
-    print('later')
-    print(p_path)
-    print(p_type)
-    print(type(p_path))
-    print(type(p_type))
 
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
