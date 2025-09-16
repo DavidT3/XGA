@@ -64,6 +64,8 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     #  is causing some of these woes (at some point) so I don't feel too bad about it
     # This is because the way the XMM call is set up, the passed paths are also in a list of one
     if isinstance(p_path, list) and len(p_path) == 1:
+        # In some instances the type(p_path[0]) can be a numpy string, so Im making it be a normal 
+        # string so that its type can match type(p_type)
         p_path = str(p_path[0])
 
     print('later')
