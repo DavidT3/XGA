@@ -69,6 +69,10 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     # string so that its type can match type(p_path)
     elif isinstance(p_type, str):
         p_type = str(p_type)
+    print(p_path)
+    print(p_type)
+    print(type(p_path))
+    print(type(p_type))
 
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
