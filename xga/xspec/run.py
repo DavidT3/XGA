@@ -362,9 +362,13 @@ def xspec_call(xspec_func):
                     # TODO this could be neater and better generalised
                     for comb in combos:
                         if tel in ['erosita', 'erass'] and len(s.obs_ids[tel]) == 1:
+                            print('single obs')
+                            print(comb)
                             spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel in ['erosita', 'erass']:
+                            print('combined obs')
+                            print(comb)
                             spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel == 'chandra':
