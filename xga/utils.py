@@ -905,7 +905,7 @@ if 'chandra' in USABLE and USABLE['chandra']:
 tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION, 'chandra': CIAO_VERSION}
 # --------------------------------------------------------------------------
 
-
+print(tele_software_map)
 # ------------- Final setup of important constants from the configuration file -------------
 # We make sure to create the absolute output path from what was specified in the configuration file
 OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
