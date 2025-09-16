@@ -148,7 +148,7 @@ class ScalingRelation:
         # It can either be a string like 'R500' or 'R2500', or a Quantity (e.g. 300 * u.kpc).
         # If it's a string, it must start with 'R' followed by digits only.
         if outer_aperture is not None:
-            if isinstance(outer_aperture, str) and bool(re.search(r'r|R\d+', outer_aperture)):
+            if isinstance(outer_aperture, str) and not bool(re.search(r'r|R\d+', outer_aperture)):
                 raise ValueError("If a string, 'outer_aperture' must represent an over density "
                                  "radius; e.g. 'R200', 'R500', 'R...'.")
             elif isinstance(outer_aperture, str):
