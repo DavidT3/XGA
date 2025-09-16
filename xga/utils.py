@@ -739,6 +739,9 @@ for tel in TELESCOPES:
     # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
     #  the USABLE entry for the current telescope will stay at the default value of False
     if all_req_changed and root_dir_exists:
+        print(tel)
+        print(all_req_changed)
+        print(root_dir_exists)
         USABLE[tel] = True
 # -----------------------------------------------------------------------------------
 
