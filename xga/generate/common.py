@@ -64,12 +64,11 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         # In some instances the type(p_path[0]) can be a numpy string, so Im making it be a normal 
         # string so that its type can match type(p_type)
         p_path = str(p_path[0])
-
-    print(p_path)
-    print(p_type)
-
-    print(type(p_path))
-    print(type(p_type))
+    
+    # In some instances the type(p_type) can be a numpy string, so Im making it be a normal 
+    # string so that its type can match type(p_path)
+    elif isinstance(p_type, str):
+        p_type = str(p_type)
 
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
