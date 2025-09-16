@@ -736,12 +736,13 @@ for tel in TELESCOPES:
     # We make sure that the root directory is an absolute path, just for our sanity later on
     cur_sec['root_{t}_dir'.format(t=tel)] = os.path.abspath(cur_sec['root_{t}_dir'.format(t=tel)]) + "/"
 
+    print(tel)
+    print(all_req_changed)
+    print(root_dir_exists)
     # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
     #  the USABLE entry for the current telescope will stay at the default value of False
     if all_req_changed and root_dir_exists:
-        print(tel)
-        print(all_req_changed)
-        print(root_dir_exists)
+
         USABLE[tel] = True
 # -----------------------------------------------------------------------------------
 
@@ -905,7 +906,6 @@ if 'chandra' in USABLE and USABLE['chandra']:
 tele_software_map = {'xmm': SAS_VERSION, 'erosita': ESASS_VERSION, 'chandra': CIAO_VERSION}
 # --------------------------------------------------------------------------
 
-print(tele_software_map)
 # ------------- Final setup of important constants from the configuration file -------------
 # We make sure to create the absolute output path from what was specified in the configuration file
 OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
