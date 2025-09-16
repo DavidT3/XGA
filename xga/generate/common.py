@@ -66,6 +66,12 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     if isinstance(p_path, list) and len(p_path) == 1:
         p_path = p_path[0]
 
+    print('later')
+    print(p_path)
+    print(p_type)
+    print(type(p_path))
+    print(type(p_type))
+
     # Catch any mistakes that will be easy to make in developing new interface functions with
     #  backend telescope software
     if type(p_type) != type(p_path):
