@@ -712,7 +712,6 @@ for tel in TELESCOPES:
     #  actually exists
     # This variable keeps track of if the root_dir for this telescope actually exists
     root_dir_exists = False
-    print(cur_sec['root_{t}_dir'.format(t=tel)])
     if os.path.exists(cur_sec['root_{t}_dir'.format(t=tel)]):
         root_dir_exists = True
 
@@ -737,9 +736,6 @@ for tel in TELESCOPES:
     # We make sure that the root directory is an absolute path, just for our sanity later on
     cur_sec['root_{t}_dir'.format(t=tel)] = os.path.abspath(cur_sec['root_{t}_dir'.format(t=tel)]) + "/"
 
-    print(tel)
-    print(all_req_changed)
-    print(root_dir_exists)
     # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
     #  the USABLE entry for the current telescope will stay at the default value of False
     if all_req_changed and root_dir_exists:
