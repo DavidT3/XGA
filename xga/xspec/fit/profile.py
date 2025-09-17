@@ -136,7 +136,8 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
             #  are found, though as we have run spectrum_set that shouldn't happen
             ann_spec = source.get_annular_spectra(cur_radii, group_spec, min_counts, min_sn, over_sample,
                                                   telescope=tel)
-
+            print('ann_spec.storage_key')
+            print(ann_spec.storage_key)
             deg_rad[repr(source)][tel] = ann_spec.radii
 
             # If source.get_annular_spectra returns a list, it means that multiple matches have been found
