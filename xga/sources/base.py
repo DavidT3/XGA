@@ -3637,8 +3637,6 @@ class BaseSource:
         elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
         
-        print('final_matched_prods.set_ident')
-        print(final_matched_prods.set_ident)
         return final_matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
