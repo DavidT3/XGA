@@ -3572,7 +3572,6 @@ class BaseSource:
         print('matched_prods')
         print(matched_prods)
 
-
         # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
         #  here we're going to throw an error
         if set_id is not None:
@@ -3615,6 +3614,11 @@ class BaseSource:
         # And we need to check to find that annular spectra have the right central coordinates for the
         #  current state of the source
         matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+        print('matched_prods down here')
+        print(matched_prods)
+        for prod in matched_prods:
+            print('prod.set_ident')
+            print(prod.set_ident)
 
         # Separating the matching steps can also give us the opportunity to say exactly where matching failed
         #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
