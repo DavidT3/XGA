@@ -3569,6 +3569,9 @@ class BaseSource:
         # Fetch all the annular spectra for the specified telescope
         # TODO THIS MAY HAVE TO BE ALTERED FOR COMBINED AND NON-COMBINED ANNULAR SPECTRA AT SOME POINT
         matched_prods = self.get_products('combined_annular_spectrum', telescope=telescope)
+        print('matched_prods')
+        print(matched_prods)
+
 
         # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
         #  here we're going to throw an error
@@ -3576,6 +3579,8 @@ class BaseSource:
             matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
             print('in get annular spectra')
             print(matched_products)
+            print('matched_products[0].storage_key')
+            print(matched_products[0].storage_key)
 
             # In this case there are no matching annular spectra
             if len(matched_products) == 0:
