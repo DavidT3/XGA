@@ -2713,6 +2713,8 @@ class BaseSource:
             (such as _existing_xga_products) which want to add products to the source storage structure, but don't
             want the inventory file altered (as they know the product is already in there).
         """
+        print('in update products')
+
         # Aggregate products are things like PSF grids and sets of annular spectra.
         if not isinstance(prod_obj, (BaseProduct, BaseAggregateProduct, BaseProfile1D, list)) and prod_obj is not None:
             raise TypeError("Only product objects can be assigned to sources.")
@@ -2730,7 +2732,10 @@ class BaseSource:
                                                     u=float(po.energy_bounds[1].value))
                 elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D) or \
                         isinstance(po, AggregateLightCurve):
+                    print('po.storage_key')
+                    print(po.storage_key)
                     extra_key = po.storage_key
+
                 elif type(po) == PSFGrid:
                     # The first part of the key is the model used (by default its ELLBETA for example), and
                     #  the second part is the number of bins per side. - Enough to uniquely identify the PSF.
@@ -2745,6 +2750,11 @@ class BaseSource:
                 tel = po.telescope
                 p_type = po.type
 
+                print('product info')
+                print(obs_id)
+                print(inst)
+                print(tel)
+                print(p_type)
                 # Previously, merged images/exposure maps were stored in a separate dictionary, but now everything lives
                 #  together - merged products do get a 'combined' prefix on their product type key though
                 if obs_id == "combined":

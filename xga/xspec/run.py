@@ -231,8 +231,7 @@ def xspec_call(xspec_func):
             set_ident = {}
 
             for res_set in results[src_repr]:
-                
-                # res_set = res_table, if it is None then the xspec fit has failed
+                # res_set[0] = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
                         raise XSPECFitError(err + " - {s}".format(s=s.name))
@@ -410,6 +409,8 @@ def xspec_call(xspec_func):
                             s.update_products(temp_prof)
 
                             # Normalisation profiles can be useful for many things, so we generate them too
+                            print('adding_norm_prof')
+                            print(ann_spec.storage_key)
                             norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
                             s.update_products(norm_prof)
 
