@@ -1063,6 +1063,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                                           psf_iter, group_spec, min_counts, min_sn, over_sample,
                                           one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
                                           num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
+        print(ann_rads)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
 
@@ -1088,7 +1089,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                     print(min_sn)
                     print(over_sample)
                     print(tel)
-                    
+
                     # The normalisation profile(s) from the fit that produced the projected
                     # temperature profile.
                     apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
