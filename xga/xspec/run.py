@@ -336,8 +336,6 @@ def xspec_call(xspec_func):
                                 ann_lums[tel] = {}
                             if tel not in ann_obs_order.keys():
                                 ann_obs_order[tel] = {}
-                            print('spec.set_ident')
-                            print(spec.set_ident)
                             set_ident[tel] = spec.set_ident
                             ann_results[tel][spec.annulus_ident] = global_results
                             ann_lums[tel][spec.annulus_ident] = chosen_lums
@@ -398,8 +396,6 @@ def xspec_call(xspec_func):
                 for tel in ann_results:
                     # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                     #  the last spectra that was opened in the loop
-                    print('set_ident[tel]')
-                    print(set_ident[tel])
                     ann_spec = s.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
                     
                     try:
@@ -414,10 +410,6 @@ def xspec_call(xspec_func):
                             s.update_products(temp_prof)
 
                             # Normalisation profiles can be useful for many things, so we generate them too
-                            print('adding_norm_prof')
-                            print(ann_spec.storage_key)
-                            print('ann_spec.set_ident')
-                            print(ann_spec.set_ident)
                             norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
                             s.update_products(norm_prof)
 

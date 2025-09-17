@@ -2730,8 +2730,6 @@ class BaseSource:
                                                     u=float(po.energy_bounds[1].value))
                 elif type(po) == Spectrum or type(po) == AnnularSpectra or isinstance(po, BaseProfile1D) or \
                         isinstance(po, AggregateLightCurve):
-                    print('po.storage_key')
-                    print(po.storage_key)
                     extra_key = po.storage_key
 
                 elif type(po) == PSFGrid:
@@ -3562,17 +3560,11 @@ class BaseSource:
         # Fetch all the annular spectra for the specified telescope
         # TODO THIS MAY HAVE TO BE ALTERED FOR COMBINED AND NON-COMBINED ANNULAR SPECTRA AT SOME POINT
         matched_prods = self.get_products('combined_annular_spectrum', telescope=telescope)
-        print('matched_prods')
-        print(matched_prods)
 
         # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
         #  here we're going to throw an error
         if set_id is not None:
             matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
-            print('in get annular spectra')
-            print(matched_products)
-            print('matched_products[0].storage_key')
-            print(matched_products[0].storage_key)
 
             # In this case there are no matching annular spectra
             if len(matched_products) == 0:
@@ -3607,11 +3599,6 @@ class BaseSource:
         # And we need to check to find that annular spectra have the right central coordinates for the
         #  current state of the source
         matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
-        print('matched_prods down here')
-        print(matched_prods)
-        for prod in matched_prods:
-            print('prod.set_ident')
-            print(prod.set_ident)
 
         # Separating the matching steps can also give us the opportunity to say exactly where matching failed
         #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
