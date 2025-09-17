@@ -413,6 +413,8 @@ def xspec_call(xspec_func):
                             # Normalisation profiles can be useful for many things, so we generate them too
                             print('adding_norm_prof')
                             print(ann_spec.storage_key)
+                            print('ann_spec.set_ident')
+                            print(ann_spec.set_ident)
                             norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5')
                             s.update_products(norm_prof)
 

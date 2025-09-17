@@ -3574,6 +3574,8 @@ class BaseSource:
         #  here we're going to throw an error
         if set_id is not None:
             matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
+            print('in get annular spectra')
+            print(matched_products)
 
             # In this case there are no matching annular spectra
             if len(matched_products) == 0:
