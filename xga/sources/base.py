@@ -3585,7 +3585,7 @@ class BaseSource:
                 raise NoProductAvailableError(mess)
             # But if we get here then there is a match (and there can only be one)
             else:
-                return matched_prods[0]
+                return matched_products[0]
 
         # If we get here, then the search for AnnularSpectra isn't as simple as just using a set identifier
         # Like in _get_spec_prod, we'll match radii first to whittle down the possibilities - IF THE USER
