@@ -336,6 +336,8 @@ def xspec_call(xspec_func):
                                 ann_lums[tel] = {}
                             if tel not in ann_obs_order.keys():
                                 ann_obs_order[tel] = {}
+                            print('spec.set_ident')
+                            print(spec.set_ident)
                             set_ident[tel] = spec.set_ident
                             ann_results[tel][spec.annulus_ident] = global_results
                             ann_lums[tel][spec.annulus_ident] = chosen_lums
