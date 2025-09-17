@@ -1058,11 +1058,13 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
     elif annulus_method == 'min_cnt':
         # This returns the boundary radii for the annuli, based on a minimum number of counts per
         # annulus
+        print('in this min_cnt')
         ann_rads = min_cnt_proj_temp_prof(sources, outer_radii, min_cnt, min_width, use_combined,
                                           lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                           psf_iter, group_spec, min_counts, min_sn, over_sample,
                                           one_rmf, freeze_met, abund_table, temp_lo_en, temp_hi_en,
                                           num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
+        print('ann_rads')
         print(ann_rads)
     elif annulus_method == "growth":
         raise NotImplementedError("This method isn't implemented yet")
@@ -1083,6 +1085,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                 cur_rads = ann_rads[tel][src_ind]
 
                 try:
+                    print('in attempted retrieval in apec norm')
                     print(cur_rads)
                     print(group_spec)
                     print(min_counts)
