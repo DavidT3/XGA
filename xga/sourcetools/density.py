@@ -1082,10 +1082,19 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                 cur_rads = ann_rads[tel][src_ind]
 
                 try:
+                    print(cur_rads)
+                    print(group_spec)
+                    print(min_counts)
+                    print(min_sn)
+                    print(over_sample)
+                    print(tel)
+                    
                     # The normalisation profile(s) from the fit that produced the projected
                     # temperature profile.
                     apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
                                                                 min_sn, over_sample, telescope=tel)
+
+                    print('found_apec_norm')
 
                     obs_id = 'combined'
                     inst = 'combined'
@@ -1094,6 +1103,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                     dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo,
                                                                    abund_table, num_data_real,
                                                                    sigma, num_dens)
+                        
                     # Then I store it in the source
                     src.update_products(dens_prof)
                     final_dens_profs[tel][src_ind] = dens_prof
