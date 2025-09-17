@@ -190,6 +190,10 @@ def xspec_call(xspec_func):
             desc = "Running XSPEC Fits"
         elif run_type == "conv_factors":
             desc = "Running XSPEC Simulations"
+        
+        # If an error is raised during this fit, store it here and raise it at the end after all 
+        # results have been dealt with 
+        errors_all_sources = []
 
         if len(script_list) > 0:
             # This mode runs the XSPEC locally in a multiprocessing pool.
@@ -234,7 +238,7 @@ def xspec_call(xspec_func):
                 # res_set[0] = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
                     for err in res_set[2]:
-                        raise XSPECFitError(err + " - {s}".format(s=s.name))
+                        errors_all_sources.append(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
 
@@ -390,7 +394,7 @@ def xspec_call(xspec_func):
 
                 elif len(res_set) != 0 and not res_set[1]:
                     for err in res_set[2]:
-                        raise XSPECFitError(err)
+                        errors_all_sources.append(err + " - {s}".format(s=s.name))
 
             if ann_fit:
                 for tel in ann_results:
@@ -424,6 +428,9 @@ def xspec_call(xspec_func):
                         warn("{src} annular spectra profile fit was not successful for the {t} "
                                 "telescope.".format(src=ann_spec.src_name, t=tel), stacklevel=2)
 
+        if len(errors_all_sources) != 0:
+            warn(f"Some XSPEC fits were not successful, the errors raised are: {errors_all_sources}")
+        
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
         if len(sources) == 1:
