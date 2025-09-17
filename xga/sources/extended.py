@@ -542,7 +542,9 @@ class GalaxyCluster(ExtendedSource):
         # However if they have passed a setID then this over-rides everything else
         else:
             matched_prods = [p for p in self.get_products(search_key, telescope=telescope) if p.set_ident == set_id]
-
+        
+        print('spec_storage_name')
+        print(spec_storage_name)
         return matched_prods
 
     def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
