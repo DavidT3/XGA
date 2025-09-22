@@ -733,6 +733,7 @@ class ScalingRelation:
         else:
             self._y_quantity_en_bounds = new_val
 
+    @property
     def telescope(self) -> str:
         """
         Returns the name of the telescope associated with this relation.
