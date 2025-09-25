@@ -1,7 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 23:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/09/2025, 19:05. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -104,9 +105,18 @@ class EventList(BaseProduct):
         self._obs_ids = obs_ids
 
         # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT for
-        #  instance calls it STDEVT
-        self._evt_tab_name = "EVENTS" if self.telescope.lower() not in MISSION_COL_DB \
-            else MISSION_COL_DB[self.telescope.lower()]['events']
+        #  instance calls it STDEVT - obviously very important that we get this right
+        if self.telescope.upper() not in MISSION_COL_DB:
+            warn("The {t} telescope cannot be found in the XSELECT mission database file, so the name of the table "
+                 "containing event information is assumed to be 'EVENTS'.".format(t=self.telescope), stacklevel=2)
+            self._evt_tab_name = "EVENTS"
+        # In cases where individual instruments have entries for this, we'll use them
+        elif (self._inst.upper() in MISSION_COL_DB[self.telescope.upper()] and
+              'events' in MISSION_COL_DB[self.telescope.upper()][self._inst.upper()]):
+            self._evt_tab_name = MISSION_COL_DB[self.telescope.upper()][self._inst.upper()]['events']
+        # Otherwise we'll look for the top-level events entry for the mission
+        elif 'events' in MISSION_COL_DB[self.telescope.upper()]:
+            self._evt_tab_name = MISSION_COL_DB[self.telescope.upper()]['events']
 
         # The user may want to use WCSes to convert between different coordinate systems (sky to RA-Dec for
         #  instance), so when they are constructed they will be assigned to these attributes

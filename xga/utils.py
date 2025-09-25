@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 21:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 25/09/2025, 19:05. Copyright (c) The Contributors
 
 import json
 import os
@@ -535,11 +535,14 @@ with open(importlib_resources.files(__name__) / "files/xspec_model_pars.json5", 
 with open(importlib_resources.files(__name__) / "files/xspec_model_units.json5", 'r') as filey:
     MODEL_UNITS = json.load(filey)
 
-# No longer XSPEC related constants/files, but here we read in a file that helps map column names in
+# No longer XSPEC-related constants/files, but here we read in a file that helps map column names in
 #  event files to mission-independent names (e.g. specifying which table name contains events in an
 #  event list). This is based on the mission database file for XSELECT, but has been modified
 #  quite a lot.
-with open(importlib_resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
+# with open(importlib_resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
+#     MISSION_COL_DB = json.load(filey)
+
+with open(importlib_resources.files(__name__) / "files/xselect_mission_database.json", 'r') as filey:
     MISSION_COL_DB = json.load(filey)
 # ---------------------------------------------------------------------------
 
