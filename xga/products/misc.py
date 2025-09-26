@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:49. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -620,6 +620,54 @@ class EventList(BaseProduct):
         self._read_data_on_demand(col_names)
 
         return self.data[col_names].to_pandas()
+
+    def get_filtered_data(self, col_names: List[str], filt_operations: dict) -> pd.DataFrame:
+        """
+
+        :param List[str] col_names:
+        :param dict filt_operations:
+        :return:
+        :rtype: pd.DataFrame
+        """
+        # Check to make sure that all the filtering operations we're being asked to perform are
+        #  on data columns that we're actually going to acquire
+        filt_op_cols = np.array(list(filt_operations.keys()))
+        filt_col_not_in_data = np.array([cur_col not in col_names for cur_col in filt_op_cols])
+        if any(filt_col_not_in_data):
+            miss_cols = ", ".join(filt_op_cols[filt_col_not_in_data])
+            warn("Filtering operations are specified on columns not in 'col_names' ({mc}), the missing "
+                 "columns will be added to the 'col_names' list.".format(mc=miss_cols), stacklevel=2)
+            col_names += (filt_op_cols[filt_col_not_in_data]).tolist()
+
+        # Make sure that all the filtering operations are specified in lists
+        if any([not isinstance(filt_cmds, list) for filt_cmds in filt_operations.values()]):
+            warn("Some filter operation commands are not defined in a list - they will be placed into one.",
+                 stacklevel=2)
+            filt_operations = {filt_col: [filt_cmds] if not isinstance(filt_cmds, list) else filt_cmds
+                               for filt_col, filt_cmds in filt_operations.items()}
+
+        # Acquiring the specified columns
+        rel_data = self.get_columns_from_data(col_names)
+
+        # Setting up the overall mask that will be applied at the end of this function - this will be modified
+        #  by each filtering operation.
+        evt_mask = np.ones(len(rel_data), dtype=bool)
+        # Iterating through the filtering operations
+        for cur_filt_col, cur_filt_cmds in filt_operations.items():
+            col_mask = np.ones(len(rel_data), dtype=bool)
+            for cur_cmd in cur_filt_cmds:
+                if isinstance(cur_cmd, str):
+                    # Dynamically evaluate a string filtering command
+                    col_mask &= eval(f"rel_data['{cur_filt_col}'] {cur_cmd}")
+                elif callable(cur_cmd):
+                    # Or apply a user-defined lambda function
+                    col_mask &= cur_cmd(rel_data[cur_filt_col])
+            # We now include the mask that resulted from the filtering operation on the current column
+            #  into the overall mask
+            evt_mask &= col_mask
+
+        return rel_data[evt_mask]
+
 
     def unload(self, unload_data: bool = True, unload_header: bool = True):
         """
