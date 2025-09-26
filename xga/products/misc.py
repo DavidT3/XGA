@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:58. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -623,10 +623,16 @@ class EventList(BaseProduct):
 
     def get_filtered_data(self, col_names: List[str], filt_operations: dict) -> pd.DataFrame:
         """
+        A method to retrieve a filtered subset of the events table data - this is useful for the production of
+        various X-ray products (images, lightcurves, etc.), as we rarely wish to use every single event.
 
-        :param List[str] col_names:
-        :param dict filt_operations:
-        :return:
+        :param List[str] col_names: A list of column names to retrieve.
+        :param dict filt_operations: A dictionary of filtering operations to apply to the event list data. The
+            dictionary should be structured with column names as keys and filtering operations as values. The
+            filtering operations can be specified either as strings (e.g. "> 5", "< 10") or as callable
+            functions (e.g. lambda functions). Multiple operations on a single column should be provided as a
+            list. For example - {'ENERGY': ['>100', '<1000'], 'X': [lambda x: x > 0]}
+        :return: A pandas DataFrame containing the specified columns, filtered according to the operations
         :rtype: pd.DataFrame
         """
         # Check to make sure that all the filtering operations we're being asked to perform are
@@ -641,8 +647,6 @@ class EventList(BaseProduct):
 
         # Make sure that all the filtering operations are specified in lists
         if any([not isinstance(filt_cmds, list) for filt_cmds in filt_operations.values()]):
-            warn("Some filter operation commands are not defined in a list - they will be placed into one.",
-                 stacklevel=2)
             filt_operations = {filt_col: [filt_cmds] if not isinstance(filt_cmds, list) else filt_cmds
                                for filt_col, filt_cmds in filt_operations.items()}
 
