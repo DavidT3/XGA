@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/09/2025, 19:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 10:07. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -92,20 +92,42 @@ class EventList(BaseProduct):
         # We attempt to automatically derive the telescope, ObsID, and instrument (if they haven't been
         #  passed by the user) from the event list header
         if telescope is None:
-            self._tele = self.header['TELESCOP']
-        if obs_id is None:
-            self._obs_id = self.header['OBS_ID']
+            # Some older missions (like Einstein) can store the telescope name, ObsID, and instrument in the header
+            #  of the event table, rather than the primary header. We try-except our attempt to read that
+            #  information from the primary header, and failover to trying to read it from the event table header.
+            try:
+                self._tele = self.header['TELESCOP']
+
+            # This contains a bodge, because we've come across a circular problem - we don't yet know the
+            #  event table name, because we don't know the telescope name and can't look it up. That then means
+            #  we have to assume the event table name is 'EVENTS' (which is a decent assumption), and attempt to
+            #  read it in to get the telescope name.
+            except KeyError:
+                self._evt_tab_name = 'EVENTS'
+
+                self._tele = self.event_header['TELESCOP']
+
+                # We now reset the event table name, and the event header attribute, so that the following code
+                #  will continue as normal
+                self._evt_tab_name = None
+                self._event_header = None
+
+        # We have to do the same for the instrument
         if instrument is None:
-            self._inst = self.header['INSTRUME']
+            try:
+                self._inst = self.header['INSTRUME']
+            except KeyError:
+                self._evt_tab_name = 'EVENTS'
 
-        # Checking the formatting of the obs_ids argument
-        if obs_ids is not None and (not isinstance(obs_ids, List) or
-                                    (isinstance(obs_ids, List) and not all(isinstance(obs, str) for obs in obs_ids))):
-            raise ValueError("The 'obs_ids' argument must be a list of strings.")
-        self._obs_ids = obs_ids
+                self._inst = self.event_header['INSTRUME']
 
-        # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT for
-        #  instance calls it STDEVT - obviously very important that we get this right
+                # We now reset the event table name, and the event header attribute, so that the following code
+                #  will continue as normal
+                self._evt_tab_name = None
+                self._event_header = None
+
+        # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT, for
+        #  instance, calls it STDEVT - obviously very important that we get this right
         if self.telescope.upper() not in MISSION_COL_DB:
             warn("The {t} telescope cannot be found in the XSELECT mission database file, so the name of the table "
                  "containing event information is assumed to be 'EVENTS'.".format(t=self.telescope), stacklevel=2)
@@ -117,6 +139,25 @@ class EventList(BaseProduct):
         # Otherwise we'll look for the top-level events entry for the mission
         elif 'events' in MISSION_COL_DB[self.telescope.upper()]:
             self._evt_tab_name = MISSION_COL_DB[self.telescope.upper()]['events']
+
+        # And now we know we have the right event table name, we'll automatically determine the ObsID and instrument
+        #  from the header, if they haven't been passed by the user.
+        if obs_id is None:
+            try:
+                self._obs_id = self.header['OBS_ID']
+            except KeyError:
+                try:
+                    self._obs_id = self.event_header['OBS_ID']
+                # This is trying to catch a behaviour that might be unique to Einstein
+                except KeyError:
+                    self._obs_id = self.event_header['XS-OBSID']
+
+
+        # Checking the formatting of the obs_ids argument
+        if obs_ids is not None and (not isinstance(obs_ids, List) or
+                                    (isinstance(obs_ids, List) and not all(isinstance(obs, str) for obs in obs_ids))):
+            raise ValueError("The 'obs_ids' argument must be a list of strings.")
+        self._obs_ids = obs_ids
 
         # The user may want to use WCSes to convert between different coordinate systems (sky to RA-Dec for
         #  instance), so when they are constructed they will be assigned to these attributes
@@ -222,22 +263,72 @@ class EventList(BaseProduct):
             # Check whether the telescope has information in the mission file we maintain (derived from XSELECT's
             #  mission database file) - if it does then we'll use that to specify the header columns that contain
             #  the relevant WCS information.
-            if self.telescope.lower() in MISSION_COL_DB:
-                rel_miss_info = MISSION_COL_DB[self.telescope.lower()]
-                radec_wcs = WCS(naxis=2)
-                radec_wcs.wcs.cdelt = [self.event_header[rel_miss_info['im_xdelt']],
-                                       self.event_header[rel_miss_info['im_ydelt']]]
-                radec_wcs.wcs.crpix = [self.event_header[rel_miss_info['im_xcritpix']],
-                                       self.event_header[rel_miss_info['im_ycritpix']]]
-                radec_wcs.wcs.crval = [self.event_header[rel_miss_info['im_xcritval']],
-                                       self.event_header[rel_miss_info['im_ycritval']]]
-                radec_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
-                                       self.event_header[rel_miss_info['im_yproj']]]
+            if self.telescope.upper() in MISSION_COL_DB:
+                # Read out the mission database file's entry for the current mission
+                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
 
-                x_lims = (self.event_header[rel_miss_info['im_xlim_low']],
-                            self.event_header[rel_miss_info['im_xlim_upp']])
-                y_lims = (self.event_header[rel_miss_info['im_ylim_low']],
-                          self.event_header[rel_miss_info['im_ylim_upp']])
+                # First we must identify the relevant header entries for the RA-Dec WCS - particularly the
+                #  index numbers appended to header keys like 'TCRPX'. We'll achieve this by looking for the TTYPE{N}
+                #  header entries that correspond to the names of the event columns that contain sky coordinate data.
+                sky_x_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                                   if hdr_val == rel_miss_info['x'] and 'TTYPE' in hdr_key]
+                sky_y_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                                   if hdr_val == rel_miss_info['y'] and 'TTYPE' in hdr_key]
+
+                # Check for multiple entries - if there are then something has gone awry
+                if len(sky_x_ttype_ind) > 1 or len(sky_y_ttype_ind) > 1:
+                    raise KeyError("Multiple TTYPE entries found for sky coordinates in the event table header.")
+                else:
+                    sky_x_ttype_ind = sky_x_ttype_ind[0]
+                    sky_y_ttype_ind = sky_y_ttype_ind[0]
+
+                # Now we have to check what WCS-related information is present in the database file, as well as
+                #  whether the entries are default values or not.
+                # TLMAX is the default value for the 'xsiz' entry, which describes the maximum size of the X
+                #  coordinate system. If the entry isn't default then we make sure to use the value from the
+                #  mission database.
+                if 'xsiz' in rel_miss_info and rel_miss_info['xsiz'] != 'TLMAX':
+                    max_sky_x = self.event_header[rel_miss_info['xsiz']]
+                    # We have to assume that the minimum value is 0 in this case, as we don't know what
+                    #  header name to look out for
+                    min_sky_x = 0
+                elif 'xsiz' in rel_miss_info and rel_miss_info['xsiz'] == 'TLMAX':
+                    max_sky_x = self.event_header['TLMAX'+sky_x_ttype_ind]
+                    # If there is a matching TLMIN entry, we'll use that information to describe the minimum
+                    #  value of the sky x coordinates
+                    if 'TLMIN'+sky_x_ttype_ind in rel_miss_info:
+                        min_sky_x = self.event_header['TLMIN'+sky_x_ttype_ind]
+                    else:
+                        min_sky_x = 0
+
+                # In a fit of paranoia we'll assume that the y entries could behave different from the x entries
+                if 'ysiz' in rel_miss_info and rel_miss_info['ysiz'] != 'TLMAX':
+                    max_sky_y = self.event_header[rel_miss_info['ysiz']]
+                    # We have to assume that the minimum value is 0 in this case, as we don't know what
+                    #  header name to look out for
+                    min_sky_y = 0
+                elif 'ysiz' in rel_miss_info and rel_miss_info['ysiz'] == 'TLMAX':
+                    max_sky_y = self.event_header['TLMAX' + sky_y_ttype_ind]
+                    # If there is a matching TLMIN entry, we'll use that information to describe the minimum
+                    #  value of the sky x coordinates
+                    if 'TLMIN' + sky_y_ttype_ind in rel_miss_info:
+                        min_sky_y = self.event_header['TLMIN' + sky_y_ttype_ind]
+                    else:
+                        min_sky_y = 0
+
+                # Time to assemble the WCS!
+                radec_wcs = WCS(naxis=2)
+                radec_wcs.wcs.cdelt = [self.event_header["TCDLT"+sky_x_ttype_ind],
+                                       self.event_header["TCDLT"+sky_y_ttype_ind]]
+                radec_wcs.wcs.crpix = [self.event_header['TCRPX'+sky_x_ttype_ind],
+                                       self.event_header['TCRPX'+sky_y_ttype_ind]]
+                radec_wcs.wcs.crval = [self.event_header["TCRVL"+sky_x_ttype_ind],
+                                       self.event_header["TCRVL"+sky_y_ttype_ind]]
+                radec_wcs.wcs.ctype = [self.event_header["TCTYP"+sky_x_ttype_ind],
+                                       self.event_header["TCTYP"+sky_y_ttype_ind]]
+
+                x_lims = (min_sky_x, max_sky_x)
+                y_lims = (min_sky_y, max_sky_y)
                 # Set the lower and upper limits of the sky pixel coordinate system
                 radec_wcs.pixel_bounds = [x_lims, y_lims]
                 self._radec_sky_wcs = radec_wcs
@@ -579,12 +670,12 @@ class EventList(BaseProduct):
         ############### Setting up the binning size ################
         # Parsing the user-specified bin size, if indeed they did specify one - if not, then we
         #  pull the default size for the mission
-        if bin_size is None and ('default_im_binsize' not in MISSION_COL_DB[self.telescope.lower()] or
-                                 MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is None):
+        if bin_size is None and ('default_im_binsize' not in MISSION_COL_DB[self.telescope.upper()] or
+                                 MISSION_COL_DB[self.telescope.upper()]['default_im_binsize'] is None):
             raise ValueError("No default image bin size is defined for {t} in the mission database file, please "
                              "pass the 'bin_size' argument".format(t=self.telescope))
-        elif bin_size is None and MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'] is not None:
-            bin_size = Quantity(MISSION_COL_DB[self.telescope.lower()]['default_im_binsize'])
+        elif bin_size is None and MISSION_COL_DB[self.telescope.upper()]['default_im_binsize'] is not None:
+            bin_size = Quantity(MISSION_COL_DB[self.telescope.upper()]['default_im_binsize'])
 
         #
         if bin_size.unit.is_equivalent('deg'):
