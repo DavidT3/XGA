@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/09/2025, 19:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:04. Copyright (c) The Contributors
 
 import json
 import os
@@ -393,7 +393,6 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
 
 
 # ------------- Defining where the configuration file (and eventually observation census) lives -------------
-
 # We need to know where the configuration file which tells XGA what data and settings to use lives. If XDG_CONFIG_HOME
 #  is set then use that, otherwise use this default config path. We'll then create this configuration directory
 #  if it doesn't already exist
@@ -404,7 +403,8 @@ if not os.path.exists(CONFIG_PATH):
 
 
 # ------------- Defining constants to do with the telescope data -------------
-# This chunk of this file sets
+# This chunk of this file sets up the constants that are used to define the telescopes that XGA supports, and
+#  the instruments that they have.
 
 # This dictionary both defines the telescopes that XGA is compatible with, and their allowed instruments. These mission
 #  and instrument names should all be lowercase, that will be the general storage convention throughout XGA
@@ -412,6 +412,12 @@ ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
                 }
 # TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
 XMM_INST = ALLOWED_INST['xmm']
+
+# This constant defines alternative names for instruments of different high-energy missions - largely used when
+#  reading instrument names from event list headers
+ALT_INST_NAMES = {"xmm": {"pn": ["pn", "epn"], "mos1": ["mos1", "emos1", "m1"], "mos2": ["mos2", "emos2", "m2"]},
+                  }
+
 # I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())
@@ -441,6 +447,19 @@ BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format
 
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed']}
+
+# A dictionary that contains rough values for the energy step per channel for telescope instruments - this is
+#  currently collated in a very manual way, but in the future may be drawn automatically from the HEASARC CALDB
+# APPROX_EN_PER_CHAN = {'xmm': {'pn': Quantity(1, 'eV/chan'),
+#                               'mos1': Quantity(1, 'eV/chan'),
+#                               'mos2': Quantity(1, 'eV/chan')},
+#                       'chandra': {'hrc': None,
+#                                   'acis': None}
+#                       }
+
+# A dictionary containing default XGA image binning for a different missions and instruments
+DEFAULT_IMAGE_BINNING = {"xmm": {'pn': 87, 'mos1': 87, 'mos2': 87},
+                        }
 # ----------------------------------------------------------------------------
 
 
@@ -539,9 +558,6 @@ with open(importlib_resources.files(__name__) / "files/xspec_model_units.json5",
 #  event files to mission-independent names (e.g. specifying which table name contains events in an
 #  event list). This is based on the mission database file for XSELECT, but has been modified
 #  quite a lot.
-# with open(importlib_resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
-#     MISSION_COL_DB = json.load(filey)
-
 with open(importlib_resources.files(__name__) / "files/xselect_mission_database.json", 'r') as filey:
     MISSION_COL_DB = json.load(filey)
 # ---------------------------------------------------------------------------

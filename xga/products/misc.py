@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 10:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:04. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -13,8 +13,8 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
-from . import BaseProduct, Image
-from .. import MISSION_COL_DB
+from . import BaseProduct
+from .. import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
 from ..exceptions import XGADeveloperError
 
 
@@ -40,7 +40,7 @@ class EventList(BaseProduct):
 
     def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
                  stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None,
-                 force_remote: bool = False, fsspec_kwargs: dict = None):
+                 force_remote: bool = False, fsspec_kwargs: dict = None, energy_per_channel: Quantity = None):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -163,9 +163,18 @@ class EventList(BaseProduct):
         #  instance), so when they are constructed they will be assigned to these attributes
         self._radec_sky_wcs = None
 
-        # Here we store the mapping between channel and energy, used for the generation of images and
-        #  lightcurves. This can be pulled from the mission database file, or set by the user.
-        self._ev_per_channel = None
+        # We allow the user to specify an energy per channel, which is used to convert between event channel and
+        #  event energy, when performing operations such as generating images. If the user doesn't specify it
+        #  then we'll try and infer the quantity using information from the mission database, but that operation
+        #  will take place in the ev_per_channel property, as we don't want to raise an error because we can't find
+        #  the necessary information unless the user actually needs that information.
+        if energy_per_channel is not None and not energy_per_channel.unit.is_equivalent('eV/chan'):
+            raise UnitConversionError("The 'energy_per_channel' argument must be an astropy Quantity with "
+                                      "units convertible to eV/chan.")
+        elif energy_per_channel is not None:
+            self._ev_per_channel = energy_per_channel.to('eV/chan')
+        else:
+            self._ev_per_channel = None
 
     @property
     def obs_ids(self) -> list:
@@ -344,11 +353,12 @@ class EventList(BaseProduct):
                 radec_wcs.wcs.ctype = [self.event_header[final_wcs_key_names["TCTYP"]+sky_x_ttype_ind],
                                        self.event_header[final_wcs_key_names["TCTYP"]+sky_y_ttype_ind]]
 
-                x_lims = (min_sky_x, max_sky_x)
-                y_lims = (min_sky_y, max_sky_y)
+                x_lims = (int(min_sky_x), int(max_sky_x))
+                y_lims = (int(min_sky_y), int(max_sky_y))
                 # Set the lower and upper limits of the sky pixel coordinate system
                 radec_wcs.pixel_bounds = [x_lims, y_lims]
                 self._radec_sky_wcs = radec_wcs
+
             else:
                 raise NotImplementedError("We cannot yet determine WCS information without header entry names "
                                           "being specified in the 'mission_event_column_name_map.json' file.")
@@ -392,11 +402,47 @@ class EventList(BaseProduct):
         :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
         :rtype: Quantity
         """
-        raise NotImplementedError("This property is not yet implemented.")
         if self._ev_per_channel is None:
-            MISSION_COL_DB
+            # If the user didn't specify the energy-channel conversion, we'll try to derive it by identifying the
+            #  fits table headers that define the limits of the channel coordinate system, then pulling that
+            #  information from the event table header
 
-            self._ev_per_channel = None
+            # Check whether the telescope has information in the mission file we maintain (derived from XSELECT's
+            #  mission database file) - if it does then we'll use that to specify the header columns that contain
+            #  the relevant WCS information.
+            if self.telescope.upper() in MISSION_COL_DB:
+                # Read out the mission database file's entry for the current mission
+                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
+
+                # Try to identify the TTYPE ind associated with the channel 'coordinate system'
+                ecol_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                                  if hdr_val == rel_miss_info['ecol'] and 'TTYPE' in hdr_key]
+                # Check for multiple entries - if there are then something has gone awry
+                if len(ecol_ttype_ind) > 1:
+                    raise KeyError("Multiple TTYPE entries found for the energy column 'coordinate system' "
+                                   "in the event table header.")
+                else:
+                    ecol_ttype_ind = ecol_ttype_ind[0]
+
+                if ('phamax' in rel_miss_info and rel_miss_info['phamax'] != 'TLMAX' and
+                        rel_miss_info['phamax'] in self.event_header):
+                    max_ecol = self.event_header[rel_miss_info['phamax']]
+                    # We have to assume that the minimum value is 0 in this case, as we don't know what
+                    #  header name to look out for
+                    min_ecol = 0
+                elif 'phamax' in rel_miss_info and (rel_miss_info['phamax'] == 'TLMAX' or
+                                                    rel_miss_info['phamax'] not in self.event_header):
+                    max_ecol = self.event_header['TLMAX' + ecol_ttype_ind]
+                    # If there is a matching TLMIN entry, we'll use that information to describe the minimum
+                    #  value of the energy column
+                    if 'TLMIN' + ecol_ttype_ind in rel_miss_info:
+                        min_ecol = self.event_header['TLMIN' + ecol_ttype_ind]
+                    else:
+                        min_ecol = 0
+
+                raise NotImplementedError("Default values for 'ev_per_channel' are not yet implemented, please pass"
+                                          " a value to the 'ev_per_channel' argument when instantiating the EventList.")
+
         return self._ev_per_channel
 
     @ev_per_channel.setter
@@ -597,17 +643,33 @@ class EventList(BaseProduct):
         if unload_header:
             del self.header
 
+    # TODO Add a 'donor_image' argument that allows the user to specify the WCS grid on which
+    #  this new image will be generated
     def generate_image(self, bin_size: Quantity = None, x_lims: Quantity = None, y_lims: Quantity = None,
-                       lo_en: Quantity = None, hi_en: Quantity = None, donor_image: Image = None,
-                       save_path: str = None):
+                       lo_en: Quantity = None, hi_en: Quantity = None, save_path: str = None) -> Tuple[np.ndarray, WCS]:
         """
+        Generate a 2D image from the event list data by binning events into pixels. The method allows control over
+        binning size, spatial boundaries, energy filtering, and output file saving.
 
-        :return:
-        :rtype:
+        :param Quantity bin_size: The size of bins to use when creating the image. Can be specified in pixels
+            ('pix') or angular units (e.g. 'deg', 'arcmin'). If None, uses mission defaults or falls back to 1 pixel.
+        :param Quantity x_lims: The x-axis boundaries of the generated image. Can be specified in pixels ('pix') or 
+            angular units (e.g. 'deg'). If None, uses full detector field of view.
+        :param Quantity y_lims: The y-axis boundaries of the generated image. Can be specified in pixels ('pix') or
+            angular units (e.g. 'deg'). If None, uses full detector field of view.
+        :param Quantity lo_en: Lower energy boundary for event filtering. Must be in energy units (e.g. 'eV', 'keV').
+            If specified, hi_en must also be specified.
+        :param Quantity hi_en: Upper energy boundary for event filtering. Must be in energy units (e.g. 'eV', 'keV').
+            If specified, lo_en must also be specified.
+        :param str save_path: Path where the generated image should be saved as a FITS file. If
+            None, image is not saved.
+        :return: Tuple containing the 2D numpy array of binned event counts and the WCS object describing the image's
+            coordinate system.
+        :rtype: Tuple[numpy.ndarray, astropy.wcs.WCS]
         """
         #
-        if self.telescope.lower() in MISSION_COL_DB:
-            rel_miss_info = MISSION_COL_DB[self.telescope.lower()]
+        if self.telescope.upper() in MISSION_COL_DB:
+            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
             if rel_miss_info['imagecoord'] is None:
                 raise ValueError("Observations taken by {t} may not contain spatial "
                                  "information.".format(t=self.telescope))
@@ -615,15 +677,13 @@ class EventList(BaseProduct):
                 x_col = rel_miss_info["x"]
                 y_col = rel_miss_info["y"]
             elif rel_miss_info['imagecoord'] == "DET":
-                x_col = rel_miss_info["detx"]
-                y_col = rel_miss_info["dety"]
+                raise NotImplementedError("Image generation from event lists for observations taken by {t} "
+                                          "with detector coordinates is not yet implemented.".format(t=self.telescope))
             #
             en_col = rel_miss_info['ecol']
         else:
             raise NotImplementedError("'{t}' does not have an mission DB entry, and manual specification is not "
                                       "supported yet.".format(t=self.telescope))
-            x_col = "X"
-            y_col = "Y"
 
         ###################### Validating input configuration ######################
         ################## Checking the save path ##################
@@ -685,16 +745,38 @@ class EventList(BaseProduct):
         ############################################################
 
         ############### Setting up the binning size ################
-        # Parsing the user-specified bin size, if indeed they did specify one - if not, then we
-        #  pull the default size for the mission
-        if bin_size is None and ('default_im_binsize' not in MISSION_COL_DB[self.telescope.upper()] or
-                                 MISSION_COL_DB[self.telescope.upper()]['default_im_binsize'] is None):
-            raise ValueError("No default image bin size is defined for {t} in the mission database file, please "
-                             "pass the 'bin_size' argument".format(t=self.telescope))
-        elif bin_size is None and MISSION_COL_DB[self.telescope.upper()]['default_im_binsize'] is not None:
-            bin_size = Quantity(MISSION_COL_DB[self.telescope.upper()]['default_im_binsize'])
+        # Parsing the user-specified bin size, if indeed they did specify one. If not, then we
+        #  pull the default size for the mission, and if that isn't available then we default to a bin size of 1
 
-        #
+        # Need to lower the telescope name for this check, as in XGA mission names are in lower case (not necessarily
+        #  true in event file headers).
+        if bin_size is None and self.telescope.lower() in DEFAULT_IMAGE_BINNING:
+            # Read out the default bin size for this mission, if this event list's instrument is a key in the image
+            #  binning constant dictionary
+            if self.instrument.lower() in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
+                bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][self.instrument.lower()], 'pix')
+
+            # If the instrument isn't a key, it is possible that the instrument name in the event list is different
+            #  to that used by XGA, so we check an 'alternative name' constant set up for this purpose
+            elif [self.instrument.lower() in inst_alts for inst_alts in
+                  ALT_INST_NAMES[self.telescope.lower()].values()]:
+                # Inefficient considering we've already performed the check, but nicer code structure
+                rel_xga_inst_name = [xga_inst for xga_inst, inst_alts in
+                                     ALT_INST_NAMES[self.telescope.lower()].items()
+                                     if self.instrument.lower() in inst_alts][0]
+                if rel_xga_inst_name in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
+                    bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], 'pix')
+                else:
+                    warn("No XGA default binning size has been set for the instrument '{i}' (please contact the "
+                         "developers), defaulting to a bin size of 1.".format(i=self.instrument), stacklevel=2)
+                    bin_size = Quantity(1, 'pix')
+        # The overall fallback, setting the binning to one
+        elif bin_size is None:
+            warn("No XGA default binning size has been set for the instrument '{i}' (please contact the "
+                 "developers), defaulting to a bin size of 1.".format(i=self.instrument), stacklevel=2)
+            bin_size = Quantity(1, 'pix')
+
+        # We allow the bin_size argument to be in angular units, but make sure to translate it to pixels
         if bin_size.unit.is_equivalent('deg'):
             # We enforce square pixels by using the first element of this calculation - though
             #  in most cases the calculated bin size for x and y axes will be the same
@@ -712,13 +794,9 @@ class EventList(BaseProduct):
         # Check validity of lower and upper energy limits
         elif lo_en is not None and (lo_en >= hi_en):
             raise ValueError("Value passed to 'lo_en' must be less than or equal to 'hi_en'.")
-
-        # phamax - mission database file keyword for the maximum allowable channel value
-
         ############################################################
 
         ############################################################################
-
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
         ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
@@ -734,15 +812,13 @@ class EventList(BaseProduct):
 
         # Setting up the new WCS
         im_wcs = WCS(naxis=2)
-        im_wcs.wcs.cdelt = [np.sign(self.event_header[rel_miss_info['im_xdelt']])*ang_bin_size,
-                                np.sign(self.event_header[rel_miss_info['im_ydelt']])*ang_bin_size]
+        im_wcs.wcs.cdelt = [np.sign(self.radec_sky_wcs.wcs.cdelt[0])*ang_bin_size,
+                                np.sign(self.radec_sky_wcs.wcs.cdelt[1])*ang_bin_size]
 
         min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 1)
         im_wcs.wcs.crpix = [1, 1]
         im_wcs.wcs.crval = [min_bnd_radec[0], min_bnd_radec[1]]
-
-        im_wcs.wcs.ctype = [self.event_header[rel_miss_info['im_xproj']],
-                               self.event_header[rel_miss_info['im_yproj']]]
+        im_wcs.wcs.ctype = [self.radec_sky_wcs.wcs.ctype[0], self.radec_sky_wcs.wcs.ctype[1]]
 
         # Set the lower and upper limits of the sky pixel coordinate system
         im_wcs.pixel_bounds = [x_lims.value, y_lims.value]
