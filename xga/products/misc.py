@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 10:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 10:18. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -316,16 +316,33 @@ class EventList(BaseProduct):
                     else:
                         min_sky_y = 0
 
+                # Some older missions might have slightly different spellings of the WCS header information, so
+                #  we'll have to account for that here
+                alt_hdr_spell = {'TCDLT': 'CDELT', 'TCRPX': 'CRPIX', 'TCRVL': 'CRVAL', 'TCTYP': 'CTYPE'}
+                final_wcs_key_names = {}
+                for new_key, old_key in alt_hdr_spell.items():
+                    # Use the appended TTYPE index for the x-axis to check
+                    if new_key+sky_x_ttype_ind in self.event_header:
+                        final_wcs_key_names[new_key] = new_key
+                    elif old_key+sky_x_ttype_ind in self.event_header:
+                        final_wcs_key_names[new_key] = old_key
+                    else:
+                        raise KeyError("The '{k}' WCS key cannot be identified in the event table "
+                                       "header.".format(k=new_key))
+
                 # Time to assemble the WCS!
                 radec_wcs = WCS(naxis=2)
-                radec_wcs.wcs.cdelt = [self.event_header["TCDLT"+sky_x_ttype_ind],
-                                       self.event_header["TCDLT"+sky_y_ttype_ind]]
-                radec_wcs.wcs.crpix = [self.event_header['TCRPX'+sky_x_ttype_ind],
-                                       self.event_header['TCRPX'+sky_y_ttype_ind]]
-                radec_wcs.wcs.crval = [self.event_header["TCRVL"+sky_x_ttype_ind],
-                                       self.event_header["TCRVL"+sky_y_ttype_ind]]
-                radec_wcs.wcs.ctype = [self.event_header["TCTYP"+sky_x_ttype_ind],
-                                       self.event_header["TCTYP"+sky_y_ttype_ind]]
+                radec_wcs.wcs.cdelt = [self.event_header[final_wcs_key_names["TCDLT"]+sky_x_ttype_ind],
+                                       self.event_header[final_wcs_key_names["TCDLT"]+sky_y_ttype_ind]]
+
+                radec_wcs.wcs.crpix = [self.event_header[final_wcs_key_names['TCRPX']+sky_x_ttype_ind],
+                                       self.event_header[final_wcs_key_names['TCRPX']+sky_y_ttype_ind]]
+
+                radec_wcs.wcs.crval = [self.event_header[final_wcs_key_names["TCRVL"]+sky_x_ttype_ind],
+                                       self.event_header[final_wcs_key_names["TCRVL"]+sky_y_ttype_ind]]
+
+                radec_wcs.wcs.ctype = [self.event_header[final_wcs_key_names["TCTYP"]+sky_x_ttype_ind],
+                                       self.event_header[final_wcs_key_names["TCTYP"]+sky_y_ttype_ind]]
 
                 x_lims = (min_sky_x, max_sky_x)
                 y_lims = (min_sky_y, max_sky_y)
