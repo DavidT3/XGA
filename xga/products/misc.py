@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 17:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 17:16. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -874,7 +874,12 @@ class EventList(BaseProduct):
         # Make sure that the bin size is an integer
         bin_size = bin_size.astype(int)
 
-        rel_evt_data = self.get_filtered_data([x_col, y_col, en_col], filt_operations)
+        # Makes sure that any extra columns that the user wishes to filter on are in the set we request
+        #  from the get_filtered_data method (they would be added by that method, but with an annoying
+        #  warning that we do not need)
+        cols_to_get = list(set([x_col, y_col, en_col] + list(filt_operations.keys())))
+        rel_evt_data = self.get_filtered_data(cols_to_get, filt_operations)
+
         x_bins = np.arange(x_lims.value[0], x_lims.value[1]+bin_size.value, bin_size.value)
         y_bins = np.arange(y_lims.value[0], y_lims.value[1]+bin_size.value, bin_size.value)
 
