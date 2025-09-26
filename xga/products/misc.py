@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 16:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 17:10. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -698,7 +698,8 @@ class EventList(BaseProduct):
     # TODO Add a 'donor_image' argument that allows the user to specify the WCS grid on which
     #  this new image will be generated
     def generate_image(self, bin_size: Quantity = None, x_lims: Quantity = None, y_lims: Quantity = None,
-                       lo_en: Quantity = None, hi_en: Quantity = None, save_path: str = None) -> Tuple[np.ndarray, WCS]:
+                       lo_en: Quantity = None, hi_en: Quantity = None, filt_operations: dict = None,
+                       save_path: str = None) -> Tuple[np.ndarray, WCS]:
         """
         Generate a 2D image from the event list data by binning events into pixels. The method allows control over
         binning size, spatial boundaries, energy filtering, and output file saving.
@@ -745,6 +746,16 @@ class EventList(BaseProduct):
                 (os.path.dirname(save_path) != '' and not os.path.exists(os.path.dirname(save_path)))):
             raise FileNotFoundError("The directory in which the image is to be saved "
                                     "({d}) does not exist.".format(d=os.path.dirname(save_path)))
+
+        # If None has been passed for the filtering operations, we'l turn it into an empty dictionary
+        if filt_operations is None:
+            filt_operations = {}
+        # Otherwise we'll check that the user isn't trying to specify x_col, y_col, or en_col limits in
+        #  the filtering operations dictionary
+        elif x_col in filt_operations or y_col in filt_operations or en_col in filt_operations:
+            raise ValueError("The filtering operations dictionary cannot contain keys spatial columns ({x}, {y}), or "
+                             "the energy column ({e}), as these are controlled separately by this "
+                             "method.".format(x=x_col, y=y_col, e=en_col))
         ############################################################
 
         ######### Converting ints to assumed pixel coords ##########
@@ -846,17 +857,24 @@ class EventList(BaseProduct):
         # Check validity of lower and upper energy limits
         elif lo_en is not None and (lo_en >= hi_en):
             raise ValueError("Value passed to 'lo_en' must be less than or equal to 'hi_en'.")
+
+        # Setup filtering operations for the events data
+        if lo_en is not None:
+            # Convert energy limits to channels if necessary
+            lo_chan = (lo_en / self.ev_per_channel).decompose().value
+            hi_chan = (hi_en / self.ev_per_channel).decompose().value
+            filt_operations[en_col] = [f">={lo_chan}", f"<={hi_chan}"]
+        
         ############################################################
 
         ############################################################################
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
         ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
-
-        #
+        # Make sure that the bin size is an integer
         bin_size = bin_size.astype(int)
-        rel_evt_data = self.get_columns_from_data([x_col, y_col, en_col])
 
+        rel_evt_data = self.get_filtered_data([x_col, y_col, en_col], filt_operations)
         x_bins = np.arange(x_lims.value[0], x_lims.value[1]+bin_size.value, bin_size.value)
         y_bins = np.arange(y_lims.value[0], y_lims.value[1]+bin_size.value, bin_size.value)
 
