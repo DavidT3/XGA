@@ -112,13 +112,17 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         start_temp = Quantity([start_temp.value]*len(sources), start_temp.unit)
 
     # Have to check that every source has a start metalicity entry, if the user decided to pass a set of them
-    if not start_met.isscalar and len(start_met) != len(sources):
-        raise ValueError("If a non-scalar Quantity is passed for 'start_met', it must have one entry for each "
+    if isinstance(start_met, list):
+        if len(start_met) != len(sources):
+            raise ValueError("If a list is passed for 'start_met', it must have one entry for each "
                          "source. It currently has {n} for {s} sources.".format(n=len(start_met), s=len(sources)))
     # Want to make sure that the start_met variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
-    elif start_met.isscalar:
-        start_met = Quantity([start_met.value]*len(sources), start_met.unit)
+    elif isinstance(start_met, float):
+        start_met = [start_met]*len(sources)
+    
+    else:
+        raise ValueError("'start_met' must be either a list with an entry for each source, or a float.")
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
