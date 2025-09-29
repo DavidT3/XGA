@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:23. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:37. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -24,7 +24,8 @@ from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
-from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
+from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
+    XGADeveloperError
 from ..sourcetools import ang_to_rad
 from ..utils import xmm_sky, xmm_det
 
@@ -64,14 +65,24 @@ class Image(BaseProduct):
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
         is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None):
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None):
         """
         The initialisation method for the Image class.
         """
+        # A validity check to help remind me to pass the telescope to the super-class init when this merges with
+        #  multi-mission XGA
+        if hasattr(super(), 'telescope'):
+            raise XGADeveloperError("Intrinsic image generation has been merged into multi-mission XGA, and the "
+                                    "call to BaseProduct init in Image needs to be updated.")
+        else:
+            self._telescope = telescope
+
+        # Calls the init of the BaseProduct class, which does some base level setup
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
 
         # TODO I hope that this will play well with the significant changes made in multi-mission XGA, which
