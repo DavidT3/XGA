@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 11:00. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -480,6 +480,9 @@ class Image(BaseProduct):
         """
         # As for some reason I've allowed certain important info about these products to be updated after init,
         #  this getter actually generates the storage key on demand, rather than returning a stored value
+
+        if any([self._energy_bounds[0] is None, self._energy_bounds[1] is None]):
+            raise ValueError("The product storage key cannot be generated if the energy bounds are None.")
 
         # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
         key = "bound_{l}-{u}".format(l=float(self._energy_bounds[0].value), u=float(self._energy_bounds[1].value))
@@ -1207,13 +1210,16 @@ class Image(BaseProduct):
         # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
         #  title - otherwise we use the custom title and don't add anything to it
         if custom_title is None:
+            # Being slightly more permissive with not setting energy bounds; this approach makes sure we don't
+            #  get an error when a None-energy-bound is passed and the user wishes to view the image
+            lo_en_str = str(self._energy_bounds[0].to("keV").value) if self._energy_bounds[0] is not None else "?"
+            hi_en_str = str(self._energy_bounds[1].to("keV").value) if self._energy_bounds[1] is not None else "?"
+
             if self.src_name is not None:
-                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
-                                                          l=self._energy_bounds[0].to("keV").value,
-                                                          u=self._energy_bounds[1].to("keV").value, t=self.type)
+                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=lo_en_str, u=hi_en_str,
+                                                          t=self.type)
             else:
-                title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
-                                                    u=self._energy_bounds[1].to("keV").value, t=self.type)
+                title = "{i} {l}-{u}keV {t}".format(i=ident, l=lo_en_str, u=hi_en_str, t=self.type)
 
             # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
             if self.psf_corrected:
