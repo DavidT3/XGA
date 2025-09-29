@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:23. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -41,7 +41,7 @@ class Image(BaseProduct):
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
 
-    :param str path: The path to where the product file SHOULD be located.
+    :param str path: The path to where the product file should be located.
     :param str obs_id: The ObsID related to the Image being declared.
     :param str instrument: The instrument related to the Image being declared.
     :param str stdout_str: The stdout from calling the terminal command.
@@ -73,14 +73,62 @@ class Image(BaseProduct):
         The initialisation method for the Image class.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+
+        # TODO I hope that this will play well with the significant changes made in multi-mission XGA, which
+        #  introduced better memory management, but will have to check carefully when merged.
+        # The super init has set the _path attribute, but as the first input of the Image class can now be
+        #  EITHER a path or a numpy array and a WCS object, we have to account for that.
+        if not isinstance(path, str):
+            # Null the path attribute, as if the input wasn't a string, it will not represent a path
+            self._path = None
+
+            # We set an attribute that lets the Image instance know that we're setting it up with data from
+            #  memory rather than reading in a file
+            self._from_mem = True
+
+            # We accept a couple of different non-string inputs, dict and list, and we perform some helpful
+            #  checks on them and their contents
+            if (isinstance(path, dict) and
+                    not all(['data' in path.keys(), 'wcs' in path.keys(), 'header' in path.keys()])):
+                raise ValueError("If the 'path' argument is a dictionary, it must contain 'data', 'wcs', and "
+                                 "'header' keys.")
+            elif isinstance(path, dict):
+                self._data = path['data']
+                self._wcs_radec = path['wcs']
+                self._header = path['header']
+            elif isinstance(path, list) and len(path) != 3:
+                raise ValueError("If the 'path' argument is a list, it must contain exactly three elements, "
+                                 "the first being a numpy array containing image data, the second being an "
+                                 "Astropy WCS object, and the third being a header dictionary/object.")
+            elif isinstance(path, list):
+                self._data = path[0]
+                self._wcs_radec = path[1]
+                self._header = path[3]
+            else:
+                raise TypeError("The 'path' argument must be a string path, a dictionary with 'data', 'wcs', and "
+                                "'header' keys, or a list containing a numpy array, an Astropy WCS object, and a "
+                                "header dictionary/object.")
+
+            # Some checks that need to be applied to the data regardless of whether it was passed in as a
+            #  dictionary or a list
+            if isinstance(self._header, dict):
+                self._header = FITSHDR(self._header)
+
+        # Otherwise we think that the 'path' argument is actually just a file path, and setup accordingly
+        else:
+            self._from_mem = False
+
+            # Setting up null values for data, wcs, and header
+            self._data = None
+            self._wcs_radec = None
+            self._header = None
+
+        # Set up many image-specific attributes
         self._shape = None
-        self._wcs_radec = None
         self._wcs_xmmXY = None
         self._wcs_xmmdetXdetY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
-        self._data = None
-        self._header = None
         # Adding an attribute to tell the product what its data units are, as there are subclasses of Image
         self._data_unit = Unit("ct")
 

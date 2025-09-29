@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 19:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:23. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -71,19 +71,26 @@ class BaseProduct:
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
-
-        # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
-        #  interact with it in the various product sub-classes
-        if force_remote:
-            # Here the user has forced us to treat the path as remote
-            self._local_file = False
-        elif path[:5] == "s3://" or path[:5] == "gs://":
-            # Here we assume that the file is remote because it starts with the s3/gs identifier - this is for
-            #  use with resources like the HEASARC open S3 bucket
-            self._local_file = False
+        # It is now possible for some 'standard' products (like Image) to be set up using data/information that
+        #  is in memory, rather than stored in a file. So we have to account for the possibility of non-string
+        #  values being passed to 'path'.
+        if isinstance(path, str):
+            # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
+            #  interact with it in the various product sub-classes
+            if force_remote:
+                # Here the user has forced us to treat the path as remote
+                self._local_file = False
+            elif path[:5] == "s3://" or path[:5] == "gs://":
+                # Here we assume that the file is remote because it starts with the s3/gs identifier - this is for
+                #  use with resources like the HEASARC open S3 bucket
+                self._local_file = False
+            else:
+                # Otherwise we decide that the file is local
+                self._local_file = True
         else:
-            # Otherwise we decide that the file is local
-            self._local_file = True
+            # We will use the existing 'local_file' mechanism in the case of in-memory declarations, so that the
+            #  init does not try to determine if the file exists.
+            self._local_file = False
 
         # Keep track of whether the user forced the path to be considered as a remote url or not, that information
         #  may be required in some warning/error messages later on
