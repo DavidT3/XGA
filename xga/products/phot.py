@@ -42,7 +42,9 @@ class Image(BaseProduct):
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
 
-    :param str path: The path to where the product file should be located.
+    :param str/list/dict path: Nominally, the string path to the product file. If this Image is being declared with
+        in-memory information, we accept a dictionary with keys 'data', 'wcs', and 'header', or a three-element
+        list containing the data, the WCS object, and the header.
     :param str obs_id: The ObsID related to the Image being declared.
     :param str instrument: The instrument related to the Image being declared.
     :param str stdout_str: The stdout from calling the terminal command.
@@ -67,8 +69,9 @@ class Image(BaseProduct):
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+    def __init__(self, path: Union[str, dict, list], obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity,
+                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None):
         """
