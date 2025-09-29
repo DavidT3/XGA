@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:44. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -699,7 +699,7 @@ class EventList(BaseProduct):
     #  this new image will be generated
     def generate_image(self, bin_size: Quantity = None, x_lims: Quantity = None, y_lims: Quantity = None,
                        lo_en: Quantity = None, hi_en: Quantity = None, filt_operations: dict = None,
-                       save_path: str = None) -> Tuple[np.ndarray, WCS]:
+                       save_path: str = None) -> Image:
         """
         Generate a 2D image from the event list data by binning events into pixels. The method allows control over
         binning size, spatial boundaries, energy filtering, and output file saving.
@@ -721,9 +721,8 @@ class EventList(BaseProduct):
             list. For example - {'PI': ['>100', '<1000'], 'X': [lambda x: x > 0]}
         :param str save_path: Path where the generated image should be saved as a FITS file. If
             None, image is not saved.
-        :return: Tuple containing the 2D numpy array of binned event counts and the WCS object describing the image's
-            coordinate system.
-        :rtype: Tuple[numpy.ndarray, astropy.wcs.WCS]
+        :return: An XGA Image object containing the binned event data and associated WCS information.
+        :rtype: Image
         """
         #
         if self.telescope.upper() in MISSION_COL_DB:
@@ -926,4 +925,4 @@ class EventList(BaseProduct):
             hdu_list = HDUList([im_hdu])
             hdu_list.writeto(save_path)
 
-        return binned_data, im_wcs
+        return new_im
