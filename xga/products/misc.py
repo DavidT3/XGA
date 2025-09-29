@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/09/2025, 17:16. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 08:56. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -714,6 +714,11 @@ class EventList(BaseProduct):
             If specified, hi_en must also be specified.
         :param Quantity hi_en: Upper energy boundary for event filtering. Must be in energy units (e.g. 'eV', 'keV').
             If specified, lo_en must also be specified.
+        :param dict filt_operations: A dictionary of filtering operations to apply to the event list data. The
+            dictionary should be structured with column names as keys and filtering operations as values. The
+            filtering operations can be specified either as strings (e.g. "> 5", "< 10") or as callable
+            functions (e.g. lambda functions). Multiple operations on a single column should be provided as a
+            list. For example - {'PI': ['>100', '<1000'], 'X': [lambda x: x > 0]}
         :param str save_path: Path where the generated image should be saved as a FITS file. If
             None, image is not saved.
         :return: Tuple containing the 2D numpy array of binned event counts and the WCS object describing the image's
@@ -909,5 +914,3 @@ class EventList(BaseProduct):
             hdu_list.writeto(save_path)
 
         return binned_data, im_wcs
-
-
