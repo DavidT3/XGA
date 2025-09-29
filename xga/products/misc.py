@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 08:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:37. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -13,7 +13,7 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
-from . import BaseProduct
+from . import BaseProduct, Image
 from .. import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
 from ..exceptions import XGADeveloperError
 
@@ -871,8 +871,9 @@ class EventList(BaseProduct):
             filt_operations[en_col] = [f">={lo_chan}", f"<={hi_chan}"]
         
         ############################################################
-
         ############################################################################
+
+        ################### Generating an image from user input ####################
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
         ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
@@ -902,6 +903,18 @@ class EventList(BaseProduct):
 
         # Set the lower and upper limits of the sky pixel coordinate system
         im_wcs.pixel_bounds = [x_lims.value, y_lims.value]
+        ############################################################################
+
+        ############### Setting up XGA Image and saving if requested ###############
+
+        new_header = [{'name': 'SIMPLE', 'value': 'T'},
+                      {'name': 'BITPIX', 'value': binned_data.dtype.itemsize * 8},
+                      {'name': 'NAXIS', 'value': 2},
+                      {'name': 'NAXIS1', 'value': binned_data.shape[1]},
+                      {'name': 'NAXIS2', 'value': binned_data.shape[0]}]
+
+        new_im = Image({'data': binned_data, 'wcs': im_wcs, 'header': new_header}, self.obs_id,
+                       self.instrument, "", "", "", lo_en=lo_en, hi_en=hi_en, telescope=self._telescope)
 
         # We validated the 'save_path' argument earlier, so we'll just get on and save the file
         if save_path is not None:
