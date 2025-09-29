@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 11:00. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 11:09. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -128,6 +128,9 @@ class Image(BaseProduct):
             if isinstance(self._header, dict):
                 self._header = FITSHDR(self._header)
 
+            # Set the shape from the data manually
+            self._shape = self._data.shape
+
         # Otherwise we think that the 'path' argument is actually just a file path, and setup accordingly
         else:
             self._from_mem = False
@@ -136,9 +139,10 @@ class Image(BaseProduct):
             self._data = None
             self._wcs_radec = None
             self._header = None
+            self._shape = None
+
 
         # Set up many image-specific attributes
-        self._shape = None
         self._wcs_xmmXY = None
         self._wcs_xmmdetXdetY = None
         self._energy_bounds = (lo_en, hi_en)
@@ -1212,8 +1216,8 @@ class Image(BaseProduct):
         if custom_title is None:
             # Being slightly more permissive with not setting energy bounds; this approach makes sure we don't
             #  get an error when a None-energy-bound is passed and the user wishes to view the image
-            lo_en_str = str(self._energy_bounds[0].to("keV").value) if self._energy_bounds[0] is not None else "?"
-            hi_en_str = str(self._energy_bounds[1].to("keV").value) if self._energy_bounds[1] is not None else "?"
+            lo_en_str = str(self._energy_bounds[0].to("keV").value) if self._energy_bounds[0] is not None else "??"
+            hi_en_str = str(self._energy_bounds[1].to("keV").value) if self._energy_bounds[1] is not None else "??"
 
             if self.src_name is not None:
                 title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=lo_en_str, u=hi_en_str,
