@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2025, 11:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2025, 16:49. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -45,6 +45,7 @@ class BaseProduct:
         accessible when defining a BaseProduct.
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
+
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  extra_info: dict = None, telescope: str = None):
         """
@@ -145,6 +146,7 @@ class BaseProduct:
             telescope-specific warnings, and another list of unidentifiable errors that occurred in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
+
         def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
             Function to search for and parse SAS (XMM software) errors and warnings.
@@ -298,7 +300,8 @@ class BaseProduct:
             if self.unprocessed_stdout != "" or self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in (self.unprocessed_stdout+'\n'+self.unprocessed_stderr).split('\n') if e != '']
+                err_lines = [e for e in (self.unprocessed_stdout + '\n' + self.unprocessed_stderr).split('\n') if
+                             e != '']
                 # Fingers crossed each line is a separate error
                 parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
                 parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
@@ -309,7 +312,7 @@ class BaseProduct:
                 # There is a particular warning that should be raised as an error, and
                 #  so we have to double back on ourselves here slightly
                 tel_warns_arr = np.array([en['message'] for en in parsed_tel_warns], dtype=str)
-                print(tel_warns_arr)
+
                 # The warning that should be an error
                 no_evt_warn_str = "Zero length source GTIs"
                 # Searches for the first index of the substring within each entry
@@ -317,7 +320,7 @@ class BaseProduct:
                 #  thus it becomes a boolean array where True means the warning
                 #  contains the substring. Then we get the warning array indices of
                 #  those that did contain the warning string.
-                cont_no_evt_warn = np.argwhere(np.char.find(tel_warns_arr, no_evt_warn_str) != -1)
+                cont_no_evt_warn = np.argwhere(np.char.find(tel_warns_arr, no_evt_warn_str) != -1).flatten()
                 # Add those warnings to the error list
                 for warn_ind in cont_no_evt_warn:
                     tel_errs_msgs.append("{e} raised by {t} - {b}".format(e="NoEventsError", t="eSASS",
@@ -493,6 +496,7 @@ class BaseAggregateProduct:
     :param str instrument: The instrument related to the product.
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
+
     def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
         """
         The init method for the BaseAggregateProduct class
@@ -705,6 +709,7 @@ class BaseProfile1D:
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     :param str telescope: The telescope that this profile is derived from. Default is None.
     """
+
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
@@ -820,7 +825,7 @@ class BaseProfile1D:
         # This generates an array containing (hopefully) the original annular boundaries of the profile
         if self._radii_err is not None:
             upper_bounds = self._radii + self._radii_err
-            bounds = np.insert(upper_bounds, 0, self._radii[0]-self._radii_err[0])
+            bounds = np.insert(upper_bounds, 0, self._radii[0] - self._radii_err[0])
 
             if self._radii[0].value == 0:
                 bounds[0] = self._radii[0]
@@ -943,6 +948,7 @@ class BaseProfile1D:
         :return: The model instance, and a boolean flag as to whether this was a successful fit or not.
         :rtype: Tuple[BaseModel1D, bool]
         """
+
         def find_to_replace(start_pos: np.ndarray, par_lims: np.ndarray) -> np.ndarray:
             """
             Tiny function to generate an array of which start positions are currently invalid and should
@@ -1086,7 +1092,7 @@ class BaseProfile1D:
                 auto_corr = np.mean(sampler.get_autocorr_time())
                 # Find the nearest hundred above the mean auto-correlation time, then multiply by two for
                 #  burn-in region
-                cut_off = int(np.ceil(auto_corr / 100) * 100)*2
+                cut_off = int(np.ceil(auto_corr / 100) * 100) * 2
                 success = True
             except ValueError as bugger:
                 model.fit_warning = str(bugger)
@@ -1125,7 +1131,7 @@ class BaseProfile1D:
                     upper = np.percentile(p_dist, 84.1).value
                     lower = np.percentile(p_dist, 15.9).value
                     # Store the upper and lower uncertainties with the correct units
-                    model_par_errs.append(Quantity([fiftieth-lower, upper-fiftieth], u))
+                    model_par_errs.append(Quantity([fiftieth - lower, upper - fiftieth], u))
 
                 # Store the model parameter and uncertainties in the model instance
                 model.model_pars = [p_dist.mean() for p_dist in par_dists]
@@ -1179,7 +1185,7 @@ class BaseProfile1D:
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
-        
+
         lower_bounds = []
         upper_bounds = []
         for prior_ind, prior in enumerate(model.par_priors):
@@ -1545,7 +1551,7 @@ class BaseProfile1D:
         model_obj = self.get_model_fit(model, 'mcmc')
 
         if figsize is None:
-            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2*model_obj.num_pars), sharex='col')
+            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2 * model_obj.num_pars), sharex='col')
         else:
             fig, axes = plt.subplots(model_obj.num_pars, figsize=figsize, sharex='col')
 
@@ -1577,7 +1583,7 @@ class BaseProfile1D:
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
 
-        frac_conf_lev = [(50 - 34.1)/100, 0.5, (50 + 34.1)/100]
+        frac_conf_lev = [(50 - 34.1) / 100, 0.5, (50 + 34.1) / 100]
 
         # If any of the median parameter values are above 1e+4 we get corner to format them in scientific
         #  notation, to avoid super long numbers spilling over the edge of the corner plot. I will say that
@@ -1803,7 +1809,7 @@ class BaseProfile1D:
             if self.values_err is not None:
                 y_errs = (self.values_err.copy() / y_norm).value
                 main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
-                                     color=data_colour,  linestyle='dashdot', alpha=0.7)
+                                     color=data_colour, linestyle='dashdot', alpha=0.7)
         else:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
 
@@ -1824,8 +1830,8 @@ class BaseProfile1D:
             #  no radii values are zero, then fit_radii will just be the radii. Then we subtract the errors and add
             #  the errors, if they are available - to find the minimum and maximum radii we should plot the model to
             if self.radii_err is not None:
-                lo_rad = (self.fit_radii-self.radii_err).min()
-                hi_rad = (self.fit_radii+self.radii_err).max()
+                lo_rad = (self.fit_radii - self.radii_err).min()
+                hi_rad = (self.fit_radii + self.radii_err).max()
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
@@ -1947,11 +1953,13 @@ class BaseProfile1D:
             elif len(d_val) == 2:
                 main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
                                 label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[1], color=data_colour, alpha=0.5)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
+                                     alpha=0.5)
             elif len(d_val) == 3:
                 main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
                                 label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[2], color=data_colour, alpha=0.5)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
+                                     alpha=0.5)
 
             main_ax.set_xlim(x_axis_lims)
 
@@ -2606,6 +2614,7 @@ class BaseAggregateProfile1D:
 
     :param list profiles: A list of profile objects (of the same type) to include in this aggregate profile.
     """
+
     def __init__(self, profiles: List[BaseProfile1D]):
         """
         The init for the BaseAggregateProfile1D class.
@@ -2876,7 +2885,7 @@ class BaseAggregateProfile1D:
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
             if p.obs_id != 'combined':
-                p_name = p.src_name + " {t}-{o}-{i}".format(t=p.telescope, o=p.obs_id, 
+                p_name = p.src_name + " {t}-{o}-{i}".format(t=p.telescope, o=p.obs_id,
                                                             i=p.instrument.upper())
             else:
                 p_name = p.src_name + " {t}".format(t=p.telescope)
@@ -2960,7 +2969,7 @@ class BaseAggregateProfile1D:
 
                         mod_lab = model_obj.publication_name + " - {}".format(p.nice_fit_names[method])
                         mod_line = main_ax.plot(mod_rads.value / x_norms[p_ind].value,
-                                                median_model.value/y_norms[p_ind], color=colour)
+                                                median_model.value / y_norms[p_ind], color=colour)
 
                         main_ax.fill_between(mod_rads.value / x_norms[p_ind].value,
                                              lower_model.value / y_norms[p_ind].value,
@@ -3019,7 +3028,7 @@ class BaseAggregateProfile1D:
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
             # That way its symmetrical
-            outer_ylim = 1.1*max([abs(lim) for lim in res_ax.get_ylim()])
+            outer_ylim = 1.1 * max([abs(lim) for lim in res_ax.get_ylim()])
             res_ax.set_ylim(-outer_ylim, outer_ylim)
             res_ax.set_ylabel("Model - Data")
 
