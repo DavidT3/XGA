@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 17:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2025, 19:28. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -290,7 +290,7 @@ class BaseProduct:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
 
-        elif self.telescope == 'erosita':
+        elif self.telescope in ['erosita', 'erass']:
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
             #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
             #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
@@ -306,9 +306,21 @@ class BaseProduct:
                 tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
                                  for e in parsed_esass_errs]
 
-                # These are impossible to predict the form of, so they won't be parsed
-                # other_err_lines = [line for line in err_lines if line not in parsed_esass_errs
-                #                    and line not in esass_warn_lines and line != "" and "warn" not in line]
+                # There is a particular warning that should be raised as an error, and
+                #  so we have to double back on ourselves here slightly
+                tel_warns_arr = np.array(parsed_tel_warns)
+                # The warning that should be an error
+                no_evt_warn_str = "Zero length source GTIs"
+                # Searches for the first index of the substring within each entry
+                #  of the telescope warning array. A -1 value means it wasn't found
+                #  thus it becomes a boolean array where True means the warning
+                #  contains the substring. Then we get the warning array indices of
+                #  those that did contain the warning string.
+                cont_no_evt_warn = np.argwhere(np.char.find(tel_warns_arr, no_evt_warn_str) != -1)
+                # Add those warnings to the error list
+                for warn_ind in cont_no_evt_warn:
+                    tel_errs_msgs.append("{e} raised by {t} - {b}".format(e="NoEventsWarning", t="eSASS",
+                                                                          b=tel_warns_arr[warn_ind]))
 
                 # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
                 #  they should), it is incredibly difficult to search for non-eSASS errors - thus I do not right now
