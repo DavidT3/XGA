@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2025, 19:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 04/11/2025, 11:19. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -308,7 +308,7 @@ class BaseProduct:
 
                 # There is a particular warning that should be raised as an error, and
                 #  so we have to double back on ourselves here slightly
-                tel_warns_arr = np.array(parsed_tel_warns)
+                tel_warns_arr = np.array([en['message'] for en in parsed_tel_warns])
                 # The warning that should be an error
                 no_evt_warn_str = "Zero length source GTIs"
                 # Searches for the first index of the substring within each entry
@@ -319,7 +319,7 @@ class BaseProduct:
                 cont_no_evt_warn = np.argwhere(np.char.find(tel_warns_arr, no_evt_warn_str) != -1)
                 # Add those warnings to the error list
                 for warn_ind in cont_no_evt_warn:
-                    tel_errs_msgs.append("{e} raised by {t} - {b}".format(e="NoEventsWarning", t="eSASS",
+                    tel_errs_msgs.append("{e} raised by {t} - {b}".format(e="NoEventsError", t="eSASS",
                                                                           b=tel_warns_arr[warn_ind]))
 
                 # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
