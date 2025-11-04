@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 10:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 03/11/2025, 19:11. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -388,8 +388,8 @@ class EventList(BaseProduct):
             for the primary coordinate (usually sky) coordinate system x-axis, and the second being for the y-axis.
         :rtype: Tuple[Quantity, Quantity]
         """
-        return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix').astype(int),
-                    Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix').astype(int))
+        return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix'),
+                    Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix'))
 
     @property
     def ev_per_channel(self) -> Quantity:
@@ -892,10 +892,16 @@ class EventList(BaseProduct):
 
         # Setting up the new WCS
         im_wcs = WCS(naxis=2)
+        print(ang_bin_size)
+        print(bin_size)
         im_wcs.wcs.cdelt = [np.sign(self.radec_sky_wcs.wcs.cdelt[0])*ang_bin_size,
                                 np.sign(self.radec_sky_wcs.wcs.cdelt[1])*ang_bin_size]
 
-        min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 1)
+        print(x_bins[0], y_bins[0])
+        print(x_bins, y_bins)
+
+        # TODO Might need to change origin to zero?
+        min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 0)
         im_wcs.wcs.crpix = [1, 1]
         im_wcs.wcs.crval = [min_bnd_radec[0], min_bnd_radec[1]]
         im_wcs.wcs.ctype = [self.radec_sky_wcs.wcs.ctype[0], self.radec_sky_wcs.wcs.ctype[1]]
@@ -923,6 +929,6 @@ class EventList(BaseProduct):
             # Create a single-HDU fits file, just containing the image
             im_hdu = PrimaryHDU(binned_data, im_hdr)
             hdu_list = HDUList([im_hdu])
-            hdu_list.writeto(save_path)
+            hdu_list.writeto(save_path, overwrite=True)
 
         return new_im
