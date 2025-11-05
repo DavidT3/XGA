@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:48. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -49,7 +49,7 @@ class BaseProduct:
         datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
         argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
     """
-    def __init__(self, path: str, obs_id: str = "", instrument: str = "", stdout_str: str = "", stderr_str: str = "",
+    def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = "", stderr_str: str = "",
                  gen_cmd: str = "", extra_info: dict = None, force_remote: bool = False, fsspec_kwargs: dict = None):
         """
         The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
