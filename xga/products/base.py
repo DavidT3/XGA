@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 26/08/2025, 19:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:27. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -26,7 +26,7 @@ from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitErro
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
+from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT, PRETTY_TELESCOPE_NAMES
 
 
 class BaseProduct:
@@ -343,6 +343,26 @@ class BaseProduct:
         :rtype: str
         """
         return self._tele
+
+    @property
+    def pretty_telescope_name(self) -> Union[str, None]:
+        """
+        Property getter for a 'pretty' version of a telescope name, for inclusion in
+        figure labels, titles, etc. - only if a 'pretty' name is defined in xga.utils.
+
+        :return: The 'pretty' version of the telescope name if available, the usual
+            form of the telescope name if not, and None if no telescope name is set.
+        :rtype: Union[str, None]
+        """
+        if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
+            pretty_name = PRETTY_TELESCOPE_NAMES[self.telescope]
+        elif (self.telescope is not None and
+              self.telescope not in PRETTY_TELESCOPE_NAMES):
+            pretty_name = self.telescope
+        else:
+            pretty_name = None
+
+        return pretty_name
 
     @property
     def obs_id(self) -> str:
