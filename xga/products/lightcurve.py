@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 15:17. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -42,16 +42,11 @@ class LightCurve(BaseProduct):
     :param bool region: Whether this was generated from a region in a region file
     :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
     :param str telescope: The telescope that this product is derived from. Default is None.
-    :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
-            a remote dataset, and to use fsspec to read/stream the data.
-    :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
-        datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
-        argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
                  time_bin_size: Quantity, pattern_expr: str = "", region: bool = False, is_back_sub: bool = True,
-                 telescope: str = None, force_remote: bool = False, fsspec_kwargs: dict = None):
+                 telescope: str = None):
         """
         This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
         for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
@@ -73,11 +68,6 @@ class LightCurve(BaseProduct):
         :param bool region: Whether this was generated from a region in a region file
         :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
         :param str telescope: The telescope that this product is derived from. Default is None.
-        :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
-            a remote dataset, and to use fsspec to read/stream the data.
-        :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
-            datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
-            argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
         # A validity check to help remind me to pass the telescope to the super-class init when this merges with
         #  multi-mission XGA
@@ -88,7 +78,8 @@ class LightCurve(BaseProduct):
             self._tele = telescope
 
         # Call the BaseProduct init, sets up some attributes
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None, force_remote, fsspec_kwargs)
+        # TODO Support streaming of remote data
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None)
 
         # Set the product type
         self._prod_type = "lightcurve"
@@ -583,13 +574,30 @@ class LightCurve(BaseProduct):
 
                 # Grab the start, stop, and time assign values from the overall header of the light curve
                 hdr = all_lc['RATE'].read_header()
-                self._time_start = Quantity(hdr['TSTART'], 's')
-                self._time_stop = Quantity(hdr['TSTOP'], 's')
+                if 'TSTART' in hdr:
+                    self._time_start = Quantity(hdr['TSTART'], 's')
+                elif 'TSTARTI' in hdr and 'TSTARTF' in hdr:
+                    self._time_start = Quantity(hdr['TSTARTI']+hdr['TSTARTF'], 's')
+                else:
+                    raise KeyError("Neither TSTART or TSTARTI/TSTARTF are present in the light curve header.")
+
+                if 'TSTOP' in hdr:
+                    self._time_stop = Quantity(hdr['TSTOP'], 's')
+                elif 'TSTOPI' in hdr and 'TSTOPF' in hdr:
+                    self._time_stop = Quantity(hdr['TSTOPI']+hdr['TSTOPF'], 's')
+                else:
+                    raise KeyError("Neither TSTOP or TSTOPI/TSTOPF are present in the light curve header.")
+
                 if 'TASSIGN' in hdr:
                     self._time_assign = hdr['TASSIGN']
                 else:
                     self._time_assign = None
-                self._ref_time = Time(hdr['MJDREF'], format='mjd')
+
+                if 'MJDREF' in hdr:
+                    self._ref_time = Time(hdr['MJDREF'], format='mjd')
+                elif 'MJDREFI' in hdr and 'MJDREFF' in hdr:
+                    self._ref_time = Time(hdr['MJDREFI']+hdr['MJDREFF'], format='mjd')
+
                 self._time_sys = hdr['TIMESYS']
 
                 # TODO NEED TO ASK EROSITA TEAM IF THE COMBINED LIGHTCURVES ARE MEANT TO HAVE GTIs WRITTEN
