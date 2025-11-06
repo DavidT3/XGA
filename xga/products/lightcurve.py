@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 16:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 11:39. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -630,6 +630,7 @@ class LightCurve(BaseProduct):
             raise FailedProductError("Failed to generate this product successfully, so you cannot access "
                                      "data from it; reason given is {}.".format(reasons))
 
+    # Then define user-facing methods
     def overlap_check(self, lightcurves: Union['LightCurve', List['LightCurve']]) -> Union[np.ndarray, bool]:
         """
         A simple method which checks whether a passed LightCurve (or list of lightcurves) overlap temporally with
@@ -661,7 +662,43 @@ class LightCurve(BaseProduct):
 
         return overlap
 
-    # Then define user-facing methods
+    def get_data(self, date_time: bool = False, fracexp_corr: bool = False) \
+            -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+        """
+        A get method to retrieve the count-rate (and error) and timing data from this LightCurve.
+
+        Alternatively, the 'count_rate', 'count_rate_err', and 'time' properties can be used to
+        access the information. This implementation is meant to be analogous to the
+        'get_data' method of the AggregateLightCurve class.
+
+        :param bool date_time: Whether the time data should be returned as an array of datetimes (not the default), or
+            an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
+        :param bool fracexp_corr: Controls whether the data should be corrected for vignetting and deadtime
+            effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
+        :return: The count rate data, count rate uncertainty data, and time data.
+        :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
+        """
+
+        # Read out the count-rate and count-rate-error data, applying fractional exposure correction
+        #  if the user requested it
+        if fracexp_corr:
+            cr_data = self.count_rate / self.frac_exp
+            # TODO THIS SCALING OF ERRORS IS PROBABLY WRONG?
+            cr_err_data = self.count_rate_err / self.frac_exp
+        else:
+            cr_data = self.count_rate
+            cr_err_data = self.count_rate_err
+
+        # Grab the time data
+        t_data = self.datetime
+
+        # If the user wants the time data as a TimeDelta from the reference MJD time then calculate that
+        if not date_time:
+            t_data = (Time(t_data) - Time(50814.0, format='mjd')).sec
+
+        # Return the requested information
+        return cr_data, cr_err_data, t_data
+
     def get_view(self, ax: Axes, time_unit: Union[str, Unit] = Unit('s'), lo_time_lim: Quantity = None,
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
@@ -1494,9 +1531,15 @@ class AggregateLightCurve(BaseAggregateProduct):
                 # We set the upper and lower y-axis limits based on the maximum and minimum count rates across all
                 #  the lightcurves that are to be plotted, as the y-axis is shared - if the user hasn't specified
                 #  their own y-axis limits
-                if y_lims is None:
+                if y_lims is None and not fracexp_corr:
                     low_lim = min([np.nanmin(lc.count_rate-lc.count_rate_err) for lc in all_rel_lcs]).value*0.95
                     upp_lim = max([np.nanmax(lc.count_rate+lc.count_rate_err) for lc in all_rel_lcs]).value*1.05
+                elif y_lims is None and fracexp_corr:
+                    # TODO THIS MIGHT BE TEMPORARY, WILL USE GET_DATA METHOD OF LIGHTCURVE WHEN WRITTEN
+                    low_lim = min([np.nanmin(lc.count_rate/lc.frac_exp - lc.count_rate_err/lc.frac_exp)
+                                   for lc in all_rel_lcs]).value * 0.95
+                    upp_lim = max([np.nanmax(lc.count_rate/lc.frac_exp + lc.count_rate_err/lc.frac_exp)
+                                   for lc in all_rel_lcs]).value * 1.05
                 else:
                     # The user has specified axis limits, so we make sure to convert them to the y-axis unit
                     low_lim, upp_lim = y_lims.to(self.all_lightcurves[0].count_rate.unit).value
