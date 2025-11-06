@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 12:14. Copyright (c) The Contributors
 
 import inspect
 import os
@@ -77,13 +77,19 @@ class BaseProduct:
         if force_remote:
             # Here the user has forced us to treat the path as remote
             self._local_file = False
-        elif path[:5] == "s3://" or path[:5] == "gs://" or path[:8] == "https://":
+            self._remote_type = 'unknown'
+        elif path[:5] == "s3://" or path[:5] == "gs://":
             # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
             #  use with resources like the HEASARC open S3 bucket
             self._local_file = False
+            self._remote_type = "s3"
+        elif path[:8] == "https://":
+            self._local_file = False
+            self._remote_type = "https"
         else:
             # Otherwise we decide that the file is local
             self._local_file = True
+            self._remote_type = None
 
         # Keep track of whether the user forced the path to be considered as a remote url or not, that information
         #  may be required in some warning/error messages later on
@@ -91,7 +97,7 @@ class BaseProduct:
 
         # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
         #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
-        if fsspec_kwargs is None:
+        if fsspec_kwargs is None and self._remote_type == "s3":
             fsspec_kwargs = {"anon": True}
         # We store the optional keyword arguments that the user can pass to facilitate access to
         #  remote files in an attribute
