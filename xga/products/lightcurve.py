@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 11:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 11:43. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1401,30 +1401,27 @@ class AggregateLightCurve(BaseAggregateProduct):
             try:
                 # Grab the light curves, but catch if there isn't an entry for the chosen instrument for this
                 #  time chunk and handle it gracefully
-                rel_lcs = self.get_lightcurves(tc_id, inst=inst)
+                rel_lc = self.get_lightcurves(tc_id, inst=inst)
             except NotAssociatedError:
                 continue
 
-            # Append the current time chunk's chosen instrument's count rate data and error to their lists
-            if fracexp_corr:
-                cr_data.append(rel_lcs.count_rate / rel_lcs.frac_exp)
-                cr_err_data.append(rel_lcs.count_rate_err / rel_lcs.frac_exp)
-            else:
-                cr_data.append(rel_lcs.count_rate)
-                cr_err_data.append(rel_lcs.count_rate_err)
+            # Append the current time chunk's chosen instrument's count rate data and
+            #  error to their lists - the get_data method of the LightCurve class
+            #  will handle fractional exposure correction and the conversion of
+            #  times to date-times (if the user requested that)
+            rel_cr, rel_cr_err, rel_time = rel_lc.get_data(date_time, fracexp_corr)
+            cr_data.append(rel_cr)
+            cr_err_data.append(rel_cr_err)
+            t_data.append(rel_time)
 
-            # Do the same with the datetime
-            cur_dt = rel_lcs.datetime
-            t_data.append(cur_dt)
-
-        # Combine the datetime arrays in t_data into one array
+        # Concatenate the light curve arrays of time, count-rate, and count-rate-error into a single
+        #  array each - that is what we're going to return
         t_data = np.concatenate(t_data)
-        # If the user wants the time data as a TimeDelta from the reference MJD time then calculate that
-        if not date_time:
-            t_data = (Time(t_data) - Time(50814.0, format='mjd')).sec
+        cr_data = np.concatenate(cr_data)
+        cr_err_data = np.concatenate(cr_err_data)
 
         # Concatenate the count rate data and error into one quantity each and return everything
-        return np.concatenate(cr_data), np.concatenate(cr_err_data), t_data
+        return cr_data, cr_err_data, t_data
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
