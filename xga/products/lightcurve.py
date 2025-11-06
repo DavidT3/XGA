@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 11:46. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 12:06. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1376,13 +1376,19 @@ class AggregateLightCurve(BaseAggregateProduct):
                                      "AggregateLightCurve.".format(time_chunk_id))
         return matches
 
-    def get_data(self, inst: str, date_time: bool = False, fracexp_corr: bool = False) \
-            -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+    def get_data(self, inst: str = None, telescope: str = None, date_time: bool = False,
+                 fracexp_corr: bool = False) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
         """
-        A get method to retrieve all count-rate and timing data for a particular instrument from this
-        AggregateLightCurve. The data are in the correct temporal order.
+        A get method to retrieve all count-rate and timing data for a particular instrument of a particular
+        telescope from this AggregateLightCurve. The data are in the correct temporal order.
 
-        :param str inst: The instrument for which to retrieve the overall count-rate and time data.
+        :param str inst: The instrument for which to retrieve the overall count-rate and time data. Default is None,
+            which will automatically select the instrument name if only one is represented in this AggregateLightCurve.
+            If multiple instruments are represented, the user must pass a value to choose which data to retrieve.
+        :param str telescope: The telescope for which to retrieve the overall count-rate and time data. Default is
+            None, which will automatically select the telescope name if only one is represented in this
+            AggregateLightCurve. If multiple telescopes are represented, the user must pass a value to choose
+            which data to retrieve.
         :param bool date_time: Whether the time data should be returned as an array of datetimes (not the default), or
             an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
         :param bool fracexp_corr: Controls whether the data should be corrected for vignetting and deadtime
@@ -1391,6 +1397,23 @@ class AggregateLightCurve(BaseAggregateProduct):
             are in the correct temporal order.
         :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
         """
+        # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
+        #  can save the user the trouble and select that single telescope. Otherwise, we throw
+        #  an error and tell them to set a value
+        if telescope is None and len(self.telescopes) != 1:
+            raise ValueError("For AggregateLightCurve instances containing data from multiple telescopes, a value "
+                             "must be passed to the 'telescope' argument of 'get_data'.")
+        elif telescope is None:
+            telescope = self.telescopes[0]
+
+        # Now we do the same thing for instrument name, but with the added context
+        #  of the telescope name already set up above
+        if inst is None and len(self.instruments[telescope]) != 1:
+            raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
+                             "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
+        elif inst is None:
+            inst = self.instruments[0]
+
         # These store the countrates, errors, and times that we pull out for the chosen instrument for all
         #  time chunks
         cr_data = []
@@ -1401,7 +1424,7 @@ class AggregateLightCurve(BaseAggregateProduct):
             try:
                 # Grab the light curves, but catch if there isn't an entry for the chosen instrument for this
                 #  time chunk and handle it gracefully
-                rel_lc = self.get_lightcurves(tc_id, inst=inst)
+                rel_lc = self.get_lightcurves(tc_id, inst=inst, telescope=telescope)
             except NotAssociatedError:
                 continue
 
