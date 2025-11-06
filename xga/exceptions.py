@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 13:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:48. Copyright (c) The Contributors
 
 
 class HeasoftError(Exception):
@@ -687,3 +687,24 @@ class InvalidTelescopeError(Exception):
             return '{}'.format(self.message)
         else:
             return 'InvalidTelescopeError has been raised'
+
+
+class TelescopeNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the user tries to run a telescope specific function (e.g. a SAS function for XMM, or an
+        eSASS function for eROSITA) and the source or sample has no data for that telescope associated with it.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'TelescopeNotAssociatedError has been raised'

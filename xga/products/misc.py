@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/09/2025, 22:59. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 15:28. Copyright (c) The Contributors
 import os.path
 from typing import List, Tuple
 
@@ -12,7 +12,8 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
-from . import BaseProduct, Image
+from .base import BaseProduct
+from .phot import Image
 from .. import MISSION_COL_DB
 from ..exceptions import XGADeveloperError
 
@@ -64,7 +65,7 @@ class EventList(BaseProduct):
             raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
                                     "call to BaseProduct init in EventList needs to be updated.")
         else:
-            self._telescope = telescope
+            self._tele = telescope
 
         # Call the BaseProduct init, sets up some attributes
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None, force_remote, fsspec_kwargs)
