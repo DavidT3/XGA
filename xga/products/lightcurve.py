@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 10/11/2025, 16:43. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -703,7 +703,7 @@ class LightCurve(BaseProduct):
                  hi_time_lim: Quantity = None, colour: str = 'black', plot_sep: bool = False,
                  src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick', custom_title: str = None,
                  label_font_size: int = 15, title_font_size: int = 18, highlight_bad_times: bool = True,
-                 fracexp_corr: bool = False) -> Axes:
+                 fracexp_corr: bool = False, alpha: float = 0.8) -> Axes:
         """
         A method that allows the user to retrieve a populated lightcurve visualisation axes, in a form that allows
         them to then add their own plots in additon to what has been automatically constructed. This is an alternative
@@ -726,6 +726,7 @@ class LightCurve(BaseProduct):
             Default is True.
         :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
+        :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
         :return: The input Axes, but populated with a lightcurve visualisation.
         :rtype: Axes
         """
@@ -760,14 +761,14 @@ class LightCurve(BaseProduct):
                                  "background separately.")
             ax.errorbar(time_x.value / corr_arr, self.src_count_rate.value / corr_arr,
                         yerr=self.src_count_rate_err.value / corr_arr, capsize=2, color=src_colour, label='Source',
-                        fmt='x')
+                        fmt='x', alpha=alpha)
             ax.errorbar(time_x.value / corr_arr, self.bck_count_rate.value / corr_arr,
                         yerr=self.bck_count_rate_err.value / corr_arr, capsize=2, color=bck_colour,
-                        label='Background', fmt='x')
+                        label='Background', fmt='x', alpha=alpha)
         else:
             ax.errorbar(time_x.value / corr_arr, self.count_rate.value / corr_arr,
                         yerr=self.count_rate_err.value / corr_arr, capsize=2, color=colour,
-                        label='Background subtracted', fmt='x')
+                        label='Background subtracted', fmt='x', alpha=alpha)
 
         if highlight_bad_times and (len(self.src_gti) != 1 or self.src_gti[0, 0] != self.start_time
                                     or self.src_gti[0, 1] != self.stop_time):
@@ -840,7 +841,7 @@ class LightCurve(BaseProduct):
              lo_time_lim: Quantity = None, hi_time_lim: Quantity = None, colour: str = 'black',
              plot_sep: bool = False, src_colour: str = 'tab:cyan', bck_colour: str = 'firebrick',
              custom_title: str = None, label_font_size: int = 15, title_font_size: int = 18,
-             highlight_bad_times: bool = True, fracexp_corr: bool = False):
+             highlight_bad_times: bool = True, fracexp_corr: bool = False, alpha: float = 0.8):
         """
         A method that creates and displays a visualisation of this lightcurve.
 
@@ -861,6 +862,7 @@ class LightCurve(BaseProduct):
             Default is True.
         :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
+        :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
@@ -868,7 +870,8 @@ class LightCurve(BaseProduct):
         ax = plt.gca()
 
         ax = self.get_view(ax, time_unit, lo_time_lim, hi_time_lim, colour, plot_sep, src_colour, bck_colour,
-                           custom_title, label_font_size, title_font_size, highlight_bad_times, fracexp_corr)
+                           custom_title, label_font_size, title_font_size, highlight_bad_times, fracexp_corr,
+                           alpha)
         plt.tight_layout()
         # Display the image
         plt.show()
@@ -1449,7 +1452,7 @@ class AggregateLightCurve(BaseAggregateProduct):
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
                  time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear',
-                 fracexp_corr: bool = False, show_legend: bool = True) -> Tuple[dict, Figure]:
+                 fracexp_corr: bool = False, show_legend: bool = True, alpha: float = 0.8) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1472,6 +1475,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :param bool show_legend: Controls whether a legend is included in each panel of the visualization.
+        :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
@@ -1660,7 +1664,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                     plt_cr = rel_lc.count_rate.value
                     plt_cr_err = rel_lc.count_rate_err.value
                 ax.errorbar(rel_lc.datetime, plt_cr, yerr=plt_cr_err, capsize=2, label=ident, fmt='x',
-                            color=inst_colours[rel_lc.instrument])
+                            color=inst_colours[rel_lc.instrument], alpha=alpha)
 
             if show_legend:
                 ax.legend(loc='best')
@@ -1683,7 +1687,7 @@ class AggregateLightCurve(BaseAggregateProduct):
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
              title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
              time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
-             show_legend: bool = True):
+             show_legend: bool = True, alpha: float = 0.8):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1711,12 +1715,13 @@ class AggregateLightCurve(BaseAggregateProduct):
         :param bool fracexp_corr: Controls whether the plotted data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :param bool show_legend: Controls whether a legend is included in each panel of the visualization.
+        :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
-                                     time_chunk_ids, yscale, fracexp_corr, show_legend)
+                                     time_chunk_ids, yscale, fracexp_corr, show_legend, alpha)
 
         # plt.tight_layout()
         # Display the plot
