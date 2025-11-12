@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 10:28. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 10:50. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1484,7 +1484,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         return cr_data, cr_err_data, t_data
 
     def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
-                                       interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True):
+                                       interval_end: Union[Quantity, Time, datetime] = None,
+                                       over_run: bool = True) -> np.ndarray:
         """
         Fetches the IDs of time chunks that fall within a specified interval. The interval can be defined
         either as a duration offset from a reference time (`Quantity`) or as absolute timestamps (`Time` or
@@ -1498,11 +1499,12 @@ class AggregateLightCurve(BaseAggregateProduct):
             from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
         :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
             chunks entirely contained within the interval.
-        :return: A sequence of IDs for the time chunks that satisfy the filtering criteria.
-        :rtype: Sequence[int]
+        :return: An array of integer time chunk IDs for the time chunks that satisfy the filtering criteria.
+        :rtype: np.ndarray
 
         :raises ValueError: If the start of the interval is not before the end of the interval.
-        :raises TypeError: If the provided interval types are not one of the accepted formats or if their types are mismatched.
+        :raises TypeError: If the provided interval types are not one of the accepted formats or if their
+            types are mismatched.
         """
 
         # Validity check on the interval, obviously can't have the start time being at the same time or after
@@ -1571,8 +1573,44 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Now we return them
         return rel_ch_ids
 
-    # def obs_ids_within_interval(self):
-    #     pass
+    def obs_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
+                                interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True) -> dict:
+        """
+        Fetches the ObsIDs of data associated with time chunks that fall within a specified interval. The interval
+        can be defined either as a duration offset from a reference time (`Quantity`) or as absolute
+        timestamps (`Time` or `datetime`). Depending on the `over_run` parameter, the method returns ObsIDs related
+        to chunks fully contained within the interval or only partially overlapping the interval. Raises
+        validation exceptions in case of incompatible interval types or invalid configurations.
+
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
+        :return: A dictionary with telescope names as keys, and values being lists of ObsIDs within the
+            specified interval.
+        :rtype: dict
+        """
+
+        # First run the class method that will take the interval information and return the relevant time chunk IDs
+        rel_ch_ids = self.time_chunk_ids_within_interval(interval_start, interval_end, over_run)
+
+        # Unfortunate to have a nested for loop going on, but this is all pretty low overhead so I don't mind
+        # We just iterate through the time chunk IDs (get_lightcurves doesn't support passing multiple time
+        #  chunk IDs), fetch the relevant light curves, and build the rel_obsids dictionary with telescope
+        #  names as keys, and values being lists of relevant ObsIDs
+        rel_obsids = {}
+        for ch_id in rel_ch_ids:
+            rel_lcs = self.get_lightcurves(ch_id)
+            rel_lcs = rel_lcs if isinstance(rel_lcs, list) else [rel_lcs]
+
+            for rel_lc in rel_lcs:
+                rel_obsids.setdefault(rel_lc.telescope, [])
+                rel_obsids[rel_lc.telescope].append(rel_lc.obs_id)
+
+        return rel_obsids
+
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
