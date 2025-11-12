@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:26. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1413,11 +1413,15 @@ class AggregateLightCurve(BaseAggregateProduct):
                                      "AggregateLightCurve.".format(time_chunk_id))
         return matches
 
-    def get_data(self, inst: str = None, telescope: str = None, date_time: bool = False,
-                 fracexp_corr: bool = False) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+    def get_data(self, inst: str = None, telescope: str = None, date_time: bool = False, fracexp_corr: bool = False,
+                 interval_start: Union[Quantity, Time, datetime] = None,
+                 interval_end: Union[Quantity, Time, datetime] = None,
+                 over_run: bool = True) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
         """
-        A get method to retrieve all count-rate and timing data for a particular instrument of a particular
+        A get method to retrieve count-rate and timing data for a particular instrument of a particular
         telescope from this AggregateLightCurve. The data are in the correct temporal order.
+
+        A time interval within which to retrieve data can be specified.
 
         :param str inst: The instrument for which to retrieve the overall count-rate and time data. Default is None,
             which will automatically select the instrument name if only one is represented in this AggregateLightCurve.
@@ -1430,6 +1434,12 @@ class AggregateLightCurve(BaseAggregateProduct):
             an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
         :param bool fracexp_corr: Controls whether the data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
         :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. These
             are in the correct temporal order.
         :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
@@ -1451,13 +1461,19 @@ class AggregateLightCurve(BaseAggregateProduct):
         elif inst is None:
             inst = self.instruments[0]
 
+        # We call a class method that will return the time interval IDs that represent data within the
+        #  user specified time window. The default behavior is to return all time chunk IDs, as the
+        #  default values of interval_start and interval_end are None.
+        rel_time_chunk_ids = self.time_chunk_ids_within_interval(interval_start, interval_end, over_run)
+
         # These store the countrates, errors, and times that we pull out for the chosen instrument for all
-        #  time chunks
+        #  time chunk IDs that are within the user-specified time window (defaults to the entire time window
+        #  of this AggregateLightCurve instance).
         cr_data = []
         cr_err_data = []
         t_data = []
-        # Iterate through the time chunk IDs associated with this object
-        for tc_id in self.time_chunk_ids:
+        # Iterate through the time chunk IDs
+        for tc_id in rel_time_chunk_ids:
             try:
                 # Grab the light curves, but catch if there isn't an entry for the chosen instrument for this
                 #  time chunk and handle it gracefully
