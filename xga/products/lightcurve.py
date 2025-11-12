@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 10:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:08. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1509,7 +1509,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         # Validity check on the interval, obviously can't have the start time being at the same time or after
         #  the end of the interval
-        if interval_start >= interval_end:
+        if interval_start is not None and interval_end is not None and interval_start >= interval_end:
             raise ValueError("Time passed to 'interval_start' argument must be before the time "
                              "passed to 'interval_end'.")
 
@@ -1548,6 +1548,17 @@ class AggregateLightCurve(BaseAggregateProduct):
         else:
             ch_starts = self.datetime_chunks[:, 0]
             ch_ends = self.datetime_chunks[:, 1]
+
+        # Now that we've normalized all the time/datetime interval formats, and the
+        #  formats of the time chunks we're comparing them too, we do one last
+        #  validity check to ensure that the user didn't pass intervals outside
+        #  the time window of this AggregateLightCurve
+        if interval_start < ch_starts[0]:
+            raise ValueError("The value of 'interval_start' ({ins}) is before the start ({wis}) of the time window "
+                             "covered by this AggregateLightCurve.".format(ins=interval_start, wis=ch_starts[0]))
+        if interval_end > ch_ends[1]:
+            raise ValueError("The value of 'interval_end' ({ine}) is after the end ({wie}) of the time window "
+                             "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[1]))
 
         # The user can choose between two slightly different matching criteria - if
         #  'over_run' is False then the time chunks they want us to return have to
