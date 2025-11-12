@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 12:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 12:14. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1685,7 +1685,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         # The user can either pass the time chunk IDs that they are interested in plotting, or a time
         #  window defined by interval_start and interval_end. The 'interval_*' arguments will override
         #  the 'time_chunk_ids' argument if both are passed.
-        if any([interval_start is None, interval_end is None]):
+        if any([interval_start is not None, interval_end is not None]):
             # If the time_chunk_ids variable is not None at this point, then we're about to override it,
             #  and we want to keep track of that to warn the user
             time_chunks_overridden = time_chunk_ids is not None
