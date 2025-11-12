@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 12:06. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1904,7 +1904,8 @@ class AggregateLightCurve(BaseAggregateProduct):
     def view(self, figsize: tuple = (14, 6), inst: str = None, custom_title: str = None, label_font_size: int = 15,
              title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
              time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
-             show_legend: bool = True, alpha: float = 0.8):
+             show_legend: bool = True, alpha: float = 0.8, interval_start: Union[Quantity, Time, datetime] = None,
+             interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -1933,12 +1934,19 @@ class AggregateLightCurve(BaseAggregateProduct):
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :param bool show_legend: Controls whether a legend is included in each panel of the visualization.
         :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
-                                     time_chunk_ids, yscale, fracexp_corr, show_legend, alpha)
+                                     time_chunk_ids, yscale, fracexp_corr, show_legend, alpha, interval_start,
+                                     interval_end, over_run)
 
         # plt.tight_layout()
         # Display the plot
