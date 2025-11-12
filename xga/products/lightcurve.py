@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 10:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 10:28. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1483,27 +1483,94 @@ class AggregateLightCurve(BaseAggregateProduct):
         # Concatenate the count rate data and error into one quantity each and return everything
         return cr_data, cr_err_data, t_data
 
-    # def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
-    #                                    interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True):
-    #     """
-    #
-    #     :param Quantity/Time/datetime interval_start:
-    #     :param Quantity/Time/datetime interval_end:
-    #     :param bool over_run: This controls whether selected observations have to be entirely within the passed
-    #         time window or whether either a start or end time can be within the search window. If set
-    #         to True then observations with a start or end within the search window will be selected, but if False
-    #         then only observations with a start AND end within the window are selected. Default is True.
-    #     :return:
-    #     :rtype:
-    #     """
-    #     if interval_start >= interval_end:
-    #         raise ValueError("Time passed to 'interval_start' argument must be before the time "
-    #                          "passed to 'interval_end'.")
-    #
-    #
-    #
-    #     if isinstance()
-    #
+    def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
+                                       interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True):
+        """
+        Fetches the IDs of time chunks that fall within a specified interval. The interval can be defined
+        either as a duration offset from a reference time (`Quantity`) or as absolute timestamps (`Time` or
+        `datetime`). Depending on the `over_run` parameter, the method returns IDs of chunks fully contained
+        within the interval or only partially overlapping the interval. Raises validation exceptions in case
+        of incompatible interval types or invalid configurations.
+
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
+        :return: A sequence of IDs for the time chunks that satisfy the filtering criteria.
+        :rtype: Sequence[int]
+
+        :raises ValueError: If the start of the interval is not before the end of the interval.
+        :raises TypeError: If the provided interval types are not one of the accepted formats or if their types are mismatched.
+        """
+
+        # Validity check on the interval, obviously can't have the start time being at the same time or after
+        #  the end of the interval
+        if interval_start >= interval_end:
+            raise ValueError("Time passed to 'interval_start' argument must be before the time "
+                             "passed to 'interval_end'.")
+
+        # We allow the user to pass None for limit values, in which case the overall start or end time of
+        #  the window covered by this object is used
+        # Handle the start time first, matching the data format of the interval end time if it was provided
+        if interval_start is None and (interval_end is None or isinstance(interval_end, Quantity)):
+            interval_start = self.overall_time_window[0]
+        elif interval_start is None:
+            interval_start = self.overall_datetime_window[0]
+        # Do the same for the end of the time interval
+        if interval_end is None and (interval_start is None or isinstance(interval_start, Quantity)):
+            interval_end = self.overall_time_window[1]
+        elif interval_end is None:
+            interval_end = self.overall_datetime_window[1]
+
+        # If the user passed the limits themselves, we could still have a mismatch in format (e.g. the start
+        #  as a time from reference time, and the end as a datetime). We wish to avoid dealing with
+        #  limits in different formats, so raise an error if this is the case.
+        # Also check the object types passed to ensure they haven't done anything really silly like passed a string
+        if (isinstance(interval_start, (Quantity, Time, datetime)) or
+                isinstance(interval_end, (Quantity, Time, datetime))):
+            raise TypeError("The 'interval_start' and 'interval_end' arguments must be one of the following; "
+                            "None, an astropy Quantity, an astropy Time, or an Python datetime.")
+        elif type(interval_start) != type(interval_end):
+            raise TypeError("The 'interval_start' ({bf}) and 'interval_end' ({ef}) arguments must be of "
+                            "the same type.".format(bf=type(interval_start), ef=type(interval_end)))
+
+        # Now we've done all our validation checks on the inputs, we will fetch the 'correct' format of time chunk
+        #  bounds (i.e. seconds from reference time, or datetime) for the input interval limits
+        # We need only check the type of one of the interval limits now, as we have made sure the start
+        #  and end of interval data formats are the same
+        if isinstance(interval_start, Quantity):
+            ch_starts = self.time_chunks[:, 0]
+            ch_ends = self.time_chunks[:, 1]
+        else:
+            ch_starts = self.datetime_chunks[:, 0]
+            ch_ends = self.datetime_chunks[:, 1]
+
+        # The user can choose between two slightly different matching criteria - if
+        #  'over_run' is False then the time chunks they want us to return have to
+        #  be entirely contained within the interval they specified
+        # If 'over_run' is True (the default), then even time chunks that start or end
+        #  outside the interval will be included in the return, so long as some part
+        #  of them is within the user's interval
+        if not over_run:
+            ch_filter = ((ch_starts >= interval_start) &
+                         (ch_ends <= interval_end))
+        else:
+            ch_filter = (((ch_starts >= interval_start) &
+                            (ch_starts <= interval_end)) |
+                           ((ch_ends >= interval_start) &
+                            (ch_ends <= interval_end)) |
+                           ((ch_starts <= interval_start) &
+                            (ch_ends >= interval_end)))
+
+        # Apply the newly created filter to the time chunk IDs property, which will give us the IDs of the
+        #  time chunks that match the user's criteria.
+        rel_ch_ids = self.time_chunk_ids[ch_filter]
+
+        # Now we return them
+        return rel_ch_ids
+
     # def obs_ids_within_interval(self):
     #     pass
 
