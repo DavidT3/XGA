@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:11. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1530,8 +1530,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         #  as a time from reference time, and the end as a datetime). We wish to avoid dealing with
         #  limits in different formats, so raise an error if this is the case.
         # Also check the object types passed to ensure they haven't done anything really silly like passed a string
-        if (isinstance(interval_start, (Quantity, Time, datetime)) or
-                isinstance(interval_end, (Quantity, Time, datetime))):
+        if (not isinstance(interval_start, (Quantity, Time, datetime)) or
+                not isinstance(interval_end, (Quantity, Time, datetime))):
             raise TypeError("The 'interval_start' and 'interval_end' arguments must be one of the following; "
                             "None, an astropy Quantity, an astropy Time, or an Python datetime.")
         elif type(interval_start) != type(interval_end):
