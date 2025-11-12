@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:15. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:20. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1556,7 +1556,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         if interval_start < ch_starts[0]:
             raise ValueError("The value of 'interval_start' ({ins}) is before the start ({wis}) of the time window "
                              "covered by this AggregateLightCurve.".format(ins=interval_start, wis=ch_starts[0]))
-        if interval_end > ch_ends[1]:
+        if interval_end > ch_ends[-1]:
             raise ValueError("The value of 'interval_end' ({ine}) is after the end ({wie}) of the time window "
                              "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[1]))
 
