@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:15. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1319,7 +1319,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: The overall time window coverage fraction.
         :rtype: float
         """
-        return (self.time_chunks[:, 1] - self.time_chunks[:, 0]).sum() / self.overall_time_window
+        return (self.time_chunks[:, 1] - self.time_chunks[:, 0]).sum() / np.diff(self.overall_time_window)
 
     @property
     def storage_key(self) -> str:
