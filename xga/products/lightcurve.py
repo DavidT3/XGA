@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 10/11/2025, 16:43. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 10:06. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -13,7 +13,6 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-
 from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, XGADeveloperError, \
     TelescopeNotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
@@ -1288,6 +1287,41 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.array(chunk_bounds)
 
     @property
+    def overall_time_window(self) -> Quantity:
+        """
+        Returns the beginning time of the first time chunk, and the end time of the last time chunk; represents
+        the entire time window covered by this AggregateLightCurve (not necessarily continuously).
+
+        :return: Two element astropy Quantity, with the first element being the start time of the first
+            time chunk, and the second element being the end time of the last time chunk.
+        :rtype: Quantity
+        """
+        return Quantity([self.time_chunks[:, 0].min(), self.time_chunks[:, 1].max()])
+
+    @property
+    def overall_datetime_window(self) -> np.ndarray:
+        """
+        Returns the beginning datetime of the first time chunk, and the end datetime of the last time
+        chunk; represents the entire time window covered by this AggregateLightCurve (not necessarily continuously).
+
+        :return: Two element astropy Quantity, with the first element being the start datetime of the first
+            time chunk, and the second element being the end datetime of the last time chunk.
+        :rtype: np.ndarray
+        """
+        return np.array([self.datetime_chunks[:, 0].min(), self.datetime_chunks[:, 1].max()])
+
+    @property
+    def overall_time_window_coverage_fraction(self) -> float:
+        """
+        Provides the fraction of the overall time window (from the beginning of the first observation to the end
+        of the last observation) that is actually covered by constituent light curves.
+
+        :return: The overall time window coverage fraction.
+        :rtype: float
+        """
+        return (self.time_chunks[:, 1] - self.time_chunks[:, 0]).sum() / self.overall_time_window
+
+    @property
     def storage_key(self) -> str:
         """
         This property returns the storage key which this object assembles to place the AggregateLightCurve in
@@ -1448,6 +1482,30 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         # Concatenate the count rate data and error into one quantity each and return everything
         return cr_data, cr_err_data, t_data
+
+    # def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
+    #                                    interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True):
+    #     """
+    #
+    #     :param Quantity/Time/datetime interval_start:
+    #     :param Quantity/Time/datetime interval_end:
+    #     :param bool over_run: This controls whether selected observations have to be entirely within the passed
+    #         time window or whether either a start or end time can be within the search window. If set
+    #         to True then observations with a start or end within the search window will be selected, but if False
+    #         then only observations with a start AND end within the window are selected. Default is True.
+    #     :return:
+    #     :rtype:
+    #     """
+    #     if interval_start >= interval_end:
+    #         raise ValueError("Time passed to 'interval_start' argument must be before the time "
+    #                          "passed to 'interval_end'.")
+    #
+    #
+    #
+    #     if isinstance()
+    #
+    # def obs_ids_within_interval(self):
+    #     pass
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
