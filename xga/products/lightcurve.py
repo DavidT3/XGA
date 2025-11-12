@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:38. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:44. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1319,7 +1319,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: The overall time window coverage fraction.
         :rtype: float
         """
-        return (self.time_chunks[:, 1] - self.time_chunks[:, 0]).sum() / np.diff(self.overall_time_window)
+        return (self.time_chunks[:, 1] - self.time_chunks[:, 0]).sum() / np.diff(self.overall_time_window)[0]
 
     @property
     def storage_key(self) -> str:
@@ -1523,12 +1523,6 @@ class AggregateLightCurve(BaseAggregateProduct):
             types are mismatched.
         """
 
-        # Validity check on the interval, obviously can't have the start time being at the same time or after
-        #  the end of the interval
-        if interval_start is not None and interval_end is not None and interval_start >= interval_end:
-            raise ValueError("Time passed to 'interval_start' argument must be before the time "
-                             "passed to 'interval_end'.")
-
         # Convert any Astropy Time objects to a standard Python datetime
         if isinstance(interval_start, Time):
             interval_start = interval_start.to_datetime()
@@ -1559,6 +1553,12 @@ class AggregateLightCurve(BaseAggregateProduct):
         elif type(interval_start) != type(interval_end):
             raise TypeError("The 'interval_start' ({bf}) and 'interval_end' ({ef}) arguments must be of "
                             "the same type.".format(bf=type(interval_start), ef=type(interval_end)))
+
+        # Validity check on the interval, obviously can't have the start time being at the same time or after
+        #  the end of the interval
+        if interval_start >= interval_end:
+            raise ValueError("Time passed to 'interval_start' argument must be before the time "
+                             "passed to 'interval_end'.")
 
         # Now we've done all our validation checks on the inputs, we will fetch the 'correct' format of time chunk
         #  bounds (i.e. seconds from reference time, or datetime) for the input interval limits
