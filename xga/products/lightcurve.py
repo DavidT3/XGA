@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 11:57. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1647,8 +1647,9 @@ class AggregateLightCurve(BaseAggregateProduct):
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
-                 time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear',
-                 fracexp_corr: bool = False, show_legend: bool = True, alpha: float = 0.8) -> Tuple[dict, Figure]:
+                 time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
+                 show_legend: bool = True, alpha: float = 0.8, interval_start: Union[Quantity, Time, datetime] = None,
+                 interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1672,9 +1673,29 @@ class AggregateLightCurve(BaseAggregateProduct):
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :param bool show_legend: Controls whether a legend is included in each panel of the visualization.
         :param float alpha: The alpha value to be used for the plotted data. Default is 0.8.
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
+        # The user can either pass the time chunk IDs that they are interested in plotting, or a time
+        #  window defined by interval_start and interval_end. The 'interval_*' arguments will override
+        #  the 'time_chunk_ids' argument if both are passed.
+        if any([interval_start is None, interval_end is None]):
+            # If the time_chunk_ids variable is not None at this point, then we're about to override it,
+            #  and we want to keep track of that to warn the user
+            time_chunks_overridden = time_chunk_ids is not None
+            # Run the method that will get the relevant time chunk IDs for the user-specified interval
+            time_chunk_ids = self.time_chunk_ids_within_interval(interval_start, interval_end, over_run)
+
+            # Warn the user that we overrode the time_chunk_ids variable with the interval start and end arguments
+            if time_chunks_overridden:
+                warn("Both 'time_chunk_ids' and 'interval_start'/'interval_end' arguments were passed. The interval "
+                     "arguments have overridden the 'time_chunk_ids' argument.", stacklevel=2)
 
         # We check the input for the time_chunk_ids argument first, because not only does it determine the data that
         #  we plot, but it determines how we set up the figure
