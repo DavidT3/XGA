@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 15:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 16:04. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1469,10 +1469,13 @@ class AggregateLightCurve(BaseAggregateProduct):
                              "must be passed to the 'telescope' argument of 'get_data'.")
         elif telescope is None:
             telescope = self.telescopes[0]
+        elif telescope not in self.telescopes:
+            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
+                                              "products in this AggregateLightCurve.".format(telescope))
 
         # Now we do the same thing for instrument name, but with the added context
         #  of the telescope name already set up above
-        if inst is None and len(self.instruments[telescope]) != 1:
+        if inst is None and len(self.associated_instruments[telescope]) != 1:
             raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
                              "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
         elif inst is None:
