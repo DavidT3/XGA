@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 16:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 16:21. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1434,10 +1434,12 @@ class AggregateLightCurve(BaseAggregateProduct):
     def get_data(self, inst: str = None, telescope: str = None, date_time: bool = False, fracexp_corr: bool = False,
                  interval_start: Union[Quantity, Time, datetime] = None,
                  interval_end: Union[Quantity, Time, datetime] = None,
-                 over_run: bool = True) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+                 over_run: bool = True) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray], np.ndarray]:
         """
-        A get method to retrieve count-rate and timing data for a particular instrument of a particular
-        telescope from this AggregateLightCurve. The data are in the correct temporal order.
+        A get method to retrieve count-rate, count-rate error, timing, and time chunk data for a particular
+        instrument of a particular telescope from this AggregateLightCurve.
+
+        The returned data are in the correct temporal order.
 
         A time interval within which to retrieve data can be specified.
 
@@ -1458,9 +1460,10 @@ class AggregateLightCurve(BaseAggregateProduct):
             from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
         :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
             chunks entirely contained within the interval.
-        :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. These
+        :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. The
+            final element of the return is an array indicating which time chunk each data point belongs to. Data
             are in the correct temporal order.
-        :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
+        :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray], np.ndarray]
         """
         # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
         #  can save the user the trouble and select that single telescope. Otherwise, we throw
@@ -1493,6 +1496,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         cr_data = []
         cr_err_data = []
         t_data = []
+        tc_data = []
         # Iterate through the time chunk IDs
         for tc_id in rel_time_chunk_ids:
             try:
@@ -1507,18 +1511,22 @@ class AggregateLightCurve(BaseAggregateProduct):
             #  will handle fractional exposure correction and the conversion of
             #  times to date-times (if the user requested that)
             rel_cr, rel_cr_err, rel_time = rel_lc.get_data(date_time, fracexp_corr)
+            rel_tc = np.full(len(rel_cr), tc_id)
+
             cr_data.append(rel_cr)
             cr_err_data.append(rel_cr_err)
             t_data.append(rel_time)
+            tc_data.append(rel_tc)
 
         # Concatenate the light curve arrays of time, count-rate, and count-rate-error into a single
         #  array each - that is what we're going to return
         t_data = np.concatenate(t_data)
         cr_data = np.concatenate(cr_data)
         cr_err_data = np.concatenate(cr_err_data)
+        tc_data = np.concatenate(tc_data)
 
         # Concatenate the count rate data and error into one quantity each and return everything
-        return cr_data, cr_err_data, t_data
+        return cr_data, cr_err_data, t_data, tc_data
 
     def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
                                        interval_end: Union[Quantity, Time, datetime] = None,
