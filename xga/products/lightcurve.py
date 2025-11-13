@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 12:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 15:58. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1093,6 +1093,23 @@ class AggregateLightCurve(BaseAggregateProduct):
         :rtype: dict
         """
         return self._rel_obs
+
+    @property
+    def associated_instruments(self) -> dict:
+        """
+        Returns a dictionary containing unique instrument names associated
+        with each telescope, for the constituent light curves of this
+        AggregateLightCurve.
+
+        NOTE - there is no guarantee that the instruments of a telescope are associated
+        with a light curve in every time chunk.
+
+        :return: Dictionary with telescope names as keys, and lists of unique associated instruments as values.
+        :rtype: dict
+        """
+
+        assoc_inst = {tel: list(set(inst for inst in oi_insts.values())) for tel, oi_insts in self.instruments.items()}
+        return assoc_inst
 
     @property
     def telescopes(self) -> List[str]:
