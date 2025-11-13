@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 16:09. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 16:14. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1108,7 +1108,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         :rtype: dict
         """
 
-        assoc_inst = {tel: list(set([inst for inst in oi_insts.values()]))
+        assoc_inst = {tel: list(set([inst for inst_list in oi_insts.values() for inst in inst_list]))
                       for tel, oi_insts in self.instruments.items()}
         return assoc_inst
 
