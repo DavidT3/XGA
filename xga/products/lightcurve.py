@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/11/2025, 16:27. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 14/11/2025, 12:25. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -671,7 +671,7 @@ class LightCurve(BaseProduct):
         'get_data' method of the AggregateLightCurve class.
 
         :param bool date_time: Whether the time data should be returned as an array of datetimes (not the default), or
-            an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
+            an Astropy TimeDelta object from the MJD reference time defined in the file header.
         :param bool fracexp_corr: Controls whether the data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :return: The count rate data, count rate uncertainty data, and time data.
@@ -693,7 +693,7 @@ class LightCurve(BaseProduct):
 
         # If the user wants the time data as a TimeDelta from the reference MJD time then calculate that
         if not date_time:
-            t_data = (Time(t_data) - Time(50814.0, format='mjd')).sec
+            t_data = (Time(t_data) - self.ref_time).sec
 
         # Return the requested information
         return cr_data, cr_err_data, t_data
