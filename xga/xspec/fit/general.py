@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:28. Copyright (c) The Contributors
 
 from typing import List, Union
 from warnings import warn
@@ -180,14 +180,11 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                                                         check_lo_lims, check_hi_lims, check_err_lims, True, nh_to_zero,
                                                         tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # TODO THIS MIGHT BE WRONG - STACKED_SPEC IS AN ARGUMENT FOR A REASON
-                # when retrieving results, we want the stacked ones from erosita
-                check_stacked_spec = (tel == 'erosita') & stacked_spectra
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -354,13 +351,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                                                         check_lo_lims, check_hi_lims, check_err_lims, True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -514,12 +509,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                                                         check_lo_lims, check_hi_lims, check_err_lims, True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -663,12 +656,10 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                         lum_conf, z, False, "{}", "{}", "{}", "{}", True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -817,10 +808,8 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
             # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel == 'erosita'
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
