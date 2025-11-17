@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 17:30. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -260,7 +260,7 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
 
 
 def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
-                    src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: float,
+                    src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: int,
                     min_sn: float, over_sample: float) -> Tuple[str, str]:
     """
     Internal function that collects relevant spectrum objects per telescope. This is used in 
