@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 10:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:25. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -72,9 +72,12 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
         ab_list = ", ".join(ABUND_TABLES)
         raise ValueError("{0} is not in the accepted list of abundance tables; {1}".format(abund_table, ab_list))
 
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
-                                                                     min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn, over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope)
 
     # pregen spectra can output a BaseSource after inputting it as a list, so turning this back to a list
     if isinstance(sources, BaseSource):

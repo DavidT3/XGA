@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 16:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:25. Copyright (c) The Contributors
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -79,7 +79,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
                     inner_radius: Union[str, Quantity], group_spec: bool = True, min_counts: int = 5,
                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
-        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str]]:
+        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str], dict]:
     """
     This pre-generates the spectra necessary for the requested fit (if they do not exist), and formats the input
     radii in a more predictable way.
@@ -111,8 +111,9 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
-    :return: The sources, inner radii, outer radii, and telescopes.
-    :rtype: Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str]]
+    :return: The sources, inner radii, outer radii, telescopes, and a dictionary containing the
+        effective values of stacked spectra for each telescope (some may have been overridden).
+    :rtype: Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str], dict]
     """
     # Have to import here to avoid a circular import error
     from ...sourcetools._common import _get_all_telescopes
@@ -127,6 +128,13 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     else:
         src_telescopes = telescope
 
+    # We're going to return a dictionary containing the 'true' value of stacked_spectra, which
+    #  by default is True (to make eRASS analyses better by default), but for many telescopes
+    #  should actually be False (and gets effectively turned to False here).
+    # It will be useful to know outside of this function (in the XSPEC convenience functions)
+    #  exactly what was really used for each telescope
+    real_stacked_spectra = {}
+
     # Cycle through the telescopes that we need to generate spectra for
     for tel in src_telescopes:
         # TODO create a function that does this sort of thing for us - as in generating spectra for each of the
@@ -136,18 +144,36 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             if stacked_spectra:
                 warn("Spectrum stacking is not currently supported (or recommended) for XMM, and so combined spectra "
                      "will not be used for these XSPEC fits.", stacklevel=2)
+            # Override the stacked_spectra value here, because stacking is not supported for XMM
+            real_stacked_spectra[tel] = False
+
             # We call the evselect_spectrum function here for two reasons; to make sure the spectra we want to fit
             #  are generated, and because that function has a lot of radius parsing and checking that will
             #  tell us if the inputs aren't formatted correctly
             sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
                                         over_sample, one_rmf, num_cores)
-        elif tel == 'erosita':
+
+        elif tel == 'chandra':
+            warn("Spectrum stacking is not currently supported for Chandra, and so combined spectra will not be "
+                 "used for these XSPEC fits.", stacklevel=2)
+            # Make sure we have Chandra spectra generated, so that we can fit them
+            sources = specextract_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
+                                           num_cores)
+            # Override the stacked_spectra value here, because stacking is not supported for Chandra
+            real_stacked_spectra[tel] = False
+
+        elif tel in ['erosita', 'erass']:
             # This is the spectrum generation tool that is specific to eROSITA
             sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores,
                                        False, stacked_spectra)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))
+
+        # Store the passed value of stacked_spectra if it hasn't been specially overridden for the
+        #  current telescope
+        if tel not in real_stacked_spectra:
+            real_stacked_spectra[tel] = stacked_spectra
 
     # This is the spectrum region preparation function, and I'm calling it here because it will return properly
     #  formatted arrays for the inner and outer radii
@@ -156,7 +182,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     else:
         raise NotImplementedError("I don't currently support fitting region spectra")
 
-    return sources, inn_rad_vals, out_rad_vals, src_telescopes
+    return sources, inn_rad_vals, out_rad_vals, src_telescopes, real_stacked_spectra
 
 
 def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
@@ -235,7 +261,7 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
 
 def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
                     src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: float,
-                    min_sn: float, over_sample: float) -> str: 
+                    min_sn: float, over_sample: float) -> Tuple[str, str]:
     """
     Internal function that collects relevant spectrum objects per telescope. This is used in 
     each XGA xspec fitting function eg. single_temp_apec etc. 
@@ -255,7 +281,9 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
-
+    :return: An XSPEC formatted list string containing the paths of the spectra, and a string containing the
+        XGA key that the spectra were stored under.
+    :rtype: Tuple[str, str]
     """
     # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
     if stacked_spectra and tel == 'erosita':
