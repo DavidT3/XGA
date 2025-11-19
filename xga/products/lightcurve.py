@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 12/11/2025, 12:14. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 19:07. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -13,6 +13,7 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+
 from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, XGADeveloperError, \
     TelescopeNotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
@@ -615,6 +616,10 @@ class LightCurve(BaseProduct):
                                               all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('STOP')],
                                              's').T
                     self._bck_gti = self._src_gti
+                elif "STDGTI" in all_lc:
+                    self._src_gti = Quantity([all_lc['STDGTI'].read_column('START'),
+                                              all_lc['STDGTI'].read_column('STOP')], 's').T
+                    self._bck_gti = self._src_gti
                 # TODO HAVEN'T MADE CHANDRA LIGHTCURVES YET SO DON'T KNOW WHAT WILL GO HERE
                 else:
                     self._src_gti = Quantity([[self._time_start.value, self._time_stop.value]], 's')
@@ -671,7 +676,7 @@ class LightCurve(BaseProduct):
         'get_data' method of the AggregateLightCurve class.
 
         :param bool date_time: Whether the time data should be returned as an array of datetimes (not the default), or
-            an Astropy TimeDelta object with the time as a different from MJD 50814.0 in seconds (the default).
+            an Astropy TimeDelta object from the MJD reference time defined in the file header.
         :param bool fracexp_corr: Controls whether the data should be corrected for vignetting and deadtime
             effects by dividing by the 'FRACEXP' entry in the lightcurve. Default is False.
         :return: The count rate data, count rate uncertainty data, and time data.
@@ -693,7 +698,7 @@ class LightCurve(BaseProduct):
 
         # If the user wants the time data as a TimeDelta from the reference MJD time then calculate that
         if not date_time:
-            t_data = (Time(t_data) - Time(50814.0, format='mjd')).sec
+            t_data = (Time(t_data) - self.ref_time).sec
 
         # Return the requested information
         return cr_data, cr_err_data, t_data
@@ -1095,6 +1100,24 @@ class AggregateLightCurve(BaseAggregateProduct):
         return self._rel_obs
 
     @property
+    def associated_instruments(self) -> dict:
+        """
+        Returns a dictionary containing unique instrument names associated
+        with each telescope, for the constituent light curves of this
+        AggregateLightCurve.
+
+        NOTE - there is no guarantee that the instruments of a telescope are associated
+        with a light curve in every time chunk.
+
+        :return: Dictionary with telescope names as keys, and lists of unique associated instruments as values.
+        :rtype: dict
+        """
+
+        assoc_inst = {tel: list(set([inst for inst_list in oi_insts.values() for inst in inst_list]))
+                      for tel, oi_insts in self.instruments.items()}
+        return assoc_inst
+
+    @property
     def telescopes(self) -> List[str]:
         """
         Property getter for telescopes that are associated with this aggregate light curve.
@@ -1416,10 +1439,12 @@ class AggregateLightCurve(BaseAggregateProduct):
     def get_data(self, inst: str = None, telescope: str = None, date_time: bool = False, fracexp_corr: bool = False,
                  interval_start: Union[Quantity, Time, datetime] = None,
                  interval_end: Union[Quantity, Time, datetime] = None,
-                 over_run: bool = True) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]:
+                 over_run: bool = True) -> Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray], np.ndarray]:
         """
-        A get method to retrieve count-rate and timing data for a particular instrument of a particular
-        telescope from this AggregateLightCurve. The data are in the correct temporal order.
+        A get method to retrieve count-rate, count-rate error, timing, and time chunk data for a particular
+        instrument of a particular telescope from this AggregateLightCurve.
+
+        The returned data are in the correct temporal order.
 
         A time interval within which to retrieve data can be specified.
 
@@ -1440,9 +1465,10 @@ class AggregateLightCurve(BaseAggregateProduct):
             from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
         :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
             chunks entirely contained within the interval.
-        :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. These
+        :return: The count rate data, count rate uncertainty data, and time data for the selected instrument. The
+            final element of the return is an array indicating which time chunk each data point belongs to. Data
             are in the correct temporal order.
-        :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray]]
+        :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray], np.ndarray]
         """
         # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
         #  can save the user the trouble and select that single telescope. Otherwise, we throw
@@ -1452,14 +1478,17 @@ class AggregateLightCurve(BaseAggregateProduct):
                              "must be passed to the 'telescope' argument of 'get_data'.")
         elif telescope is None:
             telescope = self.telescopes[0]
+        elif telescope not in self.telescopes:
+            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
+                                              "products in this AggregateLightCurve.".format(telescope))
 
         # Now we do the same thing for instrument name, but with the added context
         #  of the telescope name already set up above
-        if inst is None and len(self.instruments[telescope]) != 1:
+        if inst is None and len(self.associated_instruments[telescope]) != 1:
             raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
                              "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
         elif inst is None:
-            inst = self.instruments[0]
+            inst = self.associated_instruments[telescope][0]
 
         # We call a class method that will return the time interval IDs that represent data within the
         #  user specified time window. The default behavior is to return all time chunk IDs, as the
@@ -1472,6 +1501,7 @@ class AggregateLightCurve(BaseAggregateProduct):
         cr_data = []
         cr_err_data = []
         t_data = []
+        tc_data = []
         # Iterate through the time chunk IDs
         for tc_id in rel_time_chunk_ids:
             try:
@@ -1486,18 +1516,22 @@ class AggregateLightCurve(BaseAggregateProduct):
             #  will handle fractional exposure correction and the conversion of
             #  times to date-times (if the user requested that)
             rel_cr, rel_cr_err, rel_time = rel_lc.get_data(date_time, fracexp_corr)
+            rel_tc = np.full(len(rel_cr), tc_id)
+
             cr_data.append(rel_cr)
             cr_err_data.append(rel_cr_err)
             t_data.append(rel_time)
+            tc_data.append(rel_tc)
 
         # Concatenate the light curve arrays of time, count-rate, and count-rate-error into a single
         #  array each - that is what we're going to return
         t_data = np.concatenate(t_data)
         cr_data = np.concatenate(cr_data)
         cr_err_data = np.concatenate(cr_err_data)
+        tc_data = np.concatenate(tc_data)
 
         # Concatenate the count rate data and error into one quantity each and return everything
-        return cr_data, cr_err_data, t_data
+        return cr_data, cr_err_data, t_data, tc_data
 
     def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
                                        interval_end: Union[Quantity, Time, datetime] = None,
@@ -1580,7 +1614,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                              "covered by this AggregateLightCurve.".format(ins=interval_start, wis=ch_starts[0]))
         if interval_end > ch_ends[-1]:
             raise ValueError("The value of 'interval_end' ({ine}) is after the end ({wie}) of the time window "
-                             "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[1]))
+                             "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[-1]))
 
         # The user can choose between two slightly different matching criteria - if
         #  'over_run' is False then the time chunks they want us to return have to
