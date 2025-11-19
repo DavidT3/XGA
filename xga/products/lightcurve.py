@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 22:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 22:52. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple, Dict
@@ -1941,12 +1941,6 @@ class AggregateLightCurve(BaseAggregateProduct):
         # If the 'times' argument is a single value, turn it into an array
         if times.isscalar:
             times = Quantity([times])
-
-        # Validation check on the times, trying to make sure they've been passed in
-        #  the right format, though absolutely testing that may not be feasible
-        if (times < self.ref_times[telescope]).any():
-            raise ValueError("At least one of the entries in 'times' is before the reference time for "
-                             "the {t} light curves contained in this AggregateLightCurve.".format(t=telescope))
 
         # The user may choose to compare to source or background GTI information, so
         #  depending on what has been passed to 'src_gti' we retrieve different GTIs
