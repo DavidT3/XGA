@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 19:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 20:18. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1309,6 +1309,16 @@ class AggregateLightCurve(BaseAggregateProduct):
         return np.array(chunk_bounds)
 
     @property
+    def time_chunk_lengths(self) -> Quantity:
+        """
+        Computes and returns lengths (in seconds) of each time chunk.
+
+        :return: An astropy quantity containing the time chunk lengths in seconds.
+        :rtype: Quantity
+        """
+        return np.diff(self.time_chunks, axis=1).flatten()
+
+    @property
     def overall_time_window(self) -> Quantity:
         """
         Returns the beginning time of the first time chunk, and the end time of the last time chunk; represents
@@ -1831,6 +1841,16 @@ class AggregateLightCurve(BaseAggregateProduct):
                 rel_obsids[rel_lc.telescope].append(rel_lc.obs_id)
 
         return rel_obsids
+
+    # def time_chunk_good_fractions(self, src_gti: bool = True, inst: str = None,
+    #                               telescope: str = None) -> np.ndarray:
+    #
+    #     if src_gti:
+    #         rel_gti = self.get_src_gtis(inst, telescope)
+    #     else:
+    #         rel_gti = self.get_bck_gtis(inst, telescope)
+    #
+    #     self.
 
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
