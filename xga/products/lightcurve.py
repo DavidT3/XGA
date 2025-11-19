@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 20:18. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 20:44. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -1842,15 +1842,40 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         return rel_obsids
 
-    # def time_chunk_good_fractions(self, src_gti: bool = True, inst: str = None,
-    #                               telescope: str = None) -> np.ndarray:
-    #
-    #     if src_gti:
-    #         rel_gti = self.get_src_gtis(inst, telescope)
-    #     else:
-    #         rel_gti = self.get_bck_gtis(inst, telescope)
-    #
-    #     self.
+    def time_chunk_good_fractions(self, src_gti: bool = True, inst: str = None,
+                                  telescope: str = None) -> np.ndarray:
+        """
+        A method to retrieve the good time fractions of each time chunk, for a particular instrument of
+        a particular telescope. The good time fractions are the fraction of a time chunk that falls within
+        a good-time-interval.
+
+        :param bool src_gti: Controls whether the good fractions are calculated using the source or background
+            good-time-intervals. Default is True, which will use the source GTI information.
+        :param str inst: The instrument for which to calculate good time fractions of time chunks. Default is None,
+            which will automatically select the instrument name if only one is represented in this AggregateLightCurve.
+            If multiple instruments are represented, the user must pass a value to choose which GTIs to retrieve.
+        :param str telescope: The telescope for which to calculate good time fractions of time chunks. Default is
+            None, which will automatically select the telescope name if only one is represented in this
+            AggregateLightCurve. If multiple telescopes are represented, the user must pass a value to choose
+            which GTIs to retrieve.
+        :return: The fraction of each time chunk that within a good-time interval.
+        :rtype: np.ndarray
+        """
+        if src_gti:
+            rel_gti, chunk_indices = self.get_src_gtis(inst, telescope)
+        else:
+            rel_gti, chunk_indices = self.get_bck_gtis(inst, telescope)
+
+        gti_durations = rel_gti[:, 1] - rel_gti[:, 0]
+
+        # Sum GTI durations for each time chunk using bincount
+        total_gti_per_chunk = np.bincount(chunk_indices, weights=gti_durations,
+                                          minlength=self.num_time_chunks)
+
+        # Calculate fractions (avoid division by zero)
+        fractions = total_gti_per_chunk / self.time_chunk_lengths
+
+        return fractions
 
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
