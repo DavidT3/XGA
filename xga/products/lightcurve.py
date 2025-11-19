@@ -1,8 +1,8 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 20:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 22:05. Copyright (c) The Contributors
 import re
 from datetime import datetime
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Dict
 from warnings import warn
 
 import matplotlib.dates as mdates
@@ -1053,6 +1053,18 @@ class AggregateLightCurve(BaseAggregateProduct):
                   lc.instrument in self._component_products[lc.telescope][lc.obs_id]):
                 self._component_products[lc.telescope][lc.obs_id][lc.instrument][rel_grp] = lc
 
+        # This is a validation step, ensuring that all like light curves (i.e. same
+        #  telescope, same instrument) have the same reference time
+        ref_times = {}
+        for lc in lightcurves:
+            cur_ref_time = ref_times.setdefault(lc.telescope, lc.ref_time)
+            if cur_ref_time != lc.ref_time:
+                raise IncompatibleProductError("The time system reference times of AggregateLightCurve component "
+                                               "lightcurves from the same telescope passed to AggregateLightCurve "
+                                               "must be the same.")
+        # Make a reference time dictionary attribute
+        self._ref_times = ref_times
+
         # This is all helps to set the storage key as the same as the LightCurve, but we do account for different
         #  patterns accepted for different instruments - as mos1 and 2 should be treated the same we don't look at
         #  the specific MOS instrument, same with eROSITA telescope modules.
@@ -1229,6 +1241,18 @@ class AggregateLightCurve(BaseAggregateProduct):
         return self.all_lightcurves[0].time_bin_size
 
     @property
+    def ref_times(self) -> Dict[str, Time]:
+        """
+        Returns the time system reference times of this aggregate lightcurve's components.
+
+        There will be one reference time for each telescope associated with this object.
+
+        :return: Dictionary mapping telescope names to their reference times.
+        :rtype: Dict[str, Time]
+        """
+        return self._ref_times
+
+    @property
     def time_chunk_ids(self) -> np.ndarray:
         """
         Getter for the time chunk IDs associated with this AggregateLightCurve. Light curves that are part of an
@@ -1378,6 +1402,38 @@ class AggregateLightCurve(BaseAggregateProduct):
         return self._patterns
 
     # Now the protected methods of the class
+    def _validate_tel_inst(self, telescope: str = None, inst: str = None) -> Tuple[str, str]:
+        """
+        Internal method to check telescope and instrument inputs, and fill in values if Nones
+        are passed and the light curve only has one telescope and instrument associated.
+
+        :param str telescope: The name of the telescope to validate.
+        :param str inst: The name of the instrument to validate.
+        :return: Validated telescope and instrument names.
+        :rtype Tuple[str, str]
+        """
+        # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
+        #  can save the user the trouble and select that single telescope. Otherwise, we throw
+        #  an error and tell them to set a value
+        if telescope is None and len(self.telescopes) != 1:
+            raise ValueError("For AggregateLightCurve instances containing data from multiple telescopes, a value "
+                             "must be passed to the 'telescope' argument of 'get_data'.")
+        elif telescope is None:
+            telescope = self.telescopes[0]
+        elif telescope not in self.telescopes:
+            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
+                                              "products in this AggregateLightCurve.".format(telescope))
+
+        # Now we do the same thing for instrument name, but with the added context
+        #  of the telescope name already set up above
+        if inst is None and len(self.associated_instruments[telescope]) != 1:
+            raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
+                             "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
+        elif inst is None:
+            inst = self.associated_instruments[telescope][0]
+
+        return telescope, inst
+
     def _get_gtis(self, which_gti: str = "src", inst: str = None, telescope: str = None,
                   interval_start: Union[Quantity, Time, datetime] = None,
                   interval_end: Union[Quantity, Time, datetime] = None,
@@ -1416,25 +1472,9 @@ class AggregateLightCurve(BaseAggregateProduct):
         if which_gti not in ["src", "bck"]:
             raise ValueError("The 'which_gti' parameter can only take the values 'src' or 'bck'.")
 
-        # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
-        #  can save the user the trouble and select that single telescope. Otherwise, we throw
-        #  an error and tell them to set a value
-        if telescope is None and len(self.telescopes) != 1:
-            raise ValueError("For AggregateLightCurve instances containing data from multiple telescopes, a value "
-                             "must be passed to the 'telescope' argument of 'get_data'.")
-        elif telescope is None:
-            telescope = self.telescopes[0]
-        elif telescope not in self.telescopes:
-            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
-                                              "products in this AggregateLightCurve.".format(telescope))
-
-        # Now we do the same thing for instrument name, but with the added context
-        #  of the telescope name already set up above
-        if inst is None and len(self.associated_instruments[telescope]) != 1:
-            raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
-                             "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
-        elif inst is None:
-            inst = self.associated_instruments[telescope][0]
+        # Validate the telescope and instrument inputs and fill in values if Nones are passed and
+        #  the AggregateLightCurve only has one telescope and instrument associated.
+        telescope, inst = self._validate_tel_inst(telescope, inst)
 
         # We call a class method that will return the time interval IDs that represent data within the
         #  user specified time window. The default behavior is to return all time chunk IDs, as the
@@ -1572,25 +1612,9 @@ class AggregateLightCurve(BaseAggregateProduct):
             are in the correct temporal order.
         :rtype: Tuple[Quantity, Quantity, Union[TimeDelta, np.ndarray], np.ndarray]
         """
-        # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
-        #  can save the user the trouble and select that single telescope. Otherwise, we throw
-        #  an error and tell them to set a value
-        if telescope is None and len(self.telescopes) != 1:
-            raise ValueError("For AggregateLightCurve instances containing data from multiple telescopes, a value "
-                             "must be passed to the 'telescope' argument of 'get_data'.")
-        elif telescope is None:
-            telescope = self.telescopes[0]
-        elif telescope not in self.telescopes:
-            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
-                                              "products in this AggregateLightCurve.".format(telescope))
-
-        # Now we do the same thing for instrument name, but with the added context
-        #  of the telescope name already set up above
-        if inst is None and len(self.associated_instruments[telescope]) != 1:
-            raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
-                             "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
-        elif inst is None:
-            inst = self.associated_instruments[telescope][0]
+        # Validate the telescope and instrument inputs and fill in values if Nones are passed and
+        #  the AggregateLightCurve only has one telescope and instrument associated.
+        telescope, inst = self._validate_tel_inst(telescope, inst)
 
         # We call a class method that will return the time interval IDs that represent data within the
         #  user specified time window. The default behavior is to return all time chunk IDs, as the
@@ -1842,8 +1866,7 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         return rel_obsids
 
-    def time_chunk_good_fractions(self, src_gti: bool = True, inst: str = None,
-                                  telescope: str = None) -> np.ndarray:
+    def time_chunk_good_fractions(self, src_gti: bool = True, inst: str = None, telescope: str = None) -> np.ndarray:
         """
         A method to retrieve the good time fractions of each time chunk, for a particular instrument of
         a particular telescope. The good time fractions are the fraction of a time chunk that falls within
@@ -1861,6 +1884,8 @@ class AggregateLightCurve(BaseAggregateProduct):
         :return: The fraction of each time chunk that within a good-time interval.
         :rtype: np.ndarray
         """
+        # We account for the user wanting the good time fractions for background light
+        #  curves, which are sometimes different from source GTIs
         if src_gti:
             rel_gti, chunk_indices = self.get_src_gtis(inst, telescope)
         else:
@@ -1876,6 +1901,54 @@ class AggregateLightCurve(BaseAggregateProduct):
         fractions = total_gti_per_chunk / self.time_chunk_lengths
 
         return fractions
+
+    def check_times_within_gti(self, times: Quantity, src_gti: bool = True, inst: str = None,
+                               telescope: str = None) -> np.ndarray:
+        """
+        Check whether given times are within the good-time-intervals (GTIs) of any component light curve
+        within this AggregateLightCurve that matches the specified instrument and telescope.
+
+        Comparisons are made to the source or background GTIs depending on the passed value
+        of the 'src_gti' parameter.
+
+        Times must be in the form of seconds from reference time of the telescope of interest.
+
+        :param Quantity times: Times to be checked against the GTIs. Must be a scalar or an array of values.
+        :param bool src_gti: Flag indicating whether to use source GTIs (True) or background GTIs (False).
+            Defaults to True.
+        :param str inst: The instrument whose light curve GTIs we are to compare the input times with. If
+            None, value will be inferred if only one telescope and instrument are associated with this object.
+        :param str telescope: The telescope whose light curve GTIs we are to compare the input times with. If
+            None, value will be inferred if only one telescope and instrument are associated with this object.
+        :return: A boolean array indicating whether each input time falls within any of the GTIs.
+        :rtype: np.ndarray
+        """
+        # Validate the telescope and instrument inputs and fill in values if Nones are passed and
+        #  the AggregateLightCurve only has one telescope and instrument associated.
+        telescope, inst = self._validate_tel_inst(telescope, inst)
+
+        # If the 'times' argument is a single value, turn it into an array
+        if times.isscalar:
+            times = Quantity([times])
+
+        # Validation check on the times, trying to make sure they've been passed in
+        #  the right format, though absolutely testing that may not be feasible
+        if (times < self.ref_times[telescope]).any():
+            raise ValueError("At least one of the entries in 'times' is before the reference time for "
+                             "the {t} light curves contained in this AggregateLightCurve.".format(t=telescope))
+
+        # The user may choose to compare to source or background GTI information, so
+        #  depending on what has been passed to 'src_gti' we retrieve different GTIs
+        if src_gti:
+            rel_gti, chunk_indices = self.get_src_gtis(inst, telescope)
+        else:
+            rel_gti, chunk_indices = self.get_bck_gtis(inst, telescope)
+
+        # Now we generate the boolean array that will indicate which entries in 'times'
+        #  are within a GTI and which aren't
+        time_within = ((rel_gti[:, 0] <= times[..., None]) & (rel_gti[:, 1] >= times[..., None])).any(axis=1)
+
+        return time_within
 
 
     def get_view(self, fig: Figure, inst: str = None, custom_title: str = None, label_font_size: int = 18,
