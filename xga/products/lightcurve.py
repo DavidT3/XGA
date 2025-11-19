@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 19:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 19:41. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -620,7 +620,6 @@ class LightCurve(BaseProduct):
                     self._src_gti = Quantity([all_lc['STDGTI'].read_column('START'),
                                               all_lc['STDGTI'].read_column('STOP')], 's').T
                     self._bck_gti = self._src_gti
-                # TODO HAVEN'T MADE CHANDRA LIGHTCURVES YET SO DON'T KNOW WHAT WILL GO HERE
                 else:
                     self._src_gti = Quantity([[self._time_start.value, self._time_stop.value]], 's')
                     self._bck_gti = self._src_gti
@@ -1368,6 +1367,99 @@ class AggregateLightCurve(BaseAggregateProduct):
         """
         return self._patterns
 
+    # Now the protected methods of the class
+    def _get_gtis(self, which_gti: str = "src", inst: str = None, telescope: str = None,
+                  interval_start: Union[Quantity, Time, datetime] = None,
+                  interval_end: Union[Quantity, Time, datetime] = None,
+                  over_run: bool = True) -> Tuple[Quantity, np.ndarray]:
+        """
+        Internal get method to retrieve the good time intervals (GTIs) for the source OR background light curves
+        of a particular instrument of a particular telescope from this AggregateLightCurve.
+
+        The returned GTIs are in time chunk order.
+
+        A time interval within which to retrieve GTIs can be specified.
+
+        :param str which_gti: Which GTIs to retrieve, either 'src' or 'bck'.
+        :param str inst: The instrument for which to retrieve the overall GTI information. Default is None,
+            which will automatically select the instrument name if only one is represented in this AggregateLightCurve.
+            If multiple instruments are represented, the user must pass a value to choose which GTIs to retrieve.
+        :param str telescope: The telescope for which to retrieve the overall GTI information. Default is
+            None, which will automatically select the telescope name if only one is represented in this
+            AggregateLightCurve. If multiple telescopes are represented, the user must pass a value to choose
+            which GTIs to retrieve.
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
+        :return: The requested good-time-intervals for the source and background light curves, and an array
+            indicating which time chunk each GTI belongs in. Data are in the correct temporal order.
+        :rtype: Tuple[Quantity, np.ndarray]
+        """
+
+        # This is an internal method, so I feel okay using a string 'which_gti' rather than
+        #  a boolean variable to determine whether to retrieve the source or background GTI.
+        # Leaves the option open for some other kind of GTI retrieval to be added as well.
+        # Need to check that the variable value is valid however
+        if which_gti not in ["src", "bck"]:
+            raise ValueError("The 'which_gti' parameter can only take the values 'src' or 'bck'.")
+
+        # Check the telescope input, if it is None, and we only have one telescope in the AggLC we
+        #  can save the user the trouble and select that single telescope. Otherwise, we throw
+        #  an error and tell them to set a value
+        if telescope is None and len(self.telescopes) != 1:
+            raise ValueError("For AggregateLightCurve instances containing data from multiple telescopes, a value "
+                             "must be passed to the 'telescope' argument of 'get_data'.")
+        elif telescope is None:
+            telescope = self.telescopes[0]
+        elif telescope not in self.telescopes:
+            raise TelescopeNotAssociatedError("The telescope name {0} is not associated with any constituent "
+                                              "products in this AggregateLightCurve.".format(telescope))
+
+        # Now we do the same thing for instrument name, but with the added context
+        #  of the telescope name already set up above
+        if inst is None and len(self.associated_instruments[telescope]) != 1:
+            raise ValueError("This AggregateLightCurve instance contains data from multiple instruments of {t}, so a "
+                             "value must be passed to the 'inst' argument of 'get_data'.".format(t=telescope))
+        elif inst is None:
+            inst = self.associated_instruments[telescope][0]
+
+        # We call a class method that will return the time interval IDs that represent data within the
+        #  user specified time window. The default behavior is to return all time chunk IDs, as the
+        #  default values of interval_start and interval_end are None.
+        rel_time_chunk_ids = self.time_chunk_ids_within_interval(interval_start, interval_end, over_run)
+
+        # Then we'll store the GTIs and chunk IDs in these lists
+        gtis = []
+        tc_data = []
+        # Iterate through the time chunk IDs
+        for tc_id in rel_time_chunk_ids:
+            try:
+                # Grab the light curves, but catch if there isn't an entry for the chosen instrument for this
+                #  time chunk and handle it gracefully
+                rel_lc = self.get_lightcurves(tc_id, inst=inst, telescope=telescope)
+            except NotAssociatedError:
+                continue
+
+            # Append the current time chunk's chosen instrument's GTIs to the list
+            if which_gti == "src":
+                rel_gti = rel_lc.src_gti
+            elif which_gti == "bck":
+                rel_gti = rel_lc.bck_gti
+
+            gtis.append(rel_gti)
+            rel_tc = np.full(len(rel_gti), tc_id)
+
+            tc_data.append(rel_tc)
+
+        # Concatenate the lists of GTIs and chunk IDs to form a single array of GTIs and chunk IDs
+        gtis = np.concatenate(gtis)
+        tc_data = np.concatenate(tc_data)
+
+        return gtis, tc_data
+
     # Then define user-facing methods
     def get_lightcurves(self, time_chunk_id: int, obs_id: str = None,
                         inst: str = None, telescope: str = None) -> Union[List[LightCurve], LightCurve]:
@@ -1532,6 +1624,68 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         # Concatenate the count rate data and error into one quantity each and return everything
         return cr_data, cr_err_data, t_data, tc_data
+
+    def get_src_gtis(self, inst: str = None, telescope: str = None,
+                 interval_start: Union[Quantity, Time, datetime] = None,
+                 interval_end: Union[Quantity, Time, datetime] = None,
+                 over_run: bool = True) -> Tuple[Quantity, np.ndarray]:
+        """
+        A get method to retrieve the good time intervals (GTIs) for the source light curves
+        of a particular instrument of a particular telescope from this AggregateLightCurve.
+
+        The returned GTIs are in time chunk order.
+
+        A time interval within which to retrieve GTIs can be specified.
+
+        :param str inst: The instrument for which to retrieve the overall GTI information. Default is None,
+            which will automatically select the instrument name if only one is represented in this AggregateLightCurve.
+            If multiple instruments are represented, the user must pass a value to choose which GTIs to retrieve.
+        :param str telescope: The telescope for which to retrieve the overall GTI information. Default is
+            None, which will automatically select the telescope name if only one is represented in this
+            AggregateLightCurve. If multiple telescopes are represented, the user must pass a value to choose
+            which GTIs to retrieve.
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
+        :return: The requested good-time-intervals for the source light curves, and an array
+            indicating which time chunk each GTI belongs in. Data are in the correct temporal order.
+        :rtype: Tuple[Quantity, np.ndarray]
+        """
+        return self._get_gtis('src', inst, telescope, interval_start, interval_end, over_run)
+
+    def get_bck_gtis(self, inst: str = None, telescope: str = None,
+                 interval_start: Union[Quantity, Time, datetime] = None,
+                 interval_end: Union[Quantity, Time, datetime] = None,
+                 over_run: bool = True) -> Tuple[Quantity, np.ndarray]:
+        """
+        A get method to retrieve the good time intervals (GTIs) for the background light curves
+        of a particular instrument of a particular telescope from this AggregateLightCurve.
+
+        The returned GTIs are in time chunk order.
+
+        A time interval within which to retrieve GTIs can be specified.
+
+        :param str inst: The instrument for which to retrieve the overall GTI information. Default is None,
+            which will automatically select the instrument name if only one is represented in this AggregateLightCurve.
+            If multiple instruments are represented, the user must pass a value to choose which GTIs to retrieve.
+        :param str telescope: The telescope for which to retrieve the overall GTI information. Default is
+            None, which will automatically select the telescope name if only one is represented in this
+            AggregateLightCurve. If multiple telescopes are represented, the user must pass a value to choose
+            which GTIs to retrieve.
+        :param interval_start: The starting point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window start.
+        :param interval_end: The ending point of the time interval. Can be a Quantity indicating a duration
+            from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
+        :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
+            chunks entirely contained within the interval.
+        :return: The requested good-time-intervals for the background light curves, and an array
+            indicating which time chunk each GTI belongs in. Data are in the correct temporal order.
+        :rtype: Tuple[Quantity, np.ndarray]
+        """
+        return self._get_gtis('bck', inst, telescope, interval_start, interval_end, over_run)
 
     def time_chunk_ids_within_interval(self, interval_start: Union[Quantity, Time, datetime] = None,
                                        interval_end: Union[Quantity, Time, datetime] = None,
