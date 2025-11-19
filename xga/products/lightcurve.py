@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/11/2025, 12:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 19:07. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple
@@ -13,6 +13,7 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+
 from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, XGADeveloperError, \
     TelescopeNotAssociatedError
 from xga.products import BaseProduct, BaseAggregateProduct
@@ -614,6 +615,10 @@ class LightCurve(BaseProduct):
                     self._src_gti = Quantity([all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('START'),
                                               all_lc['SRCGTI{}'.format(self.instrument[-1])].read_column('STOP')],
                                              's').T
+                    self._bck_gti = self._src_gti
+                elif "STDGTI" in all_lc:
+                    self._src_gti = Quantity([all_lc['STDGTI'].read_column('START'),
+                                              all_lc['STDGTI'].read_column('STOP')], 's').T
                     self._bck_gti = self._src_gti
                 # TODO HAVEN'T MADE CHANDRA LIGHTCURVES YET SO DON'T KNOW WHAT WILL GO HERE
                 else:
@@ -1609,7 +1614,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                              "covered by this AggregateLightCurve.".format(ins=interval_start, wis=ch_starts[0]))
         if interval_end > ch_ends[-1]:
             raise ValueError("The value of 'interval_end' ({ine}) is after the end ({wie}) of the time window "
-                             "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[1]))
+                             "covered by this AggregateLightCurve.".format(ine=interval_end, wie=ch_ends[-1]))
 
         # The user can choose between two slightly different matching criteria - if
         #  'over_run' is False then the time chunks they want us to return have to
