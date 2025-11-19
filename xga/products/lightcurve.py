@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 22:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 22:42. Copyright (c) The Contributors
 import re
 from datetime import datetime
 from typing import Union, List, Tuple, Dict
@@ -1931,8 +1931,9 @@ class AggregateLightCurve(BaseAggregateProduct):
 
         if isinstance(times, Time):
             times = (times - self.ref_times[telescope]).to('s')
-        elif ((isinstance(times, np.ndarray) and not isinstance(times, Quantity) and
-               all([isinstance(en, datetime) for en in times])) or isinstance(times, datetime)):
+        elif ((not isinstance(times, Quantity) and (isinstance(times, np.ndarray) and
+                                                   all([isinstance(en, datetime) for en in times])))
+              or isinstance(times, datetime)):
             times = (Time(times) - self.ref_times[telescope]).to('s')
         elif isinstance(times, np.ndarray):
             raise TypeError("If an array is passed to the 'times' argument, every element must be of type 'datetime'.")
