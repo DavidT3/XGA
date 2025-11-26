@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:48. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 26/11/2025, 12:47. Copyright (c) The Contributors
 
 import os
 import warnings
@@ -280,7 +280,7 @@ class Image(BaseProduct):
                     final_regs[o].append(reg)
                 else:
                     # Regions in sky coordinates need to be in pixels for overlaying on the image
-                    final_regs[o].append(reg.to_pixel(self._wcs_radec))
+                    final_regs[o].append(reg.to_pixel(self.radec_wcs))
 
         return final_regs
 
@@ -327,7 +327,7 @@ class Image(BaseProduct):
         #  are all in pixel coordinates (it makes it easier for plotting etc. later)
         for obs_id, matched_reg in matched_reg_input.items():
             if matched_reg is not None and not isinstance(matched_reg, PixelRegion):
-                matched_reg_input[obs_id] = matched_reg.to_pixel(self._wcs_radec)
+                matched_reg_input[obs_id] = matched_reg.to_pixel(self.radec_wcs)
 
         return matched_reg_input
 
