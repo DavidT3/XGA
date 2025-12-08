@@ -221,6 +221,7 @@ def xspec_call(xspec_func):
             warn("All XSPEC operations had already been run.", stacklevel=2)
 
         # Now we assign the fit results to source objects
+        err_list = []
         for src_repr in results:
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
@@ -237,6 +238,7 @@ def xspec_call(xspec_func):
             for res_set in results[src_repr]:
                 # res_set[0] = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
+                    print(res_set)
                     for err in res_set[2]:
                         errors_all_sources.append(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit
@@ -369,7 +371,7 @@ def xspec_call(xspec_func):
                             spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel in ['erosita', 'erass']:
-                            spec = s.get_products("combined_spectrum", comb[:8], comb[8:], extra_key=storage_key,
+                            spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
                                                 telescope=tel)[0]
                         elif tel == 'chandra':
                             # We know that only ACIS is supported by XGA currently, so we can split on it to

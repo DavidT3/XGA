@@ -71,7 +71,11 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
     local_census["dist"] = hav_sep
 
     # Select any ObsIDs within (or at) the search radius input to the function
-    matches = local_census[local_census["dist"] <= search_rad]
+    try:
+        matches = local_census[local_census["dist"] <= search_rad]
+    except ValueError:
+        # Temp handling for samples
+        matches = local_census[local_census["dist"] <= search_rad[0]]
     # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
     in_bl = local_blacklist[
         local_blacklist['ObsID'].isin(matches[matches["ObsID"].isin(local_blacklist["ObsID"])]['ObsID'])]

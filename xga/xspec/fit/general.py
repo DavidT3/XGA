@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 15:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:28. Copyright (c) The Contributors
 
 from typing import List, Union
 from warnings import warn
@@ -95,9 +95,12 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     """
 
     # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
-                                                                     min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope, force_gen)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn, over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope, force_gen)
 
     # Confirms that input parameters are legal, and nothing silly has been passed
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -196,14 +199,11 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                                                         check_lo_lims, check_hi_lims, check_err_lims, True, nh_to_zero,
                                                         tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # TODO THIS MIGHT BE WRONG - STACKED_SPEC IS AN ARGUMENT FOR A REASON
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel in ['erosita', 'erass']
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -289,9 +289,12 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
-                                                                     min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn, over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
@@ -384,13 +387,11 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                                                         check_lo_lims, check_hi_lims, check_err_lims, True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel in ['erosita', 'erass']
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -468,9 +469,12 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
-                                                                     min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn, over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
@@ -542,12 +546,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                                                         check_lo_lims, check_hi_lims, check_err_lims, True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -614,9 +616,12 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
-                                                                     min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn, over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
@@ -688,12 +693,10 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                         lum_conf, z, False, "{}", "{}", "{}", "{}", True,
                                                         nh_to_zero, tel)
 
-            # If the fit has already been performed we do not wish to perform it again
+            # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -760,9 +763,12 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope = _pregen_spectra(sources, outer_radius, inner_radius, group_spec,
-                                                                     min_counts, min_sn, over_sample, one_rmf,
-                                                                     num_cores, stacked_spectra, telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn, over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed blackbody or absorbed zbbody
@@ -839,10 +845,8 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
             # If the fit has already been performed, we do not wish to perform it again
             try:
-                # when retrieving results, we want the stacked ones from erosita
-                stacked_spec = tel in ['erosita', 'erass']
                 res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec,
-                                         min_counts, min_sn, over_sample, stacked_spec)
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel])
             except ModelNotAssociatedError:
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
