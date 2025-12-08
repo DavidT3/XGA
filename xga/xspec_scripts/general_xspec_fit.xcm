@@ -131,7 +131,7 @@ ignore bad
 #############################################
 
 #############################################
-# Throw an error if no spectra passed
+# Read the number of noticed channels and check if they meet our minimum requirement
 #############################################
 # This list will contain the paths to spectra which HAVE the minimum number of
 #  channels we require
@@ -139,9 +139,12 @@ set accept_min_chan_spec_paths {{}}
 
 set sp_id 1
 foreach sp $spec_paths {{
+    # Sets a variable containing the lower and upper limits of the noticed channels
     set range [split [tcloutr noticed $sp_id] -]
+    # Calculates the number of channels in the range
     set num_chan [expr [lindex $range 1] - [lindex $range 0]]
-
+    # Performs a check to see if the number of channels is greater than the minimum requirement, and
+    #  if it is, add the spectrum's path to the accepted list
     if {{$num_chan > $min_chan_req}} {{
             lappend accept_min_chan_spec_paths $sp
         }}
@@ -174,7 +177,6 @@ unset accept_min_chan_spec_paths
 unset num_chan
 unset range
 unset sp_id
-
 #############################################
 #################################################
 
