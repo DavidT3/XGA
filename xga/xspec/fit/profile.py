@@ -5,6 +5,7 @@ from typing import List, Union, Dict
 
 import astropy.units as u
 from astropy.units import Quantity
+from xga.generate.ciao import ciao_spectrum_set
 
 from ._common import _write_xspec_script, _check_inputs, _pregen_annular_spectra
 from ..run import xspec_call
@@ -13,6 +14,7 @@ from ...exceptions import ModelNotAssociatedError
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import BaseSource
+
 
 
 @xspec_call
@@ -129,8 +131,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
 
             # Gets the set of radii for this particular source into a variable
             cur_radii = radii[tel][src_ind]
-            print("cur_radii")
-            print(cur_radii)
 
             # This will fetch the annular_spec, get_annular_spectra will throw an error if no matches
             #  are found, though as we have run spectrum_set that shouldn't happen
@@ -138,9 +138,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                                                   telescope=tel)
 
             deg_rad[repr(source)][tel] = ann_spec.radii
-            
-            print("deg_rad[repr(source)][tel]")
-            print(deg_rad[repr(source)][tel])
 
             # If source.get_annular_spectra returns a list, it means that multiple matches have been found
             if isinstance(ann_spec, list):

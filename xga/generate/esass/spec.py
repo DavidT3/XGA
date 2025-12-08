@@ -89,7 +89,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             try:
                 if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
-                    print(inst)
                     check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
                                             min_counts, min_sn, telescope='erosita')
 
@@ -279,7 +278,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                         im = source.get_combined_images(lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
                                                         telescope='erosita')
                     else:
-                        # We only need the image path for extended source generation 
+                        # We only need the image path for extended source generation
                         im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
                                                telescope='erosita')
                     # We have a slightly different command for extended and point sources

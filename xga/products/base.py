@@ -257,6 +257,40 @@ class BaseProduct:
 
             return parsed_esass, rel_esass_lines
 
+        def find_ciao(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+            """
+            Function to search for and parse CIAO (Chandra software) errors and warnings.
+
+            :param list split_stderr: The stderr string split on line endings.
+            :param str err_type: Should this look for errors or warnings?
+            :return: Returns the dictionary of parsed errors/warnings, as well as all lines
+                with CIAO errors/warnings in.
+            :rtype: Tuple[List[dict], List[str]]
+            """
+            parsed_ciao = []
+            # This is a crude way of looking for CIAO error/warning strings ONLY
+            if err_type == 'error':
+                ciao_lines = [line for line in split_stderr if "ERROR" in line]
+            elif err_type == 'warning':
+                ciao_lines = [line for line in split_stderr if "WARNING" in line]
+
+            for err in ciao_lines:
+                try:
+                    # This tries to split out the CIAO task that produced the error
+                    originator = err.split(" **")[0].split(":")[0].replace(" ", "")
+                    # The CIAO errors don't seem to have specific names, so this will be the same for all
+                    err_ident = "ChandraError"
+                    # Actual error message
+                    err_body = err.split(" **")[-1].split("** ")[-1]
+
+                except IndexError:
+                    originator = ""
+                    err_ident = ""
+                    err_body = ""
+
+                parsed_ciao.append({"originator": originator, "name": err_ident, "message": err_body})
+            return parsed_ciao, ciao_lines
+
         # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
         # Defined as empty as they are returned by this method
         tel_errs_msgs = []
@@ -337,11 +371,35 @@ class BaseProduct:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
 
-        elif self.unprocessed_stderr == "":
-            # This should only trigger if the telescope is not XMM or eROSITa AND there was a non-empty string passed
-            #  for the stderr
+        # Now for Chandra error identification
+        elif self.telescope == 'chandra':
+
+            if self.unprocessed_stderr != "":
+
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_ciao_errs, ciao_err_lines = find_ciao(err_lines, "error")
+                parsed_tel_warns, ciao_warn_lines = find_ciao(err_lines, "warning")
+
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_ciao_errs]
+
+                other_err_lines = []
+
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("CIAOErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.unprocessed_stderr != "":
+            # This should only trigger if the telescope is not XMM/eROSITa/Chandra AND there was a non-empty
+            #  string passed for the stderr
             warn("We do not currently support checking {t}-specific backend software stderr for issues - feel free to "
-                 "contact the developer team and request this feature.", stacklevel=2)
+                 "contact the developer team and request this feature.".format(t=self.telescope), stacklevel=2)
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 

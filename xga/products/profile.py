@@ -90,8 +90,6 @@ class SurfaceBrightness1D(BaseProfile1D):
         #  arrays from the ratemap first, otherwise pickling can save those data
         self._ratemap = rt
 
-        print(f"Size of rt: {sys.getsizeof(self._ratemap)} bytes")
-
         # Set the internal type attribute to brightness profile
         self._prof_type = "brightness"
 
@@ -2564,14 +2562,11 @@ class SpecificEntropy(BaseProfile1D):
         else:
             already_run = False
 
-        print('already_run')
-        print(already_run)
         # Here, if we haven't already identified a previously calculated entropy for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
         #  ways of calculating entropy we support (using smooth models, using data points, using interpolated data
         #  points). First of all we deal with the case of there being a density model to draw from
         if not already_run and self.density_model is not None:
-            print("dens in this one")
             # If the density model fit didn't work then we give up and throw an error
             if not self.density_model.success:
                 raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
@@ -2642,7 +2637,6 @@ class SpecificEntropy(BaseProfile1D):
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
 
-            print(len(temp_interp))
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,

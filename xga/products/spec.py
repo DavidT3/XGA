@@ -107,8 +107,14 @@ class Spectrum(BaseProduct):
         self._central_coord = central_coord
 
         # Storing the region information
-        self._inner_rad = inn_rad
-        self._outer_rad = out_rad
+        # Firstly, we'll ensure that those radii have been passed in the right kind of units, and then convert
+        #  them to degrees - all XGA spectrum filenames have degree radii in them, and more importantly the source
+        #  storage structures all expect the storage keys to have degree radii
+        if not all([inn_rad.unit.is_equivalent('deg'), out_rad.unit.is_equivalent('deg')]):
+            raise UnitConversionError("The 'inn_rad' and 'out_rad' arguments must be in angular distance units.")
+
+        self._inner_rad = inn_rad.to('deg')
+        self._outer_rad = out_rad.to('deg')
         # And also the shape of the region
         if self._inner_rad.isscalar:
             self._shape = 'circular'
@@ -287,7 +293,7 @@ class Spectrum(BaseProduct):
                 if src_spec:
                     # Make this variable so the FileNotFoundError can work
                     rel_path = self.path
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._spec_counts = all_dat['COUNTS']
                     self._spec_channels = all_dat['CHANNEL']
                     # If the spectrum has not been grouped it may not have this column
@@ -304,7 +310,7 @@ class Spectrum(BaseProduct):
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
                     rel_path = self.background
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._back_counts = all_dat['COUNTS']
                     self._back_channels = all_dat['CHANNEL']
 
@@ -1784,6 +1790,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
                              "Spectra with IDs {p} have been "
@@ -2559,11 +2566,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
-            print('erroring here')
+            print('in first err')
+            print(len(tab_line))
+            print(self._num_ann)
             raise ValueError("The dictionary passed in with the fit results in it does not have the same"
                              " number of entries as there are annuli.")
         elif len(lums) != self._num_ann:
-            print('erroring here instead')
+            print('in second err')
+            print(len(lums))
+            print(self._num_ann)
             raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
                              " number of entries as there are annuli.")
 

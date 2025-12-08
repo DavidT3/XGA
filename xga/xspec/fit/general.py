@@ -18,14 +18,15 @@ from ...sources import BaseSource
 @xspec_call
 def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                     start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
+                     start_temp: Quantity = Quantity(3.0, "keV"), start_met: Union[float, List] = 0.3,
                      lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
                      freeze_met: bool = True, freeze_temp: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                      spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
-                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None):
+                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
+                     force_gen: bool = False):
     """
     This is a convenience function for fitting an absorbed single temperature apec model (constant*tbabs*apec) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -54,7 +55,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param Quantity start_temp: The initial temperature for the fit, the default is 3 keV. This value can also be
         a non-scalar Quantity, with an entry for every source in a sample (this is most useful when used with the
         'freeze_temp' argument, to provide some external constraint on temperature for objects with poor data).
-    :param start_met: The initial metallicity for the fit (in ZSun).
+    :param float/List start_met: The initial metallicity for the fit (in ZSun). This value can also be
+        a list, with an entry for every source in a sample (this is most useful when used with the
+        'freeze_met' argument, to provide some external constraint on metallicity for objects with poor data).
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen. Default is True.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen. Default is True.
@@ -88,6 +91,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
+    :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
 
     # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
@@ -96,7 +100,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                                                                                      min_counts, min_sn, over_sample,
                                                                                      one_rmf,
                                                                                      num_cores, stacked_spectra,
-                                                                                     telescope)
+                                                                                     telescope, force_gen)
 
     # Confirms that input parameters are legal, and nothing silly has been passed
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -109,6 +113,19 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
         start_temp = Quantity([start_temp.value]*len(sources), start_temp.unit)
+
+    # Have to check that every source has a start metalicity entry, if the user decided to pass a set of them
+    if isinstance(start_met, list):
+        if len(start_met) != len(sources):
+            raise ValueError("If a list is passed for 'start_met', it must have one entry for each "
+                         "source. It currently has {n} for {s} sources.".format(n=len(start_met), s=len(sources)))
+    # Want to make sure that the start_met variable is always a list with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif isinstance(start_met, float):
+        start_met = [start_met]*len(sources)
+    
+    else:
+        raise ValueError("'start_met' must be either a list with an entry for each source, or a float.")
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
@@ -138,8 +155,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+            m = start_met[src_ind]
+
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, start_met,
+            par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, t, m,
                                                               source.redshift, 1.)
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
@@ -233,7 +252,9 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param Quantity start_temp: The initial temperature for the fit, the default is 3 keV. This value can also be
         a non-scalar Quantity, with an entry for every source in a sample (this is most useful when used with the
         'freeze_temp' argument, to provide some external constraint on temperature for objects with poor data).
-    :param start_met: The initial metallicity for the fit (in ZSun).
+    :param float/List start_met: The initial metallicity for the fit (in ZSun). This value can also be
+        a list, with an entry for every source in a sample (this is most useful when used with the
+        'freeze_met' argument, to provide some external constraint on metallicity for objects with poor data).
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
@@ -285,6 +306,20 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     elif start_temp.isscalar:
         start_temp = Quantity([start_temp.value] * len(sources), start_temp.unit)
 
+    # Have to check that every source has a start metalicity entry, if the user decided to pass a set of them
+    if isinstance(start_met, list):
+        if len(start_met) != len(sources):
+            raise ValueError("If a list is passed for 'start_met', it must have one entry for each "
+                         "source. It currently has {n} for {s} sources.".format(n=len(start_met), s=len(sources)))
+    # Want to make sure that the start_met variable is always a list with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif isinstance(start_met, float):
+        start_met = [start_met]*len(sources)
+    
+    else:
+        raise ValueError("'start_met' must be either a list with an entry for each source, or a float.")
+
+
     # This function is for a set model, absorbed mekal, so I can hard code all of this stuff.
     # These will be inserted into the general XSPEC script template, so lists of parameters need to be in the form
     #  of TCL lists.
@@ -310,9 +345,10 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+            m = start_met[src_ind]
             # Another TCL list, this time of the parameter start values for this model.
             par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1,
-                                                                      start_met, source.redshift, 1, 1.)
+                                                                      m, source.redshift, 1, 1.)
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
             freezing = "{{F {n} {t} T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
@@ -466,6 +502,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = start_max_temp.to("keV", equivalencies=u.temperature_energy()).value
+
             # Another TCL list, this time of the parameter start values for this model.
             par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
                                                                               start_t_rat, start_inv_em_slope,

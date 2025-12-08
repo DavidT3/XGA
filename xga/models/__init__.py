@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/07/2024, 21:58. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/08/2025, 13:36. Copyright (c) The Contributors
 
 import inspect
 from types import FunctionType
@@ -88,6 +88,94 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
 
     return new_model_func
 
+
+def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args: tuple= (), order: int = 3):
+    """
+    Find the nth derivative of a function at a point.
+
+    Given a function, use a central difference formula with spacing `dx` to
+    compute the nth derivative at `x0`.
+
+    This is intended as a drop-in replacement for Scipy's misc.derivative function, which was deprecated in
+    Scipy v1.10.0 and removed after Scipy v1.14.1. It has been directly copied/reconstructed from Scipy  code.
+
+    :param FunctionType func: Input function
+    :param x0: The point at which the nth derivative is found.
+    :param dx: Spacing.
+    :param n: Order of the derivative. Default is 1.
+    :param args: Arguments
+    :param order: Number of points to use, must be odd.
+    """
+
+    def _central_diff_weights(Np, ndiv=1):
+        """
+        Return weights for an Np-point central derivative.
+
+        Assumes equally-spaced function points.
+
+        If weights are in the vector w, then
+        derivative is w[0] * f(x-ho*dx) + ... + w[-1] * f(x+h0*dx)
+        """
+
+        if Np < ndiv + 1:
+            raise ValueError(
+                "Number of points must be at least the derivative order + 1."
+            )
+        if Np % 2 == 0:
+            raise ValueError("The number of points must be odd.")
+
+        ho = Np >> 1
+        x = np.arange(-ho, ho + 1.0)
+        x = x[:, np.newaxis]
+        X = x ** 0.0
+        for k in range(1, Np):
+            X = np.hstack([X, x ** k])
+        w = np.prod(np.arange(1, ndiv + 1), axis=0) * np.linalg.inv(X)[ndiv]
+        return w
+
+    if order < n + 1:
+        raise ValueError(
+            "'order' (the number of points used to compute the derivative), "
+            "must be at least the derivative order 'n' + 1."
+        )
+    if order % 2 == 0:
+        raise ValueError(
+            "'order' (the number of points used to compute the derivative) "
+            "must be odd."
+        )
+        # pre-computed for n=1 and 2 and low-order for speed.
+    if n == 1:
+        if order == 3:
+            weights = np.array([-1, 0, 1]) / 2.0
+        elif order == 5:
+            weights = np.array([1, -8, 0, 8, -1]) / 12.0
+        elif order == 7:
+            weights = np.array([-1, 9, -45, 0, 45, -9, 1]) / 60.0
+        elif order == 9:
+            weights = np.array([3, -32, 168, -672, 0, 672, -168, 32, -3]) / 840.0
+        else:
+            weights = _central_diff_weights(order, 1)
+    elif n == 2:
+        if order == 3:
+            weights = np.array([1, -2.0, 1])
+        elif order == 5:
+            weights = np.array([-1, 16, -30, 16, -1]) / 12.0
+        elif order == 7:
+            weights = np.array([2, -27, 270, -490, 270, -27, 2]) / 180.0
+        elif order == 9:
+            weights = (
+                    np.array([-9, 128, -1008, 8064, -14350, 8064, -1008, 128, -9])
+                    / 5040.0
+            )
+        else:
+            weights = _central_diff_weights(order, 2)
+    else:
+        weights = _central_diff_weights(order, n)
+    val = 0.0
+    ho = order >> 1
+    for k in range(order):
+        val += weights[k] * func(x0 + (k - ho) * dx, *args)
+    return val / np.prod((dx,) * n, axis=0)
 
 
 

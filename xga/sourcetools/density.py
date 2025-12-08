@@ -236,8 +236,6 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
             for tel in src_telescopes:
                 try:
                     if tel == 'erosita':
-                        print('stacked_spectra')
-                        print(stacked_spectra)
                         # A temporary temperature variable
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
                                                         conv_inner_radius, group_spec, min_counts, min_sn,
@@ -280,9 +278,17 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
             # but if inst = None, we only want to retreive combined instrument spectra
-            if tel == 'erosita' and inst[tel][src_ind] is None:
-                lookup_obs = 'combined'
-                lookup_inst = 'combined'
+            if tel == 'erosita':
+                if inst[tel][src_ind] is None:
+                    lookup_inst = 'combined'
+                else:
+                    lookup_inst = inst[tel][src_ind]
+                
+                if len(src.obs_ids['erosita']) > 1:
+                    lookup_obs = 'combined'
+                else:
+                    lookup_obs = src.obs_ids['erosita'][0]
+
             else:
                 lookup_obs = obs_id[tel][src_ind]
                 lookup_inst = inst[tel][src_ind]
@@ -330,21 +336,35 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
     """
 
     try:
-        if all([obs_id is None, inst is None]):
+        if telescope == 'erosita':
+            if len(src.obs_ids['erosita']) > 1:
+                use_combined = True
+            else:
+                use_combined = False
+                obs_id = src.obs_ids['erosita'][0]
+
+        else:
+            if all([obs_id is None, inst is None]):
+                use_combined = True
+            elif all([obs_id is not None, inst is not None]):
+                use_combined = False
+            else:
+                raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and " 
+                    "vice versa.")
+
+        if use_combined:
             rt = src.get_combined_ratemaps(lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                            psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope)
             comb = True
-        elif all([obs_id is not None, inst is not None]):
+        else:
             rt = src.get_ratemaps(obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins,
                                   psf_algo, psf_iter, telescope=telescope)
             # Grabs the mask which will remove interloper sources
             int_mask = src.get_interloper_mask(telescope=telescope, obs_id=obs_id)
             comb = False
-        else:
-            raise ValueError("If an ObsID is supplied, an instrument must be supplied as well, and " 
-                             "vice versa.")
+
     except NoProductAvailableError:
         raise NoProductAvailableError("The RateMap required to measure the density profile has not "
                                       "been generated yet, possibly because you haven't generated " 
@@ -526,7 +546,6 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
-
                 sb_prof = _run_sb(src, tel, out_rads[src_ind], use_peak, lo_en, hi_en, use_psf_corr,
                                   psf_model, psf_bins, psf_algo, psf_iter, pix_step, min_snr,
                                   obs_id[tel][src_ind], inst[tel][src_ind])
@@ -1074,7 +1093,6 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                     # temperature profile.
                     apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
                                                                 min_sn, over_sample, telescope=tel)
-
                     obs_id = 'combined'
                     inst = 'combined'
                     # Seeing as we're here, I might as well make a density profile from the apec
@@ -1082,6 +1100,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                     dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo,
                                                                    abund_table, num_data_real,
                                                                    sigma, num_dens)
+                        
                     # Then I store it in the source
                     src.update_products(dens_prof)
                     final_dens_profs[tel][src_ind] = dens_prof

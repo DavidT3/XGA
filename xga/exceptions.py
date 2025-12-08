@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/02/2024, 15:10. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:19. Copyright (c) The Contributors
 
 
 class eROSITAImplentationError(Exception):
@@ -772,3 +772,23 @@ class InvalidTelescopeError(Exception):
             return '{}'.format(self.message)
         else:
             return 'InvalidTelescopeError has been raised'
+
+
+class XGADeveloperError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when an error has occurred that needs the attention of developers.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'XGADeveloperError has been raised'
