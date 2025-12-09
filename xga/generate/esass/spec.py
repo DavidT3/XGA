@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:01. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:07. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -156,7 +156,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             os.makedirs(dest_dir, exist_ok=True)
             # The temporary directory will now have a symlink to the relevant event list, with the symlink name
             #  the same as the actual event list
-            os.symlink(cur_evt_list.path, os.path.join(dest_dir, os.path.basename(cur_evt_list.path)))
+            evt_symlink_name = os.path.basename(cur_evt_list.path)
+            os.symlink(cur_evt_list.path, os.path.join(dest_dir, evt_symlink_name))
 
             # This constructs the eSASS strings/region files
             reg = get_annular_esass_region(source,
@@ -270,7 +271,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # As with the paths to the event lists, it is possible that the image
                 #  file names will be too long for eSASS' srctool to handle. To
                 #  mitigate the potential problem, we make another symlink
-                os.symlink(im.path, os.path.join(dest_dir, os.path.basename(im.path)))
+                im_symlink_name = os.path.basename(im.path)
+                os.symlink(im.path, os.path.join(dest_dir, im_symlink_name))
 
                 # Fill out the spectrum generation (srctool) command specific to extended sources
                 s_cmd_str = ext_sp_cmd.format(d=dest_dir,
@@ -340,13 +342,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             else:
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
                 # Add handling for DR1 produced merged files
-                if ESASS_VERSION == "ESASS4DR1":
-                    # Remove "TM9" output if the instrument number is 5 or 7
-                    if inst_no in ['5', '7']:
-                        cmd_str += f";{remove_merged_dr1_9}"
-                    else:
-                        # Remove "TM8" output otherwise
-                        cmd_str += f";{remove_merged_dr1_8}"
+                # if ESASS_VERSION == "ESASS4DR1":
+                #     # Remove "TM9" output if the instrument number is 5 or 7
+                #     if inst_no in ['5', '7']:
+                #         cmd_str += f";{remove_merged_dr1_9}"
+                #     else:
+                #         # Remove "TM8" output otherwise
+                #         cmd_str += f";{remove_merged_dr1_8}"
 
             # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
             #  we'll neaten it up at some point
@@ -359,13 +361,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             else:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
                 # Add handling for DR1 produced merged files
-                if ESASS_VERSION == "ESASS4DR1":
-                    # Remove "TM9" output if the instrument number is 5 or 7
-                    if inst_no in ['5', '7']:
-                        cmd_str += f";{remove_merged_dr1_9}"
-                    else:
-                        # Remove "TM8" output otherwise
-                        cmd_str += f";{remove_merged_dr1_8}"
+                # if ESASS_VERSION == "ESASS4DR1":
+                #     # Remove "TM9" output if the instrument number is 5 or 7
+                #     if inst_no in ['5', '7']:
+                #         cmd_str += f";{remove_merged_dr1_9}"
+                #     else:
+                #         # Remove "TM8" output otherwise
+                #         cmd_str += f";{remove_merged_dr1_8}"
 
             # If the user wants to group the spectrum then this command should be added
             if group_spec:
@@ -374,6 +376,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #  if grouping fails, there definitely won't be a file with the name of the grouped spectrum, but
                 #  no grouping applied.
                 cmd_str += "; " + grp_cmd_str
+
+            # Adds symlink-removal commands - we don't want to be moving them along
+            #  with every else in the temporary working directory
+            cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
+            # Image symlink will only be present if the source is extended
+            if extended_src:
+                cmd_str += "; rm {esym}".format(esym=im_symlink_name)
 
             # Adds clean up commands to move all generated files and remove the temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
