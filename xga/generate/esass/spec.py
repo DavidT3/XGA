@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:07. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 16:49. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -514,13 +514,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # The DR1 version of eSASS has an additional argument that can be passed to specify
     #  which instruments should be written to output files - we want to be able to
     #  set that to avoid some warnings that clog up the logs
-    print(ESASS_VERSION)
     if ESASS_VERSION == "ESASS4DR1":
         ext_sp_cmd += " writeinsts={i}"
         back_sp_cmd += " writeinsts={i}"
         pnt_sp_cmd += " writeinsts={i}"
 
-    # You can't control the whole name of the output of srctool, so this renames it to the XGA format
+    # You can't control the whole names of srctool outputs, so this renames it to the XGA format
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
     # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
     remove_merged_cmd = 'rm *srctoolout_0*'
