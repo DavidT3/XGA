@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:35. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -546,7 +546,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  cmd_list and input argument 'sources' have the same length, which avoids
             #  bugs occurring in the esass_call wrapper
             if er_miss not in source.telescopes:
-                print("WHAT?")
                 sources_cmds.append(np.array(cmds))
                 sources_paths.append(np.array(final_paths))
                 # This contains any other information that will be needed to instantiate the class
@@ -632,13 +631,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 final_paths += out_fin_paths
                 extra_info += out_ex_info
 
-        print(cmds)
-        print('\n\n')
-        print(final_paths)
-        print('\n\n')
-        print(extra_info)
-        print('\n\n')
-
         # Turn the overall, final, set of commands, output paths, and extra information
         #  into numpy arrays - this is because it is easier to index and mask them
         #  than it is for lists
@@ -648,6 +640,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+
+        print(len(cmds), len(final_paths), len(extra_info))
+        print('\n')
+
+    print(len(sources_cmds), len(sources_paths), len(sources_extras), len(sources_types))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
