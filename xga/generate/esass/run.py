@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 10:05. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:20. Copyright (c) The Contributors
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -9,7 +9,7 @@ from warnings import warn
 from tqdm import tqdm
 
 from ..common import execute_cmd
-from ... import eSASS_AVAIL
+from ... import ESASS_AVAIL
 from ...exceptions import eSASSNotFoundError, ProductGenerationError
 from ...products import BaseProduct, AnnularSpectra
 from ...samples.base import BaseSample
@@ -27,7 +27,7 @@ def esass_call(esass_func):
     @wraps(esass_func)
     def wrapper(*args, **kwargs):
         # Checking eSASS is installed and available on the system
-        if not eSASS_AVAIL:
+        if not ESASS_AVAIL:
             raise eSASSNotFoundError("No eSASS installation has been found on this machine.")
 
         # The first argument of all of these eSASS functions will be the source object (or a list of),
