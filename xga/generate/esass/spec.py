@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:01. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -501,6 +501,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     pnt_sp_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" ' \
                  'todo="SPEC ARF RMF" srcreg="{reg}" exttype="POINT" ' \
                  'tstep={ts} insts={i} psftype="2D_PSF"'
+
+    # The DR1 version of eSASS has an additional argument that can be passed to specify
+    #  which instruments should be written to output files - we want to be able to
+    #  set that to avoid some warnings that clog up the logs
+    print(ESASS_VERSION)
+    if ESASS_VERSION == "ESASS4DR1":
+        ext_sp_cmd += " writeinsts={i}"
+        back_sp_cmd += " writeinsts={i}"
+        pnt_sp_cmd += " writeinsts={i}"
 
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
