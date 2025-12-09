@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:52. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:57. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -75,13 +75,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
         :param EventList cur_evt_list: The event list to generate spectra from.
         :return: A list of spectral generation commands, a list of final spectrum file
-            paths, and a list of dictionaries of extra information.
+            paths, and a list of extra information dictionaries.
         :rtype: Tuple[List[str], List[str], List[str]]
         """
 
         # Then we have to account for the two different modes this function can be used in - generating spectra
         #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
-        # TODO NEED TO MAKE SURE THE RIGHT TMs ARE BEING USED HERE
         if combine_tm:
             inst_names = ['combined']
             inst_nums = ['"' + ' '.join([tm[-1] for tm in list(source.num_inst_obs[cur_evt_list.telescope].keys())]) + '"']
@@ -477,10 +476,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     if isinstance(sources[0], (ExtendedSource, GalaxyCluster)):
         # Set up a boolean value to tell us later on if this is an extended source
         extended_src = True
-
         # Sets the extent model type to MAP, which means we'll be using an image to encode the emission extent
         ext_type = 'MAP'
-
         # Ensures that the images we intend to use as extent maps have actually been generated
         evtool_image(sources, EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, combine_obs=combine_obs, num_cores=NUM_CORES)
     else:

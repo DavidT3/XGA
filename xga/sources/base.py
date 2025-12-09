@@ -1,10 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/08/2025, 10:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:57. Copyright (c) The Contributors
 
 import gc
 import os
 import pickle
-import pprint
 from copy import deepcopy
 from shutil import move, copyfile
 from typing import Tuple, List, Dict, Union
@@ -24,7 +23,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from .. import xga_conf, BLACKLIST
 from ..exceptions import (NotAssociatedError, NoValidObservationsError, NoProductAvailableError,
                           ModelNotAssociatedError, ParameterNotAssociatedError, NotSampleMemberError,
-                          TelescopeNotAssociatedError, PeakConvergenceFailedError, PeakConvergenceFailedError,
+                          TelescopeNotAssociatedError, PeakConvergenceFailedError,
                           XGADeveloperError)
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
@@ -727,36 +726,6 @@ class BaseSource:
         """
         return {tel: {i: len([i for o in self.instruments[tel] if i in self.instruments[tel][o]])
                       for i in ALLOWED_INST[tel]} for tel in self.instruments}
-
-    # @property
-    # def num_pn_obs(self) -> int:
-    #     """
-    #     Getter method that gives the number of PN observations.
-    #
-    #     :return: Integer number of PN observations associated with this source
-    #     :rtype: int
-    #     """
-    #     return len([o for o in self.obs_ids if 'pn' in self._products[o]])
-    #
-    # @property
-    # def num_mos1_obs(self) -> int:
-    #     """
-    #     Getter method that gives the number of MOS1 observations.
-    #
-    #     :return: Integer number of MOS1 observations associated with this source
-    #     :rtype: int
-    #     """
-    #     return len([o for o in self.obs_ids if 'mos1' in self._products[o]])
-    #
-    # @property
-    # def num_mos2_obs(self) -> int:
-    #     """
-    #     Getter method that gives the number of MOS2 observations.
-    #
-    #     :return: Integer number of MOS2 observations associated with this source
-    #     :rtype: int
-    #     """
-    #     return len([o for o in self.obs_ids if 'mos2' in self._products[o]])
 
     @property
     def disassociated(self) -> bool:
