@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:47. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:52. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -829,8 +829,10 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
+    if ((not isinstance(sources, list) and (
+            'erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
+            (isinstance(sources, list) and (
+                    'erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
         raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
                                           "eROSITA spectra cannot be generated.")
 
@@ -912,7 +914,7 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the esass_call wrapper
-        if 'erosita' not in source.telescopes:
+        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
             all_cmds.append(np.array(src_cmds))
             all_paths.append(np.array(src_paths))
             # This contains any other information that will be needed to instantiate the class
