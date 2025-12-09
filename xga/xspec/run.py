@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 17:17. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 17:27. Copyright (c) The Contributors
 
 import os
 from functools import wraps
@@ -69,6 +69,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         warn("An XSPEC fit for {} has timed out".format(source_name), stacklevel=2)
         usable = False
 
+    # Have to decode the output and errors as they are in byte form
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
