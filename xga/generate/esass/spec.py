@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:41. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:49. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -556,7 +556,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         extra_info = []
 
         for er_miss in ['erosita', 'erass']:
-
+            # Skip this iteration if the current skew of eROSITA isn't associated
+            #  with the current source
+            if er_miss not in source.telescopes:
+                continue
 
             # need to set this so the combine_obs variable doesn't get overwritten
             use_combine_obs = combine_obs
