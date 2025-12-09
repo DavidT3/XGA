@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 14:41. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -533,28 +533,30 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_types = []
     # TODO HAVE TO ITERATE THROUGH EROSITA AND ERASS
     for s_ind, source in enumerate(sources):
+        # By this point we know that at least one of the sources has eROSITA data
+        #  associated (we checked that at the beginning of this function).
+        #  However, for those sources that don't, we still need to append the empty
+        #  cmds, paths, extra_info, and ptypes to the final output, so that the
+        #  cmd_list and input argument 'sources' have the same length, which avoids
+        #  bugs occurring in the esass_call wrapper
+        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
+            sources_cmds.append(np.array(cmds))
+            sources_paths.append(np.array(final_paths))
+            # This contains any other information that will be needed to
+            #  instantiate the Spectrum class once the eSASS cmd has run
+            sources_extras.append(np.array(extra_info))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+
+            # Now we can continue with the rest of the sources
+            continue
+
         source: BaseSource
         cmds = []
         final_paths = []
         extra_info = []
 
         for er_miss in ['erosita', 'erass']:
-            # By this point we know that at least one of the sources has eROSITA data
-            #  associated (we checked that at the beginning of this function).
-            #  However, for those sources that don't, we still need to append the empty
-            #  cmds, paths, extra_info, and ptypes to the final output, so that the
-            #  cmd_list and input argument 'sources' have the same length, which avoids
-            #  bugs occurring in the esass_call wrapper
-            if er_miss not in source.telescopes:
-                sources_cmds.append(np.array(cmds))
-                sources_paths.append(np.array(final_paths))
-                # This contains any other information that will be needed to instantiate the class
-                # once the eSASS cmd has run
-                sources_extras.append(np.array(extra_info))
-                sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
 
-                # Now we can continue with the rest of the sources
-                continue
 
             # need to set this so the combine_obs variable doesn't get overwritten
             use_combine_obs = combine_obs
@@ -640,11 +642,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         #  once the eSASS cmd has run
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
-
-        print(len(cmds), len(final_paths), len(extra_info))
-        print('\n')
-
-    print(len(sources_cmds), len(sources_paths), len(sources_extras), len(sources_types))
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
