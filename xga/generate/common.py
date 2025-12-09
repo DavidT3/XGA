@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 17:26. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 08/12/2025, 21:40. Copyright (c) The Contributors
 
 import os
 import sys
@@ -45,9 +45,26 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         if "DYLD_LIBRARY_PATH" in sys_env:
             cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {cmd}"
 
+    # This runs the passed command - it captures the stdout and stderr as well
     out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+    # Captured out/err are byte type, will decode that into str for easier use
     out = out.decode("UTF-8", errors='ignore')
     err = err.decode("UTF-8", errors='ignore')
+
+    # We will assume that the first entry in the product path argument is the
+    #  primary output file, and will name the log files after it
+    log_stem = p_path[0][:p_path[0].rfind('.')]
+    # One file for out and one for error
+    std_out_file = log_stem + "_stdout.log"
+    std_err_file = log_stem + "_stderr.log"
+
+    # Write the standard out to a log file
+    with open(std_out_file, "w") as std_outo:
+        std_outo.write(out)
+    # If there are standard error entries, write them to a file as well
+    if len(err) > 0:
+        with open(std_err_file, "w") as std_erro:
+            std_erro.write(err)
 
     # Trying to make sure that any passed arrays get smoothed out into the list type we want
     if type(p_path) == np.ndarray:
