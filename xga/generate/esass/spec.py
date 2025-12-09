@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/07/2025, 11:02. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 10:36. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -64,12 +64,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
-    def _append_spec_info(evt_list):
+
+    def _append_spec_info(cur_evt_list):
         """
         Internal method to get the parameters required for the srctool spectral generation command.
         """
-        # extracting the obs_id to use later
-        obs_id = evt_list.obs_id
 
         # Then we have to account for the two different modes this function can be used in - generating spectra
         #  for individual telescope models, or generating a single stacked spectrum for all telescope modules
@@ -90,12 +89,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             try:
                 if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
                     check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
-                                            min_counts, min_sn, telescope='erosita')
+                                                           min_counts, min_sn, telescope='erosita')
 
                 else:
                     # Got to check if this spectrum already exists
-                    check_sp = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec,
-                                            min_counts, min_sn, telescope='erosita')
+                    check_sp = source.get_spectra(outer_radii[s_ind], cur_evt_list.obs_id, inst, inner_radii[s_ind],
+                                                  group_spec,
+                                                  min_counts, min_sn, telescope='erosita')
                 exists = True
 
             except NoProductAvailableError:
@@ -104,20 +104,17 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if exists and check_sp.usable and not force_gen:
                 continue
 
-            # Getting the source name
-            source_name = source.name
-
             # eROSITA observations have the potential to be in pointed or survey modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
-            if evt_list.header['OBS_MODE'] == 'POINTING':
+            if cur_evt_list.header['OBS_MODE'] == 'POINTING':
                 t_step = t_step_point
-            elif evt_list.header['OBS_MODE'] == 'SURVEY':
+            elif cur_evt_list.header['OBS_MODE'] == 'SURVEY':
                 t_step = t_step_survey
             else:
                 warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
-                    "survey mode value ({ts})".format(om=evt_list.header['OBS_MODE'], ts=t_step_survey),
-                    stacklevel=2)
+                     "survey mode value ({ts})".format(om=cur_evt_list.header['OBS_MODE'], ts=t_step_survey),
+                     stacklevel=2)
                 t_step = t_step_survey
 
             # setting up file names for output files
@@ -127,7 +124,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 rand_ident = randint(0, 100_000_000)
                 # Makes absolutely sure that the random integer hasn't already been used
                 while len([f for f in os.listdir(final_dest_dir)
-                        if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
+                           if str(rand_ident) in f.split(OUTPUT + "erosita/combined/")[-1]]) != 0:
                     rand_ident = randint(0, 100_000_000)
 
                 dest_dir = os.path.join(final_dest_dir, "temp_srctool_{}".format(rand_ident))
@@ -137,7 +134,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # The temporary region files necessary to generate eROSITA spectra (if contaminating sources are
                 #  being removed) will be written to a different temporary folder using the same random identifier.
                 rand_ident = randint(0, 100_000_000)
-                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=obs_id, i=inst, n=source_name,
+                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{n}_temp_{r}/".format(o=cur_evt_list.obs_id, i=inst,
+                                                                                n=source.name,
                                                                                 r=rand_ident)
             # If something got interrupted and the temp directory still exists, and it somehow has the same
             #  random number, this will remove it
@@ -150,36 +148,37 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             os.mkdir(dest_dir)
             # The temporary directory will now have a symlink to the relevant event list, with the symlink name
             #  the same as the actual event list
-            os.symlink(evt_list.path, os.path.join(dest_dir, os.path.basename(evt_list.path)))
+            os.symlink(cur_evt_list.path, os.path.join(dest_dir, os.path.basename(cur_evt_list.path)))
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
-            # TODO ASSUMPTION6 source.source_back_regions will have a telescope parameter
-            if outer_radius == "region" and source.source_back_regions("erosita", "region", obs_id)[0] is None:
+            if outer_radius == "region" and source.source_back_regions("erosita", "region", cur_evt_list.obs_id)[
+                0] is None:
                 raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' "
-                                            "argument.")
+                                               "argument.")
 
             # Because the region will be different for each ObsID, I have to call the setup function here
             if outer_radius == 'region':
                 raise eROSITAImplentationError("XGA for eROSITA does not support the outer_radius='region' "
-                                            "argument.")
+                                               "argument.")
 
             else:
                 # This constructs the eSASS strings/region files for any radius that isn't 'region'
-                reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], obs_id,
-                                            interloper_regions=interloper_regions,
-                                            central_coord=source.default_coord, rand_ident=rand_ident)
+                reg = get_annular_esass_region(source, inner_radii[s_ind], outer_radii[s_ind], cur_evt_list.obs_id,
+                                               interloper_regions=interloper_regions,
+                                               central_coord=source.default_coord, rand_ident=rand_ident)
                 b_reg = get_annular_esass_region(source, outer_radii[s_ind] * source.background_radius_factors[0],
-                                                outer_radii[s_ind] * source.background_radius_factors[1], obs_id,
-                                                interloper_regions=back_inter_reg,
-                                                central_coord=source.default_coord, bkg_reg=True,
-                                                rand_ident=rand_ident)
+                                                 outer_radii[s_ind] * source.background_radius_factors[1],
+                                                 cur_evt_list.obs_id,
+                                                 interloper_regions=back_inter_reg,
+                                                 central_coord=source.default_coord, bkg_reg=True,
+                                                 rand_ident=rand_ident)
                 inn_rad_degrees = inner_radii[s_ind]
                 out_rad_degrees = outer_radii[s_ind]
 
                 # TODO implement the detector map
                 # This creates a detection map for the source and background region
-                # map_path = _det_map_creation(outer_radii[s_ind], source, obs_id, inst)
+                # map_path = _det_map_creation(outer_radii[s_ind], source, cur_evt_list.obs_id, inst)
 
             # Setting up file names that include the extra variables
             if group_spec and min_counts is not None:
@@ -193,9 +192,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # TODO TIDY THIS UP, THE STORAGE NAMES OF THE SPECTRA ARE ALREADY DEFINED
             # The names of spectra will be different depending on if it is from a combined eventlist
             if use_combine_obs and (len(source.obs_ids['erosita']) > 1):
-                prefix = str(rand_ident) + '_{i}_'.format(i=inst) + '{n}_'.format(n=source_name)
+                prefix = str(rand_ident) + '_{i}_'.format(i=inst) + '{n}_'.format(n=source.name)
             else:
-                prefix = "{o}_{i}_{n}_".format(o=obs_id, i=inst, n=source_name)
+                prefix = "{o}_{i}_{n}_".format(o=cur_evt_list.obs_id, i=inst, n=source.name)
 
             spec_str = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}{ex}_spec.fits"
             spec_str = prefix + spec_str
@@ -241,19 +240,21 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # These file names are for the debug images of the source and background images, they will not be loaded
             #  in as a XGA products, but exist purely to check by eye if necessary
-            dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug.fits".format(o=obs_id, i=inst, n=source_name,
+            dim = "{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_debug.fits".format(o=cur_evt_list.obs_id, i=inst,
+                                                                                n=source.name,
                                                                                 ra=source.default_coord[0].value,
                                                                                 dec=source.default_coord[1].value,
                                                                                 ri=src_inn_rad_str,
                                                                                 ro=src_out_rad_str)
             b_dim = ("{o}_{i}_{n}_ra{ra}_dec{dec}_ri{ri}_ro{ro}_"
-                     "back_debug.fits").format(o=obs_id, i=inst, n=source_name, ra=source.default_coord[0].value,
+                     "back_debug.fits").format(o=cur_evt_list.obs_id, i=inst, n=source.name,
+                                               ra=source.default_coord[0].value,
                                                dec=source.default_coord[1].value, ri=src_inn_rad_str,
                                                ro=src_out_rad_str)
 
             # TODO ADD MANY MORE COMMENTS
             coord_str = "icrs;{ra}, {dec}".format(ra=source.default_coord[0].value,
-                                                dec=source.default_coord[1].value)
+                                                  dec=source.default_coord[1].value)
             src_reg_str = reg  # dealt with in get_annular_esass_region
 
             # TODO allow user to chose tstep and xgrid
@@ -279,20 +280,22 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                         telescope='erosita')
                     else:
                         # We only need the image path for extended source generation
-                        im = source.get_images(obs_id, lo_en=Quantity(0.2, 'keV'), hi_en=Quantity(10.0, 'keV'),
+                        im = source.get_images(cur_evt_list.obs_id, lo_en=Quantity(0.2, 'keV'),
+                                               hi_en=Quantity(10.0, 'keV'),
                                                telescope='erosita')
                     # We have a slightly different command for extended and point sources
-                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=os.path.basename(evt_list.path), sc=coord_str,
+                    s_cmd_str = ext_srctool_cmd.format(d=dest_dir, ef=os.path.basename(cur_evt_list.path), sc=coord_str,
                                                        reg=src_reg_str, i=inst_no, ts=t_step, em=im.path, et=et)
                 except:
                     raise ValueError(f"it was this sources {source.name}")
 
             else:
-                s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=os.path.basename(evt_list.path), sc=coord_str,
+                s_cmd_str = pnt_srctool_cmd.format(d=dest_dir, ef=os.path.basename(cur_evt_list.path), sc=coord_str,
                                                    reg=src_reg_str, i=inst_no, ts=t_step)
 
             # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
-            sb_cmd_str = bckgr_srctool_cmd.format(ef=os.path.basename(evt_list.path), sc=coord_str, breg=bsrc_reg_str,
+            sb_cmd_str = bckgr_srctool_cmd.format(ef=os.path.basename(cur_evt_list.path), sc=coord_str,
+                                                  breg=bsrc_reg_str,
                                                   i=inst_no, ts=t_step * 4)
             # Filling out the grouping command
             grp_cmd_str = grp_cmd.format(infi=no_grp_spec, of=spec, gt=group_type, gs=group_scale)
@@ -335,7 +338,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Removing the 'merged spectra' output of srctool, the background in this case
             if combine_tm:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf,
-                                    remove_all_but_merged_cmd])
+                                     remove_all_but_merged_cmd])
             else:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
                 # Add handling for DR1 produced merged files
@@ -346,7 +349,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     else:
                         # Remove "TM8" output otherwise
                         cmd_str += f";{remove_merged_dr1_8}"
-
 
             # If the user wants to group the spectra then this command should be added
             if group_spec:
@@ -359,20 +361,20 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
-            if os.path.exists(OUTPUT + 'erosita/' + obs_id + '/temp_regs_{i}'.format(i=rand_ident)):
+            if os.path.exists(OUTPUT + 'erosita/' + cur_evt_list.obs_id + '/temp_regs_{i}'.format(i=rand_ident)):
                 # Removing this directory
                 cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
 
             cmds.append(cmd_str)  # Adds the full command to the set
 
-            final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, spec))
+            final_paths.append(os.path.join(OUTPUT, "erosita", cur_evt_list.obs_id, spec))
             extra_info.append({"inner_radius": inn_rad_degrees, "outer_radius": out_rad_degrees,
-                               "rmf_path": os.path.join(OUTPUT, "erosita", obs_id, rmf),
-                               "arf_path": os.path.join(OUTPUT, "erosita", obs_id, arf),
-                               "b_spec_path": os.path.join(OUTPUT, "erosita", obs_id, b_spec),
-                               "b_rmf_path": os.path.join(OUTPUT, "erosita", obs_id, b_rmf),
-                               "b_arf_path": os.path.join(OUTPUT, "erosita", obs_id, b_arf),
-                               "obs_id": obs_id, "instrument": inst,
+                               "rmf_path": os.path.join(OUTPUT, "erosita", cur_evt_list.obs_id, rmf),
+                               "arf_path": os.path.join(OUTPUT, "erosita", cur_evt_list.obs_id, arf),
+                               "b_spec_path": os.path.join(OUTPUT, "erosita", cur_evt_list.obs_id, b_spec),
+                               "b_rmf_path": os.path.join(OUTPUT, "erosita", cur_evt_list.obs_id, b_rmf),
+                               "b_arf_path": os.path.join(OUTPUT, "erosita", cur_evt_list.obs_id, b_arf),
+                               "obs_id": cur_evt_list.obs_id, "instrument": inst,
                                "central_coord": source.default_coord,
                                "grouped": group_spec,
                                "min_counts": min_counts,
@@ -381,7 +383,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                "from_region": from_region,
                                "telescope": "erosita"})
 
-    # TODO MORE COMMENTS
+    # Early XGA could generate spectra within the detection regions of the source, but
+    #  that has been deprecated for quite a while, as it was a bad idea. The generation
+    #  of spectra within user-specified regions will be possible, but it will be
+    #  implemented differently. The original way was bad because the detection region
+    #  could/almost certainly would be different for each observation
+    if outer_radius == 'region':
+        raise ValueError("The string 'region' is no longer a valid option for "
+                         "the 'outer_radius' argument.")
 
     # TODO This will change in a future release, so that the user can control it - see issue #1113. The definitions
     #  are up the top of the function as a reminder
@@ -436,7 +445,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     else:
         extra_name = ''
 
-    # SASS' srctool operates quite differently for extended sources and point sources. We are going to want a
+    # eSASS' srctool operates quite differently for extended sources and point sources. We are going to want a
     #  detector map for extended sources to weight the ARF calculation, so here we check the source type
     if isinstance(sources[0], (ExtendedSource, GalaxyCluster)):
         ex_src = True
@@ -487,8 +496,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  (though honestly it seems wasteful to generate them all and not use them, this might change later
     remove_all_but_merged_cmd = "rm *srctoolout_*"
 
-    # TODO include the background file - YES
-    # TODO regroup the background file too 
     # Grouping the spectra will be done using the HEASoft tool 'ftgrouppha' - we make sure to remove the original
     #  ungrouped file. I think maybe that approach is safer than turning clobber on and just having the original
     #  generated file with a name that only truly applies once grouping has been done.
@@ -560,10 +567,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Check which event lists are associated with each individual source
             for evt_list in source.get_products("events", telescope='erosita', just_obj=True):
                 # This function then uses the evtlist to generate spec commands, final paths, 
-                # and extra info, it will then append them to the cmds, final_paths, and extrainfo lists
+                # and extra info, it will then append them to the cmds, final_paths, and extra_info lists
                 # that are defined above
                 _append_spec_info(evt_list)
-
 
         else:
             # getting Eventlist product
@@ -684,7 +690,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
-                     disable_progress: bool = False, combine_tm: bool = True,  combine_obs: bool = True, force_gen: bool = False):
+                     disable_progress: bool = False, combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False):
 
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
