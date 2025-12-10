@@ -141,6 +141,14 @@ set sp_id 1
 foreach sp $spec_paths {{
     # Sets a variable containing the lower and upper limits of the noticed channels
     set range [split [tcloutr noticed $sp_id] -]
+
+    # If there are no noticed channels, then it is possible for the just-set 'range'
+    #  variable to be null. We check, and if range is null, we move to the next
+    #  iteration of the loop (i.e. the next spectrum).
+    if {{[string trim $range] == ""}} {{
+        continue
+    }}
+
     # Calculates the number of channels in the range
     set num_chan [expr [lindex $range 1] - [lindex $range 0]]
     # Performs a check to see if the number of channels is greater than the minimum requirement, and
