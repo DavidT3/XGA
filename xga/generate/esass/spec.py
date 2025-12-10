@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 10:04. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 10:36. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -341,14 +341,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_all_but_merged_cmd])
             else:
                 cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
-                # Add handling for DR1 produced merged files
-                # if ESASS_VERSION == "ESASS4DR1":
-                #     # Remove "TM9" output if the instrument number is 5 or 7
-                #     if inst_no in ['5', '7']:
-                #         cmd_str += f";{remove_merged_dr1_9}"
-                #     else:
-                #         # Remove "TM8" output otherwise
-                #         cmd_str += f";{remove_merged_dr1_8}"
 
             # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
             #  we'll neaten it up at some point
@@ -360,14 +352,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                      remove_all_but_merged_cmd])
             else:
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
-                # Add handling for DR1 produced merged files
-                # if ESASS_VERSION == "ESASS4DR1":
-                #     # Remove "TM9" output if the instrument number is 5 or 7
-                #     if inst_no in ['5', '7']:
-                #         cmd_str += f";{remove_merged_dr1_9}"
-                #     else:
-                #         # Remove "TM8" output otherwise
-                #         cmd_str += f";{remove_merged_dr1_8}"
 
             # If the user wants to group the spectrum, then this command should be added
             if group_spec:
@@ -467,7 +451,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     if all([o is not None for o in [min_counts, min_sn]]):
         raise eSASSInputInvalid("Only one grouping option can passed, you can't group both by"
                                 " minimum counts AND by minimum signal to noise.")
-    # Should also check that the user has passed any sort of grouping argument, if they say they want to group
+    # Should also check that the user has passed any sort of grouping argument if they say they want to group
     elif group_spec and all([o is None for o in [min_counts, min_sn]]):
         raise eSASSInputInvalid("If you set group_spec=True, you must supply a grouping option, either min_counts"
                                 " or min_sn.")
@@ -531,7 +515,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     remove_merged_dr1_8 = 'rm *srctoolout_8*'
     remove_merged_dr1_9 = 'rm *srctoolout_9*'
     # We also set up a command that will remove all spectra BUT the combined one
-    remove_all_but_merged_cmd = "rm *srctoolout_*"
+    # TODO SORT THIS SHIT OUT?!
+    # remove_all_but_merged_cmd = "rm *srctoolout_*"
+    remove_all_but_merged_cmd = ""
 
     # Grouping the spectra will be done using the HEASoft tool 'ftgrouppha' - we make sure to remove the original
     #  ungrouped file. I think maybe that approach is safer than turning clobber on and just having the original
