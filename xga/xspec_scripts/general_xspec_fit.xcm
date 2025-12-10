@@ -164,7 +164,7 @@ foreach sp $spec_paths {{
 #############################################
 # Throw an error if no spectra passed
 #############################################
-# The fit script has to exit here if no spectra made it past our cleaning
+# The fit script exits here if none of the input spectra meet the minimum channel requirement
     if {{[llength $accept_min_chan_spec_paths] == 0}} {{
         puts stderr "***Error: No acceptable spectra are left after the minimum channel step"
         exit
