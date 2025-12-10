@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 16:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 10:04. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -369,7 +369,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 #         # Remove "TM8" output otherwise
                 #         cmd_str += f";{remove_merged_dr1_8}"
 
-            # If the user wants to group the spectrum then this command should be added
+            # If the user wants to group the spectrum, then this command should be added
             if group_spec:
                 # This both performs the grouping and deletes the original non-grouped file. A similar effect
                 #  could be ensured by turning clobber on for ftgrouppha, but I think this way is safer. That way
@@ -379,13 +379,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Adds symlink-removal commands - we don't want to be moving them along
             #  with every else in the temporary working directory
-            cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
-            # Image symlink will only be present if the source is extended
-            if extended_src:
-                cmd_str += "; rm {esym}".format(esym=im_symlink_name)
+            # cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
+            # # Image symlink will only be present if the source is extended
+            # if extended_src:
+            #     cmd_str += "; rm {esym}".format(esym=im_symlink_name)
 
             # Adds clean up commands to move all generated files and remove the temporary directory
-            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            # cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
             if os.path.exists(final_dest_dir + '/temp_regs_{i}'.format(i=rand_ident)):
                 # Removing this directory
