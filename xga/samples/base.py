@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
 from ..exceptions import (NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError)
+                          NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError)
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
@@ -135,7 +135,7 @@ class BaseSample:
                     self._sources[n] = temp
                     self._names.append(n)
                     self._accepted_inds.append(ind)
-                except (NoMatchFoundError, NoValidObservationsError):
+                except (NoMatchFoundError, NoValidObservationsError) as err:
                     if n is not None:
                         # We don't be liking spaces in source names
                         # n = n.replace(" ", "")
@@ -145,7 +145,7 @@ class BaseSample:
                         n = coord_to_name(ra_dec)
 
                     # We record that a particular source name was not successfully declared
-                    self._failed_sources[n] = "NoMatch"
+                    self._failed_sources[n] = str(err)
                 dec_base.update(1)
 
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
