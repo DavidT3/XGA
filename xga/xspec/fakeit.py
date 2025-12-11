@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 14:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:57. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -158,20 +158,10 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 raise NoProductAvailableError("There are no matching spectra for {s} object, you "
                                                 "need to generate them first!".format(s=source.name))
 
-            # DAVID_QUESTION not sure what the purpose of this check is
-            #total_obs_inst = source.num_pn_obs + source.num_mos1_obs + source.num_mos2_obs
-
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a source with only a single valid instrument for a single valid observation this may not be the case
             if isinstance(spec_objs, Spectrum):
                 spec_objs = [spec_objs]
-
-            # DAVID_QUESTION not sure what the purpose of this check is
-            #elif len(spec_objs) != total_obs_inst:
-            #    raise NoProductAvailableError("The number of matching spectra ({0}) is not equal to the number of "
-            #                                "instrument/observation combinations ({1}) for {2}.".format(len(spec_objs),
-            #                                                                                            total_obs_inst,
-            #                                                                                            source.name))
 
             # Turn RMF and ARF paths into TCL style list for substitution into template
             rmf_paths = "{" + " ".join([spec.rmf for spec in spec_objs]) + "}"

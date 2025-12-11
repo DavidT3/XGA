@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2025, 10:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 10:36. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy
@@ -190,6 +190,15 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                             "lo_en": lo_en,
                             "hi_en": hi_en,
                             "telescope": 'erosita'})
+
+    # Early XGA could generate spectra within the detection regions of the source, but
+    #  that has been deprecated for quite a while, as it was a bad idea. The generation
+    #  of spectra within user-specified regions will be possible, but it will be
+    #  implemented differently. The original way was bad because the detection region
+    #  could/almost certainly would be different for each observation
+    if outer_radius == 'region':
+        raise ValueError("The string 'region' is no longer a valid option for "
+                         "the 'outer_radius' argument.")
 
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object

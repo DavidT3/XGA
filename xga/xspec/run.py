@@ -1,8 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 07/08/2025, 16:40. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 17:27. Copyright (c) The Contributors
 
 import os
-import warnings
 from functools import wraps
 # from multiprocessing.dummy import Pool
 from multiprocessing import Pool
@@ -18,10 +17,12 @@ from fitsio import FITS
 from tqdm import tqdm
 
 from .. import XSPEC_VERSION
-from ..exceptions import XSPECFitError, MultipleMatchError, NoMatchFoundError, XSPECNotFoundError, XGADeveloperError
+from ..exceptions import MultipleMatchError, NoMatchFoundError, XSPECNotFoundError, XGADeveloperError
 from ..samples.base import BaseSample
 from ..sources import BaseSource
 
+XGA_XSPEC_ERRS = ["No acceptable spectra are left after the minimum channel step",
+                  "No acceptable spectra are left after the cleaning step"]
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
         -> Tuple[Union[FITS, str], str, bool, list, list, str]:
@@ -45,7 +46,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     usable = True
 
     # We're going to make a temporary pfiles directory which is a) local to the XGA directory, and thus sure to
-    #  be on the same filesystem (can be a performance issue for HPCs I think), and b) is unique to a particular
+    #  be on the same filesystem (can be a performance issue for HPCs I think); and b) is unique to a particular
     #  fit process, so there shouldn't be any clashes. The temporary file name is randomly generated
     tmp_ident = str(randint(0, int(100_000_000)))
     tmp_hea_dir = os.path.join(os.path.dirname(out_file), tmp_ident, 'pfiles/')
@@ -65,9 +66,10 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         out, err = xspec_proc.communicate()
         # Need to infer the name of the source to supply it in the warning
         source_name = x_script.split('/')[-1].split("_")[0]
-        warnings.warn("An XSPEC fit for {} has timed out".format(source_name), stacklevel=2)
+        warn("An XSPEC fit for {} has timed out".format(source_name), stacklevel=2)
         usable = False
 
+    # Have to decode the output and errors as they are in byte form
     out = out.decode("UTF-8").split("\n")
     err = err.decode("UTF-8").split("\n")
 
@@ -77,8 +79,8 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     # We ignore that particular string in the errors identified from stdout because if we don't just it being
     #  present in the if statement in the executed script is enough to make XGA think that the fit failed, even if
     #  that error message was never printed at all
-    err_out_lines = [line.split("***Error: ")[-1] for line in out if "***Error" in line
-                     if "No acceptable spectra are left after the cleaning step" not in line]
+    err_out_lines = [line.split("***Error: ")[-1] for line in out
+                     if "***Error" in line and all([xxe not in line for xxe in XGA_XSPEC_ERRS])]
     err_out_line_init = [line for line in out if "You do not have an up-to-date version of Xspec.init" in line]
     warn_out_lines = [line.split("***Warning: ")[-1] for line in out if "***Warning" in line]
     err_err_lines = [line.split("***Error: ")[-1] for line in err if "***Error" in line]
@@ -89,8 +91,8 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     else:
         usable = False
 
-    error = err_out_lines + err_err_lines + err_out_line_init
-    warn = warn_out_lines + warn_err_lines
+    cur_error = err_out_lines + err_err_lines + err_out_line_init
+    cur_warn = warn_out_lines + warn_err_lines
 
     if os.path.exists(out_file + "_info.csv") and run_type == "fit" and usable:
         # The original version of the xga_output.tcl script output everything as one nice neat fits file
@@ -132,20 +134,22 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     elif not os.path.exists(out_file):
         usable = False
         res_tables = None
-        error.append('Results table not written.')
+        cur_error.append('Results table not written.')
     else:
         res_tables = None
         usable = False
 
-    # This uses outfile name (which has a structure set by XGA, so this is reliable) to figure out which telescope
-    #  this script was run for - this isn't necessarily how I would have designed it from the beginning, but is a
-    #  good solution to get the telescope which doesn't require adding stuff to all the user-facing XSPEC functions
+    # This uses outfile name (has structure set by XGA, so this is reliable) to
+    #  figure out which telescope this script was run for. This isn't necessarily
+    #  how I would have designed it from the beginning, but is a good solution to get
+    #  the telescope which doesn't require adding stuff to all the user-facing
+    #  XSPEC functions
     if run_type ==  "conv_factors":
         tel = out_file.split('_')[-3]
     else:
         tel = out_file.split('_')[-1].split('.')[0]
 
-    return res_tables, src, usable, error, warn, tel
+    return res_tables, src, usable, cur_error, cur_warn, tel
 
 
 def xspec_call(xspec_func):
@@ -153,7 +157,6 @@ def xspec_call(xspec_func):
     This is used as a decorator for functions that produce XSPEC scripts. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
     executing the XSPEC commands will change. This supports multi-threading.
-    :return:
     """
 
     @wraps(xspec_func)
@@ -200,14 +203,14 @@ def xspec_call(xspec_func):
             with tqdm(total=len(script_list), desc=desc) as fit, Pool(cores) as pool:
                 def callback(results_in):
                     """
-                    Callback function for the apply_async pool method, gets called when a task finishes
-                    and something is returned.
+                    Callback function for the apply_async pool method which gets
+                    called when a task finishes and something is returned.
                     """
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
 
-                    res_fits, rel_src, successful, err_list, warn_list, tel = results_in
-                    results[rel_src].append([res_fits, successful, err_list, warn_list, tel])
+                    res_fits, rel_src, successful, cur_err_list, cur_warn_list, cur_tel = results_in
+                    results[rel_src].append([res_fits, successful, cur_err_list, cur_warn_list, cur_tel])
                     fit.update(1)
 
                 for s_ind, s in enumerate(script_list):
@@ -238,7 +241,6 @@ def xspec_call(xspec_func):
             for res_set in results[src_repr]:
                 # res_set[0] = res_table, if it is None then the xspec fit has failed
                 if res_set[0] is None:
-                    print(res_set)
                     for err in res_set[2]:
                         errors_all_sources.append(err + " - {s}".format(s=s.name))
                 # Extract the telescope from the information passed back by the running of the fit

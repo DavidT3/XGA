@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:50. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:20. Copyright (c) The Contributors
 
 import json
 import os
@@ -16,11 +16,10 @@ import pandas as pd
 import pkg_resources
 from astropy.constants import m_p, m_e
 from astropy.cosmology import LambdaCDM
+from astropy.io import fits
 from astropy.units import Quantity, def_unit, add_enabled_units
 from astropy.wcs import WCS
-from astropy.io import fits
 from fitsio import FITSHDR
-from fitsio import read_header
 from tqdm import tqdm
 
 from .exceptions import XGAConfigError, InvalidTelescopeError, NoTelescopeDataError
@@ -853,15 +852,25 @@ SASWARNING_LIST = warnings["WarnName"].values
 
 # --- eROSITA ---
 ESASS_VERSION = None
-eSASS_AVAIL = False
+ESASS_AVAIL = False
 if ('erosita' in USABLE and USABLE['erosita']) or ('erass' in USABLE and USABLE['erass']):
-    # TODO will have to handle the whole eSASS4DR1 and the original eSASS release thing at some point... sigh
+    # Run the 'which' command for evtool, one of the eSASS tasks
+    which_evtool = shutil.which("evtool")
+
     # This checks for an installation of eSASS
-    if shutil.which("evtool") is None:
+    if which_evtool is None:
         warn("No eSASS installation detected on system, as such all functions in xga.generate.esass will not work.",
              stacklevel=2)
     else:
-        eSASS_AVAIL = True
+        ESASS_AVAIL = True
+        if 'ESASS4EDR' in which_evtool.upper():
+            ESASS_VERSION = 'ESASS4EDR'
+        elif 'ESASS4DR1' in which_evtool.upper():
+            ESASS_VERSION = 'ESASS4DR1'
+        else:
+            warn(
+                "Unknown eSASS installation detected on system, as such some functions in xga.generate.esass may not work.",
+                stacklevel=2)
 # ---------------
 
 # --- Chandra ---
