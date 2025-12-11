@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 10:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 21:11. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -103,6 +103,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Extracting just the instrument number for later use in eSASS commands (or indeed a list of instrument
             #  numbers if the user has requested a combined spectrum).
             inst_no = inst_nums[inst_ind]
+            # Also pick out the current instrument srctool ID - this will be passed
+            #  to the writeinsts argument of srctool. It will be identical to 'inst_no'
+            #  for individual telescope module spectra, and will be zero (to write a
+            #  combined spectrum of all specified TMs) for combined telescope
+            #  module spectra.
+            cur_inst_srctool_id = inst_srctool_id[inst_ind]
 
             try:
                 if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
@@ -280,6 +286,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                               sc=coord_str,
                                               reg=reg,
                                               i=inst_no,
+                                              wi=cur_inst_srctool_id,
                                               ts=t_step,
                                               em=os.path.basename(im.path),
                                               et=ext_type)
@@ -291,6 +298,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                               sc=coord_str,
                                               reg=reg,
                                               i=inst_no,
+                                              wi=cur_inst_srctool_id,
                                               ts=t_step)
 
             # TODO FIGURE OUT WHAT TO DO ABOUT THE TIMESTEP
@@ -298,6 +306,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                             sc=coord_str,
                                             breg=b_reg,
                                             i=inst_no,
+                                            wi=cur_inst_srctool_id,
                                             ts=t_step * 4)
             # Filling out the grouping command
             grp_cmd_str = grp_cmd.format(infi=no_grp_spec,
@@ -337,14 +346,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # We make sure to remove the 'merged spectra' output of srctool - which is identical to the
             #  instrument one if we generate for one spectrum at a time. Though only if the user hasn't actually
             #  ASKED for the merged spectrum
-            print('TM combo', combine_tm)
-
             if combine_tm:
-                # cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_all_but_merged_cmd])
-                cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf])
+                cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_all_but_merged_cmd])
             else:
-                # cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
-                cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf])
+                cmd_str = ";".join([s_cmd_str, rename_spec, rename_rmf, rename_arf, remove_merged_cmd])
 
             # This currently ensures that there is a ';' divider between these two chunks of commands - hopefully
             #  we'll neaten it up at some point
@@ -352,13 +357,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Removing the 'merged spectra' output of srctool, for the background spectra in this case
             if combine_tm:
-                # cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf,
-                #                      remove_all_but_merged_cmd])
                 cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf,
-                                     ])
+                                     remove_all_but_merged_cmd])
             else:
-                # cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
-                cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf])
+                cmd_str += ";".join([sb_cmd_str, rename_b_spec, rename_b_rmf, rename_b_arf, remove_merged_cmd])
 
             # If the user wants to group the spectrum, then this command should be added
             if group_spec:
@@ -370,13 +372,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Adds symlink-removal commands - we don't want to be moving them along
             #  with every else in the temporary working directory
-            # cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
-            # # Image symlink will only be present if the source is extended
-            # if extended_src:
-            #     cmd_str += "; rm {esym}".format(esym=im_symlink_name)
+            cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
+            # Image symlink will only be present if the source is extended
+            if extended_src:
+                cmd_str += "; rm {esym}".format(esym=im_symlink_name)
 
             # Adds clean up commands to move all generated files and remove the temporary directory
-            # cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
             if os.path.exists(final_dest_dir + '/temp_regs_{i}'.format(i=rand_ident)):
                 # Removing this directory
@@ -506,9 +508,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  which instruments should be written to output files - we want to be able to
     #  set that to avoid some warnings that clog up the logs
     if ESASS_VERSION == "ESASS4DR1":
-        ext_sp_cmd += " writeinsts={i}"
-        back_sp_cmd += " writeinsts={i}"
-        pnt_sp_cmd += " writeinsts={i}"
+        ext_sp_cmd += " writeinsts={wi}"
+        back_sp_cmd += " writeinsts={wi}"
+        pnt_sp_cmd += " writeinsts={wi}"
 
     # TODO SORT THIS SHIT OUT?!
     # You can't control the whole names of srctool outputs, so this renames it to the XGA format
