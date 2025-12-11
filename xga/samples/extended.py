@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:08. Copyright (c) The Contributors
 
 from typing import List
 
@@ -274,18 +274,13 @@ class ClusterSample(BaseSample):
                                                              peak_find_method, True, telescope, search_distance,
                                                              cur_inc_core_pnt_src)
                             final_names.append(n)
-                        except NoValidObservationsError:
-                            # warn("After a failed attempt to find an X-ray peak, and after applying the criteria for "
-                            #      "the minimum amount of cluster required on an observation, {} cannot be declared as "
-                            #      "all potential observations were removed".format(n))
-                            self._failed_sources[n] = "Failed ObsClean"
+                        except NoValidObservationsError as err:
+                            self._failed_sources[n] = str(err)
 
-                    except NoValidObservationsError:
-                        # warn("After applying the criteria for the minimum amount of cluster required on an "
-                        #      "observation, {} cannot be declared as all potential observations were removed".format(n))
+                    except NoValidObservationsError as err:
                         # Note we don't append n to the final_names list here, as it is effectively being
                         #  removed from the sample
-                        self._failed_sources[n] = "Failed ObsClean"
+                        self._failed_sources[n] = str(err)
                     dec_lb.update(1)
 
         self._names = final_names
