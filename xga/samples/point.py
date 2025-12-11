@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
 
 from typing import Union, List
 from warnings import warn
@@ -204,8 +204,8 @@ class StarSample(BaseSample):
                     #  been set yet when all radii should be forced to be the same unit
                     self._pr_unit = pr.unit
                     final_names.append(n)
-                except NoValidObservationsError:
-                    self._failed_sources[n] = "CleanedNoMatch"
+                except NoValidObservationsError as err:
+                    self._failed_sources[n] = str(err)
 
                 dec_lb.update(1)
         self._names = final_names
