@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 10:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 15:39. Copyright (c) The Contributors
 
 import os
 import sys
@@ -15,7 +15,6 @@ from xga.exceptions import XGADeveloperError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList
 from ..products.lightcurve import LightCurve
 from ..sources import BaseSource
-from ..utils import OUTPUT
 
 
 def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_info: dict,
@@ -198,7 +197,7 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
 def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str,
                              output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
                              interloper_regions: np.ndarray = None, central_coord: Quantity = None,
-                             bkg_reg: bool = False, rand_ident: int = None) -> str:
+                             bkg_reg: bool = False, rand_ident: int = None, out_root_path: str = None) -> str:
     """
     A method to generate an eSASS region string for an arbitrary circular or elliptical annular region, with
     interloper sources removed.
@@ -223,6 +222,8 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         will be added to the file names. Default is False.
     :param int rand_ident: A random identifier to be inserted in the 'temp_regs' directory name, if temporary
         region files need to be written out.
+    :param str out_root_path: The root path within which we can create a temporary
+    directory of region files if they need to be written to disk.
     :return: Either a string representation of the requested region (if no contaminating sources are being
         removed), or a path to a region file that can be used with eSASS that specifies the source and
         contaminating regions.
@@ -296,8 +297,10 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     if len(esass_interloper) == 0:
         final_src = esass_source_area
     else:
-        # Multiple regions must be passed to eSASS via an ASCII file, so I will write this here
-        reg_file_path = OUTPUT + 'erosita/' + obs_id + '/temp_regs_{i}'.format(i=rand_ident)
+        # Multiple regions must be passed to eSASS via an ASCII
+        #  file, so we will need somewhere to write them
+        reg_file_path = os.path.join(out_root_path, f'/temp_regs_{rand_ident}')
+
         reg_str = esass_source_area.replace(" ", "_")  # replacing spaces with underscores for file naming purposes
         reg_str = reg_str.replace(".", "-")  # replacing any dots with dashes
 
@@ -311,12 +314,13 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         #  Extra argument means no error is raised if directories already exist
         os.makedirs(reg_file_path, exist_ok=True)
 
+        final_reg_path = os.path.join(reg_file_path, reg_file_name)
         # Making the file
         # TODO Decide whether FK5 or ICRS is more appropriate here
-        with open(reg_file_path + '/' + reg_file_name, 'w') as file:
+        with open(final_reg_path, 'w') as file:
             file.write('fk5; ' + esass_source_area + "\n" + "\n".join(esass_interloper))
         
-        final_src = reg_file_path + '/' + reg_file_name
+        final_src = final_reg_path
 
     return final_src
 

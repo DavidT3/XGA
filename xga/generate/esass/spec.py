@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 14:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 15:39. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -172,7 +172,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                            cur_evt_list.obs_id,
                                            interloper_regions=interloper_regions,
                                            central_coord=source.default_coord,
-                                           rand_ident=rand_ident)
+                                           rand_ident=rand_ident,
+                                           out_root_path=final_dest_dir)
             b_reg = get_annular_esass_region(source,
                                              bck_inn_rad,
                                              bck_out_rad,
@@ -180,7 +181,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                              interloper_regions=back_inter_reg,
                                              central_coord=source.default_coord,
                                              bkg_reg=True,
-                                             rand_ident=rand_ident)
+                                             rand_ident=rand_ident,
+                                             out_root_path=final_dest_dir)
 
             # Set up a string describing the central coordinate in addition to the regions
             coord_str = "icrs;{ra},{dec}".format(ra=source.default_coord[0].value,
@@ -380,7 +382,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Adds clean up commands to move all generated files and remove the temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
-            if os.path.exists(final_dest_dir + '/temp_regs_{i}'.format(i=rand_ident)):
+            if os.path.exists(os.path.join(final_dest_dir, 'temp_regs_{i}'.format(i=rand_ident))):
                 # Removing this directory
                 cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
 
