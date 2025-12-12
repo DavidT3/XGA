@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:44. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 14:49. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -10,7 +10,7 @@ from warnings import warn
 import numpy as np
 from astropy.units import Quantity
 
-from ._common import EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN
+from ._common import EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, T_STEP_POINT, T_STEP_SURVEY
 from .misc import evtool_combine_evts
 from .phot import evtool_image
 from .run import esass_call
@@ -420,8 +420,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # TODO This will change in a future release, so that the user can control it - see issue #1113. The definitions
     #  are up the top of the function as a reminder
     # TODO allow user to chose tstep and xgrid
-    t_step_survey = 0.5
-    t_step_point = 100
+    t_step_survey = T_STEP_SURVEY
+    t_step_point = T_STEP_POINT
 
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
@@ -440,7 +440,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  sure that combined event lists exist for each source
     if combine_obs:
         # This requires combined event lists - this function will generate them
-        evtool_combine_evts(sources)
+        evtool_combine_evts(sources, num_cores)
 
     # TODO edit region_setup to be telescope agnostic
     sources, inner_radii, outer_radii = region_setup(sources,
@@ -572,7 +572,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if er_miss not in source.telescopes:
                 continue
 
-            # need to set this so the combine_obs variable doesn't get overwritten
+            # Need to set this so the combine_obs variable doesn't get overwritten
             use_combine_obs = combine_obs
             # if the user has set combine_obs to True and there is only one observation, then we
             # use the combine_obs = False functionality instead
@@ -630,8 +630,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     final_paths += out_fin_paths
                     extra_info += out_ex_info
             else:
-                # In this case, the sky tiles are to be combined, so we grab the combined
-                #  event list
+                # In this case, the sky tiles are to be combined, so we grab
+                #  the combined event list
                 evt_list = source.get_products("combined_events", telescope=er_miss)[0]
                 # Mainly for code-completion purposes in IDE
                 evt_list: EventList
