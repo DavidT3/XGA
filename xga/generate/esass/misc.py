@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:06. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:22. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -59,9 +59,9 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
         final_paths = []
         extra_info = []
         # By this point we know that at least one of the sources has erosita data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
-        #  bugs occuring in the esass_call wrapper
+        #  bugs occurring in the esass_call wrapper
         if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
@@ -86,7 +86,6 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
             # Checking if the combined product already exists
             # TODO existing combined event lists arent loaded into a source
             comb_evt_exists = source.get_products("combined_events", telescope=er_miss)
-
 
             # If only one skytile event list is associated, then there is nothing to
             #  combine, or if there are multiple, but we already have a combined

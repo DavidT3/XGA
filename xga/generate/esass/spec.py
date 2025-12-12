@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 21:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:22. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -152,7 +152,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  directory name - ensures there won't be any clashes
             rand_ident = randint(0, 100_000_000)
             # This is the name of the working directory for the generation process
-            ddir_name = "temp_srctool_{i}_{r}".format(i=inst, r=randint(0, 100_000_000))
+            ddir_name = "temp_srctool_{i}_{r}".format(i=inst, r=rand_ident)
             # And the full path
             dest_dir = os.path.join(final_dest_dir, ddir_name)
 
