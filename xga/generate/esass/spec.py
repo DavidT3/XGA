@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 15:39. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 17:06. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -112,18 +112,33 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             try:
                 if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
-                    check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
-                                                           min_counts, min_sn, telescope=cur_evt_list.telescope)
+                    check_sp = source.get_combined_spectra(outer_radii[s_ind],
+                                                           inst,
+                                                           inner_radii[s_ind],
+                                                           group_spec,
+                                                           min_counts,
+                                                           min_sn,
+                                                           telescope=cur_evt_list.telescope)
 
                 else:
                     # Got to check if this spectrum already exists
-                    check_sp = source.get_spectra(outer_radii[s_ind], cur_evt_list.obs_id, inst, inner_radii[s_ind],
+                    check_sp = source.get_spectra(outer_radii[s_ind],
+                                                  cur_evt_list.obs_id,
+                                                  inst,
+                                                  inner_radii[s_ind],
                                                   group_spec,
-                                                  min_counts, min_sn, telescope=cur_evt_list.telescope)
+                                                  min_counts,
+                                                  min_sn,
+                                                  telescope=cur_evt_list.telescope)
                 exists = True
 
             except NoProductAvailableError:
                 exists = False
+
+            print(exists)
+            print(use_combine_obs)
+            print(inst)
+            print(cur_evt_list.telescope)
 
             if exists and check_sp.usable and not force_gen:
                 continue
