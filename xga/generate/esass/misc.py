@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:44. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -74,6 +74,11 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
             continue
 
         for er_miss in ['erosita', 'erass']:
+            # Skip this iteration if the current skew of eROSITA isn't associated
+            #  with the current source
+            if er_miss not in source.telescopes:
+                continue
+
             # Fetch the individual skytile event lists associated with the current
             #  source - if there are more than one, we'll be combining them
             rel_skytile_evts = source.get_products("events", telescope=er_miss)
@@ -83,22 +88,15 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
 
             # TODO if the user runs different samples with different search distances then more obs can
             #  be associated so I would need to check this
-            # Checking if the combined product already exists
-            # TODO existing combined event lists arent loaded into a source
+            # Checking if the combined events product already exists
             comb_evt_exists = source.get_products("combined_events", telescope=er_miss)
 
             # If only one skytile event list is associated, then there is nothing to
             #  combine, or if there are multiple, but we already have a combined
             #  event list, then there is nothing to do here.
-            #  We add some null entries to the lists of commands, output
-            #  files, etc., then move on to the next source
             if len(rel_skytile_evts) == 1 or (len(rel_skytile_evts) != 1 and
                                               len(comb_evt_exists) == 1 and
                                               comb_evt_exists[0].usable):
-                sources_cmds.append(np.array([]))
-                sources_paths.append(np.array([]))
-                sources_extras.append(np.array([]))
-                sources_types.append(np.array([]))
                 continue
 
             # If we've gotten this far, then there is a command to be run, so we start

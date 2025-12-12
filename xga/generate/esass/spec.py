@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:22. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:44. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -542,8 +542,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_paths = []
     sources_extras = []
     sources_types = []
-    # TODO HAVE TO ITERATE THROUGH EROSITA AND ERASS
     for s_ind, source in enumerate(sources):
+
+        source: BaseSource
+        cmds = []
+        final_paths = []
+        extra_info = []
+
         # By this point we know that at least one of the sources has eROSITA data
         #  associated (we checked that at the beginning of this function).
         #  However, for those sources that don't, we still need to append the empty
@@ -560,11 +565,6 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Now we can continue with the rest of the sources
             continue
-
-        source: BaseSource
-        cmds = []
-        final_paths = []
-        extra_info = []
 
         for er_miss in ['erosita', 'erass']:
             # Skip this iteration if the current skew of eROSITA isn't associated
