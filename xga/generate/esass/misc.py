@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 09:40. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -34,11 +34,13 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such a "
-                                          "combined eROSITA event list cannot be generated.")
-    
+    if ((not isinstance(sources, list) and (
+            'erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
+            (isinstance(sources, list) and (
+                    'erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
+                                          "eROSITA spectra cannot be generated.")
+
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
     # This function supports passing both individual sources and sets of sources
