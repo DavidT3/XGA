@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 12:24. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 12:30. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -600,14 +600,20 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str, 
-                      lo_en: Quantity = Quantity(0.2, 'keV'), hi_en: Quantity = Quantity(10, 'keV'),
+def combine_phot_prod(sources: Union[BaseSource, BaseSample],
+                      to_combine: str,
+                      lo_en: Quantity = Quantity(0.2, 'keV'),
+                      hi_en: Quantity = Quantity(10, 'keV'),
                       num_cores: int = NUM_CORES,
                       disable_progress: bool = False):
     """
-    A convenient Python wrapper for the eSASS evtool and expmap commands. Images or exposure maps
-    will be generated from all Obs IDs associated with the source, combined together (duplicate
-    events are removed).
+    A convenient Python wrapper for the eSASS evtool and expmap commands. Combined
+    images or exposure maps will be generated from all skytiles associated with the
+    source (duplicate events are removed).
+
+    This only exists as an analogy to XGA-XMM's 'emosaic' function, you could
+    just as easily use xga.generate.esass.phot.evtool_image/expmap directly, with
+    'combine_obs=True' as an argument.
 
     :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources
     :param str to_combine: The data type to produce, can be either image or expmap.
@@ -618,29 +624,23 @@ def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str,
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress
         bar.
     """
-    # We check to see whether there is an eROSITA entry in the 'telescopes' property.
-    # If sources is a Source object, then that property contains the telescopes associated with 
-    # that source, and if it is a Sample object then 'telescopes' contains the list of unique 
-    # telescopes that are associated with at least one member source.
-    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the "
-                                          "source/sample, as such eROSITA"
-                                          "images or exposure maps cannot be generated.")
-    
     if to_combine not in ["image", "expmap"]:
-        raise ValueError("The only valid choices for to_combine are image and expmap.")
-    # Don't do much value checking in this module, but this one is so fundamental that I will do it
-    elif lo_en > hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
+        raise ValueError("The 'to_combine' argument accepts either 'image' or "
+                         "'expmap' as a value.")
 
-    # To make a mosaic we need to have the individual products in the first place
     if to_combine == "image":
-        sources = evtool_image(sources, lo_en, hi_en, combine_obs=True, 
-                               disable_progress=disable_progress, num_cores=num_cores)
+        evtool_image(sources,
+                     lo_en,
+                     hi_en,
+                     combine_obs=True,
+                     disable_progress=disable_progress,
+                     num_cores=num_cores)
     elif to_combine == "expmap":
-        sources = expmap(sources, lo_en, hi_en, combine_obs=True, 
-                         disable_progress=disable_progress, num_cores=num_cores)
+        expmap(sources,
+               lo_en,
+               hi_en,
+               combine_obs=True,
+               disable_progress=disable_progress,
+               num_cores=num_cores)
 
     
