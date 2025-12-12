@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 10:21. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:06. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -68,7 +68,7 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
             # This contains any other information that will be needed to
             #  instantiate the Spectrum class once the eSASS cmd has run
             sources_extras.append(np.array(extra_info))
-            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="spectrum"))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
 
             # Now we can continue with the rest of the sources
             continue
@@ -105,7 +105,7 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
             # If we've gotten this far, then there is a command to be run, so we start
             #  setting up the working and output directories.
             # The combined event list files produced by this function will be
-            #  stored in the combined-ObsID directory, once the process is complete.
+            #  stored in the combined-ObsID directory once the process is complete.
             final_dest_dir = os.path.join(OUTPUT, er_miss, 'combined')
 
             # We're also going to need a temporary working directory and create a
