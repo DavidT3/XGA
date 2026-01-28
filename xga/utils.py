@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:20. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 28/01/2026, 16:29. Copyright (c) The Contributors
 
 import json
 import os
@@ -174,7 +174,7 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                         #  events into memory, as we might be doing this a bunch of times
                         try:
                             with fits.open(evt_path) as hdul:
-                                evts_header = hdul[0].header
+                                evts_header = hdul['EVENTS'].header
                         except Exception as exc:
                             print(evt_path)
                             raise exc
