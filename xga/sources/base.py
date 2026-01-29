@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 10:53. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 29/01/2026, 14:51. Copyright (c) The Contributors
 
 import gc
 import os
@@ -1304,6 +1304,9 @@ class BaseSource:
                 inst = 'combined'
 
             src_name = row['src_name']
+            # Spectral files are named with '+' replaced with 'x', as having the plus
+            #  symbol in the same can be misinterpreted by some XMM-SAS tools
+            no_plus_src_name = src_name.replace('+', 'x')
 
             # we will take the info key from the filename, instead of the actual info key in the
             # inventory. This is because annular spectrum need to be read in, and their info key
@@ -1356,9 +1359,9 @@ class BaseSource:
             if combined_obs:
                 indent_no = row['file_name'].split('_')[0]
                 # The info key actually needs to be used here
-                prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(src_name) + '_' + info_key
+                prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(no_plus_src_name) + '_' + info_key
             else:
-                prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
+                prod_gen_path = cur_d + obs_id + f'_{inst}_' +  str(no_plus_src_name) + '_' + info_key
 
             spec = prod_gen_path + '_spec.fits'
             arf = prod_gen_path + '.arf'
@@ -1373,7 +1376,7 @@ class BaseSource:
                 if os.path.exists(prod_gen_path + '.rmf'):
                     rmf = prod_gen_path + '.rmf'
                 else:
-                    rmf = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_universal.rmf'
+                    rmf = cur_d + obs_id + '_' + inst + '_' +  str(no_plus_src_name) + '_universal.rmf'
                 back_rmf = ''
                 back_arf = ''
 
@@ -3771,8 +3774,14 @@ class BaseSource:
     def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
                                  inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
                                  hi_en: Quantity = None, time_bin_size: Quantity = None,
-                                 pattern: Union[dict, str] = "default", telescope: str = None,
-                                 inst: str = None) \
+                                 pattern: Union[dict, str] = "default", telescope: str = None) -> Union[LightCurve, List[LightCurve]]:
+        raise NoProductAvailableError("The corrected version of get_combined_lightcurves is not yet available.")
+
+    def get_aggregate_lightcurves(self, outer_radius: Union[str, Quantity] = None,
+                                  inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                                  hi_en: Quantity = None, time_bin_size: Quantity = None,
+                                  pattern: Union[dict, str] = "default", telescope: str = None,
+                                  inst: str = None) \
             -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
         """
         A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at
