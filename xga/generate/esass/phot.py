@@ -1,19 +1,17 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 14:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 12:30. Copyright (c) The Contributors
 
 import os
 from random import randint
-from shutil import rmtree
 from typing import Union
 
 import numpy as np
-from astropy.units import Quantity, UnitConversionError
+from astropy.units import Quantity
 
 from .misc import evtool_combine_evts
 from .run import esass_call
 from ... import OUTPUT, NUM_CORES
 from ...exceptions import TelescopeNotAssociatedError, NoProductAvailableError
-from ...products import BaseProduct
 from ...products.misc import EventList
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -119,10 +117,12 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
+    if ((not isinstance(sources, list) and (
+            'erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
+            (isinstance(sources, list) and (
+                    'erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
         raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA images cannot be generated.")
+                                          "eROSITA spectra cannot be generated.")
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
@@ -131,38 +131,38 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
     
-    # Checking user's choice of energy limit parameters
-    if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
-        raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
+    # Checking the user's choice of energy limit parameters - first are they the
+    #  right kind of object, and do they have the right units?
+    if (not all([isinstance(lo_en, Quantity), isinstance(hi_en, Quantity)]) or
+            not all([lo_en.unit.is_equivalent('eV'), hi_en.unit.is_equivalent('eV')])):
+        raise TypeError("The 'lo_en' and 'hi_en' arguments must be astropy quantities in units "
                         "that can be converted to keV.")
-    
-    # Have to make sure that the energy bounds are in units that can be converted to keV (which is what evtool
-    #  expects for these arguments).
-    elif not lo_en.unit.is_equivalent('eV') or not hi_en.unit.is_equivalent('eV'):
-        raise UnitConversionError("The lo_en and hi_en arguments must be astropy quantities in units "
-                                  "that can be converted to keV.")
-
     # Checking that the upper energy limit is not below the lower energy limit
     elif hi_en <= lo_en:
         raise ValueError("The hi_en argument must be larger than the lo_en argument.")
-    
-    # Converting to the right unit
+    # If we get here we know they're okay, so we make sure they're in keV
     else:
         lo_en = lo_en.to('keV')
         hi_en = hi_en.to('keV')
 
     # Checking user's lo_en and hi_en inputs are in the valid energy range for eROSITA
-    if ((lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or
-            (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV'))):
-        raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
-    
-    # Checking user's choice of combine_obs
+    if ((Quantity([lo_en, hi_en]) < Quantity(0.2, 'keV')).any() or
+            (Quantity([lo_en, hi_en]) > Quantity(10, 'keV')).any()):
+        raise ValueError("The 'lo_en' and 'hi_en' values must be between 0.2 keV and 10 keV for eROSITA.")
+
+    # Checking the user's choice of 'combine_obs'
     if not isinstance(combine_obs, bool):
         raise TypeError("The combine_obs argument must be a bool.")
-    
+
+    # Make sure that combined event lists exist
     if combine_obs:
         # This requires combined event lists - this function will generate them
-        evtool_combine_evts(sources)
+        evtool_combine_evts(sources, num_cores)
+
+    # This is the template for the evtool command that will be run to make new images
+    evtool_cmd = "cd {d}; evtool eventfiles={e} outfile={i} image=yes " \
+                 "emin={l} emax={u} events=no size='{xs} {ys}' rebin={rb} " \
+                 "center_position='{c}'; mv * ../; cd ..; rm -r {d}"
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
@@ -176,119 +176,168 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         extra_info = []
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the esass_call wrapper
-        if 'erosita' not in source.telescopes:
+        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
             # This contains any other information that will be needed to instantiate the class
             # once the eSASS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
-            
-            # then we can continue with the rest of the sources
+
+            # We can go to the next source
             continue
-        
-        # Define this variable for each source no it doesn't get overwritten with the wrong value
-        # later in the loop
-        use_combine_obs = combine_obs
-        
-        # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
-        if use_combine_obs and len(source.obs_ids['erosita']) == 1:
-            use_combine_obs = False
-    
-        if not use_combine_obs:
-            # Check which event lists are associated with each individual source
-            for pack in source.get_products("events", telescope='erosita', just_obj=False):
-                obs_id = pack[1]
-                inst = pack[2]
-                if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                    os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
-                en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-                # ASSUMPTION5 source.get_products has a telescope parameter
-                exists = [match for match in
-                          source.get_products("image", obs_id, inst, just_obj=False, telescope='erosita')
-                          if en_id in match]
-                if len(exists) == 1 and exists[0][-1].usable:
-                    continue
-
-                evt_list = pack[-1]
-
-                re_bin, x_size, y_size, centre_pos = _img_params_from_evtlist(evt_list)
-
-                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value,
-                                                                                    u=hi_en.value, n=source.name)
-                im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
-
-                # If something got interrupted and the temp directory still exists, this will remove it
-                if os.path.exists(dest_dir):
-                    rmtree(dest_dir)
-
-                os.makedirs(dest_dir)
-                cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
-                            "size='{xs} {ys}' rebin={rb} center_position='{c}'; mv * ../; cd ..; "
-                            "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
-                                            xs=x_size, ys=y_size, c=centre_pos))
-
-                # This is the product's final resting place, if it exists at the end of this command
-                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, im))
-                extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                                "telescope": "erosita"})
-            
-        else:
-            # Checking if a combined event list has be made already
-            try:
-                exists = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
-            except NoProductAvailableError:
-                exists = []
-
-            if isinstance(exists, BaseProduct) and exists.usable:
-                # we still need to append the empty cmds, paths, extrainfo, and ptypes to 
-                #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
-                #  bugs occuring in the esass_call wrapper
-                sources_cmds.append(np.array([]))
-                sources_paths.append(np.array([]))
-                # This contains any other information that will be needed to instantiate the class
-                # once the eSASS cmd has run
-                sources_extras.append(np.array([]))
-                sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
+        for er_miss in ['erosita', 'erass']:
+            # Skip this iteration if the current skew of eROSITA isn't associated
+            #  with the current source
+            if er_miss not in source.telescopes:
                 continue
 
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            # getting Eventlist product
-            evt_list = source.get_products("combined_events", just_obj=True, telescope="erosita")[0]
-            obs_id = evt_list.obs_id
-            inst = evt_list.instrument
-            re_bin, x_size, y_size, centre_pos = _img_params_from_evtlist(evt_list)
+            # Define this variable for each iteration no it doesn't get overwritten with the wrong value
+            # later in the loop
+            use_combine_obs = combine_obs
 
-            # The files produced by this function will now be stored in the combined directory.
-            final_dest_dir = OUTPUT + "erosita/combined/"
-            rand_ident = randint(0, 100_000_000)
-            # Makes absolutely sure that the random integer hasn't already been used
-            while len([f for f in os.listdir(final_dest_dir)
-                    if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
+            # if the user has set combine_obs to True and there is only one observation, then we
+            # use the combine_obs = False functionality instead
+            if use_combine_obs and len(source.obs_ids[er_miss]) == 1:
+                use_combine_obs = False
+
+            if not use_combine_obs:
+                # Fetch the individual skytile event lists
+                rel_skytile_evts = source.get_products("events", telescope=er_miss)
+
+                # Iterating through the event lists of separate skytiles, as we
+                #  are making one image per skytile in this case
+                for cur_ev in rel_skytile_evts:
+                    # We try to retrieve the image we've been told to make from the
+                    #  source object, if an exception occurs, then it already exists
+                    try:
+                        im_exists = source.get_images(cur_ev.obs_id,
+                                                      cur_ev.instrument,
+                                                      telescope=er_miss,
+                                                      lo_en=lo_en,
+                                                      hi_en=hi_en)
+                        # If we get here, then the image already exists, and we can
+                        #  move to the next event list
+                        continue
+                    except NoProductAvailableError:
+                        # If there is an exception raised then we just keep going, as
+                        #  an image needs to be generated for this event list in
+                        #  the specified energy band
+                        pass
+
+                    # Use an internal function to figure out the centering
+                    #  and boundary information
+                    re_bin, x_size, y_size, centre_pos = _img_params_from_evtlist(cur_ev)
+
+                    # Now we set up the final output directory for the image to be
+                    #  generated, as well as the temporary working directory (with
+                    #  a random identifier in the name to avoid collisions)
+                    final_dest_dir = os.path.join(OUTPUT, er_miss, cur_ev.obs_id)
+
+                    # Generate the random identifier for the working directory
+                    rand_ident = randint(0, 100_000_000)
+                    dest_dir = os.path.join(final_dest_dir,
+                                            "temp_evtool_{}".format(rand_ident))
+                    # Make the working directory
+                    os.makedirs(dest_dir, exist_ok=True)
+
+                    # eSASS command line tools can have issues with overlong input
+                    #  file paths (see closed issue #1400). So we set up a symlink
+                    #  to the event list in the working directory
+                    evt_symlink_name = os.path.basename(cur_ev.path)
+                    os.symlink(cur_ev.path, os.path.join(dest_dir, evt_symlink_name))
+
+                    # The name of the output image file
+                    im_name = "{o}_{i}_{l}-{u}keVimg.fits".format(o=cur_ev.obs_id,
+                                                                  i=cur_ev.instrument,
+                                                                  l=lo_en.value,
+                                                                  u=hi_en.value)
+
+                    # Make the command to create the image
+                    cmds.append(evtool_cmd.format(d=dest_dir,
+                                                  e=evt_symlink_name,
+                                                  i=im_name,
+                                                  l=lo_en.value,
+                                                  u=hi_en.value,
+                                                  rb=re_bin,
+                                                  xs=x_size,
+                                                  ys=y_size,
+                                                  c=centre_pos))
+
+                    # Add the final full output path for the image to the final_paths list
+                    final_paths.append(os.path.join(final_dest_dir, im_name))
+                    # And any necessary extra information for the class instantiation
+                    extra_info.append({"lo_en": lo_en,
+                                       "hi_en": hi_en,
+                                       "obs_id": cur_ev.obs_id,
+                                       "instrument": cur_ev.instrument,
+                                       "telescope": er_miss})
+
+            else:
+                # We try to retrieve the combined image we've been asked to make, and
+                #  if an exception is raised, we know we will have to generate it.
+                try:
+                    im_exists = source.get_combined_images(lo_en=lo_en,
+                                                           hi_en=hi_en,
+                                                           telescope=er_miss)
+                    # If we get here, then the image already exists, and we can move
+                    #  to the next source
+                    continue
+                except NoProductAvailableError:
+                    pass
+
+                # For a combined image, we need a combined event list. They should
+                #  have already been generated by the call to 'evtool_combine_evts'
+                #  in the first part of this function
+                cur_comb_ev = source.get_products("combined_events", telescope=er_miss)[0]
+                # Determine image centers and boundaries using an internal function
+                re_bin, x_size, y_size, centre_pos = _img_params_from_evtlist(cur_comb_ev)
+
+                # Now we set up the final output directory for the output COMBINED
+                #  image to be generated
+                final_dest_dir = os.path.join(OUTPUT, er_miss, 'combined')
+
+                # Generate the random identifier for the working directory
                 rand_ident = randint(0, 100_000_000)
+                dest_dir = os.path.join(final_dest_dir,
+                                        "temp_evtool_{}".format(rand_ident))
+                # Make the working directory
+                os.makedirs(dest_dir, exist_ok=True)
 
-            dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
-            # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
+                # eSASS command line tools can have issues with overlong input
+                #  file paths (see closed issue #1400). So we set up a symlink
+                #  to the combined event list in the working directory
+                comb_evt_symlink_name = os.path.basename(cur_comb_ev.path)
+                os.symlink(cur_comb_ev.path, os.path.join(dest_dir, comb_evt_symlink_name))
 
-            os.mkdir(dest_dir)
+                # Set up the name of the output combined image file
+                comb_im_name = "{r}_{l}-{u}keVimg.fits".format(r=rand_ident,
+                                                               l=lo_en.value,
+                                                               u=hi_en.value)
 
-            im = "{r}_{l}-{u}keVimg.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
+                # Make the command to create the combined image
+                cmds.append(evtool_cmd.format(d=dest_dir,
+                                              e=comb_evt_symlink_name,
+                                              i=comb_im_name,
+                                              l=lo_en.value,
+                                              u=hi_en.value,
+                                              rb=re_bin,
+                                              xs=x_size,
+                                              ys=y_size,
+                                              c=centre_pos))
 
-            cmds.append("cd {d}; evtool eventfiles={e} outfile={i} image=yes emin={l} emax={u} events=no "
-                        "size='{xs} {ys}' rebin={rb} center_position='{c}'; mv * ../; cd ..; "
-                        "rm -r {d}".format(d=dest_dir, e=evt_list.path, i=im, l=lo_en.value, u=hi_en.value, rb=re_bin,
-                                        xs=x_size, ys=y_size, c=centre_pos))
-            # This is the products final resting place, if it exists at the end of this command
-            final_paths.append(os.path.join(final_dest_dir, im))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                               "telescope": "erosita"})
+                # Add the full path to the output combined image to the final_paths list
+                final_paths.append(os.path.join(final_dest_dir, comb_im_name))
+                # Then fill in the extra_info
+                extra_info.append({"lo_en": lo_en,
+                                   "hi_en": hi_en,
+                                   "obs_id": 'combined',
+                                   "instrument": 'combined',
+                                   "telescope": er_miss})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -297,8 +346,6 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="image"))
 
-    # I only return num_cores here, so it has a reason to be passed to this function, really
-    # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
@@ -321,61 +368,32 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress bar.
     """
-    # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
-    #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
-    #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
-    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA exposure maps cannot be generated.")
 
-    # TODO make sure that the same exposure map is added as a product to every source it covers
-    stack = False  # This tells the esass_call routine that this command won't be part of a stack
-    execute = True  # This should be executed immediately
-
-    # This function supports passing both individual sources and sets of sources
-    if isinstance(sources, (BaseSource, NullSource)):
-        sources = [sources]
-
-    # Checking user's choice of energy limit parameters
-    if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
-        raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
-                        "that can be converted to keV.")
-    
-    # Have to make sure that the energy bounds are in units that can be converted to keV (which is what evtool
-    #  expects for these arguments).
-    elif not lo_en.unit.is_equivalent('eV') or not hi_en.unit.is_equivalent('eV'):
-        raise UnitConversionError("The lo_en and hi_en arguments must be astropy quantities in units "
-                                  "that can be converted to keV.")
-
-    # Checking that the upper energy limit is not below the lower energy limit
-    elif hi_en <= lo_en:
-        raise ValueError("The hi_en argument must be larger than the lo_en argument.")
-    
-    # Converting to the right unit
-    else:
-        lo_en = lo_en.to('keV')
-        hi_en = hi_en.to('keV')
-
-    # Checking user's lo_en and hi_en inputs are in the valid energy range for eROSITA
-    if (lo_en < Quantity(200, 'eV') or lo_en > Quantity(10000, 'eV')) or \
-        (hi_en < Quantity(200, 'eV') or hi_en > Quantity(10000, 'eV')):
-        raise ValueError("The lo_en and hi_en value must be between 0.2 keV and 10 keV.")
-
-    # To generate an exposure map one must have a reference image. 
-    # If they do not already exist, these commands should generate them.
-    sources = evtool_image(sources, lo_en, hi_en, combine_obs=combine_obs)
-
-    expmap_cmd = ("cd {d}; expmap inputdatasets={e} templateimage={im} emin={l} emax={u} mergedmaps={em} "
-                  "withweights=yes withdetmaps=yes; "
-                  "export HEADASNOQUERY=; export HEADASPROMPT=/dev/null; fthedit {em} REFYCRVL delete; "
-                  "mv * ../; cd ..; rm -r {d}")
-
+    # To generate exposure maps, we need reference images, so we'll call the XGA
+    #  function that generates from for eROSITA.
+    # This has an added benefit, as evtool_image performs the validity checks on
+    #  input parameters that this function would have required as well.
+    sources = evtool_image(sources, lo_en, hi_en, combine_obs, num_cores)
     # This is necessary because the decorator will reduce a one element list of source objects to a single
     # source object. Useful for the user, not so much here where the code expects an iterable.
     if not isinstance(sources, (list, BaseSample)):
         sources = [sources]
+
+    stack = False  # This tells the esass_call routine that this command won't be part of a stack
+    execute = True  # This should be executed immediately
+
+    # This is the template for the evtool command that will be run to make new images
+    # evtool_cmd = "cd {d}; evtool eventfiles={e} outfile={i} image=yes " \
+    #              "emin={l} emax={u} events=no size='{xs} {ys}' rebin={rb} " \
+    #              "center_position='{c}'; mv * ../; cd ..; rm -r {d}"
+
+    # This is the template for the expmap command that will be
+    #  run to make new exposure maps
+    expmap_cmd = "cd {d}; expmap inputdatasets={e} templateimage={im} " \
+                 "emin={l} emax={u} mergedmaps={em} withweights=yes " \
+                 "withdetmaps=yes; export HEADASNOQUERY=; " \
+                 "export HEADASPROMPT=/dev/null; fthedit {em} " \
+                 "REFYCRVL delete; mv * ../; cd ..; rm -r {d}"
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
@@ -384,124 +402,193 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     sources_extras = []
     sources_types = []
     for source in sources:
+        source: BaseSource
         cmds = []
         final_paths = []
         extra_info = []
 
         # By this point we know that at least one of the sources has eROSITA data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
         #  bugs occuring in the esass_call wrapper
-        if 'erosita' not in source.telescopes:
+        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
             # This contains any other information that will be needed to instantiate the class
             # once the eSASS cmd has run
             sources_extras.append(np.array(extra_info))
             sources_types.append(np.full(sources_cmds[-1].shape, fill_value="expmap"))
-            
-            # then we can continue with the rest of the sources
+
+            # We can go to the next source
             continue
-        
-        # Define this variable for each source no it doesn't get overwritten with the wrong value
-        # later in the loop
-        use_combine_obs = combine_obs
-        
-        # if the user has set combine_obs to True and there is only one observation, then we 
-        # use the combine_obs = False functionality instead
-        if use_combine_obs and len(source.obs_ids['erosita']) == 1:
-            use_combine_obs = False
-        
-        if not use_combine_obs:
-            # Check which event lists are associated with each individual source
-            for pack in source.get_products("events",  telescope='erosita', just_obj=False):
-                obs_id = pack[1]
-                inst = pack[2]
-                # ASSUMPTION4 new output directory structure
-                if not os.path.exists(OUTPUT + 'erosita/' + obs_id):
-                    os.mkdir(OUTPUT + 'erosita/' + obs_id)
 
-                en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-                exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False,
-                                                                telescope='erosita')
-                        if en_id in match]
-
-                if len(exists) == 1 and exists[0][-1].usable:
-                    continue
-                # Generating an exposure map requires a reference image.
-                # ASSUMPTION5 source.get_products has a telescope parameter
-                ref_im = [match for match in source.get_products("image", obs_id, inst, just_obj=False,
-                                                                telescope='erosita')
-                        if en_id in match][0][-1]
-                # Set up the paths and names of files
-                evt_list = pack[-1]
-                # ASSUMPTION4 new output directory structure
-                dest_dir = OUTPUT + "erosita/" + "{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, 
-                                                                                    u=hi_en.value, n=source.name)
-                exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
-
-                # If something got interrupted and the temp directory still exists, this will remove it
-                if os.path.exists(dest_dir):
-                    rmtree(dest_dir)
-
-                os.makedirs(dest_dir)
-                # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
-                #  terminal, which causes 'device not available' errors
-                # withweights=yes will calculate the effective on axis exposure
-                # withdetmaps=yes will exclude bad pixels when calculating exposure
-                cmds.append(expmap_cmd.format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
-                                                                u=hi_en.value, em=exp_map, d=dest_dir))
-
-                # This is the products final resting place, if it exists at the end of this command
-                # ASSUMPTION4 new output directory structure
-                final_paths.append(os.path.join(OUTPUT, "erosita", obs_id, exp_map))
-                extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                                "telescope": "erosita"})
-        else:
-            # Checking if a combined event list has be made already
-            try:
-                exists = source.get_combined_expmaps(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
-            except NoProductAvailableError:
-                exists = []
-
-            if isinstance(exists, BaseProduct) and exists.usable:
+        for er_miss in ['erosita', 'erass']:
+            # Skip this iteration if the current skew of eROSITA isn't associated
+            #  with the current source
+            if er_miss not in source.telescopes:
                 continue
-            
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            # getting Eventlist product
-            evt_list = source.get_products("combined_events", just_obj=True, telescope="erosita")[0]
-            # defining values needed for esass expmap command
-            obs_id = evt_list.obs_id
-            inst = evt_list.instrument
-            ref_im = source.get_combined_images(lo_en=lo_en, hi_en=hi_en, telescope='erosita')
 
-            # The files produced by this function will now be stored in the combined directory.
-            final_dest_dir = OUTPUT + "erosita/combined/"
-            rand_ident = randint(0, 100_000_000)
-            # Makes absolutely sure that the random integer hasn't already been used
-            while len([f for f in os.listdir(final_dest_dir)
-                    if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
+            # Define this variable for each iteration no it doesn't get overwritten with the wrong value
+            # later in the loop
+            use_combine_obs = combine_obs
+
+            # if the user has set combine_obs to True and there is only one observation, then we
+            # use the combine_obs = False functionality instead
+            if use_combine_obs and len(source.obs_ids[er_miss]) == 1:
+                use_combine_obs = False
+
+            if not use_combine_obs:
+                # Fetch the individual skytile event lists
+                rel_skytile_evts = source.get_products("events", telescope=er_miss)
+
+                # Iterating through the event lists of separate skytiles, as we
+                #  are making one image per skytile in this case
+                for cur_ev in rel_skytile_evts:
+                    # We try to retrieve the exposure map we've been told to make
+                    #  from the source object, if an exception occurs, then it
+                    #  already exists
+                    try:
+                        ex_exists = source.get_expmaps(cur_ev.obs_id,
+                                                       cur_ev.instrument,
+                                                       lo_en,
+                                                       hi_en,
+                                                       er_miss,
+                                                       )
+                        # If we get here, then the exposure map already
+                        #  exists, and we can move to the next event list
+                        continue
+                    except NoProductAvailableError:
+                        # If an exception was raised, then we just keep going, as
+                        #  an exposure map needs to be generated for this event list in
+                        #  the specified energy band
+                        pass
+
+                    # Generating an exposure map requires a reference image, so we
+                    #  retrieve the image that matches the current ObsID, instrument,
+                    #  and energy range.
+                    # We know it exists because we called the image generation routine
+                    #  at the beginning of this function
+                    cur_ref_im = source.get_images(cur_ev.obs_id,
+                                                   cur_ev.instrument,
+                                                   lo_en,
+                                                   hi_en,
+                                                   telescope='erosita')[0]
+
+                    # Now we set up the final output directory for the expmap to be
+                    #  generated, as well as the temporary working directory (with
+                    #  a random identifier in the name to avoid collisions)
+                    final_dest_dir = os.path.join(OUTPUT, er_miss, cur_ev.obs_id)
+
+                    # Generate the random identifier for the working directory
+                    rand_ident = randint(0, 100_000_000)
+                    dest_dir = os.path.join(final_dest_dir,
+                                            "temp_expmap_{}".format(rand_ident))
+                    # Make the working directory
+                    os.makedirs(dest_dir, exist_ok=True)
+
+                    # eSASS command line tools can have issues with overlong input
+                    #  file paths (see closed issue #1400). So we set up a symlink
+                    #  to the event list in the working directory
+                    evt_symlink_name = os.path.basename(cur_ev.path)
+                    os.symlink(cur_ev.path, os.path.join(dest_dir, evt_symlink_name))
+
+                    # We also make a symlink to the reference image, for the
+                    #  same reasons as the event list
+                    ref_im_symlink_name = os.path.basename(cur_ref_im.path)
+                    os.symlink(cur_ref_im.path, os.path.join(dest_dir,
+                                                             ref_im_symlink_name))
+
+                    # The name of the output expmap file
+                    ex_name = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=cur_ev.obs_id,
+                                                                     i=cur_ev.instrument,
+                                                                     l=lo_en.value,
+                                                                     u=hi_en.value)
+
+                    # Make the command to create the expmap
+                    cmds.append(expmap_cmd.format(e=evt_symlink_name,
+                                                  im=ref_im_symlink_name,
+                                                  l=lo_en.value,
+                                                  u=hi_en.value,
+                                                  em=ex_name,
+                                                  d=dest_dir))
+
+                    # Add the final full output path for the expmap to
+                    #  the final_paths list
+                    final_paths.append(os.path.join(final_dest_dir, ex_name))
+                    # And any necessary extra information for the class instantiation
+                    extra_info.append({"lo_en": lo_en,
+                                       "hi_en": hi_en,
+                                       "obs_id": cur_ev.obs_id,
+                                       "instrument": cur_ev.instrument,
+                                       "telescope": er_miss})
+
+            else:
+                # We try to retrieve the combined exposure map we've been asked to
+                #  make, and if an exception is raised, we know we will
+                #  have to generate it.
+                try:
+                    ex_exists = source.get_combined_expmaps(lo_en, hi_en, er_miss)
+                    # If we get here, then the exposure map already exists, and
+                    #  we can move to the next source
+                    continue
+                except NoProductAvailableError:
+                    pass
+
+                # For a combined exposure map, we need a combined event list. They should
+                #  have already been generated by the call to 'evtool_combine_evts'
+                #  in the first part of this function
+                cur_comb_ev = source.get_products("combined_events",
+                                                  telescope=er_miss)[0]
+
+                # We need a combined image as a reference to make a new exposure map
+                cur_comb_ref_im = source.get_combined_images(lo_en,
+                                                             hi_en,
+                                                             telescope='erosita')[0]
+
+                # Now we set up the final output directory for the output COMBINED
+                #  image to be generated
+                final_dest_dir = os.path.join(OUTPUT, er_miss, 'combined')
+
+                # Generate the random identifier for the working directory
                 rand_ident = randint(0, 100_000_000)
-            
-            dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
-            # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
+                dest_dir = os.path.join(final_dest_dir,
+                                        "temp_expmap_{}".format(rand_ident))
+                # Make the working directory
+                os.makedirs(dest_dir, exist_ok=True)
 
-            os.mkdir(dest_dir)
+                # eSASS command line tools can have issues with overlong input
+                #  file paths (see closed issue #1400). So we set up a symlink
+                #  to the combined event list in the working directory
+                comb_evt_symlink_name = os.path.basename(cur_comb_ev.path)
+                os.symlink(cur_comb_ev.path, os.path.join(dest_dir, comb_evt_symlink_name))
 
-            exp_map = "{r}_{l}-{u}keVexpmap.fits".format(r=rand_ident, l=lo_en.value, u=hi_en.value)
-            # The HEASoft environment variables set here ensure that fthedit doesn't try to access the
-            #  terminal, which causes 'device not available' errors
-            cmds.append(expmap_cmd.format(e=evt_list.path, im=ref_im.path, l=lo_en.value,
-                                                            u=hi_en.value, em=exp_map, d=dest_dir))
+                # Also make a symlink for the combined reference image
+                comb_ref_im_symlink_name = os.path.basename(cur_comb_ref_im.path)
+                os.symlink(cur_comb_ref_im.path, os.path.join(dest_dir,
+                                                              comb_ref_im_symlink_name))
 
-            # This is the products final resting place, if it exists at the end of this command
-            # ASSUMPTION4 new output directory structure
-            final_paths.append(os.path.join(final_dest_dir, exp_map))
-            extra_info.append({"lo_en": lo_en, "hi_en": hi_en, "obs_id": obs_id, "instrument": inst,
-                            "telescope": "erosita"})
+                # Set up the name of the output combined image file
+                comb_ex_name = "{r}_{l}-{u}keVexpmap.fits".format(r=rand_ident,
+                                                                  l=lo_en.value,
+                                                                  u=hi_en.value)
 
+                # Make the command to create the ned combined expmap
+                cmds.append(expmap_cmd.format(e=comb_evt_symlink_name,
+                                              im=comb_ref_im_symlink_name,
+                                              l=lo_en.value,
+                                              u=hi_en.value,
+                                              em=comb_ex_name,
+                                              d=dest_dir))
+
+                # Add the full path to the output combined exposure map to
+                #  the final_paths list
+                final_paths.append(os.path.join(final_dest_dir, comb_ex_name))
+                # Then fill in the extra_info
+                extra_info.append({"lo_en": lo_en,
+                                   "hi_en": hi_en,
+                                   "obs_id": 'combined',
+                                   "instrument": 'combined',
+                                   "telescope": er_miss})
 
         sources_cmds.append(np.array(cmds))
         sources_paths.append(np.array(final_paths))
@@ -510,21 +597,23 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
         sources_extras.append(np.array(extra_info))
         sources_types.append(np.full(sources_cmds[-1].shape, fill_value="expmap"))
 
-    stack = False  # This tells the esass_call routine that this command won't be part of a stack
-    execute = True  # This should be executed immediately
-    # I only return num_cores here, so it has a reason to be passed to this function, really
-    # it could just be picked up in the decorator.
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
 
-def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str, 
-                      lo_en: Quantity = Quantity(0.2, 'keV'), hi_en: Quantity = Quantity(10, 'keV'),
+def combine_phot_prod(sources: Union[BaseSource, BaseSample],
+                      to_combine: str,
+                      lo_en: Quantity = Quantity(0.2, 'keV'),
+                      hi_en: Quantity = Quantity(10, 'keV'),
                       num_cores: int = NUM_CORES,
                       disable_progress: bool = False):
     """
-    A convenient Python wrapper for the eSASS evtool and expmap commands. Images or exposure maps
-    will be generated from all Obs IDs associated with the source, combined together (duplicate
-    events are removed).
+    A convenient Python wrapper for the eSASS evtool and expmap commands. Combined
+    images or exposure maps will be generated from all skytiles associated with the
+    source (duplicate events are removed).
+
+    This only exists as an analogy to XGA-XMM's 'emosaic' function, you could
+    just as easily use xga.generate.esass.phot.evtool_image/expmap directly, with
+    'combine_obs=True' as an argument.
 
     :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources
     :param str to_combine: The data type to produce, can be either image or expmap.
@@ -535,29 +624,23 @@ def combine_phot_prod(sources: Union[BaseSource, BaseSample], to_combine: str,
     :param bool disable_progress: Setting this to true will turn off the eSASS generation progress
         bar.
     """
-    # We check to see whether there is an eROSITA entry in the 'telescopes' property.
-    # If sources is a Source object, then that property contains the telescopes associated with 
-    # that source, and if it is a Sample object then 'telescopes' contains the list of unique 
-    # telescopes that are associated with at least one member source.
-    # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the "
-                                          "source/sample, as such eROSITA"
-                                          "images or exposure maps cannot be generated.")
-    
     if to_combine not in ["image", "expmap"]:
-        raise ValueError("The only valid choices for to_combine are image and expmap.")
-    # Don't do much value checking in this module, but this one is so fundamental that I will do it
-    elif lo_en > hi_en:
-        raise ValueError("lo_en cannot be greater than hi_en")
+        raise ValueError("The 'to_combine' argument accepts either 'image' or "
+                         "'expmap' as a value.")
 
-    # To make a mosaic we need to have the individual products in the first place
     if to_combine == "image":
-        sources = evtool_image(sources, lo_en, hi_en, combine_obs=True, 
-                               disable_progress=disable_progress, num_cores=num_cores)
+        evtool_image(sources,
+                     lo_en,
+                     hi_en,
+                     combine_obs=True,
+                     disable_progress=disable_progress,
+                     num_cores=num_cores)
     elif to_combine == "expmap":
-        sources = expmap(sources, lo_en, hi_en, combine_obs=True, 
-                         disable_progress=disable_progress, num_cores=num_cores)
+        expmap(sources,
+               lo_en,
+               hi_en,
+               combine_obs=True,
+               disable_progress=disable_progress,
+               num_cores=num_cores)
 
     

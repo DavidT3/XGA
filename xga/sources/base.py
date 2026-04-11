@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:57. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 29/01/2026, 14:51. Copyright (c) The Contributors
 
 import gc
 import os
@@ -386,8 +386,8 @@ class BaseSource:
                     move(OUTPUT + '/' + oi_cand, OUTPUT + 'xmm/{}'.format(oi_cand))
 
         # This part of the init sets up the directory structure in the output directory specified in the
-        #  configuration file - some of this was in xga.utils in a past version of XGA, and a lot of this is now
-        #  more resilient to things like inventory files being deleted (though they will hopefully be replaced soon)
+        #  configuration file. Some of this was in xga.utils in a past version of XGA, and a lot of this is now
+        #  more resilient to things like inventory files being deleted
         for tel in self.obs_ids:
             # By iterating through self.obs_ids we can create the directories only for those telescopes/ObsIDs that
             #  are relevant to the current source.
@@ -398,36 +398,34 @@ class BaseSource:
             #  about them - largely because some of the informative file names I was using were longer than
             #  256 characters which my OS does not support
             for oi in self.obs_ids[tel]:
-                if not os.path.exists(cur_pth + '/' + oi):
-                    os.makedirs(cur_pth + '/' + oi)
+                # Make a directory for the current ObsID, if it doesn't already exist
+                os.makedirs(os.path.join(cur_pth, oi), exist_ok=True)
+
                 # We also make an inventory file for each ObsID inventory, if we can't find a pre-existing one
                 if not os.path.exists(cur_pth + '/{}/inventory.csv'.format(oi)):
                     with open(cur_pth + '/{}/inventory.csv'.format(oi), 'w') as inven:
                         inven.writelines(['file_name,obs_id,inst,info_key,src_name,type'])
 
-            # Now we follow the same process but for the profiles, combined, regions, and XSPEC directories
-            if not os.path.exists(cur_pth + 'profiles/{}'.format(self.name)):
-                os.makedirs(cur_pth + 'profiles/{}'.format(self.name))
+            # Now we follow the same process but for the profiles, and their inventory
+            os.makedirs(os.path.join(cur_pth, 'profiles', self.name), exist_ok=True)
             if not os.path.exists(cur_pth + "profiles/{}/inventory.csv".format(self.name)):
                 with open(cur_pth + "/profiles/{}/inventory.csv".format(self.name), 'w') as inven:
                     inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
-            # There is currently no inventory file for the XSPEC directory
-            if not os.path.exists(cur_pth + 'XSPEC/'):
-                os.makedirs(cur_pth + 'XSPEC/')
+            # The XSPEC directory (there is currently no inventory file)
+            os.makedirs(os.path.join(cur_pth, 'XSPEC'), exist_ok=True)
 
-            if not os.path.exists(cur_pth + 'combined/'):
-                os.makedirs(cur_pth + 'combined/')
+            # The combined ObsID directory (does have an inventory)
+            os.makedirs(os.path.join(cur_pth, 'combined'), exist_ok=True)
             # And create an inventory file for that directory
             if not os.path.exists(cur_pth + "/combined/inventory.csv"):
                 with open(cur_pth + "/combined/inventory.csv", 'w') as inven:
                     inven.writelines(["file_name,obs_ids,insts,info_key,src_name,type"])
 
-            if not os.path.exists(cur_pth + 'regions/'):
-                os.makedirs(cur_pth + 'regions/')
+            # The custom regions file directory
+            os.makedirs(os.path.join(cur_pth, 'regions', self.name), exist_ok=True)
             # We now create a directory for custom region files for the source to be stored in
             if not os.path.exists(cur_pth + "/regions/{0}/{0}_custom.reg".format(self.name)):
-                os.makedirs(cur_pth + "/regions/{}".format(self.name))
                 # And a start to the custom file itself, with white (custom source) as the default colour
                 with open(cur_pth + "/regions/{0}/{0}_custom.reg".format(self.name), 'w') as reggo:
                     reggo.write("global color=white\n")
@@ -1306,6 +1304,9 @@ class BaseSource:
                 inst = 'combined'
 
             src_name = row['src_name']
+            # Spectral files are named with '+' replaced with 'x', as having the plus
+            #  symbol in the same can be misinterpreted by some XMM-SAS tools
+            no_plus_src_name = src_name.replace('+', 'x')
 
             # we will take the info key from the filename, instead of the actual info key in the
             # inventory. This is because annular spectrum need to be read in, and their info key
@@ -1358,9 +1359,9 @@ class BaseSource:
             if combined_obs:
                 indent_no = row['file_name'].split('_')[0]
                 # The info key actually needs to be used here
-                prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(src_name) + '_' + info_key
+                prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(no_plus_src_name) + '_' + info_key
             else:
-                prod_gen_path = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_' + info_key
+                prod_gen_path = cur_d + obs_id + f'_{inst}_' +  str(no_plus_src_name) + '_' + info_key
 
             spec = prod_gen_path + '_spec.fits'
             arf = prod_gen_path + '.arf'
@@ -1375,7 +1376,7 @@ class BaseSource:
                 if os.path.exists(prod_gen_path + '.rmf'):
                     rmf = prod_gen_path + '.rmf'
                 else:
-                    rmf = cur_d + obs_id + '_' + inst + '_' +  str(src_name) + '_universal.rmf'
+                    rmf = cur_d + obs_id + '_' + inst + '_' +  str(no_plus_src_name) + '_universal.rmf'
                 back_rmf = ''
                 back_arf = ''
 
@@ -3773,8 +3774,14 @@ class BaseSource:
     def get_combined_lightcurves(self, outer_radius: Union[str, Quantity] = None,
                                  inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
                                  hi_en: Quantity = None, time_bin_size: Quantity = None,
-                                 pattern: Union[dict, str] = "default", telescope: str = None,
-                                 inst: str = None) \
+                                 pattern: Union[dict, str] = "default", telescope: str = None) -> Union[LightCurve, List[LightCurve]]:
+        raise NoProductAvailableError("The corrected version of get_combined_lightcurves is not yet available.")
+
+    def get_aggregate_lightcurves(self, outer_radius: Union[str, Quantity] = None,
+                                  inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
+                                  hi_en: Quantity = None, time_bin_size: Quantity = None,
+                                  pattern: Union[dict, str] = "default", telescope: str = None,
+                                  inst: str = None) \
             -> Union[AggregateLightCurve, List[AggregateLightCurve]]:
         """
         A method to retrieve XGA AggregateLightCurve objects (i.e. lightcurves for this object that were generated at

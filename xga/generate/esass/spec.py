@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 21:11. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 17:06. Copyright (c) The Contributors
 
 import os
 from copy import deepcopy, copy
@@ -10,7 +10,7 @@ from warnings import warn
 import numpy as np
 from astropy.units import Quantity
 
-from ._common import EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN
+from ._common import EROSITA_EXTMAP_LO_EN, EROSITA_EXTMAP_HI_EN, T_STEP_POINT, T_STEP_SURVEY
 from .misc import evtool_combine_evts
 from .phot import evtool_image
 from .run import esass_call
@@ -112,18 +112,33 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             try:
                 if use_combine_obs and (len(source.obs_ids[cur_evt_list.telescope]) > 1):
-                    check_sp = source.get_combined_spectra(outer_radii[s_ind], inst, inner_radii[s_ind], group_spec,
-                                                           min_counts, min_sn, telescope=cur_evt_list.telescope)
+                    check_sp = source.get_combined_spectra(outer_radii[s_ind],
+                                                           inst,
+                                                           inner_radii[s_ind],
+                                                           group_spec,
+                                                           min_counts,
+                                                           min_sn,
+                                                           telescope=cur_evt_list.telescope)
 
                 else:
                     # Got to check if this spectrum already exists
-                    check_sp = source.get_spectra(outer_radii[s_ind], cur_evt_list.obs_id, inst, inner_radii[s_ind],
+                    check_sp = source.get_spectra(outer_radii[s_ind],
+                                                  cur_evt_list.obs_id,
+                                                  inst,
+                                                  inner_radii[s_ind],
                                                   group_spec,
-                                                  min_counts, min_sn, telescope=cur_evt_list.telescope)
+                                                  min_counts,
+                                                  min_sn,
+                                                  telescope=cur_evt_list.telescope)
                 exists = True
 
             except NoProductAvailableError:
                 exists = False
+
+            print(exists)
+            print(use_combine_obs)
+            print(inst)
+            print(cur_evt_list.telescope)
 
             if exists and check_sp.usable and not force_gen:
                 continue
@@ -152,7 +167,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             #  directory name - ensures there won't be any clashes
             rand_ident = randint(0, 100_000_000)
             # This is the name of the working directory for the generation process
-            ddir_name = "temp_srctool_{i}_{r}".format(i=inst, r=randint(0, 100_000_000))
+            ddir_name = "temp_srctool_{i}_{r}".format(i=inst, r=rand_ident)
             # And the full path
             dest_dir = os.path.join(final_dest_dir, ddir_name)
 
@@ -172,7 +187,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                            cur_evt_list.obs_id,
                                            interloper_regions=interloper_regions,
                                            central_coord=source.default_coord,
-                                           rand_ident=rand_ident)
+                                           rand_ident=rand_ident,
+                                           out_root_path=final_dest_dir)
             b_reg = get_annular_esass_region(source,
                                              bck_inn_rad,
                                              bck_out_rad,
@@ -180,7 +196,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                              interloper_regions=back_inter_reg,
                                              central_coord=source.default_coord,
                                              bkg_reg=True,
-                                             rand_ident=rand_ident)
+                                             rand_ident=rand_ident,
+                                             out_root_path=final_dest_dir)
 
             # Set up a string describing the central coordinate in addition to the regions
             coord_str = "icrs;{ra},{dec}".format(ra=source.default_coord[0].value,
@@ -380,7 +397,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Adds clean up commands to move all generated files and remove the temporary directory
             cmd_str += "; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
             # If temporary region files were made, they will be here
-            if os.path.exists(final_dest_dir + '/temp_regs_{i}'.format(i=rand_ident)):
+            if os.path.exists(os.path.join(final_dest_dir, 'temp_regs_{i}'.format(i=rand_ident))):
                 # Removing this directory
                 cmd_str += ";rm -r temp_regs_{i}".format(i=rand_ident)
 
@@ -420,8 +437,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     # TODO This will change in a future release, so that the user can control it - see issue #1113. The definitions
     #  are up the top of the function as a reminder
     # TODO allow user to chose tstep and xgrid
-    t_step_survey = 0.5
-    t_step_point = 100
+    t_step_survey = T_STEP_SURVEY
+    t_step_point = T_STEP_POINT
 
     # We check to see whether there is an eROSITA entry in the 'telescopes' property. If sources is a Source
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
@@ -440,7 +457,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     #  sure that combined event lists exist for each source
     if combine_obs:
         # This requires combined event lists - this function will generate them
-        evtool_combine_evts(sources)
+        evtool_combine_evts(sources, num_cores)
 
     # TODO edit region_setup to be telescope agnostic
     sources, inner_radii, outer_radii = region_setup(sources,
@@ -542,8 +559,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     sources_paths = []
     sources_extras = []
     sources_types = []
-    # TODO HAVE TO ITERATE THROUGH EROSITA AND ERASS
     for s_ind, source in enumerate(sources):
+
+        source: BaseSource
+        cmds = []
+        final_paths = []
+        extra_info = []
+
         # By this point we know that at least one of the sources has eROSITA data
         #  associated (we checked that at the beginning of this function).
         #  However, for those sources that don't, we still need to append the empty
@@ -561,18 +583,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Now we can continue with the rest of the sources
             continue
 
-        source: BaseSource
-        cmds = []
-        final_paths = []
-        extra_info = []
-
         for er_miss in ['erosita', 'erass']:
             # Skip this iteration if the current skew of eROSITA isn't associated
             #  with the current source
             if er_miss not in source.telescopes:
                 continue
 
-            # need to set this so the combine_obs variable doesn't get overwritten
+            # Need to set this so the combine_obs variable doesn't get overwritten
             use_combine_obs = combine_obs
             # if the user has set combine_obs to True and there is only one observation, then we
             # use the combine_obs = False functionality instead
@@ -630,8 +647,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                     final_paths += out_fin_paths
                     extra_info += out_ex_info
             else:
-                # In this case, the sky tiles are to be combined, so we grab the combined
-                #  event list
+                # In this case, the sky tiles are to be combined, so we grab
+                #  the combined event list
                 evt_list = source.get_products("combined_events", telescope=er_miss)[0]
                 # Mainly for code-completion purposes in IDE
                 evt_list: EventList

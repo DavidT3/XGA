@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/07/2024, 08:35. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:44. Copyright (c) The Contributors
 
 import os
 from random import randint
@@ -34,17 +34,18 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
     #  object, then that property contains the telescopes associated with that source, and if it is a Sample object
     #  then 'telescopes' contains the list of unique telescopes that are associated with at least one member source.
     # Clearly if eROSITA isn't associated at all, then continuing with this function would be pointless
-    if ((not isinstance(sources, list) and 'erosita' not in sources.telescopes) or
-            (isinstance(sources, list) and 'erosita' not in sources[0].telescopes)):
-        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such a "
-                                          "combined eROSITA event list cannot be generated.")
-    
-    stack = False  # This tells the esass_call routine that this command won't be part of a stack
-    execute = True  # This should be executed immediately
+    if ((not isinstance(sources, list) and (
+            'erosita' not in sources.telescopes and 'erass' not in sources.telescopes)) or
+            (isinstance(sources, list) and (
+                    'erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
+        raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
+                                          "eROSITA spectra cannot be generated.")
+
     # This function supports passing both individual sources and sets of sources
     if isinstance(sources, (BaseSource, NullSource)):
         sources = [sources]
-    
+
+    # Set up a template for the evtool command to be run
     evtool_cmd = 'cd {d}; evtool eventfiles="{evts}" outfile="{out}"; mv * ../; cd ..; rm -r {d}'
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
@@ -58,76 +59,94 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
         final_paths = []
         extra_info = []
         # By this point we know that at least one of the sources has erosita data associated (we checked that at the
-        #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to 
+        #  beginning of this function). We still need to append the empty cmds, paths, extra_info, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
-        #  bugs occuring in the esass_call wrapper
-        if 'erosita' not in source.telescopes:
+        #  bugs occurring in the esass_call wrapper
+        if 'erosita' not in source.telescopes and 'erass' not in source.telescopes:
             sources_cmds.append(np.array(cmds))
             sources_paths.append(np.array(final_paths))
-            # This contains any other information that will be needed to instantiate the class
-            # once the eSASS cmd has run
+            # This contains any other information that will be needed to
+            #  instantiate the Spectrum class once the eSASS cmd has run
             sources_extras.append(np.array(extra_info))
-            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="events"))
-            
-            # then we can continue with the rest of the sources
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
+
+            # Now we can continue with the rest of the sources
             continue
 
-        evt_list_paths = [match[-1].path for match in source.get_products("events", just_obj=False, telescope='erosita')]
-        # This gets passed onto the extra_info dict
-        obs_ids = [match[1] for match in source.get_products("events", just_obj=False, telescope='erosita')]
+        for er_miss in ['erosita', 'erass']:
+            # Skip this iteration if the current skew of eROSITA isn't associated
+            #  with the current source
+            if er_miss not in source.telescopes:
+                continue
 
-        # If only one event list is associated, then there is nothing to combine
-        if len(evt_list_paths) == 1:
-            sources_cmds.append(np.array([]))
-            sources_paths.append(np.array([]))
-            sources_extras.append(np.array([]))
-            sources_types.append(np.array([]))
-            continue
+            # Fetch the individual skytile event lists associated with the current
+            #  source - if there are more than one, we'll be combining them
+            rel_skytile_evts = source.get_products("events", telescope=er_miss)
 
-        # TODO if the user runs different samples with different search distances then more obs can
-        # be associated so I would need to check this
-        # Checking if the combined product already exists
-        # TODO existing combined event lists arent loaded into a source
-        exists = source.get_products("combined_events", just_obj=False, telescope='erosita')
+            # Then the ObsIDs (skytile IDs) - this gets passed onto the extra_info dict
+            evt_obs_ids = [cur_ev.obs_id for cur_ev in rel_skytile_evts]
 
-        if len(exists) == 1 and exists[0][-1].usable:
-            sources_cmds.append(np.array([]))
-            sources_paths.append(np.array([]))
-            sources_extras.append(np.array([]))
-            sources_types.append(np.array([]))
-            continue
+            # TODO if the user runs different samples with different search distances then more obs can
+            #  be associated so I would need to check this
+            # Checking if the combined events product already exists
+            comb_evt_exists = source.get_products("combined_events", telescope=er_miss)
 
-        # The files produced by this function will now be stored in the combined directory.
-        final_dest_dir = OUTPUT + "erosita/combined/"
-        rand_ident = randint(0, 100_000_000)
-        # Makes absolutely sure that the random integer hasn't already been used
-        while len([f for f in os.listdir(final_dest_dir)
-                   if str(rand_ident) in f.split(OUTPUT+"erosita/combined/")[-1]]) != 0:
+            # If only one skytile event list is associated, then there is nothing to
+            #  combine, or if there are multiple, but we already have a combined
+            #  event list, then there is nothing to do here.
+            if len(rel_skytile_evts) == 1 or (len(rel_skytile_evts) != 1 and
+                                              len(comb_evt_exists) == 1 and
+                                              comb_evt_exists[0].usable):
+                continue
+
+            # If we've gotten this far, then there is a command to be run, so we start
+            #  setting up the working and output directories.
+            # The combined event list files produced by this function will be
+            #  stored in the combined-ObsID directory once the process is complete.
+            final_dest_dir = os.path.join(OUTPUT, er_miss, 'combined')
+
+            # We're also going to need a temporary working directory and create a
+            #  random integer to add to the directory to avoid collisions
             rand_ident = randint(0, 100_000_000)
-        
-        dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
-        os.mkdir(dest_dir)
+            # Set up the path to the temporary working directory, and create it
+            dest_dir = os.path.join(final_dest_dir, "temp_evtool_{}".format(rand_ident))
+            os.makedirs(dest_dir, exist_ok=True)
 
-        # Combining all the names of the paths to input into the command
-        input_evts = ' '.join(evt_list_paths)
+            # eSASS command line tools (along with many others) can have issues with
+            #  overlong input file paths (see closed issue #1400). So we set up
+            #  symlinks to the event lists in the working directory
+            for cur_ev in rel_skytile_evts:
+                evt_symlink_name = os.path.basename(cur_ev.path)
+                os.symlink(cur_ev.path, os.path.join(dest_dir, evt_symlink_name))
 
-        # The name of the file used to contain all the ObsIDs that went into the combined event list. However
-        #  this caused problems when too many ObsIDs were present and the filename was longer than allowed. So
-        #  now I use the random identity I generated, and store the ObsID/instrument information in the inventory
-        #  file
-        outfile = "{os}_merged_events.fits".format(os=rand_ident)
+            # Combining all the symlinked skytile event list paths to make an
+            #  input for evtool
+            input_evts = ' '.join([os.path.basename(cur_ev.path)
+                                   for cur_ev in rel_skytile_evts])
 
-        sources_cmds.append(np.array([evtool_cmd.format(d=dest_dir, evts=input_evts, out=outfile)]))
-        sources_paths.append(np.array([os.path.join(final_dest_dir, outfile)]))
-        # This contains any other information that will be needed to instantiate the class
-        # once the eSASS cmd has run
-        # The 'combined' values for obs and inst here are crucial, they will tell the source object that the final
-        # product is assigned to that these are merged products - combinations of all available data
-        sources_extras.append(np.array([{"obs_id": "combined",
-                                         "instrument": "combined", 
-                                         "telescope": 'erosita',
-                                         "obs_ids": obs_ids}]))  
-        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
+            # Create the name of the final event list file - use the random integer
+            #  we've already set up to make the file name unique, as including all
+            #  skytile IDs can result in file names that are just too long
+            comb_evt_name = "{os}_merged_events.fits".format(os=rand_ident)
+
+            # Add the populated command string, and the expected output path for the
+            #  combined event list to the lists that are returned from this function
+            sources_cmds.append(np.array([evtool_cmd.format(d=dest_dir,
+                                                            evts=input_evts,
+                                                            out=comb_evt_name)]))
+            sources_paths.append(np.array([os.path.join(final_dest_dir,
+                                                        comb_evt_name)]))
+
+            # This contains any other information that will be needed to instantiate
+            #  the event list class once the eSASS cmd has run.
+            # The 'combined' values for obs and inst here are crucial, they will tell
+            #  the source object that the final product is assigned to that these
+            #  are merged products - combinations of all available data.
+            sources_extras.append(np.array([{"obs_id": "combined",
+                                             "instrument": "combined",
+                                             "telescope": er_miss,
+                                             "obs_ids": evt_obs_ids}]))
+            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
