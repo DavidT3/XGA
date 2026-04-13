@@ -9,8 +9,8 @@ from subprocess import Popen, PIPE
 
 from astropy.units import Quantity
 from daxa.archive import Archive
-from daxa.mission import XMMPointed, eRASS1DE
-from daxa.process.simple import full_process_xmm, full_process_erosita
+from daxa.mission import XMMPointed, eRASS1DE, Chandra
+from daxa.process.simple import full_process_xmm, full_process_erosita, full_process_chandra
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -54,7 +54,20 @@ def write_config(cwd, module):
         erosita_image = /this/is/optional/
         erosita_expmap = /this/is/optional/
         region_file = {cwd}/tests/test_data/src_regs/erosita/{{obs_id}}.reg
+        
+        [CHANDRA_FILES]
+        root_chandra_dir = {cwd}/tests/test_data/daxa_out/archives/xga_tests/processed_data/chandra/
+        clean_acis_evts = {{obs_id}}/events/obsid{{obs_id}}-instACIS-subexpE001-en-cleanevents.fits
+        attitude_file = {{obs_id}}/misc/obsid{{obs_id}}-instACIS-subexpE001-aspectsolution.fits
+        acis_badpix_file = {{obs_id}}/misc/obsid{{obs_id}}-instACIS-subexpE001-badpix.fits
+        acis_mask_file = {{obs_id}}/misc/obsid{{obs_id}}-instACIS-subexpE001-mask.fits
+        lo_en = ['0.5', '0.5', '1.2', 2.0, '0.2']
+        hi_en = ['7.0', '1.2, '2.0', '7.0', '0.4']
+        acis_image = {{obs_id}}/images/obsid{{obs_id}}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-image.fits
+        acis_expmap = {{obs_id}}/images/obsid{{obs_id}}-instACIS-subexpE001-en{lo_en}_{hi_en}keV-expmap.fits
+        region_file = {cwd}/tests/test_data/src_regs/chandra/{{obs_id}}.reg
         """
+
     elif module == 'daxa':
         config_content = f"""[DAXA_SETUP]
         daxa_save_path = {cwd}/tests/test_data/daxa_out
@@ -103,20 +116,24 @@ def obtain_test_data():
     import daxa
     from daxa import daxa_conf
 
-    print(daxa_conf)
-
     xm = XMMPointed()
     er = eRASS1DE()
+    # XGA currently only supports ACIS data, no sense fetching HRC as well
+    ch = Chandra(insts="ACIS")
 
     xm.filter_on_positions([[SRC_INFO['ra'], SRC_INFO['dec']], [SUPP_SRC_INFO['ra'], 
                              SUPP_SRC_INFO['dec']]])
     er.filter_on_positions([[SRC_INFO['ra'], SRC_INFO['dec']], [SUPP_SRC_INFO['ra'], 
                              SUPP_SRC_INFO['dec']]], search_distance=Quantity(3.6, 'deg'))
+    ch.filter_on_positions([[SRC_INFO['ra'], SRC_INFO['dec']], [SUPP_SRC_INFO['ra'],
+                             SUPP_SRC_INFO['dec']]])
 
-    arch = Archive('xga_tests', [xm, er])
+    arch = Archive('xga_tests', [xm, er, ch])
 
+    # TODO check that backend software for each is available
     full_process_erosita(arch)
     full_process_xmm(arch)
+    full_process_chandra(arch)
 
 
 def set_up_tests():
