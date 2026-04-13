@@ -17,14 +17,6 @@ ciao.spec module
    :undoc-members:
    :show-inheritance:
 
-ciao.lightcurve module
----------------
-
-.. automodule:: xga.generate.ciao.lightcurve
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 ciao.run module
 --------------
 

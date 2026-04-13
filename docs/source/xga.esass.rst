@@ -25,6 +25,14 @@ esass.lightcurve module
    :undoc-members:
    :show-inheritance:
 
+esass.misc module
+---------------
+
+.. automodule:: xga.generate.esass.misc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 esass.run module
 --------------
 

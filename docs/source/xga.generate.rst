@@ -11,6 +11,8 @@ generate
 
    xga.generate.ciao <xga.ciao.rst>
 
+   xga.generate.multitelescope <xga.multitelescope.rst>
+
 .. automodule:: xga.generate.sas
    :members:
    :undoc-members:
@@ -22,6 +24,11 @@ generate
    :show-inheritance:
 
 .. automodule:: xga.generate.ciao
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: xga.generate.multitelescope
    :members:
    :undoc-members:
    :show-inheritance:

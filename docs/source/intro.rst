@@ -66,7 +66,8 @@ product generatation and analysis will utilise all the X-ray telescopes that the
 Currently XGA supports interaction with:
 
 * **XMM** via Science Analysis System (SAS)
-* **eROSITA** via eROSITA Science Analysis Software System (eSASS) 
+* **eROSITA** via eROSITA Science Analysis Software System (eSASS)
+* **Chandra** via Chandra Interactive Analysis of Observations (CIAO)
 
 The long term aim is to support all X-ray telescope's data, if you are interested in helping integrate your favourite X-ray telescope please do get in contact. 
 To see full details of XGA treatment of different missions see the :doc:`multi` section.

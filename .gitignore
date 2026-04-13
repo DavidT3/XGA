@@ -13,3 +13,4 @@ xga_output
 /xga/__pycache__
 *.pyc
 xga/__pycache__/__init__.cpython-39.pyc
+claude_context/
