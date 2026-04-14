@@ -22,7 +22,7 @@ from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
 class BaseSample:
     """
     The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
-    interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
+    interesting X-ray sources easy. This in particular creates samples of BaseSource objects. It doesn't seem
     likely that users should need to declare one of these, they should use one of the general ExtendedSample or
     PointSample classes if they are doing exploratory analyses, or a more specific subclass like ClusterSample.
 
@@ -155,7 +155,7 @@ class BaseSample:
             raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
                                            " valid {t} data.".format(t='/'.join(nice_tels)))
 
-        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
         # HOWEVER - I only want this warning to appear in certain circumstances. For instance I wouldn't want it
         #  to be triggered here for a ClusterSample declaration that has called the super init (this method), as that
@@ -181,7 +181,7 @@ class BaseSample:
         Property getter for the list of source names in this sample.
 
         :return: List of source names.
-        :rtype: list
+        :rtype: ndarray
         """
         return np.array(self._names)
 
@@ -237,12 +237,13 @@ class BaseSample:
         return Quantity([s.nH for s in self._sources.values()])
 
     @property
-    def cosmo(self):
+    def cosmo(self) -> Cosmology:
         """
         Property getter for the cosmology defined at initialisation of the sample. This cosmology is what
         is used for all analyses performed on the sample.
 
         :return: The chosen cosmology.
+        :rtype: Cosmology
         """
         return self._cosmo
 
@@ -401,7 +402,7 @@ class BaseSample:
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.

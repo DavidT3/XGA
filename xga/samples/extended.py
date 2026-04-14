@@ -34,7 +34,7 @@ class ClusterSample(BaseSample):
     :param np.ndarray richness_err: Uncertainties on the optical richnesses of the clusters, optional.
     :param Quantity wl_mass: Weak lensing masses of the clusters, optional.
     :param Quantity wl_mass_err: Uncertainties on the weak lensing masses of the clusters, optional.
-    :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+    :param Quantity custom_region_radius: A custom analysis region radius/radii for these sources, optional.
     :param bool use_peak: Whether peak position should be found and used.
     :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
         from. Default is 0.5keV
@@ -46,12 +46,11 @@ class ClusterSample(BaseSample):
         radius for the background region. Default is 1.5.
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
-    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-        is hierarchical, simple may also be passed.
     :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
         certain fraction of a certain region is covered by an ObsID. Default is True.
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        Default is 0.3.
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
         is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
         case the brightest unmasked pixel within the source region will be selected.
@@ -96,7 +95,7 @@ class ClusterSample(BaseSample):
         :param np.ndarray richness_err: Uncertainties on the optical richnesses of the clusters, optional.
         :param Quantity wl_mass: Weak lensing masses of the clusters, optional.
         :param Quantity wl_mass_err: Uncertainties on the weak lensing masses of the clusters, optional.
-        :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
+        :param Quantity custom_region_radius: A custom analysis region radius/radii for these sources, optional.
         :param bool use_peak: Whether peak position should be found and used.
         :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak position
             from. Default is 0.5keV
@@ -108,12 +107,11 @@ class ClusterSample(BaseSample):
             radius for the background region. Default is 1.5.
         :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_fits: Whether existing fits should be loaded from disk.
-        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-            is hierarchical, simple may also be passed.
         :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
             certain fraction of a certain region is covered by an ObsID. Default is True.
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+            Default is 0.3.
         :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
             is 'hierarchical' (uses XGA's hierarchical clustering peak finder), 'simple' may also be passed in which
             case the brightest unmasked pixel within the source region will be selected.
@@ -134,8 +132,7 @@ class ClusterSample(BaseSample):
         """
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.generate.sas import evselect_image, eexpmap, emosaic
-        from ..generate.esass import evtool_image, expmap
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 
         # We do a quick check on the length of certain arguments (if they are not just a single value)
         if type(include_core_pnt_srcs) != bool and isinstance(include_core_pnt_srcs, (list, np.ndarray)):
@@ -152,18 +149,8 @@ class ClusterSample(BaseSample):
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
                          no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        if 'xmm' in self.telescopes:
-            # This part is super useful - it is much quicker to use the base sources to generate all
-            #  necessary ratemaps, as we can do it in parallel for the entire sample, rather than one at a time as
-            #  might be necessary for peak finding in the cluster init.
-            evselect_image(self, peak_lo_en, peak_hi_en)
-            eexpmap(self, peak_lo_en, peak_hi_en)
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
-
-        if 'erosita' in self.telescopes:
-            evtool_image(self, peak_lo_en, peak_hi_en)
-            expmap(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # Now that we've made those images the BaseSource objects aren't required anymore, we're about
         #  to define GalaxyClusters
@@ -285,11 +272,11 @@ class ClusterSample(BaseSample):
 
         self._names = final_names
 
-        # And again I ask XGA to generate the merged images and exposure maps, in case any sources have been
-        #  cleaned and had data removed
-        if clean_obs and 'xmm' in self.telescopes:
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        # And again I ask XGA to generate the individual-telescope combined images and exposure maps,
+        #  in case any sources have been cleaned and had data removed
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # Updates with new peaks
         if clean_obs and use_peak:
@@ -315,14 +302,16 @@ class ClusterSample(BaseSample):
             raise NoValidObservationsError("No Galaxy Clusters have been declared, none of the sample passed the "
                                            "cleaning steps.")
 
-        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
         if len(failed_peak_find) != 0:
@@ -334,52 +323,61 @@ class ClusterSample(BaseSample):
         self._check_source_warnings()
 
     @property
-    def r200_snr(self) -> np.ndarray:
+    def r200_snr(self) -> Dict[str, np.ndarray]:
         """
-        Fetches and returns the R200 signal to noises from the constituent sources.
+        Fetches and returns the R200 signal to noises from the constituent sources, for each telescope.
 
-        :return: The signal to noise ration calculated at the R200.
-        :rtype: np.ndarray
+        :return: A dictionary where the keys are telescope names and the values are numpy arrays of the
+            signal to noise ratio calculated at the R200.
+        :rtype: Dict[str, np.ndarray]
         """
-        snrs = []
-        for s in self:
-            try:
-                snrs.append(s.get_snr("r200", 'xmm'))
-            except ValueError:
-                snrs.append(None)
-        return np.array(snrs)
-
-    @property
-    def r500_snr(self) -> np.ndarray:
-        """
-        Fetches and returns the R500 signal to noises from the constituent sources.
-
-        :return: The signal to noise ration calculated at the R500.
-        :rtype: np.ndarray
-        """
-        snrs = []
-        for s in self:
-            try:
-                snrs.append(s.get_snr("r500", 'xmm'))
-            except ValueError:
-                snrs.append(None)
-        return np.array(snrs)
+        snr_dict = {tel: [] for tel in self.telescopes}
+        for tel in self.telescopes:
+            for s in self:
+                try:
+                    snr_dict[tel].append(s.get_snr("r200", tel))
+                except (ValueError, TelescopeNotAssociatedError, NotAssociatedError):
+                    snr_dict[tel].append(None)
+            snr_dict[tel] = np.array(snr_dict[tel])
+        return snr_dict
 
     @property
-    def r2500_snr(self) -> np.ndarray:
+    def r500_snr(self) -> Dict[str, np.ndarray]:
         """
-        Fetches and returns the R2500 signal to noises from the constituent sources.
+        Fetches and returns the R500 signal to noises from the constituent sources, for each telescope.
 
-        :return: The signal to noise ration calculated at the R2500.
-        :rtype: np.ndarray
+        :return: A dictionary where the keys are telescope names and the values are numpy arrays of the
+            signal to noise ratio calculated at the R500.
+        :rtype: Dict[str, np.ndarray]
         """
-        snrs = []
-        for s in self:
-            try:
-                snrs.append(s.get_snr("r2500", 'xmm'))
-            except ValueError:
-                snrs.append(None)
-        return np.array(snrs)
+        snr_dict = {tel: [] for tel in self.telescopes}
+        for tel in self.telescopes:
+            for s in self:
+                try:
+                    snr_dict[tel].append(s.get_snr("r500", tel))
+                except (ValueError, TelescopeNotAssociatedError, NotAssociatedError):
+                    snr_dict[tel].append(None)
+            snr_dict[tel] = np.array(snr_dict[tel])
+        return snr_dict
+
+    @property
+    def r2500_snr(self) -> Dict[str, np.ndarray]:
+        """
+        Fetches and returns the R2500 signal to noises from the constituent sources, for each telescope.
+
+        :return: A dictionary where the keys are telescope names and the values are numpy arrays of the
+            signal to noise ratio calculated at the R2500.
+        :rtype: Dict[str, np.ndarray]
+        """
+        snr_dict = {tel: [] for tel in self.telescopes}
+        for tel in self.telescopes:
+            for s in self:
+                try:
+                    snr_dict[tel].append(s.get_snr("r2500", tel))
+                except (ValueError, TelescopeNotAssociatedError, NotAssociatedError):
+                    snr_dict[tel].append(None)
+            snr_dict[tel] = np.array(snr_dict[tel])
+        return snr_dict
 
     @property
     def richness(self) -> Quantity:
@@ -601,7 +599,7 @@ class ClusterSample(BaseSample):
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
@@ -644,7 +642,7 @@ class ClusterSample(BaseSample):
             circular spectrum. You may also pass a quantity containing radius values, with one value for each
             source in this sample.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
