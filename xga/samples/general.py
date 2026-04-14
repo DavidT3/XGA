@@ -25,7 +25,7 @@ class ExtendedSample(BaseSample):
     :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
     :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
         then they will be constructed from the supplied coordinates.
-    :param Quantity custom_region_radius: Custom analysis region radius(ii) for these sources, optional. Either
+    :param Quantity custom_region_radius: Custom analysis region radius/radii for these sources, optional. Either
         pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
     :param bool use_peak: Whether peak positions should be found and used.
     :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
@@ -56,6 +56,7 @@ class ExtendedSample(BaseSample):
         certain fraction of a certain region is covered by an ObsID. Default is True.
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        Default is 0.3.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
@@ -104,6 +105,7 @@ class ExtendedSample(BaseSample):
             certain fraction of a certain region is covered by an ObsID. Default is True.
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+            Default is 0.3.
         """
         if custom_region_radius is not None and not isinstance(custom_region_radius, Quantity):
             raise TypeError("Please pass None or a quantity object for custom_region_radius, rather than an "
@@ -120,24 +122,14 @@ class ExtendedSample(BaseSample):
                              " then there must be one entry per object passed to this sample object.")
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.generate.sas import evselect_image, eexpmap, emosaic
-        from ..generate.esass import evtool_image, expmap
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
                          no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        # TODO This will need to be altered when I create a general image making function and exposure
-        #  map making function that support the different telescopes after checking which are available
-        if 'xmm' in self.telescopes:
-            evselect_image(self, peak_lo_en, peak_hi_en)
-            eexpmap(self, peak_lo_en, peak_hi_en)
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
-
-        if 'erosita' in self.telescopes:
-            evtool_image(self, peak_lo_en, peak_hi_en)
-            expmap(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # Remove the initial BaseSources that were declared
         del self._sources
@@ -193,11 +185,11 @@ class ExtendedSample(BaseSample):
                 dec_lb.update(1)
         self._names = final_names
 
-        if 'xmm' in self.telescopes:
-            # I've cleaned the observations, and its possible some of the data has been thrown away,
-            #  so I should regenerate the mosaic images/expmaps
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        # I've cleaned the observations, and its possible some of the data has been thrown away,
+        #  so I should regenerate the individual-telescope combined images/expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         # TODO this won't currently work for non-XMM telescopes
@@ -212,14 +204,16 @@ class ExtendedSample(BaseSample):
             raise NoValidObservationsError(
                 "No Extended Sources have been declared, none of the sample passed the cleaning steps.")
 
-        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
         if len(failed_peak_find) != 0:
@@ -432,11 +426,11 @@ class PointSample(BaseSample):
                 dec_lb.update(1)
         self._names = final_names
 
-        if 'xmm' in self.telescopes:
-            # I've cleaned the observations, and its possible some of the data has been thrown away,
-            #  so I should regenerate the mosaic images/expmaps
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        # I've cleaned the observations, and its possible some of the data has been thrown away,
+        #  so I should regenerate the individual-telescope combined images/expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         # TODO this currently won't work for non-XMM telescopes
