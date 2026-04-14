@@ -1205,15 +1205,16 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                              "vice versa.")
 
+        # For multi-obs eROSITA, use combined-obs spectra to avoid duplicate events
         if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
-            spec = self.get_combined_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
-                                             min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                                             inst=inst, telescope=telescope)
+            use_obs_id = 'combined'
         else:
-            # Grabbing the relevant spectra
-            spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
-                                    min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, obs_id=obs_id,
-                                    inst=inst, telescope=telescope)
+            use_obs_id = obs_id
+
+        # Retrieve the relevant spectra using unified get_spectra method
+        spec = self.get_spectra(outer_radius, obs_id=use_obs_id, inner_radius=inner_radius, group_spec=group_spec,
+                               min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                               inst=inst, telescope=telescope)
 
         # It's just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):

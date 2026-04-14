@@ -291,21 +291,26 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
     :rtype: Tuple[str, str]
     """
     # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
-    if stacked_spectra and tel in ['erosita', 'erass']:
-        search_inst = 'combined'
-    else:
-        search_inst = None
-
     try:
         if tel in ['erosita', 'erass'] and (len(source.obs_ids[tel]) > 1):
-            # For erosita we need to use the spectrum generated from combined observations, so that there
-            # are no duplicated events
-            spec_objs = source.get_combined_spectra(out_rad_vals[src_ind], inst=search_inst,
-                                                    inner_radius=inn_rad_vals[src_ind],
-                                                    group_spec=group_spec, min_counts=min_counts,
-                                                    min_sn=min_sn, telescope=tel)
+            # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
+            # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument
+            if stacked_spectra:
+                # Scenario 3: Multi-obs + multi-inst combined (obs_id='combined', inst='combined')
+                search_inst = 'combined'
+            else:
+                # Scenario 2: Multi-obs + individual insts (obs_id='combined', inst=<specific>)
+                # Leaving inst=None returns all per-instrument combined-obs spectra
+                search_inst = None
+
+            spec_objs = source.get_spectra(out_rad_vals[src_ind], obs_id='combined', inst=search_inst,
+                                           inner_radius=inn_rad_vals[src_ind],
+                                           group_spec=group_spec, min_counts=min_counts,
+                                           min_sn=min_sn, telescope=tel)
         else:
-            # Find matching spectrum objects associated with the current source
+            # Single observation (or non-eROSITA): use regular spectra
+            # For multi-instrument stacking, inst='combined' retrieves Scenario 1 products
+            search_inst = 'combined' if stacked_spectra else None
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                             group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                             over_sample=over_sample, telescope=tel, inst=search_inst)
