@@ -28,7 +28,7 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     :param str p_type: The product type(s) that will be produced by this command - this can be a string, or a list
         of strings in the case where an XGA interface-with-telescope-software function will produce multiple
         different products.
-    :param str p_path: The final output path(s) of the product.
+    :param list p_path: The final output path(s) of the product.
     :param dict extra_info: Any extra information required to define the product object.
     :param str src: A string representation of the source object that this product is associated with.
     :return: The product object(s), and the string representation of the associated source object.
@@ -204,13 +204,13 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
 
     :param BaseSource source: The source object for which we wish to generate an eSASS-compatible annular region
         string/region file.
-    :param Quantity inner_radius: The inner radius/radii of the region you wish to generate in SAS, if the
+    :param Quantity inner_radius: The inner radius/radii of the region you wish to generate in eSASS, if the
         quantity has multiple elements then an elliptical region will be generated, with the first element
         being the inner radius on the semi-major axis, and the second on the semi-minor axis.
-    :param Quantity outer_radius: The inner outer_radius/radii of the region you wish to generate in SAS, if the
+    :param Quantity outer_radius: The outer radius/radii of the region you wish to generate in eSASS, if the
         quantity has multiple elements then an elliptical region will be generated, with the first element
         being the outer radius on the semi-major axis, and the second on the semi-minor axis.
-    :param str obs_id: The ObsID of the observation you wish to generate the SAS region for.
+    :param str obs_id: The ObsID of the observation you wish to generate the eSASS region for.
     :param UnitBase/str output_unit: The desired units for the region string/file to be written in.
     :param Quantity rot_angle: The rotation angle of the source region, default is zero degrees.
     :param np.ndarray interloper_regions: The interloper regions to remove from the source region,
@@ -222,8 +222,8 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         will be added to the file names. Default is False.
     :param int rand_ident: A random identifier to be inserted in the 'temp_regs' directory name, if temporary
         region files need to be written out.
-    :param str out_root_path: The root path within which we can create a temporary
-    directory of region files if they need to be written to disk.
+    :param str out_root_path: The root path within which we can create a temporary directory of region files if
+        they need to be written to disk.
     :return: Either a string representation of the requested region (if no contaminating sources are being
         removed), or a path to a region file that can be used with eSASS that specifies the source and
         contaminating regions.
