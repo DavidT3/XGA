@@ -188,7 +188,7 @@ class ProductGenerationError(Exception):
 class UnknownCommandlineError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if an error is found to have occured during a run of a part
+        Exception raised if an error is found to have occurred during a run of a part
         of the SAS software, but it cannot be linked to a SAS function.
 
         :param expression:

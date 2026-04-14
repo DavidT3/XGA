@@ -801,10 +801,6 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
-        To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
-        To disable minimum signal-to-noise set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param int num_cores: The number of cores to use, default is set to 90% of available.
@@ -812,6 +808,8 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param bool combine_tm: Create spectra for individual ObsIDs that are a combination of the data from all the
         telescope modules utilized for that ObsID. This can help to offset the low signal-to-noise nature of the
         survey data eROSITA takes. Default is True.
+    :param bool combine_obs: Combine observations for multi-ObsID sources to create single combined spectra per
+        instrument (or combined instrument if combine_tm=True). Default is True.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function

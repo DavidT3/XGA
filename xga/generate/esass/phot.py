@@ -122,7 +122,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
             (isinstance(sources, list) and (
                     'erosita' not in sources[0].telescopes and 'erass' not in sources[0].telescopes))):
         raise TelescopeNotAssociatedError("There are no eROSITA data associated with the source/sample, as such "
-                                          "eROSITA spectra cannot be generated.")
+                                          "eROSITA images cannot be generated.")
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
