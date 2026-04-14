@@ -46,7 +46,7 @@ simplefilter('ignore', wcs.FITSFixedWarning)
 class BaseSource:
     """
     The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
-    functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
+    functionality upon which the rest of XGA is built, including selecting observations, reading in data products,
     and storing newly created data products. Base functionality is included, but this type of source shouldn't
     often need to be instantiated by a user.
 
@@ -78,9 +78,6 @@ class BaseSource:
         single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
-    :param List[str] sel_null_obs: If a NullSource is being declared, this argument controls the ObsIDs that are to
-        be selected, in any other circumstances it has no effect. This argument should either be None (in which
-        case all ObsIDs will be eligible) or a list of ObsIDs.
     :param bool null_load_products: Controls whether the image and exposure maps that may be specified in the
         configuration file are loaded. This can cause slow-down with very large NullSources, so by default is
         set to False.
@@ -107,7 +104,7 @@ class BaseSource:
         """
         The init method for the BaseSource, the most general type of XGA source which acts as a superclass for all
         others. The overlord of all XGA classes, the superclass for all source classes. This contains a huge amount of
-        functionality upon which the rest of XGA is built, includes selecting observations, reading in data products,
+        functionality upon which the rest of XGA is built, including selecting observations, reading in data products,
         and storing newly created data products. Base functionality is included, but this type of source shouldn't
         often need to be instantiated by a user.
 
@@ -211,7 +208,7 @@ class BaseSource:
                 if len(telescope) == 0:
                     raise NoValidObservationsError("Source {s} is outside the eRASS1:DE "
                                                    "footprint, and no other telescopes "
-                                                   "were specified.".format(s=self.name, t=', '.join(telescope)))
+                                                   "were specified.".format(s=self.name))
 
                 # We also have to change the search_distance argument to match
                 if search_distance is not None and eros_rel_name in search_distance:
@@ -269,7 +266,7 @@ class BaseSource:
                     blacklisted_obs[tel][row['ObsID']] = excl_inst
 
                 # This vaguely unpleasant looking list comprehension is actually simple - it locates the columns of
-                #  the match dataframe that tell use whether the CENSUS for this telescope says we should use the
+                #  the match dataframe that tell us whether the CENSUS for this telescope says we should use the
                 #  different instruments of an observation. If the CENSUS says yes for the current ObsID (row['ObsID']),
                 #  and that particular ObsID-instrument has not appeared in the blacklist, then it gets added to the
                 #  list which will be included in the 'obs' dictionary under the current telescope and ObsID
@@ -563,7 +560,7 @@ class BaseSource:
         :return: The ra-dec coordinates entered by the user when the source was first defined
         :rtype: Quantity
         """
-        # Easier for it be internally kep as a numpy array, but I want the user to have astropy coordinates
+        # Easier for it be internally kept as a numpy array, but I want the user to have astropy coordinates
         return Quantity(self._ra_dec, 'deg')
 
     @property
@@ -628,7 +625,7 @@ class BaseSource:
         A property getter that returns the dictionary of telescope ObsIDs and their instruments which have been
         blacklisted, and thus not considered for use in any analysis of this source.
 
-        :return: The dictionary of blacklisted data, top level keys are .
+        :return: The dictionary of blacklisted data, top level keys are telescopes.
         :rtype: Dict
         """
         return self._blacklisted_obs
@@ -638,8 +635,8 @@ class BaseSource:
         """
         A property getter to return if a match of the correct type has been found.
 
-        :return: The detected boolean attribute.
-        :rtype: bool
+        :return: The detected dictionary attribute.
+        :rtype: dict
         """
         if self._detected is None:
             raise ValueError("detected is currently None, BaseSource objects don't have the type "
@@ -693,7 +690,7 @@ class BaseSource:
     @property
     def cosmo(self) -> Cosmology:
         """
-        This method returns whatever cosmology object is associated with this source object.
+        This property returns whatever cosmology object is associated with this source object.
 
         :return: An astropy cosmology object specified for this source on initialization.
         :rtype: Cosmology
@@ -808,7 +805,7 @@ class BaseSource:
     def use_peak(self) -> bool:
         """
         This property shows whether a particular XGA source object has been setup to use peak coordinates
-        or not. The property is either True, False, or None (if its a BaseSource).
+        or not. The property is either True, False, or None (if it's a BaseSource).
 
         :return: If the source is set to use peaks, True, otherwise False.
         :rtype: bool
@@ -870,18 +867,21 @@ class BaseSource:
         :rtype: Quantity
         """
         if any([tel not in ['xmm', 'erosita', 'erass', 'chandra'] for tel in self.telescopes]):
-            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM and "
-                                    "eROSITA associated - this should never be seen by a non-developer, but if it "
-                                    "please get in touch.")
+            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM, "
+                                    "eROSITA, or Chandra associated - this should never be seen by a "
+                                    "non-developer, but if it is please get in touch.")
 
         if len(self.telescopes) > 1:
+            # We don't yet support combining peak information from multiple telescopes, so we just return the
+            #  peak for the first telescope associated with this source.
             warn_text = ("Multiple telescopes are associated with source {n} - we do not yet support combining "
-                         "peak information, so the XMM peak is being returned.").format(n=self.name)
+                         "peak information, so the {t} peak is being returned.").format(n=self.name,
+                                                                                        t=self.telescopes[0])
             if not self._samp_member:
                 warn(warn_text, stacklevel=2)
             else:
                 self._supp_warn.append(warn_text)
-            peak = self._peaks['xmm']["combined"]
+            peak = self._peaks[self.telescopes[0]]["combined"]
 
         else:
             peak = self._peaks[self.telescopes[0]]['combined']
@@ -896,9 +896,9 @@ class BaseSource:
         :param Quantity new_peak: A new RA-DEC peak coordinate, in degrees.
         """
         if any([tel not in ['xmm', 'erosita', 'erass', 'chandra'] for tel in self.telescopes]):
-            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM and "
-                                    "eROSITA associated - this should never be seen by a non-developer, but if it "
-                                    "please get in touch.")
+            raise XGADeveloperError("This property will not work if there are any telescopes apart from XMM, "
+                                    "eROSITA, or Chandra associated - this should never be seen by a "
+                                    "non-developer, but if it is please get in touch.")
 
         if not new_peak.unit.is_equivalent("deg"):
             raise UnitConversionError("The new peak value must be in RA and DEC coordinates")
@@ -907,14 +907,17 @@ class BaseSource:
                              "one for RA and one for DEC.")
 
         if len(self.telescopes) > 1:
+            # We don't yet support combining peak information from multiple telescopes, so we set the
+            #  passed coordinate to the first telescope associated with this source.
             warn_text = ("Multiple telescopes are associated with source {n} - we do not yet support combining "
-                         "peak information, so the passed coordinate was set as the XMM peak.").format(n=self.name)
+                         "peak information, so the passed coordinate was set as the {t} "
+                         "peak.").format(n=self.name, t=self.telescopes[0])
             if not self._samp_member:
                 warn(warn_text, stacklevel=2)
             else:
                 self._supp_warn.append(warn_text)
 
-            self._peaks['xmm']["combined"] = new_peak.to("deg")
+            self._peaks[self.telescopes[0]]["combined"] = new_peak.to("deg")
 
         else:
             self._peaks[self.telescopes[0]]['combined'] = new_peak.to('deg')
@@ -3297,7 +3300,7 @@ class BaseSource:
             the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
             default this is zero arcseconds, resulting in a circular spectrum.
         :param bool group_spec: Was the spectrum you wish to retrieve grouped?
-        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+        :param int min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
             the minimum number of counts?
         :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
             the minimum signal-to-noise.
@@ -3402,7 +3405,7 @@ class BaseSource:
             the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
             default this is zero arcseconds, resulting in a circular spectrum.
         :param bool group_spec: Was the spectrum you wish to retrieve grouped?
-        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+        :param int min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
             the minimum number of counts?
         :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
             the minimum signal to noise.
@@ -3445,7 +3448,7 @@ class BaseSource:
             the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
             default this is zero arcseconds, resulting in a circular spectrum.
         :param bool group_spec: Was the spectrum you wish to retrieve grouped?
-        :param float min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+        :param int min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
             the minimum number of counts?
         :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
             the minimum signal to noise.
@@ -3510,7 +3513,8 @@ class BaseSource:
                     mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
                             "found.").format(si=set_id, t=telescope)
                 else:
-                    mess = "AnnularSpectra object with setID {si} cannot be found.".format(si=set_id, t=telescope)
+                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
+                            "found.").format(si=set_id, t=telescope)
                 raise NoProductAvailableError(mess)
             # But if we get here then there is a match (and there can only be one)
             else:
@@ -3667,7 +3671,7 @@ class BaseSource:
             is None (which will retrieve all lightcurves regardless of energy limit).
         :param Quantity time_bin_size: The time bin size used to generate the desired lightcurve. The default value
             is None, in which case all lightcurves matching other criteria will be retrieved.
-        :param dict pattern: Event selection patterns used to create lightcurves of interest. The default value is
+        :param dict/str pattern: Event selection patterns used to create lightcurves of interest. The default value is
             'default' which uses the default values for generating lightcurves for different instruments, or you
             can pass a dictionary with patterns in; e.g. {'pn': '<=4', 'mos': '<=12'}. You can also pass None, which
             means all light curves matching other search terms will be returned.
@@ -4182,7 +4186,7 @@ class BaseSource:
 
     def get_snr(self, outer_radius: Union[Quantity, str], telescope: str, central_coord: Quantity = None,
                 lo_en: Quantity = None, hi_en: Quantity = None, obs_id: str = None, inst: str = None,
-                psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                psf_corr: bool = False, psf_model: str = None, psf_bins: int = 4, psf_algo: str = "rl",
                 psf_iter: int = 15, allow_negative: bool = False, exp_corr: bool = True) -> float:
         """
         This takes a region type and central coordinate and calculates the signal-to-noise ratio.
@@ -4203,7 +4207,9 @@ class BaseSource:
         :param str inst: The instrument of a specific ratemap to use for the SNR calculation. Default is None, which
             means the combined ratemap will be used.
         :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
-        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used. If None is
+            passed (the default), then 'ELLBETA' is used for XMM, but for other telescopes an error will be raised
+            as PSF correction is not yet implemented.
         :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
             side in the PSF grid.
         :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
@@ -4221,6 +4227,14 @@ class BaseSource:
             lo_en = self._peak_lo_en
         if hi_en is None:
             hi_en = self._peak_hi_en
+
+        # If psf_corr is True but psf_model is None, we need to set a default based on the telescope
+        if psf_corr and psf_model is None:
+            if telescope == 'xmm':
+                psf_model = 'ELLBETA'
+            else:
+                raise NotImplementedError("PSF correction is not yet implemented for "
+                                          "{t}.".format(t=PRETTY_TELESCOPE_NAMES[telescope]))
 
         # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
         if all([obs_id is None, inst is None]):
@@ -4255,7 +4269,7 @@ class BaseSource:
 
     def get_counts(self, outer_radius: Union[Quantity, str], telescope: str, central_coord: Quantity = None,
                    lo_en: Quantity = None, hi_en: Quantity = None, obs_id: str = None, inst: str = None,
-                   psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                   psf_corr: bool = False, psf_model: str = None, psf_bins: int = 4, psf_algo: str = "rl",
                    psf_iter: int = 15) -> Quantity:
         """
         This takes a region type and central coordinate and calculates the background subtracted X-ray counts.
@@ -4276,7 +4290,9 @@ class BaseSource:
         :param str inst: The instrument of a specific ratemap to use for the counts calculation. Default is None, which
             means the combined ratemap will be used.
         :param bool psf_corr: Sets whether you wish to use a PSF corrected ratemap or not.
-        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used.
+        :param str psf_model: If the ratemap you want to use is PSF corrected, this is the PSF model used. If None is
+            passed (the default), then 'ELLBETA' is used for XMM, but for other telescopes an error will be raised
+            as PSF correction is not yet implemented.
         :param int psf_bins: If the ratemap you want to use is PSF corrected, this is the number of PSFs per
             side in the PSF grid.
         :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
@@ -4289,6 +4305,14 @@ class BaseSource:
             lo_en = self._peak_lo_en
         if hi_en is None:
             hi_en = self._peak_hi_en
+
+        # If psf_corr is True but psf_model is None, we need to set a default based on the telescope
+        if psf_corr and psf_model is None:
+            if telescope == 'xmm':
+                psf_model = 'ELLBETA'
+            else:
+                raise NotImplementedError("PSF correction is not yet implemented for "
+                                          "{t}.".format(t=PRETTY_TELESCOPE_NAMES[telescope]))
 
         # Parsing the ObsID and instrument options, see if they want to use a specific ratemap
         if all([obs_id is None, inst is None]):
