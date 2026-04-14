@@ -30,7 +30,7 @@ class StarSample(BaseSample):
         and if vectors are passed it should be in the form Quantity([[4, 2.3], [5, 4.3], [2, 2.5],
         [7.2, 6.9],...], 'arcsec/yr'), where the first is in RA and the second in Dec. Units should be convertible to
         arcseconds per year. Default is None
-    :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
+    :param Quantity point_radius: The point source analysis region radius/radii for this sample. Either
         pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
     :param Quantity match_radius: The radius within which point source regions are accepted as a match to the
         RAs and Dec passed by the user. The default value is 10 arcseconds.
@@ -145,21 +145,14 @@ class StarSample(BaseSample):
                              " motion magnitudes please have one entry of two components per source.")
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.generate.sas import evselect_image, eexpmap, emosaic
-        from ..generate.esass import evtool_image, expmap
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, None, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar,
                          telescope=telescope, search_distance=search_distance)
-        if 'xmm' in self.telescopes:
-            evselect_image(self, peak_lo_en, peak_hi_en)
-            eexpmap(self, peak_lo_en, peak_hi_en)
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
-        if 'erosita' in self.telescopes:
-            evtool_image(self, peak_lo_en, peak_hi_en)
-            expmap(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # Remove the BaseSources
         del self._sources
@@ -212,11 +205,11 @@ class StarSample(BaseSample):
         # Store the matching radius as an attribute, though its also in the sources
         self._match_radius = match_radius
 
-        if 'xmm' in self.telescopes:
-            # I've cleaned the observations, and its possible some of the data has been thrown away,
-            #  so I should regenerate the mosaic images/expmaps
-            emosaic(self, "image", peak_lo_en, peak_hi_en)
-            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        # I've cleaned the observations, and its possible some of the data has been thrown away,
+        #  so I should regenerate the individual-telescope combined images/expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
         if psf_corr and 'xmm' in self.telescopes:
@@ -230,14 +223,16 @@ class StarSample(BaseSample):
             raise NoValidObservationsError(
                 "No Stars have been declared, none of the sample passed the cleaning steps.")
 
-        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
         if len(failed_peak_find) != 0:
