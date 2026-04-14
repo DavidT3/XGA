@@ -49,7 +49,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
     if not isinstance(lo_en, Quantity) or not isinstance(hi_en, Quantity):
         raise TypeError("The lo_en and hi_en arguments must be astropy quantities in units "
                         "that can be converted to keV.")
-    # Have to make sure that the energy bounds are in units that can be converted to keV (which is what evtool
+    # Have to make sure that the energy bounds are in units that can be converted to keV (which is what fluximage
     #  expects for these arguments).
     elif not lo_en.unit.is_equivalent('eV') or not hi_en.unit.is_equivalent('eV'):
         raise UnitConversionError("The lo_en and hi_en arguments must be astropy quantities in units "
@@ -127,7 +127,7 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
                 continue
             except NoProductAvailableError:
                 pass
-            
+
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
@@ -144,8 +144,8 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
             final_image_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVimg.fits")
             final_expmap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVexpmap.fits")
             final_ratemap_file = os.path.join(dest_dir, f"{obs_id}_{inst}_{lo_en.value}-{hi_en.value}keVratemap.fits")
-            
-            # Check if a Chandra image exists.  
+
+            # Check if a Chandra image exists.
             # If it does, use its size for the subsequent photometric products.
             img_exist = False
             try:
@@ -153,14 +153,12 @@ def chandra_image_expmap(sources: Union[BaseSource, NullSource, BaseSample],
                 img_exist = True
             except Exception:
                 pass
-            
-            if img_exist == True:
-                if not isinstance(img_temp, list):
-                    img_temp = [img_temp]
-                elif isinstance(img_temp, list):
-                    img_temp = img_temp
-                xygrid_dir = img_temp[0].path
-            elif img_exist == False:
+
+            if img_exist:
+                if isinstance(img_temp, list):
+                    img_temp = img_temp[0]
+                xygrid_dir = img_temp.path
+            elif not img_exist:
                 xygrid_dir = ""
 
             # Skip generation if files already exist.

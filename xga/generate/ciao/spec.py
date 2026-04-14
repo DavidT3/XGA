@@ -36,7 +36,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default, this is zero arcseconds, resulting in a circular spectrum.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -182,7 +182,7 @@ def _chandra_spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Uni
             # Setting up the top level path for the eventual destination of the products to be generated here
             dest_dir = os.path.join(OUTPUT, "chandra", obs_id)
 
-            # Temporary directory for fluximage.
+            # Temporary directory for specextract.
             temp_dir = os.path.join(dest_dir, f"temp_{randint(0, int(1e8))}")
             os.makedirs(temp_dir, exist_ok=True)
 
@@ -349,7 +349,7 @@ def specextract_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: U
         default this is zero arcseconds, resulting in a circular spectrum. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -378,7 +378,7 @@ def ciao_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[
         is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
         source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -443,7 +443,7 @@ def ciao_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[
                              "for generating a set of multiple annular spectra, I need at least three "
                              "entries.".format(s=src_name))
         elif len(cur_rad) < 3:
-            raise ValueError("The radii quantity have you passed for {s} must have at least 3 entries, this "
+            raise ValueError("The radii quantity you have passed for {s} must have at least 3 entries, this "
                              "would generate a set of 2 annular spectra and is the minimum for this "
                              "function.".format(s=src_name))
 
@@ -516,7 +516,7 @@ def ciao_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[
 
         exists = source.get_products('annular_spectrum', extra_key=spec_storage_name, telescope='chandra')
         if len(exists) == 0:
-            # If it doesn't exist then we do need to call evselect_spectrum
+            # If it doesn't exist then we do need to call _chandra_spec_cmds
             generate_spec = True
         else:
             # If it already exists though we don't need to bother

@@ -97,11 +97,11 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             if not os.path.exists(OUTPUT + "xmm/" + obs_id):
                 os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
-            # TODO Switch this get methods to the dedicated image map one
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("image", obs_id, inst, just_obj=False, telescope='xmm')
-                      if en_id in match]
-            if len(exists) == 1 and exists[0][-1].usable:
+            # Check if this image already exists and is usable
+            exists = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
+            if not isinstance(exists, list):
+                exists = [exists]
+            if len(exists) == 1 and exists[0].usable:
                 continue
 
             evt_list = pack[-1]
@@ -148,7 +148,7 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
     :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources.
     :param Quantity lo_en: The lower energy limit for the expmap, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the expmap, in astropy energy units.
-    :param int num_cores: The number of cores to use (if running locally), default is set to
+    :param int num_cores: The number of cores to use, default is set to
         90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     """
@@ -220,14 +220,16 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             if not os.path.exists(OUTPUT + "xmm/" + obs_id):
                 os.mkdir(OUTPUT + "xmm/" + obs_id)
 
-            # TODO Switch these get methods to the dedicated image/exposure map ones
-            en_id = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-            exists = [match for match in source.get_products("expmap", obs_id, inst, just_obj=False, telescope='xmm')
-                      if en_id in match]
-            if len(exists) == 1 and exists[0][-1].usable:
+            # Check if this exposure map already exists and is usable
+            exists = source.get_expmaps(obs_id, inst, lo_en, hi_en, telescope='xmm')
+            if not isinstance(exists, list):
+                exists = [exists]
+            if len(exists) == 1 and exists[0].usable:
                 continue
             # Generating an exposure map requires a reference image.
             ref_im = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
+            if isinstance(ref_im, list):
+                ref_im = ref_im[0]
             # It also requires an attitude file
             att = source.get_att_file(obs_id, 'xmm')
             # Set up the paths and names of files
@@ -350,21 +352,22 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
         elif psf_corr:
             en_id += "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
-        # TODO Switch these get methods to the dedicated image/exposure map ones
-        # Checking if the combined product already exists
-        exists = [match for match in source.get_products("combined_{}".format(to_mosaic), just_obj=False,
-                                                         telescope='xmm')
-                  if en_id in match]
-        if len(exists) == 1 and exists[0][-1].usable:
+        # Check if this combined product already exists and is usable
+        exists = source.get_products("combined_{}".format(to_mosaic), extra_key=en_id, telescope='xmm')
+        if not isinstance(exists, list):
+            exists = [exists]
+
+        if len(exists) == 1 and exists[0].usable:
             sources_cmds.append(np.array([]))
             sources_paths.append(np.array([]))
             sources_extras.append(np.array([]))
             sources_types.append(np.array([]))
             continue
 
-        # This fetches all image objects with the passed energy bounds
-        matches = [[match[1], match[-1]] for match in source.get_products(to_mosaic, just_obj=False, telescope='xmm')
-                   if en_id in match]
+        # This fetches all relevant images/expmaps with the passed energy bounds
+        matches = source.get_products(to_mosaic, extra_key=en_id, telescope='xmm')
+        if not isinstance(matches, list):
+            matches = [matches]
 
         # In theory this should never be triggered, because we already ran evselect_image so the images should be
         #  there - but I am now somehow having an error where we get to this point with no errors and no images, so
@@ -376,8 +379,8 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
                                           " usual behaviour as XGA should have generated them; the relevant "
                                           "observations are {d}.".format(p=source.name, d=assoc))
 
-        paths = [product[1].path for product in matches if product[1].usable]
-        obs_ids = [product[0] for product in matches if product[1].usable]
+        paths = [product.path for product in matches if product.usable]
+        obs_ids = [product.obs_id for product in matches if product.usable]
         obs_ids_set = []
         for obs_id in obs_ids:
             if obs_id not in obs_ids_set:
@@ -438,7 +441,7 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
     resultant PSF object will be paired up with an image that matches it's ObsID and instrument.
 
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
-    :param int bins: The image coordinate space will be divided into a grid of size binsxbins, PSFs will be
+    :param int bins: The image coordinate space will be divided into a grid of size bins x bins, PSFs will be
         generated at the central coordinates of the grid chunks.
     :param str psf_model: Which model to use when generating the PSF, default is ELLBETA, the best available.
     :param int num_cores: The number of cores to use (if running locally), default is set to

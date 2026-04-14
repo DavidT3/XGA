@@ -86,21 +86,14 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
     #  are actually in distance units. The distance unit checking is done by convert_radius
     for s_ind, src in enumerate(sources):
         # Converts the inner and outer radius for this source into the same unit
-        if isinstance(outer_radius, str) and outer_radius != 'region':
+        if isinstance(outer_radius, str):
             cur_out_rad = src.get_radius(outer_radius, 'deg')
-        elif isinstance(outer_radius, str) and outer_radius == 'region':
-            reg = src.source_back_regions('region', 'xmm', obs_id)[0]
-            cur_out_rad = Quantity([reg.width.to('deg').value/2, reg.height.to('deg').value/2], 'deg')
         elif outer_radius.isscalar:
             cur_out_rad = src.convert_radius(outer_radius, 'deg')
         else:
             cur_out_rad = src.convert_radius(outer_radius[s_ind], 'deg')
 
-        # We need to check that the outer radius isn't region, because for region objects we ignore whatever
-        #  inner radius has been passed and just set it 0
-        if outer_radius == 'region':
-            cur_inn_rad = Quantity([0, 0], 'deg')
-        elif isinstance(inner_radius, str):
+        if isinstance(inner_radius, str):
             cur_inn_rad = src.get_radius(inner_radius, 'deg')
         elif inner_radius.isscalar:
             cur_inn_rad = src.convert_radius(inner_radius, 'deg')
@@ -108,14 +101,14 @@ def region_setup(sources: Union[BaseSource, BaseSample], outer_radius: Union[str
             cur_inn_rad = src.convert_radius(inner_radius[s_ind], 'deg')
 
         # Then we can check to make sure that the outer radius is larger than the inner radius
-        if outer_radius != 'region' and cur_inn_rad >= cur_out_rad:
+        if cur_inn_rad >= cur_out_rad:
             raise ValueError("The inner_radius of {s} is greater than or equal to the outer_radius".format(s=src.name))
         else:
             final_inner.append(cur_inn_rad)
             final_outer.append(cur_out_rad)
 
-    if ((not isinstance(sources, list) and 'xmm' in sources.telescopes)
-            or (isinstance(sources, list) and 'xmm' in sources[0].telescopes)):
+    from xga.sourcetools._common import _get_all_telescopes
+    if 'xmm' in _get_all_telescopes(sources):
         # Have to make sure that all XMM observations have an up to date cif file.
         cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
 
@@ -137,7 +130,7 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
     :return: The command to generate the requested detector map (will be blank if the detector map already
         exists), the path where the detmap will be after the command is run (i.e. the ObsID directory if it was
         already generated, or the temporary directory if it has just been generated), and the final output path
-        of the detector.
+        of the detector map.
     :rtype: Tuple[str, str, str]
     """
     # This is the command that will be filled out to generate the detmap of our dreams!

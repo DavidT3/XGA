@@ -37,7 +37,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
         default, this is zero arcseconds, resulting in a circular spectrum.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -211,7 +211,10 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 os.mkdir(OUTPUT + "xmm/" + obs_id)
 
             # Got to check if this spectrum already exists
-            exists = source.get_products("spectrum", obs_id, inst, extra_key=spec_storage_name, telescope='xmm')
+            exists = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec, min_counts,
+                                        min_sn, over_sample, telescope='xmm')
+            if not isinstance(exists, list):
+                exists = [exists]
             if len(exists) == 1 and exists[0].usable and not force_gen:
                 continue
 
@@ -492,7 +495,7 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
         default this is zero arcseconds, resulting in a circular spectrum. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -527,7 +530,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
         source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -592,7 +595,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
                              "for generating a set of multiple annular spectra, I need at least three "
                              "entries.".format(s=src_name))
         elif len(cur_rad) < 3:
-            raise ValueError("The radii quantity have you passed for {s} must have at least 3 entries, this "
+            raise ValueError("The radii quantity you have passed for {s} must have at least 3 entries, this "
                              "would generate a set of 2 annular spectra and is the minimum for this "
                              "function.".format(s=src_name))
 

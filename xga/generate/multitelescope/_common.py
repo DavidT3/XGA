@@ -14,7 +14,7 @@ from xga.sourcetools._common import _get_all_telescopes
 def check_tel_associated(sources: Union[BaseSource, BaseSample], telescope: Union[str, List[str], None]) -> List[str]:
     """
     Simple check meant to be used on user-specified telescope names, to ensure they are associated with at
-    least one source. If None is passed for telescope then all telescopes names associated with a source will
+    least one source. If None is passed for telescope then all telescope names associated with a source will
     be returned
 
     :param BaseSource/BaseSample sources: XGA source/sample to validate telescope names against, or to retrieve
@@ -37,7 +37,7 @@ def check_tel_associated(sources: Union[BaseSource, BaseSample], telescope: Unio
     if telescope is not None:
         good_tel = np.array([t in all_tels for t in telescope])
         if not all(good_tel):
-            which_bad = ", ".join(np.array(all_tels)[~good_tel])
+            which_bad = ", ".join(np.array(telescope)[~good_tel])
             raise TelescopeNotAssociatedError("Telescopes {t} are not associated with any "
                                               "source".format(t=which_bad))
 
