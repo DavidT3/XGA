@@ -63,8 +63,6 @@ class GalaxyCluster(ExtendedSource):
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
-    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-        is hierarchical, simple may also be passed.
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
@@ -102,8 +100,8 @@ class GalaxyCluster(ExtendedSource):
         :param Quantity r200: A value for the R200 of the source. At least one overdensity radius must be passed.
         :param Quantity r500: A value for the R500 of the source. At least one overdensity radius must be passed.
         :param Quantity r2500: A value for the R2500 of the source. At least one overdensity radius must be passed.
-        :param richness: An optical richness of the cluster, optional.
-        :param richness_err: An uncertainty on the optical richness of the cluster, optional.
+        :param float richness: An optical richness of the cluster, optional.
+        :param float richness_err: An uncertainty on the optical richness of the cluster, optional.
         :param Quantity wl_mass: A weak lensing mass of the cluster, optional.
         :param Quantity wl_mass_err: An uncertainty on the weak lensing mass of the cluster, optional.
         :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
@@ -116,7 +114,7 @@ class GalaxyCluster(ExtendedSource):
             radius for the background region. Default is 1.05.
         :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
             radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
         :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
@@ -126,8 +124,6 @@ class GalaxyCluster(ExtendedSource):
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
-        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-            is hierarchical, simple may also be passed.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
             to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
             is False. User should only set to True to remove warnings.
@@ -432,8 +428,8 @@ class GalaxyCluster(ExtendedSource):
         """
         Gets the weak lensing mass passed in at initialisation of the source.
 
-        :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
-            values were not passed in at initialisation, the returned values will be None.
+        :return: A quantity containing the weak lensing mass, and the weak lensing mass error in Msun. If the
+            values were not passed in at initialisation, the returned values will be NaN.
         :rtype: Quantity
         """
         if self._wl_mass is not None:
@@ -457,8 +453,8 @@ class GalaxyCluster(ExtendedSource):
         """
         Gets the richness passed in at initialisation of the source.
 
-        :return: Two floats, the richness, and the richness error. If the values were not passed in at
-            initialisation, the returned values will be None.
+        :return: A quantity containing the richness, and the richness error. If the values were not passed in at
+            initialisation, the returned values will be NaN.
         :rtype: Quantity
         """
         if self._richness is not None:
@@ -488,8 +484,8 @@ class GalaxyCluster(ExtendedSource):
         :param str search_key: The profile search key, e.g. combined_1d_proj_temperature_profile.
         :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
             from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal-to-noise.
@@ -572,7 +568,7 @@ class GalaxyCluster(ExtendedSource):
             circular spectrum.
         :param str par: The name of the parameter you want a result for.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
@@ -612,7 +608,7 @@ class GalaxyCluster(ExtendedSource):
         :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
         :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
         :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
             desired result were grouped by minimum counts.
         :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
             desired result were grouped by minimum signal-to-noise.
@@ -674,8 +670,8 @@ class GalaxyCluster(ExtendedSource):
 
         :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
             from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal-to-noise.
@@ -707,8 +703,8 @@ class GalaxyCluster(ExtendedSource):
 
         :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
             from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal to noise.
@@ -740,8 +736,8 @@ class GalaxyCluster(ExtendedSource):
 
         :param Quantity radii: The annulus boundary radii that were used to generate the annular spectra set
             from which the normalisation profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal to noise.

@@ -117,6 +117,7 @@ class ExtendedSource(BaseSource):
             certain fraction of a certain region is covered by an ObsID. Default is True.
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+            Default is 0.3.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
         :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
@@ -204,16 +205,10 @@ class ExtendedSource(BaseSource):
         #  only if this source is not a member of a sample - if so then more efficient mass generation will be done
         #  later
         if not in_sample:
-            # There isn't a single method to generate images etc. from every associated telescope yet, so we have
-            #  to go the long way around
-            if 'xmm' in self.telescopes:
-                from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-            if 'erosita' in self.telescopes:
-                from ..generate.esass import combine_phot_prod
-                combine_phot_prod(self, 'image', self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-                combine_phot_prod(self, 'expmap', self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+            # Generate images and exposure maps for every associated telescope
+            from ..generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+            all_telescope_combined_images(self, self._peak_lo_en, self._peak_hi_en)
+            all_telescope_combined_expmaps(self, self._peak_lo_en, self._peak_hi_en)
 
         if clean_obs and clean_obs_reg in self._radii:
             # Use this method to figure out what data to throw away
@@ -226,11 +221,10 @@ class ExtendedSource(BaseSource):
                 #  to run those commands themselves later
                 # Now I will run them only if the regen_merged flag is True
                 if regen_merged:
-                    # TODO Implement for eROSITA when merging is possible
-                    if 'xmm' in self.telescopes:
-                        from ..generate.sas import emosaic
-                        emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-                        emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                    from ..generate.multitelescope.phot import all_telescope_combined_images, \
+                        all_telescope_combined_expmaps
+                    all_telescope_combined_images(self, self._peak_lo_en, self._peak_hi_en)
+                    all_telescope_combined_expmaps(self, self._peak_lo_en, self._peak_hi_en)
                     self._all_peaks(peak_find_method, 'extended')
 
                     # And finally this sets the default coordinate to the peak if use peak is True
@@ -277,8 +271,8 @@ class ExtendedSource(BaseSource):
         """
         A method that will find the X-ray peak for the RateMap that has been passed in. It takes
         the user supplied coordinates from source initialisation as a starting point, finds the peak within a 500kpc
-        radius, re-centres the region, and iterates until the peak converges to within 15kpc, or until 20
-        20 iterations has been reached.
+        radius, re-centres the region, and iterates until the peak converges to within 15 kpc, or until 20
+        iterations has been reached.
 
         :param RateMap rt: The ratemap which we want to find the peak (local to our user supplied coordinates) of.
         :param str method: Which peak finding method to use. Currently either hierarchical or simple can be chosen.
@@ -491,9 +485,11 @@ class PointSource(BaseSource):
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
-    def __init__(self, ra, dec, redshift=None, name=None, point_radius=Quantity(30, 'arcsec'), use_peak=False,
-                 peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
-                 back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
+    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
+                 point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
+                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
+                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
+                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  clean_obs: bool = True, clean_obs_threshold: float = 0.9, regen_merged: bool = True,
                  in_sample: bool = False, telescope: Union[str, List[str]] = None,
                  search_distance: Union[Quantity, dict] = None):
@@ -518,7 +514,7 @@ class PointSource(BaseSource):
             radius for the background region. Default is 1.05.
         :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
             radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
         :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
@@ -585,16 +581,10 @@ class PointSource(BaseSource):
         #  only if this source is not a member of a sample - if so then more efficient mass generation will be done
         #  later
         if not in_sample:
-            # There isn't a single method to generate images etc. from every associated telescope yet, so we have
-            #  to go the long way around
-            if 'xmm' in self.telescopes:
-                from ..generate.sas import emosaic
-                emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-                emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-            if 'erosita' in self.telescopes:
-                from ..generate.esass import combine_phot_prod
-                combine_phot_prod(self, 'image')
-                combine_phot_prod(self, 'expmap')
+            # Generate images and exposures for every associated telescope
+            from ..generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+            all_telescope_combined_images(self, self._peak_lo_en, self._peak_hi_en)
+            all_telescope_combined_expmaps(self, self._peak_lo_en, self._peak_hi_en)
 
         # Here we clean the observations (if requested), to make sure the point source does actually lie
         #  on the detector and not just near it. We'll use a pretty harsh acceptance fraction by default
@@ -608,10 +598,11 @@ class PointSource(BaseSource):
                                                    " observations.")
 
                 # TODO Generalise this to more telescopes once generation is better supported
-                if regen_merged and 'xmm' in self.telescopes:
-                    from ..generate.sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=False)
+                if regen_merged:
+                    from ..generate.multitelescope.phot import all_telescope_combined_images, \
+                        all_telescope_combined_expmaps
+                    all_telescope_combined_images(self, self._peak_lo_en, self._peak_hi_en)
+                    all_telescope_combined_expmaps(self, self._peak_lo_en, self._peak_hi_en)
 
         # Store the user choice on whether to calculate and use a peak position value
         self._use_peak = use_peak

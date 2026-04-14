@@ -100,7 +100,7 @@ class Star(PointSource):
             radius for the background region. Default is 1.05.
         :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
             radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
         :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
