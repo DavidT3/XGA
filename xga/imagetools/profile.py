@@ -18,19 +18,19 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
                  start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> np.ndarray:
     """
     A handy little function to generate annular (or circular) masks in the form of numpy arrays.
-    It produces the src_mask for a given shape of image, centered at supplied coordinates, and with inner and
-    outer radii supplied by the user also. Angular limits can also be supplied to give the src_mask an annular
+    It produces an annular mask for a given shape of image, centered at supplied coordinates, and with inner and
+    outer radii supplied by the user also. Angular limits can also be supplied to give the mask an annular
     dependence. This function should be properly vectorised, and accepts inner and outer radii in
     the form of arrays. The result will be an len_y, len_x, N dimensional array, where N is equal to
     the length of inn_rad.
 
     :param Quantity centre: Astropy pix quantity of the form Quantity([x, y], pix).
-    :param np.ndarray inn_rad: Pixel radius for the inner part of the annular src_mask.
-    :param np.ndarray out_rad: Pixel radius for the outer part of the annular src_mask.
-    :param Quantity start_ang: Lower angular limit for the src_mask.
-    :param Quantity stop_ang: Upper angular limit for the src_mask.
+    :param np.ndarray inn_rad: Pixel radius for the inner part of the annular mask.
+    :param np.ndarray out_rad: Pixel radius for the outer part of the annular mask.
+    :param Quantity start_ang: Lower angular limit for the mask.
+    :param Quantity stop_ang: Upper angular limit for the mask.
     :param tuple shape: The output from the shape property of the numpy array you are generating masks for.
-    :return: The generated src_mask array.
+    :return: The generated mask array.
     :rtype: np.ndarray
     """
 
@@ -104,7 +104,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     else:
         rad_mask = (arr_r_squared < out_rad ** 2) & (arr_r_squared >= inn_rad ** 2)
 
-    # Finally, puts a cut on the allowed angle, and combined the radius and angular cuts into the final src_mask
+    # Finally, puts a cut on the allowed angle, and combined the radius and angular cuts into the final mask
     ang_mask = arr_theta <= (stop_ang - start_ang)
     ann_mask = rad_mask * ang_mask
 
@@ -117,7 +117,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     if ann_mask.shape[-1] == 1:
         ann_mask = np.squeeze(ann_mask)
 
-    # Returns the annular src_mask(s), in the form of a len_y, len_x, N dimension np array
+    # Returns the annular mask(s), in the form of a len_y, len_x, N dimension np array
     return ann_mask
 
 
@@ -208,7 +208,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     :param np.ndarray interloper_mask: A numpy array that masks out any interloper sources.
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-    :param BaseUnit rad_units: The desired output units for the central radii of the annuli.
+    :param UnitBase rad_units: The desired output units for the central radii of the annuli.
     :param Cosmology cosmo: An astropy cosmology object for source coordinate conversions.
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
         below this threshold the profile will be rebinned. Default is 0.0
@@ -235,7 +235,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         :return: Boolean variable that describes whether another re-binning iteration is required, the
             brightness profile and uncertainties, the modified annular masks, inner radii, outer radii, and
             annulus areas.
-        :rtype:
+        :rtype: Tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
         """
         # These are annular masks with interloper sources removed, sensor and edge masks applied
         corr_ann_masks = (annulus_masks * sel_inter_mask[..., None] * sel_sensor_mask[..., None]

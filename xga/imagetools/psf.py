@@ -55,9 +55,10 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
 
         :param int ind: The current step, passed through for the callback function.
         :param np.ndarray cur_image: The im_deconv from the last step.
-        :param last_image:
-        :param rel_psf: The particular spacial PSF being applied to this image.
-        :return:
+        :param np.ndarray last_image: The image data that is being deconvolved in this iteration.
+        :param np.ndarray rel_psf: The particular spacial PSF being applied to this image.
+        :return: The deconvolved image for this iteration and the iteration index.
+        :rtype: Tuple[np.ndarray, int]
         """
         psf_mirror = rel_psf[::-1, ::-1]
         relative_blur = cur_image / convolve(last_image, rel_psf, mode='same')
@@ -70,7 +71,7 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
         Modifies an existing XMM Newton fits image header, removes some elements, and adds a little extra
         information. The new header is then used for PSF corrected fits image files.
 
-        :param og_header: The header from the fits image that has been PSF corrected.
+        :param FITSHDR og_header: The header from the fits image that has been PSF corrected.
         :return: The new, modified, fits header.
         :rtype: FITSHDR
         """
