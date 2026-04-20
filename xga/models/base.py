@@ -247,6 +247,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param Quantity x: The x-position at which the model should be evaluated.
         :param List[Quantity] pars: The parameters of model to be evaluated.
         :return: The y-value of the model at x.
+        :rtype: Quantity
         """
         raise NotImplementedError("Base Model doesn't have this implemented")
 
@@ -568,7 +569,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param List[Quantity] good_pars: The second list of parameters, these are taken as having 'correct'
             units.
         :return: Only if the check pars pass the tests. We return the check pars list but with all elements
-            converted to EXACTLY the same units as good_pars, not just equivelant.
+            converted to EXACTLY the same units as good_pars, not just equivalent.
         :rtype: List[Quantity]
         """
         if len(check_pars) != len(good_pars):
@@ -634,7 +635,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
         :param Quantity radius: The radius at which you wish to evaluate this model and view the
             predicted distribution.
-        :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
+        :param Union[str, int] bins: Equivalent to the plt.hist bins argument, set either the number of bins
             or the algorithm to decide on the number of bins.
         :param str colour: Set the colour of the histogram.
         :param tuple figsize: The desired dimensions of the figure.
@@ -669,7 +670,7 @@ class BaseModel1D(metaclass=ABCMeta):
         model. The model parameter and uncertainties are indicated with red lines, highlighting the value
         and enclosing the 1sigma confidence region.
 
-        :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
+        :param Union[str, int] bins: Equivalent to the plt.hist bins argument, set either the number of bins
             or the algorithm to decide on the number of bins.
         :param str colour: Set the colour of the histogram.
         """

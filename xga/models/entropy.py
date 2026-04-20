@@ -176,8 +176,6 @@ class PowerEntropy(BaseModel1D):
         The model function for the power-law entropy model.
 
         :param Quantity x: The radii to calculate y values for.
-        :param Quantity k_zero: Parameter quantifying the typical excess of core entropy above the best fitting
-            power-law found at larger radii.
         :param Quantity k_100kpc: A normalization for entropy at 100kpc.
         :param Quantity alpha: The power law index.
         :return: The y values corresponding to the input x values.
