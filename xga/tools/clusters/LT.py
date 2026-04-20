@@ -81,7 +81,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     temperature is not allowed to vary during the spectral fits, instead staying at the initial value. Each iteration
     the luminosity from the model is read out and, with the help of a temperature-luminosity relation supplied through
     'temp_lum_rel', used to estimate the temperature that the next spectral fit will be frozen at. To activate this
-    mode, set 'freeze_temp=True'. Please note that we do not currently
+    mode, set 'freeze_temp=True'.
 
     As with all XGA sources and samples, the XGA luminosity-temperature pipeline DOES NOT require all objects
     passed in the sample_data to have X-ray observations. Those that do not will simply be filtered out.
@@ -113,13 +113,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         R500-Tx Arnaud et al. 2005 relation.
     :param Quantity lum_en: The energy bands in which to measure luminosity. The default is
         Quantity([[0.5, 2.0], [0.01, 100.0]], 'keV'), corresponding to the 0.5-2.0keV and bolometric bands.
-    :param bool core_excised: Should final measurements of temperature and luminosity be made with core-excision in
-        addition to measurements within the overdensity radius specified by the scaling relation. This will involve
-        multiplying the radii by 0.15 to determine the inner radius. Default is True.
     :param bool freeze_nh: Controls whether the hydrogen column density (nH) should be frozen during XSPEC fits to
         spectra, the default is True.
     :param bool freeze_met: Controls whether metallicity should be frozen during XSPEC fits to spectra, the default
-        is False. Leaving metallicity free to vary tends to require more photons to achieve a good fit.
+        is True. Leaving metallicity free to vary tends to require more photons to achieve a good fit.
     :param bool freeze_temp: Controls whether temperature should be frozen (i.e. the pipeline would run in
         frozen-temperature mode) during XSPEC fits to spectra. Can be used in the case of low signal-to-noise data.
         The default is False.
@@ -133,7 +130,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
     :param Quantity hi_en: The upper energy limit for the data to be fitted by XSPEC. The default is 7.9 keV, but
         reducing this value may help achieve a good fit for suspected lower temperature systems.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.

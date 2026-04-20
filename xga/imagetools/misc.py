@@ -58,7 +58,7 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
 def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
                   small_offset: Quantity = Quantity(1, 'arcmin')) -> Quantity:
     """
-    This is equivelant to pix_deg_scale, but instead calculates the conversion factor between
+    This is equivalent to pix_deg_scale, but instead calculates the conversion factor between
     XMM's XY sky coordinate system and degrees.
 
     :param Image/Ratemap/ExpMap im_prod: The image product to calculate the conversion factor for.
@@ -145,7 +145,7 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
     proper radii, so long as redshift and cosmology information is provided for the conversion from proper radii
     to pixels.
 
-    :param Image/RateMap/ExpMap im_prod:
+    :param Image/RateMap/ExpMap im_prod: The image product used for coordinate conversion.
     :param Quantity physical_rad: The physical radius to be converted to pixels.
     :param Quantity coord: The position of the object being analysed.
     :param float/int z: The redshift of the object (only required for input proper distance units like kpc).
@@ -182,7 +182,7 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
         boundary coordinates for.
     :return: Two lists, the first with the x lower and upper bounding coordinates, and the second with
         the y lower and upper bounding coordinates.
-    :rtype: Tuple[List[int, int], List[int, int]]
+    :rtype: Tuple[List[int], List[int]]
     """
     if isinstance(im_prod, Image) and im_prod.data.sum() != 0:
         # For the XGA Image products
@@ -302,6 +302,7 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
     as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
     header, and uses their critical values to construct astropy WCS objects.
 
+    :param FITSHDR hdr: The header object to extract WCS information from.
     :return: A list of astropy WCS objects extracted from the input header.
     :rtype: List[WCS]
     """
