@@ -60,6 +60,29 @@ class Spectrum(BaseProduct):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
+
+        :param str path: The path to the spectrum file.
+        :param str rmf_path: The path to the RMF generated for the spectrum file.
+        :param str arf_path: The path to the ARF generated for the spectrum file.
+        :param str b_path: The path to the background spectrum generated for the spectrum file.
+        :param Quantity central_coord: The central coordinate of the spectrum region.
+        :param Quantity inn_rad: The inner radius of the spectrum region.
+        :param Quantity out_rad: The outer radius of the spectrum region.
+        :param str obs_id: The ObsID from which this spectrum was generated.
+        :param str instrument: The instrument which this spectrum was generated.
+        :param bool grouped: Was this spectrum grouped?
+        :param int min_counts: The minimum counts applied for the grouping.
+        :param float min_sn: The minimum signal to noise applied for the grouping.
+        :param int over_sample: Level of oversampling applied to spectrum grouping.
+        :param str stdout_str: The stdout from the generation process.
+        :param str stderr_str: The stderr for the generation process.
+        :param str gen_cmd: The generation command for the spectrum stack.
+        :param bool region: Was this spectrum generated from a region in a region file?
+        :param str b_rmf_path: The path to the RMF generated for the background spectrum (if applicable, XGA no longer
+            generates these by default, as XSPEC does not make use of them).
+        :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
+            generates these by default, as XSPEC does not make use of them).
+        :param str telescope: The telescope that this spectrum is derived from. Default is None.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "spectrum"
@@ -321,15 +344,12 @@ class Spectrum(BaseProduct):
                         self._back_quality = all_dat['QUALITY']
 
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
+                                     f"access data from it; the reason given is: {reasons}.")
 
     def _read_header_on_demand(self, src_spec: bool = True, primary_header: bool = True):
         """
@@ -363,15 +383,12 @@ class Spectrum(BaseProduct):
                     self._spec_back_header = read_header(rel_path, 'SPECTRUM')
 
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
+                                     f"access data from it; the reason given is: {reasons}.")
 
     def _read_response_on_demand(self, rmf: bool = True):
         """
@@ -415,15 +432,12 @@ class Spectrum(BaseProduct):
                     arf_read.close()
 
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
+                                     f"access data from it; the reason given is: {reasons}.")
 
     @property
     def header(self) -> FITSHDR:
@@ -1765,8 +1779,10 @@ class AnnularSpectra(BaseAggregateProduct):
     """
     def __init__(self, spectra: List[Spectrum]):
         """
-        The init method for the AnnularSpectrum class, performs checks and organizes the spectra which
+        The init method for the AnnularSpectra class, performs checks and organizes the spectra which
         have been passed in, for easy retrieval.
+
+        :param List[Spectrum] spectra: A list of the XGA Spectrum objects which make up this set.
         """
         if len(set([s.telescope for s in spectra])) != 1:
             raise NotImplementedError("AnnularSpectra comprised of spectra from multiple telescopes are not "
