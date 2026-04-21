@@ -17,7 +17,7 @@ import pkg_resources
 from astropy.constants import m_p, m_e
 from astropy.cosmology import LambdaCDM
 from astropy.io import fits
-from astropy.units import Quantity, def_unit, add_enabled_units
+from astropy.units import Quantity, def_unit, add_enabled_units, add_enabled_equivalencies
 from astropy.wcs import WCS
 from fitsio import FITSHDR
 from tqdm import tqdm
@@ -604,13 +604,33 @@ erosita_det = def_unit("erosita_det")
 chandra_sky = def_unit("chandra_sky")
 chandra_det = def_unit("chandra_det")
 
+# Define a dictionary to store the units in to make dynamic access easier. Also
+#  allows us to test if we forgot to define a unit when adding a new mission.
+MISSION_XY_UNITS = {'xmm': {'skyxy': xmm_sky, 'detxy': xmm_det},
+                    'erosita': {'skyxy': erosita_sky, 'detxy': erosita_det},
+                    'erass': {'skyxy': erosita_sky, 'detxy': erosita_det},
+                    'chandra': {'skyxy': chandra_sky, 'detxy': chandra_det}
+                    }
+
+# Generic units for SKY and DET coordinate systems
+SKY_XY_UNIT = def_unit("skyxy")
+DET_XY_UNIT = def_unit("detxy")
+
+XY_UNIT_EQUIVS = [(uno, SKY_XY_UNIT if unt == 'skyxy' else DET_XY_UNIT,
+                   lambda x: x, lambda x: x)
+                  for mn, uns in MISSION_XY_UNITS.items() for unt, uno in uns.items()]
+
 # This is a dumb and annoying work-around for a readthedocs problem where units were being added multiple times
 try:
     Quantity(1, 'r200')
 except ValueError:
     # Adding the unit instances we created to the astropy pool of units - means we can do things like just defining
     #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
-    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandra_det])
+    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandra_det,
+                       SKY_XY_UNIT, DET_XY_UNIT])
+
+    # We add the equivalencies for some of the custom units we defined
+    add_enabled_equivalencies(XY_UNIT_EQUIVS)
 # ---------------------------------------------------------------
 
 
@@ -621,9 +641,9 @@ except ValueError:
 #  to use the XGA products with your own data files without using the source/sample classes, so it will no longer fail
 #  at this stage.
 
-# We're going to be assessing the configuration sections and determining whether they are configured in such a way
-#  that XGA can use them - if the configuration is valid and can be used then that telescope's entry in this
-#  dictionary wll be set to True. That is likely to be checked in the source class init at some point
+# We're going to be assessing the configuration sections and determining whether they are configured
+#  in such a way that XGA can use them - if the configuration is valid then that telescope's entry in
+#  this dictionary will be set to True.
 VALID_CONFIG = {tel: False for tel in TELESCOPES}
 
 # In this case we find that the configuration file does not exist, and we set it up using the default sections and
