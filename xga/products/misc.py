@@ -36,6 +36,7 @@ class EventList(BaseProduct):
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the event list.
         :param str telescope: The telescope that is the source of this event list. The default is None.
+        :param List[str] obs_ids: The obs ids that were combined to make this event list. The default is None.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._prod_type = "events"
@@ -45,11 +46,11 @@ class EventList(BaseProduct):
         self._data = None
         self._telescope = telescope
 
-        if obs_ids is not None and not isinstance(obs_ids, List):
-            raise ValueError("The 'obs_ids' argument nust be a list of strings.")
+        if obs_ids is not None and not isinstance(obs_ids, list):
+            raise ValueError("The 'obs_ids' argument must be a list of strings.")
 
         if obs_ids is not None and not all(isinstance(obs, str) for obs in obs_ids):
-            raise ValueError("The 'obs_ids' argument nust be a list of strings.")
+            raise ValueError("The 'obs_ids' argument must be a list of strings.")
         
         self._obs_ids = obs_ids
     
@@ -92,9 +93,9 @@ class EventList(BaseProduct):
     @property
     def data(self) -> pd.DataFrame:
         """
-        Property getter allowing access to the astropy fits header object of this event list.
+        Property getter allowing access to the pandas dataframe of this event list's data.
 
-        :return: The header of the primary data table of the event list.
+        :return: The primary data table of the event list as a pandas dataframe.
         :rtype: pd.DataFrame
         """
         # If the header attribute is None then we know we have to read the header in
@@ -107,7 +108,7 @@ class EventList(BaseProduct):
         """
         Property deleter for the data of this EventList instance. The self._data attribute is removed from
         memory, and then self._data is explicitly set to None so that self._read_data_on_demand() will be
-        triggered if you ever want the header from this object again.
+        triggered if you ever want the data from this object again.
         """
         del self._data
         self._data = None
@@ -169,6 +170,8 @@ class EventList(BaseProduct):
         into memory.
 
         :param List[str] col_names: A list of column names to retrieve.
+        :return: A pandas DataFrame containing only the requested columns.
+        :rtype: pd.DataFrame
         """
 
         # There is no sense reading in the columns again, if the whole event list is already in memory

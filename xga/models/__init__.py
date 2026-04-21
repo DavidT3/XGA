@@ -133,7 +133,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     compute the nth derivative at `x0`.
 
     This is intended as a drop-in replacement for Scipy's misc.derivative function, which was deprecated in
-    Scipy v1.10.0 and removed after Scipy v1.14.1. It has been directly copied/reconstructed from Scipy  code.
+    Scipy v1.10.0 and removed after Scipy v1.14.1. It has been directly copied/reconstructed from Scipy code.
 
     :param FunctionType func: Input function.
     :param float x0: The point at which the nth derivative is found.

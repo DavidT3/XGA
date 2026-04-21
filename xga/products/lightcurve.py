@@ -27,7 +27,7 @@ class LightCurve(BaseProduct):
 
     :param str path: The path to the lightcurve.
     :param str obs_id: The ObsID from which this lightcurve was generated.
-    :param str instrument: The instrument from which this lightcurve.
+    :param str instrument: The instrument from which this lightcurve was generated.
     :param str stdout_str: The stdout from the generation process.
     :param str stderr_str: The stderr for the generation process.
     :param str gen_cmd: The generation command for the lightcurve.
@@ -636,7 +636,7 @@ class LightCurve(BaseProduct):
                  fracexp_corr: bool = False) -> Axes:
         """
         A method that allows the user to retrieve a populated lightcurve visualisation axes, in a form that allows
-        them to then add their own plots in additon to what has been automatically constructed. This is an alternative
+        them to then add their own plots in addition to what has been automatically constructed. This is an alternative
         to the view method, which calls this method and then displays the visualisation as constructed here.
 
         :param Axes ax: The matplotlib axes that should be populated with a lightcurve visualization.

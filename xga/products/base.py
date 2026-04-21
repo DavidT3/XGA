@@ -409,7 +409,7 @@ class BaseProduct:
         Property getter for the confirmed generation errors associated with a product.
 
         :return: The list of confirmed generation errors.
-        :rtype: List[Dict]
+        :rtype: List[str]
         """
         return self._gen_error
 
@@ -558,6 +558,12 @@ class BaseAggregateProduct:
     def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
         """
         The init method for the BaseAggregateProduct class
+
+        :param list file_paths: A list of file paths to the constituent products of this aggregate product.
+        :param str prod_type: The type of product this aggregate represents (e.g. 'image').
+        :param str obs_id: The ObsID associated with this aggregate product.
+        :param str instrument: The combined instrument name associated with this product.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         self._all_paths = file_paths
         self._all_usable = True
@@ -797,6 +803,7 @@ class BaseProfile1D:
             plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
             is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this profile is derived from. Default is None.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -1683,7 +1690,7 @@ class BaseProfile1D:
         g.triangle_plot([gd_samp], filled=True)
         plt.show()
 
-    def generate_data_realisations(self, num_real: int, truncate_zero: bool = False):
+    def generate_data_realisations(self, num_real: int, truncate_zero: bool = False) -> Quantity:
         """
         A method to generate random realisations of the data points in this profile, using their y-axis values
         and uncertainties. This can be useful for error propagation for instance, and does not require a model fit
@@ -2642,12 +2649,13 @@ class BaseProfile1D:
         """
         return self._outer_rad
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
         passed in on init.
 
         :return: The number of bins in this radial profile.
+        :rtype: int
         """
         return len(self._radii)
 
@@ -2676,6 +2684,8 @@ class BaseAggregateProfile1D:
     def __init__(self, profiles: List[BaseProfile1D]):
         """
         The init for the BaseAggregateProfile1D class.
+
+        :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this aggregate profile.
         """
         # This checks that all types of profiles in the profiles list are the same
         types = [type(p) for p in profiles]
