@@ -176,7 +176,6 @@ def build_observation_census(tel: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
                             with fits.open(evt_path) as hdul:
                                 evts_header = hdul['EVENTS'].header
                         except Exception as exc:
-                            print(evt_path)
                             raise exc
                         # evts_header = read_header(evt_path, ext="EVENTS")
 
