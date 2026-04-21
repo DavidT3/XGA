@@ -44,15 +44,15 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
 
 def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool,
                   min_counts: int, min_sn: float, over_sample: float, num_cores: int, psf_bins: int,
-                  stacked_spectra: bool, telescope: List[str]):
+                  stacked_spectra: bool, telescope: List[str]) -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]:
     """
     Internal function to see if a source/sources have a measured global temperature, single_temp_apec
     is run before the check is done. It also runs the region_setup() method to fetch the outer radii
     of the annular bins of profiles. This method is used in _setup_inv_abel_dens_onion_temp, which
     is then used in entropy and mass profile functions.
 
-    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to check whether a global
-        temperature is measured.
+    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to check for a global
+        temperature measurement.
     :param str/Quantity outer_radius: The radius out to which you wish to measure gas density and
         temperature profiles. This can either be a string radius name (like 'r500') or an astropy
         quantity. That quantity should have as many entries as there are sources.
@@ -77,14 +77,13 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be
         used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
         supported, this function will instead use individual spectra for an ObsID. The default is
-        False
-    :param List[str] telescope: The telescopes to set up global absorbed plasma emission fits for.
+        False.
+    :param List[str] telescope: The telescope(s) for which we are setting up spectral fits.
     :return: A tuple. The first elements are the sources. The second are the Quantity objects
         describing the outer_radii of the regions used for annular bins. The third is a dictionary
-        with telescope keys, containing a list of Trues and Falses, depending on if the source
+        with telescope keys, containing a list of True and False values, depending on if the source
         has a global temperature or not.
-    :rtype Tuple[BaseSource/List[BaseSource]/BaseSample, Tuple[Union[BaseSource, BaseSample],
-        List[Quantity], List[Quantity]], dict]:
+    :rtype: Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]
     """
 
     out_rads = region_setup(sources, outer_radius, Quantity(0, 'arcsec'), False, '')[-1]
@@ -137,7 +136,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
                 warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
                      "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
                 has_glob_temp[tel].append(False)
-            # If the telescope is not associated with this Source it will raise a NotAssociatedError
+            # If the telescope is not associated with this source, a NotAssociatedError will be raised
             except NotAssociatedError:
                 has_glob_temp[tel].append(False)
 
@@ -151,7 +150,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     global_radius: Quantity, fit_method: str = "mcmc", num_walkers: int = 20,
                                     num_steps: int = 20000, sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0,
                                     inv_abel_method: str = None, temp_annulus_method: str = 'min_snr',
-                                    temp_min_snr: float = 30, temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
+                                    temp_min_snr: Union[int, float] = 30, temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                                     temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
                                     temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
                                     temp_lo_en: Quantity = Quantity(0.3, 'keV'),
@@ -221,7 +220,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
         To disable minimum counts set this parameter to None.
     :param float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
-    :param bool over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
+    :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
