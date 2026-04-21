@@ -537,7 +537,7 @@ ALLOWED_PRODUCTS = ["spectrum", "grp_spec", "regions", "events", "psf", "psfgrid
                     ] + ENERGY_BOUND_PRODUCTS + PROFILE_PRODUCTS + COMBINED_PROFILE_PRODUCTS
 
 # A centralised constant to define what radius labels are allowed
-RAD_LABELS = ["region", "r2500", "r500", "r200", "custom", "point"]
+RAD_LABELS = ["r2500", "r500", "r200", "custom", "point"]
 
 # Adding a default concordance cosmology set up here - this replaces the original default choice of Planck15
 DEFAULT_COSMO = LambdaCDM(70, 0.3, 0.7)
