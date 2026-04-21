@@ -775,7 +775,7 @@ class GasDensity3D(BaseProfile1D):
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity radii: The radii at which to measure gas masses. The default is None, in which
             case the radii at which this density profile has data points will be used.
-        :param Quantity deg_radii: The equivelant radii to `radii` but in degrees, required for defining
+        :param Quantity deg_radii: The equivalent radii to `radii` but in degrees, required for defining
             a profile. The default is None, but if custom radii are passed then this variable must be passed too.
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
         :return: A cumulative gas mass distribution.
@@ -1150,7 +1150,7 @@ class EmissionMeasure1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
-:param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param str telescope: The telescope that this emission measure profile is derived from. Default is None.
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
@@ -2314,7 +2314,7 @@ class SpecificEntropy(BaseProfile1D):
           and density profiles, then the data points on the profile with wider bins can either be interpolated, or
           matched to the data points of the other profile that they cover.
 
-        :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
@@ -2541,10 +2541,10 @@ class SpecificEntropy(BaseProfile1D):
         which dx will be set to radius/1e+6.
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
-            mass within.
+            entropy at.
         :param float conf_level: The confidence level for the entropy uncertainties, the default is 68.2% (~1σ).
         :return: An astropy quantity containing the entropy/entropies, lower and upper uncertainties, and another
-            containing the mass realisation distribution.
+            containing the entropy realisation distribution.
         :rtype: Union[Quantity, Quantity]
         """
         # Setting the upper and lower confidence limits
@@ -2817,6 +2817,8 @@ class Generic1D(BaseProfile1D):
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
 
+        :param Quantity radii: The radii at which the y values of this profile have been measured.
+        :param Quantity values: The y values of this profile.
         :param Quantity centre: The central coordinate the profile was generated from.
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
