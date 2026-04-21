@@ -59,20 +59,20 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
     :param Quantity lo_en: The lower energy limit of the combined ratemap used to calculate density.
     :param Quantity hi_en: The upper energy limit of the combined ratemap used to calculate density.
     :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-    :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+    :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
         desired result were grouped by minimum counts.
     :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted
         for the desired result were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were fitted.
     :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from.
-        This should be a dictonary of strings if a single source is being analysed, or a dictionary
+        This should be a dictionary of strings if a single source is being analysed, or a dictionary
         of lists of ObsIDs the same length as the number of sources otherwise. The dictionary should
         have keys for every telescope associated to the Source/Sample. If a source in a sample
         doesn't have data associated to one of the telescopes, use an empty string for its place in
         the list. The default is None, in which case the combined data will be used to measure the
         density profile.
     :param Dict[str, str]/Dict[str, list] inst: A specific instruments(s) to measure the density
-        from. This should be a dictonary of strings if a single source is being analysed, or if the
+        from. This should be a dictionary of strings if a single source is being analysed, or if the
         same instrument should be used for every source in the sample, or a dictionary of lists of
         instruments the same length as the number of sources otherwise. The dictionary should have
         keys for every telescope associated to the Source/Sample. The default is None, in which case
@@ -86,9 +86,9 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         measure temperatures for the conversion factor calculation, default is 'r500'. An astropy
         quantity may also be passed, with either a single value or an entry for each cluster being
         analysed.
-    :param str/Quantity conv_outer_radius: The inner radius of spectra from measure temperatures for the conversion
-        factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
-        a single value or an entry for each cluster being analysed.
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the
+        conversion factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum.
+        Supports either a single value or an entry for each cluster being analysed.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
@@ -459,7 +459,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param int num_samples: The number of samples drawn from the posterior distributions of model
         parameters after the fitting process is complete.
     :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
-    :param float min_counts: The minimum counts per channel, if the spectra that were used for
+    :param int min_counts: The minimum counts per channel, if the spectra that were used for
         fakeit were grouped by minimum counts.
     :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for
         fakeit were grouped by minimum signal-to-noise.
@@ -487,7 +487,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         measure temperatures for the conversion factor calculation, default is 'r500'. An astropy
         quantity may also be passed, with either a single value or an entry for each cluster being
         analysed.
-    :param str/Quantity conv_inner_radius: The inner radius of spectra from measure temperatures for the conversion
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the conversion
         factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
         a single value or an entry for each cluster being analysed.
     :param str inv_abel_method: The method which should be used for the inverse abel transform of
@@ -503,7 +503,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
         case density profiles will be produced from all telescopes associated with a source.
-    :parma Quantity timeout: Timeout argument for xspec functions.
+    :param Quantity timeout: Timeout argument for xspec functions.
     :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
         names. The values are lists with one entry per source, even if the source in question doesn't have
         that telescope associated or the profile construction process failed.
@@ -737,7 +737,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param int num_samples: The number of samples drawn from the posterior distributions of model parameters
         after the fitting process is complete.
     :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
-    :param float min_counts: The minimum counts per channel, if the spectra that were used for fakeit
+    :param int min_counts: The minimum counts per channel, if the spectra that were used for fakeit
         were grouped by minimum counts.
     :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for fakeit
         were grouped by minimum signal-to-noise.
@@ -763,7 +763,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param str/Quantity conv_outer_radius: The outer radius within which to generate spectra and measure temperatures
         for the conversion factor calculation, default is 'r500'. An astropy quantity may also be passed, with either
         a single value or an entry for each cluster being analysed.
-    :param str/Quantity conv_inner_radius: The inner radius of spectra from measure temperatures for the conversion
+    :param str/Quantity conv_inner_radius: The inner radius of spectra from which to measure temperatures for the conversion
         factor calculation. Default is 0 arcseconds, producing a core-included circular spectrum. Supports either
         a single value or an entry for each cluster being analysed.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed to use.
@@ -772,7 +772,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to produce density profiles from. Default is None, in which
         case density profiles will be produced from all telescopes associated with a source.
-    :parma Quantity timeout: Timeout argument for xspec functions.
+    :param Quantity timeout: Timeout argument for XSPEC functions.
     :return: A dictionary of 3D gas density profile lists measured by this function - the keys are telescope
         names. The values are lists with one entry per source, even if the source in question doesn't have
         that telescope associated or the profile construction process failed.
@@ -1018,7 +1018,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
             is True. I recommend that this be true for combined observations, as exposure time could
             change quite dramatically across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts
         per channel. To disable minimum counts, set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
         each channel. To disable minimum signal-to-noise, set this parameter to None.
