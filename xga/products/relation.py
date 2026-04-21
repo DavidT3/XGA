@@ -92,7 +92,7 @@ class ScalingRelation:
         the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
     :param float core_radius_fraction: If the scaling relation is built using core-excised quantities, the radius
         of the core defined as a fraction of the outer aperture.
-    :param float outer_aperture: The aperture within which the quantities used to build this relation are
+    :param str/Quantity outer_aperture: The aperture within which the quantities used to build this relation are
         measured, either a numerical fixed aperture in the form of an astropy quantity (e.g. Quantity(500, 'kpc')) or
         a named overdensity (e.g. 'R500').
     :param str telescope: The name of the telescope that performed the measurements used to build this relation.
@@ -325,23 +325,22 @@ class ScalingRelation:
     @property
     def outer_aperture(self) -> Union[str, Quantity, None]:
         """
-        This property stores the outer radius or aperture used for the scaling relation. It can either be a 
-        string indicating an overdensity-based radius (e.g. 'R500', 'R2500'), or a Quantity for fixed physical 
+        This property stores the outer radius or aperture used for the scaling relation. It can either be a
+        string indicating an overdensity-based radius (e.g. 'R500', 'R2500'), or a Quantity for fixed physical
         apertures (e.g. 300 * u.kpc).
 
         :return: The outer aperture used for the scaling relation, or None if not specified.
-        :rtype: str, astropy.units.Quantity, or None
+        :rtype: Union[str, Quantity, None]
         """
         return self._outer_aperture
 
     @property
     def core_radius_fraction(self) -> float:
         """
-        Indicates whether this scaling relation is core-excised or core-included. A core-excised relation excludes
-        emission from the cluster core, which is often done to reduce scatter in the scaling relation.
+        Indicates the fraction of the overdensity radius that is excluded for core-excision.
 
-        :return: True if the relation is core-excised, False if core-included.
-        :rtype: bool
+        :return: The core radius fraction.
+        :rtype: float
         """
         return self._core_radius_fraction
 
@@ -380,7 +379,7 @@ class ScalingRelation:
     @property
     def y_name(self) -> str:
         """
-        A string containing the name of the x-axis of this relation.
+        A string containing the name of the y-axis of this relation.
 
         :return: A Python string containing the name.
         :rtype: str
@@ -681,7 +680,7 @@ class ScalingRelation:
         Returns the name of the third data dimension passed to this relation on initialization.
 
         :return: The name of the third dimension, if supplied on initialization. The default is None.
-        :rtype: Quantity/None
+        :rtype: str/None
         """
         return self._third_dim_name
 
@@ -794,7 +793,7 @@ class ScalingRelation:
         :param List[str] cust_par_names: A list of custom parameter names. If the names include LaTeX code do not
             include $$ math environment symbols - you may also need to pass a string literal (e.g. r"\sigma"). Do
             not include an entry for a scatter parameter.
-        :param List[str] colour: Colour for the contours. Default is None in which case the value of the
+        :param str colour: Colour for the contours. Default is None in which case the value of the
             model_colour property of the relation is used.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
