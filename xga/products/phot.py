@@ -64,7 +64,7 @@ class Image(BaseProduct):
         kernel used or a dictionary of information (required structure detailed in
         parse_smoothing). Default is None
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
@@ -110,8 +110,8 @@ class Image(BaseProduct):
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
         self._shape = None
         self._wcs_radec = None
-        self._wcs_xmmXY = None
-        self._wcs_xmmdetXdetY = None
+        self._wcs_skyXY = None
+        self._wcs_detXY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
         self._data = None
@@ -259,9 +259,9 @@ class Image(BaseProduct):
                 raise ValueError("Image shape from the FITS header does not match the data shape.")
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError("This product has been marked as unusable, so you cannot access data from it. "
+                                     "The reason(s) given are: {}. Please check the usable attribute "
+                                     "before attempting to access data.".format(reasons))
 
     def _read_header_on_demand(self):
         """
@@ -313,11 +313,11 @@ class Image(BaseProduct):
                     if self._wcs_radec is None:
                         self._wcs_radec = w
                 elif "x" in axes and "y" in axes:
-                    if self._wcs_xmmXY is None:
-                        self._wcs_xmmXY = w
+                    if self._wcs_skyXY is None:
+                        self._wcs_skyXY = w
                 elif "detx" in axes and "dety" in axes:
-                    if self._wcs_xmmdetXdetY is None:
-                        self._wcs_xmmdetXdetY = w
+                    if self._wcs_detXY is None:
+                        self._wcs_detXY = w
                 else:
                     raise ValueError("This type of WCS is not recognised!")
 
@@ -773,22 +773,22 @@ class Image(BaseProduct):
     def skyxy_wcs(self):
         """
         Property getter for the WCS that converts back and forth between pixel values
-        and XMM XY Sky coordinates.
+        and SKY XY coordinates.
 
-        :return: The WCS object for XMM X and Y sky coordinates.
+        :return: The WCS object for SKY XY coordinates.
         :rtype: wcs.WCS
         """
         # Deliberately checking the radec WCS, as the skyXY WCS is allowed to be None after the
         # read_on_demand call
         if self._wcs_radec is None:
             self._read_wcs_on_demand()
-        return self._wcs_xmmXY
+        return self._wcs_skyXY
 
     @skyxy_wcs.setter
     def skyxy_wcs(self, input_wcs: wcs.WCS):
         """
         Property setter for the WCS that converts back and forth between pixel values
-        and XMM XY Sky coordinates. This WCS is not guaranteed to be set from the image,
+        and SKY XY coordinates. This WCS is not guaranteed to be set from the image,
         so it is possible to add your own.
 
         :param wcs.WCS input_wcs: The user supplied WCS object to assign to skyxy_wcs property.
@@ -803,28 +803,28 @@ class Image(BaseProduct):
             if "x" not in axes or "y" not in axes:
                 raise ValueError("This WCS does not have the XY axes expected for the skyxy_wcs property.")
             else:
-                self._wcs_xmmXY = input_wcs
+                self._wcs_skyXY = input_wcs
 
     @property
     def detxy_wcs(self):
         """
         Property getter for the WCS that converts back and forth between pixel values
-        and XMM DETXY detector coordinates.
+        and DETXY detector coordinates.
 
-        :return: The WCS object for XMM DETX and DETY detector coordinates.
+        :return: The WCS object for DETX and DETY detector coordinates.
         :rtype: wcs.WCS
         """
         # Deliberately checking the radec WCS, as the DETXY WCS is allowed to be None after the
         # read_on_demand call
         if self._wcs_radec is None:
             self._read_wcs_on_demand()
-        return self._wcs_xmmdetXdetY
+        return self._wcs_detXY
 
     @detxy_wcs.setter
     def detxy_wcs(self, input_wcs: wcs.WCS):
         """
         Property setter for the WCS that converts back and forth between pixel values
-        and XMM DETXY detector coordinates. This WCS is not guaranteed to be set from the image,
+        and DETXY detector coordinates. This WCS is not guaranteed to be set from the image,
         so it is possible to add your own.
 
         :param wcs.WCS input_wcs: The user supplied WCS object to assign to detxy_wcs property.
@@ -839,7 +839,7 @@ class Image(BaseProduct):
             if "detx" not in axes or "dety" not in axes:
                 raise ValueError("This WCS does not have the DETX DETY axes expected for the detxy_wcs property.")
             else:
-                self._wcs_xmmdetXdetY = input_wcs
+                self._wcs_detXY = input_wcs
 
     # This absolutely doesn't get a setter considering it's the header object with all the information
     #  about the image in.
@@ -871,110 +871,106 @@ class Image(BaseProduct):
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
 
-        :param Quantity coords: The input coordinates quantity to convert, in units of either deg,
-            pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
-        :param Unit/str output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
-            xmm_det (xmm_sky and xmm_det are defined for this module).
+        :param Quantity coords: The input coordinates quantity to convert, in units of either deg, pix,
+            skyxy, detxy, or the mission-specific variants (e.g. xmm_sky, xmm_det, erosita_sky, etc.).
+        :param Unit/str output_unit: The desired unit of the output coordinate. Can be either deg, pix, skyxy,
+            detxy, or the mission-specific variants (e.g. xmm_sky, xmm_det, erosita_sky, etc.).
         :param bool ignore_bad_pix_coord: Means that no error will be raised if an invalid pixel coordinate (i.e.
             less than 0 or greater than the size of the image) is calculated. Default is False.
-        :return: The converted coordinates.
+        :return: The transformed coordinates.
         :rtype: Quantity
         """
-        # If a string representation was passed, we make it an astropy unit
-        if isinstance(output_unit, str) and output_unit not in ['xmm_sky', 'xmm_det']:
+        # If a string representation was passed, we make it an Astropy unit. This will also work for the 'xmm_sky',
+        #  'xmm_det', 'erosita_sky', 'erosita_det', etc. that we define specifically for XGA in the utils.py file
+        if isinstance(output_unit, str):
             output_unit = Unit(output_unit)
-        elif isinstance(output_unit, str) and output_unit == 'xmm_sky':
-            output_unit = xmm_sky
-        elif isinstance(output_unit, str) and output_unit == 'xmm_det':
-            output_unit = xmm_det
 
-        allowed_units = ["deg", "xmm_sky", "xmm_det", "pix"]
-        if coords.unit.is_equivalent("deg"):
+        # Check that the specified output unit is allowed.
+        if (output_unit != Unit('deg') and output_unit != Unit('pix')
+                and not output_unit.is_equivalent('skyxy')
+                and not output_unit.is_equivalent('detxy')):
+            raise UnitConversionError("The output unit must be either deg, pix, skyxy, or detxy.")
+
+        if not isinstance(coords, Quantity):
+            raise TypeError("The 'coords' argument must be an Astropy Quantity.")
+        # Make sure the coords are in degrees if they are an angular unit
+        elif coords.unit.is_equivalent("deg"):
             coords = coords.to("deg")
-        input_unit = coords.unit.name
-        out_name = output_unit.name
 
-        if input_unit != out_name:
-            # First off do some type checking
-            if not isinstance(coords, Quantity):
-                raise TypeError("Please pass an astropy Quantity for the coords.")
+        # Extract the unit of the input coordinates
+        input_unit = coords.unit
+
+        if not input_unit.is_equivalent(output_unit):
             # The coordinate pair must have two elements per row, no more no less
-            elif len(coords.shape) == 1 and coords.shape != (2,):
-                raise ValueError("You have supplied an array with {} values, coordinate pairs "
-                                 "should have two.".format(coords.shape[0]))
+            if len(coords.shape) == 1 and coords.shape != (2,):
+                raise ValueError(f"You have supplied an array with {coords.shape[0]} values, coordinate "
+                                 f"pairs should have two.")
             # This changes individual coordinate pairs into the form that this function expects
             elif len(coords.shape) == 1:
                 coords = coords[:, None].T
             # Checks that multiple pairs of coordinates are in the right format
             elif len(coords.shape) != 1 and coords.shape[1] != 2:
-                raise ValueError("You have supplied an array with {} columns, there can only be "
-                                 "two.".format(coords.shape[1]))
-            # I know the proper way with astropy units is to do .to() but its easier with WCS this way
-            elif input_unit not in allowed_units:
-                raise UnitsError("Those coordinate units are not supported by this method, "
-                                 "please use one of these: {}".format(", ".join(allowed_units)))
-            elif out_name not in allowed_units:
-                raise UnitsError("That output unit is not supported by this method, "
-                                 "please use one of these: {}".format(", ".join(allowed_units)))
+                raise ValueError(f"You have supplied an array with {coords.shape[1]} columns, there "
+                                 f"can only be two.")
 
             # Check for presence of the right WCS
-            if (input_unit == "xmm_sky" or out_name == "xmm_sky") and self.skyxy_wcs is None:
-                raise ValueError("There is no XMM Sky XY WCS associated with this product.")
-            elif (input_unit == "xmm_det" or out_name == "xmm_det") and self.detxy_wcs is None:
-                raise ValueError("There is no XMM Detector XY WCS associated with this product.")
+            if (input_unit.is_equivalent("skyxy") or output_unit.is_equivalent("skyxy")) and self.skyxy_wcs is None:
+                raise ValueError(f"There is no SkyXY WCS associated with this {self._prod_type}.")
+            elif (input_unit.is_equivalent("detxy") or output_unit.is_equivalent("detxy")) and self.detxy_wcs is None:
+                raise ValueError(f"There is no DETXY WCS associated with this {self._prod_type}.")
 
             # Now to do the actual conversion, which will include checking that the correct WCS is loaded
             # These go between degrees and pixels
-            if input_unit == "deg" and out_name == "pix":
+            if input_unit == Unit('deg') and output_unit == Unit('pix'):
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
                 # We define an interim variable, in case the result is NaN - this now causes a warning that we
                 #  wish to avoid, so we replace NaN with a negative number that will cause a failure further down
                 inter_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0)
                 out_coord = np.nan_to_num(inter_coord, nan=Quantity(-100, 'pix')).astype(int)
-            elif input_unit == "pix" and out_name == "deg":
+            elif input_unit == Unit("pix") and output_unit == Unit("deg"):
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
-            # These go between degrees and XMM sky XY coordinates
-            elif input_unit == "deg" and out_name == "xmm_sky":
+            # These go between degrees and sky XY coordinates
+            elif input_unit == Unit("deg") and output_unit.is_equivalent('skyxy'):
                 interim = self.radec_wcs.all_world2pix(coords, 0)
-                out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), xmm_sky)
-            elif input_unit == "xmm_sky" and out_name == "deg":
+                out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), output_unit)
+            elif input_unit.is_equivalent('skyxy') and output_unit == Unit("deg"):
                 interim = self.skyxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
-            # These go between XMM sky XY and pixel coordinates
-            elif input_unit == "xmm_sky" and out_name == "pix":
+            # These go between sky XY and pixel coordinates
+            elif input_unit.is_equivalent('skyxy') and output_unit == Unit("pix"):
                 out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == "pix" and out_name == "xmm_sky":
+            elif input_unit == Unit("pix") and output_unit.is_equivalent('skyxy'):
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(coords, 0), output_unit)
 
-            # These go between degrees and XMM Det XY coordinates
-            elif input_unit == "deg" and out_name == "xmm_det":
+            # These go between degrees and Det XY coordinates
+            elif input_unit == Unit("deg") and output_unit.is_equivalent("detxy"):
                 interim = self.radec_wcs.all_world2pix(coords, 0)
-                out_coord = Quantity(self.detxy_wcs.all_pix2world(interim, 0), xmm_sky)
-            elif input_unit == "xmm_det" and out_name == "deg":
+                out_coord = Quantity(self.detxy_wcs.all_pix2world(interim, 0), output_unit)
+            elif input_unit.is_equivalent("detxy") and output_unit == Unit("deg"):
                 interim = self.detxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
-            # These go between XMM det XY and pixel coordinates
-            elif input_unit == "xmm_det" and out_name == "pix":
+            # These go between det XY and pixel coordinates
+            elif input_unit.is_equivalent("detxy") and output_unit == Unit("pix"):
                 out_coord = Quantity(self.detxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == "pix" and out_name == "xmm_det":
+            elif input_unit == Unit("pix") and output_unit.is_equivalent("detxy"):
                 out_coord = Quantity(self.detxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
             # outside the range covered by an image, but we can at least catch the error
-            if out_name == "pix" and np.any(out_coord < 0) and self._prod_type != "psf" and not ignore_bad_pix_coord:
+            if output_unit == Unit("pix") and np.any(out_coord < 0) and self._prod_type != "psf" and not ignore_bad_pix_coord:
                 raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
             # Have to compare to the [1] element of shape because numpy arrays are flipped, and we want
             #  to compare x to x
-            elif (out_name == "pix" and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf"
+            elif (output_unit == Unit("pix") and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf"
                   and not ignore_bad_pix_coord):
                 raise ValueError("You've converted to pixel coordinates, and some x coordinates are larger than the "
                                  "image x-shape.")
             # Have to compare to the [0] element of shape because numpy arrays are flipped, and we want
             #  to compare y to y
-            elif (out_name == "pix" and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf"
+            elif (output_unit == Unit("pix") and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf"
                   and not ignore_bad_pix_coord):
                 raise ValueError("You've converted to pixel coordinates, and some y coordinates are larger than the "
                                  "image y-shape.")
@@ -983,9 +979,8 @@ class Image(BaseProduct):
             if out_coord.shape == (1, 2):
                 out_coord = out_coord[0, :]
 
-            # if out_coord.shape ==
-        elif input_unit == out_name and out_name == 'pix':
-            out_coord = coords.round(0).astype(int)
+        elif input_unit.is_equivalent(output_unit) and output_unit == Unit('pix'):
+            out_coord = coords.to('pix').round(0).astype(int)
         else:
             out_coord = coords
 
@@ -2636,7 +2631,7 @@ class ExpMap(Image):
     :param Quantity lo_en: The lower energy bound used to generate this product.
     :param Quantity hi_en: The upper energy bound used to generate this product.
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
@@ -2645,6 +2640,19 @@ class ExpMap(Image):
                  telescope: str = None):
         """
         Init of the ExpMap class.
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str obs_id: The ObsID related to the ExpMap being declared.
+        :param str instrument: The instrument related to the ExpMap being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param Quantity lo_en: The lower energy bound used to generate this product.
+        :param Quantity hi_en: The upper energy bound used to generate this product.
+        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
                          obs_inst_combs=obs_inst_combs, telescope=telescope)
@@ -2696,7 +2704,7 @@ class ExpMap(Image):
 class RateMap(Image):
     """
     A very powerful class which allows interactions with 'RateMaps', though these are not directly generated by
-    SAS, they are images divided by matching exposure maps, to provide a count rate image.
+    backend software like XMM-SAS, they are images divided by matching exposure maps, to provide a count rate image.
 
     :param Image xga_image: The image component of the RateMap.
     :param ExpMap xga_expmap: The exposure map component of the RateMap.
@@ -2712,8 +2720,18 @@ class RateMap(Image):
                  regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None):
         """
-        This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
-        of X-ray counts.
+        This initialises a RateMap instance, where a count image is divided by an exposure map, to create a map
+        of X-ray count rate.
+
+        :param Image xga_image: The image component of the RateMap.
+        :param ExpMap xga_expmap: The exposure map component of the RateMap.
+        :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
+        :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+            that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+            supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+            if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+            property. Default is None.
         """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
             raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
@@ -3487,6 +3505,15 @@ class PSF(Image):
                  gen_cmd: str, telescope: str = None):
         """
         The init method for PSF class.
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str psf_model: The model used for the generation of the PSF.
+        :param str obs_id: The ObsID related to the PSF being declared.
+        :param str instrument: The instrument related to the PSF being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
@@ -3585,7 +3612,7 @@ class PSF(Image):
         """
         This is the model that was used to generate this PSF.
 
-        :return: XMM SAS psfgen model name.
+        :return: The psf model name used by the backend software.
         :rtype: str
         """
         return self._psf_model
@@ -3610,6 +3637,18 @@ class PSFGrid(BaseAggregateProduct):
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
         generated at different points on the detector.
+
+        :param list file_paths: The file paths of the individual PSF files for this grid.
+        :param int bins: The number of bins per side of the grid.
+        :param str psf_model: The model used to generate PSFs.
+        :param np.ndarray x_bounds: The upper and lower x boundaries of the bins in image pixel coordinates.
+        :param np.ndarray y_bounds: The upper and lower y boundaries of the bins in image pixel coordinates.
+        :param str obs_id: The ObsID for which this PSFGrid was generated.
+        :param str instrument: The instrument for which this PSFGrid was generated.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The commands used to generate the products.
+        :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
         """
         super().__init__(file_paths, 'psf', obs_id, instrument, telescope=telescope)
         self._psf_model = psf_model
@@ -3652,7 +3691,7 @@ class PSFGrid(BaseAggregateProduct):
         """
         This is the model that was used to generate the component PSFs in this PSFGrid.
 
-        :return: XMM SAS psfgen model name.
+        :return: The psf model name used by the backend software.
         :rtype: str
         """
         return self._psf_model
