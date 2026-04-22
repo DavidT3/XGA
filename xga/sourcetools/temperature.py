@@ -24,7 +24,8 @@ ALLOWED_ANN_METHODS = ['min_snr', 'min_cnt']
 
 def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity, lo_en: Quantity, hi_en: Quantity,
                     telescope: str, obs_id: str = None, inst: str = None, psf_corr: bool = False,
-                    psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15):
+                    psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15) \
+        -> Tuple:
     """
     This method just sets up radii, masks, etc. for annular binning functions in this file. The operations in
     this function are shared by multiple other binning functions, hence they have been put in a function of their
@@ -35,7 +36,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
         PSF effects.
     :param Quantity lo_en: The lower energy bound of the ratemap to use for the signal-to-noise calculations.
-    :param Quantity hi_en: The upper energy bound of the ratemap to use for the signal-to-noise calculations.
+    :param Quantity hi_en: The upper energy limit of the ratemap to use for the signal-to-noise calculations.
     :param str telescope: The telescope whose data we are generating annuli for.
     :param str obs_id: An ObsID of a specific ratemap to use for the SNR calculations. Default is None, which
             means the combined ratemap will be used. Please note that inst must also be set to use this option.
@@ -47,8 +48,8 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         side in the PSF grid.
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
-    :return: The various variables that this function sets up
-    :rtype:
+    :return: The various variables that this function sets up.
+    :rtype: Tuple
     """
     # Parsing the telescope, ObsID, and instrument options, to figure out the exact ratemap that we want to use
     # There are unfortunately two 'types' of combined ratemap for eROSITA (or there can be) - combined in the sense
@@ -289,7 +290,7 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
 
     :param BaseSource source: The source object to generate annuli for.
     :param Quantity outer_rad: The outermost radius of the source region we will generate annuli within.
-    :param float min_cnt: The minimum number of counts which are allowable in a given annulus.
+    :param int/Quantity min_cnt: The minimum number of counts which are allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of the annuli. This can be set to try and avoid
         PSF effects.
     :param Quantity lo_en: The lower energy bound of the ratemap to use for the background subtracted count
@@ -397,9 +398,10 @@ def _cnt_bins(source: BaseSource, outer_rad: Quantity, min_cnt: Union[int, Quant
 def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
                            min_snr: float = 20, min_width: Quantity = Quantity(20, 'arcsec'),
                            use_combined: bool = True, use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
-                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
+                           hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
-                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
+                           min_sn: Union[int, float] = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
@@ -439,9 +441,9 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -556,9 +558,10 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
 def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_radii: Union[Quantity, List[Quantity]],
                            min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                            min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
-                           lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2, 'keV'),
+                           lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
-                           psf_iter: int = 15, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                           psf_iter: int = 15, group_spec: bool = True, min_counts: int = 5,
+                           min_sn: Union[int, float] = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
@@ -577,7 +580,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         the spectra (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
         'region' is chosen (to use the regions in region files), then any inner radius will be ignored. If you are
         generating for multiple sources then you can also pass a Quantity with one entry per source.
-    :param float min_cnt: The minimum counts allowable in a given annulus.
+    :param int/Quantity min_cnt: The minimum counts allowable in a given annulus.
     :param Quantity min_width: The minimum allowable width of an annulus. The default is set to 20 arcseconds to try
         and avoid PSF effects.
     :param bool use_combined: If True then the combined RateMap will be used for count annulus calculations.
@@ -592,9 +595,9 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -714,14 +717,15 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                            min_width: Quantity = Quantity(20, 'arcsec'), use_combined: bool = True,
                            use_worst: bool = False, lo_en: Quantity = Quantity(0.5, 'keV'),
-                           hi_en: Quantity = Quantity(2, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
+                           hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = False, psf_model: str = "ELLBETA",
                            psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, allow_negative: bool = False,
-                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
+                           min_sn: Union[int, float] = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
                            abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
                            conf_level: int = 68.2, num_cores: int = NUM_CORES, stacked_spectra: bool = False,
-                           telescope: Union[str, List[str]] = None) -> List[GasTemperature3D]:
+                           telescope: Union[str, List[str]] = None) -> Dict[str, List[GasTemperature3D]]:
     """
     This function will generate de-projected, three-dimensional, gas temperature profiles of galaxy clusters using
     the 'onion peeling' deprojection method. It will also generate any projected temperature profiles that may be
@@ -767,9 +771,9 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -791,9 +795,9 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param str/List[str] telescope: Telescope(s) to produce deprojected temperature profiles from. Default is
         None, in which case deprojected temperature profiles will be produced from all telescopes associated
         with a source.
-    :return: A list of the 3D temperature profiles measured by this function, though if the measurement was not
-        successful an entry of None will be added to the list.
-    :rtype: List[GasTemperature3D]
+    :return: A dictionary of lists of the 3D temperature profiles measured by this function (keys are telescope
+        names), though if the measurement was not successful an entry of None will be added to the list.
+    :rtype: Dict[str, List[GasTemperature3D]]
     """
     if annulus_method not in ALLOWED_ANN_METHODS:
         a_meth = ", ".join(ALLOWED_ANN_METHODS)
