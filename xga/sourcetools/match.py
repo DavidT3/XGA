@@ -601,7 +601,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
 def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                       distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
-                      num_cores: int = NUM_CORES):
+                      num_cores: int = NUM_CORES) -> Union[dict, np.ndarray]:
     """
     A matching function that checks whether supplied coordinates lie on a detector by using exposure maps to determine
     the exposure time at the supplied coordinates. Of course, this means that we need an idea of which observations
@@ -626,7 +626,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         will be returned. For multiple input coordinates an array of dictionaries (with telescope names as keys) of
         arrays of ObsID(s) and None values will be returned. Each entry corresponds to the input coordinate
         array, a None value indicates that the coordinate did not fall on an telescope observation at all.
-    :rtype: np.ndarray
+    :rtype: Union[dict, np.ndarray]
     """
     # Checks whether there are multiple input coordinates or just one. If one then the floats are turned into
     #  an array of length one to make later code easier to write (i.e. everything is iterable regardless)
@@ -659,16 +659,10 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     #  a detector, and b) don't already have exposure maps generated
     obs_src = NullSource(obs_ids, list(obs_ids.keys()), True)
 
-    # This is telescope-specific, and thus isn't generalised to new telescope implementations, but oh well
-    # We run exposure map generation for the ObsIDs we suspect to be associated with our positions
-    # TODO Could be more sophisticated and just check for ANY exposure maps - don't actually care about their energy
-    #  ranges at all for this
-    if 'xmm' in obs_src.telescopes:
-        from ..generate.sas import eexpmap
-        eexpmap(obs_src, num_cores=num_cores)
-    if 'erosita' in obs_src.telescopes:
-        from ..generate.esass import expmap
-        expmap(obs_src, lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), num_cores=num_cores)
+    # We run exposure map generation for the ObsIDs we suspect to be associated with our positions.
+    #  We use a unified multi-telescope function for this.
+    from ..generate.multitelescope.phot import all_telescope_expmaps
+    all_telescope_expmaps(obs_src, num_cores=num_cores, telescope=telescope)
 
     # # This is all the same deal as in separation_match, but calls the _on_obs_id internal function
     # The dictionary stores match dataframe information, with the keys comprised of the str(ra)+str(dec)

@@ -7,9 +7,10 @@ from warnings import warn
 from astropy.units import Quantity
 
 from xga import NUM_CORES
-from xga.generate.esass import combine_phot_prod
+from xga.generate.esass import combine_phot_prod, evtool_image, expmap
 from xga.generate.multitelescope._common import check_tel_associated
-from xga.generate.sas import emosaic
+from xga.generate.sas import emosaic, evselect_image, eexpmap
+from xga.generate.ciao import chandra_image_expmap
 from xga.samples import BaseSample
 from xga.sources import BaseSource
 
@@ -69,3 +70,55 @@ def all_telescope_combined_expmaps(sources: Union[BaseSource, BaseSample], lo_en
     if 'chandra' in rel_tels:
         warn("Combined exposure maps cannot yet be generated from Chandra observations.", stacklevel=2)
         pass
+
+
+def all_telescope_images(sources: Union[BaseSource, BaseSample], lo_en: Quantity = Quantity(0.5, "keV"),
+                         hi_en: Quantity = Quantity(2.0, "keV"), telescope: Union[str, List[str]] = None,
+                         num_cores: int = NUM_CORES):
+    """
+    A convenience function for generating individual images for all telescopes associated with the
+    passed source(s).
+
+    :param BaseSource/BaseSample sources: The source/sample for which we will generate images.
+    :param Quantity lo_en: Lower energy bound of the images.
+    :param Quantity hi_en: Upper energy bound of the images.
+    :param str/List[str]/None telescope: Telescope name or list of telescope names for which to generate
+        images. Default is None, in which case all associated telescopes will be used.
+    :param int num_cores: Number of CPU cores to use. Default is set to 90% of available.
+    """
+    rel_tels = check_tel_associated(sources, telescope)
+
+    if 'xmm' in rel_tels:
+        evselect_image(sources, lo_en, hi_en, num_cores=num_cores)
+
+    if 'erosita' in rel_tels or 'erass' in rel_tels:
+        evtool_image(sources, lo_en, hi_en, num_cores=num_cores)
+
+    if 'chandra' in rel_tels:
+        chandra_image_expmap(sources, lo_en, hi_en, num_cores=num_cores)
+
+
+def all_telescope_expmaps(sources: Union[BaseSource, BaseSample], lo_en: Quantity = Quantity(0.5, "keV"),
+                          hi_en: Quantity = Quantity(2.0, "keV"), telescope: Union[str, List[str]] = None,
+                          num_cores: int = NUM_CORES):
+    """
+    A convenience function for generating individual exposure maps for all telescopes associated with the
+    passed source(s).
+
+    :param BaseSource/BaseSample sources: The source/sample for which we will generate exposure maps.
+    :param Quantity lo_en: Lower energy bound of the exposure maps.
+    :param Quantity hi_en: Upper energy bound of the exposure maps.
+    :param str/List[str]/None telescope: Telescope name or list of telescope names for which to generate
+        exposure maps. Default is None, in which case all associated telescopes will be used.
+    :param int num_cores: Number of CPU cores to use. Default is set to 90% of available.
+    """
+    rel_tels = check_tel_associated(sources, telescope)
+
+    if 'xmm' in rel_tels:
+        eexpmap(sources, lo_en, hi_en, num_cores=num_cores)
+
+    if 'erosita' in rel_tels or 'erass' in rel_tels:
+        expmap(sources, lo_en, hi_en, num_cores=num_cores)
+
+    if 'chandra' in rel_tels:
+        chandra_image_expmap(sources, lo_en, hi_en, num_cores=num_cores)

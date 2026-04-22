@@ -1,7 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 13:17. Copyright (c) The Contributors
 
-from typing import Union, List
+from typing import Union, List, Dict
 from warnings import warn
 
 from astropy.units import Quantity
@@ -30,7 +30,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
                              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                              show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False,
-                             telescope: Union[str, List[str]] = None) -> Union[List[HydrostaticMass], HydrostaticMass]:
+                             telescope: Union[str, List[str]] = None) -> Union[Dict[str, List[HydrostaticMass]],
+                                                                               List[HydrostaticMass]]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
     clusters, elegantly dealing with any sources that have inadequate data or aren't fit properly. For the sake
@@ -113,9 +114,10 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         supported, this function will instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to produce hydrostatic mass profiles from. Default is None, in
         which case hydrostatic mass profiles will be produced from all telescopes associated with a source.
-    :return: A list of the hydrostatic mass profiles measured by this function, though if the measurement was not
-        successful an entry of None will be added to the list.
-    :rtype: List[HydrostaticMass]/HydrostaticMass
+    :return: A dictionary of hydrostatic mass profile lists measured by this function - the keys are telescope
+        names. The values are lists with one entry per source, even if the source in question doesn't have
+        that telescope associated or the profile construction process failed.
+    :rtype: Dict[str, List[Union[HydrostaticMass, None]]]/List[Union[HydrostaticMass, None]]
     """
     # Call this common function which checks for whether temperature profiles/density profiles exist, if not creates
     #  them, and tries to fit the requested models to them - implemented like this because it is an identical process
