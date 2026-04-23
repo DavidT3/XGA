@@ -401,10 +401,14 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
 
 # ------------- Defining where the configuration file (and eventually observation census) lives -------------
 
-# We need to know where the configuration file which tells XGA what data and settings to use lives. If XDG_CONFIG_HOME
-#  is set then use that, otherwise use this default config path. We'll then create this configuration directory
-#  if it doesn't already exist
-CONFIG_PATH = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config', 'xga'))
+# We need to know where the configuration file which tells XGA what data and settings to use lives. If XGA_CONFIG_DIR
+#  is set then we use that, otherwise if XDG_CONFIG_HOME is set then use that (appending xga/), otherwise use
+#  this default config path. We'll then create this configuration directory if it doesn't already exist
+if 'XGA_CONFIG_DIR' in os.environ:
+    CONFIG_PATH = os.environ.get('XGA_CONFIG_DIR')
+else:
+    CONFIG_PATH = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config')), 'xga')
+
 if not os.path.exists(CONFIG_PATH):
     os.makedirs(CONFIG_PATH)
 # -----------------------------------------------------------------------------------------------------------

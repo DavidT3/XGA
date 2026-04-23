@@ -94,6 +94,7 @@ Follow these steps to fill out the configuration file:
 
 1. Import XGA to generate the initial, incomplete, configuration file.
 2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is probably easier to navigate via the terminal.
+   * Note: The location of the configuration directory can be overridden by setting the ``XGA_CONFIG_DIR`` environment variable. If set, XGA will look for its configuration and store its census files in exactly that directory.
 3. Take note of the entries that currently have /this/is/required at the beginning, without these entries the module will not function.
 4. Set the directory in which XGA will save the products and files it generates. It is advised to just set it to xga_output, so wherever you run a script that imports XGA it will create a folder called xga_output there. You could choose to use an absolute path and have a global XGA folder however, it wouldn't make a lot of sense.
 5. You may also set an optional parameter in the [XGA_SETUP] section, 'num_cores'. If you wish to manually limit the number of cores that XGA is allowed to use, then set this to an integer value, e.g. num_cores = 10. You can also set this at runtime, by importing NUM_CORES from xga and setting that to a value.

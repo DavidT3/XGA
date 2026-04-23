@@ -90,8 +90,9 @@ Before XGA can be used you must fill out a configuration file (a completed examp
 
 Follow these steps to fill out the configuration file:
 1. Import XGA to generate the initial, incomplete, configuration file.
-2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is 
+2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is
 probably easier to navigate via the terminal.
+   * Note: The location of the configuration directory can be overridden by setting the ``XGA_CONFIG_DIR`` environment variable. If set, XGA will look for its configuration and store its census files in exactly that directory.
 3. Take note of the entries that currently have /this/is/required at the beginning, without these entries the 
 module will not function.
 4. Set the directory where you wish XGA to save the products and files it generates. I just set it to xga_output,
