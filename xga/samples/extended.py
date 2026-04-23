@@ -1,7 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:08. Copyright (c) The Contributors
 
-from typing import List
+from __future__ import annotations
+
+from typing import List, Union, Dict
 
 import numpy as np
 from astropy.cosmology import Cosmology
@@ -9,7 +11,7 @@ from astropy.units import Quantity
 from tqdm import tqdm
 
 from .base import BaseSample
-from .. import DEFAULT_COSMO
+from .. import DEFAULT_COSMO, PRETTY_TELESCOPE_NAMES
 from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
     NoProductAvailableError, NoValidObservationsError, NotAssociatedError, TelescopeNotAssociatedError
 from ..products.profile import GasDensity3D

@@ -1,10 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
+from __future__ import annotations
+
 import gc
 import os
 from copy import deepcopy
 from multiprocessing import Pool
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
@@ -19,6 +21,8 @@ from .. import (CENSUS, BLACKLIST, NUM_CORES, xga_conf, DEFAULT_TELE_SEARCH_DIST
                 check_telescope_choices, PRETTY_TELESCOPE_NAMES)
 from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableError
 
+if TYPE_CHECKING:
+    from ..products.phot import ExpMap
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
     """
@@ -94,7 +98,7 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
     return ra, dec, matches, all_excl
 
 
-def _on_obs_id(ra: float, dec: float, exp_maps: Union['ExpMap', List['ExpMap']]) -> Tuple[float, float, np.ndarray]:
+def _on_obs_id(ra: float, dec: float, exp_maps: Union[ExpMap, List[ExpMap]]) -> Tuple[float, float, np.ndarray]:
     """
     Internal function used by the on_detector_match function to check whether a passed coordinate falls directly on a
     camera for a single (or set of) ObsID(s). Checks whether exposure time is 0 at the coordinate.

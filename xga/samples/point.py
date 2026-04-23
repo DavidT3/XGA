@@ -10,7 +10,7 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from tqdm import tqdm
 
 from .base import BaseSample
-from .. import DEFAULT_COSMO
+from .. import DEFAULT_COSMO, PRETTY_TELESCOPE_NAMES
 from ..exceptions import NoValidObservationsError
 from ..sources.point import Star
 
