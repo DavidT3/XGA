@@ -67,8 +67,8 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
                          "{a}.".format(f=fit_method, a=", ".join(XSPEC_FIT_METHOD)))
 
     if abund_table not in ABUND_TABLES:
-        raise ValueError("{f} is not an XSPEC abundance table, allowed abundance tables are; "
-                         "{a}.".format(f=fit_method, a=", ".join(ABUND_TABLES)))
+        raise ValueError("{a} is not an XSPEC abundance table, allowed abundance tables are; "
+                         "{av}.".format(a=abund_table, av=", ".join(ABUND_TABLES)))
 
     if not timeout.unit.is_equivalent('second'):
         raise UnitConversionError("The timeout quantity must be in units which can be converted to seconds, you have"
@@ -79,7 +79,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
 
 def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                     inner_radius: Union[str, Quantity], group_spec: bool = True, min_counts: int = 5,
-                    min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                    min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None, force_gen: bool = False) \
         -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str], dict]:
     """
@@ -98,9 +98,9 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         inner radius will be ignored. By default, this is zero arcseconds, resulting in a circular spectrum. If
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -191,7 +191,7 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
 
 def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
                             radii: Union[Quantity, List[Quantity], Dict[str, Quantity], Dict[str, List[Quantity]]],
-                            group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                            group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None,
                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                             stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
         -> Tuple[Union[List[BaseSource], BaseSample], Union[Dict[str, Quantity], Dict[str, List[Quantity]]], List[str]]:
@@ -205,9 +205,9 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
         least three radii may be passed if one source is being analysed, but for multiple sources there should
         be a quantity (with at least three radii), PER source.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -266,10 +266,10 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
 
 def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
                     src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: int,
-                    min_sn: float, over_sample: float) -> Tuple[str, str]:
+                    min_sn: Union[int, float], over_sample: float) -> Tuple[str, str]:
     """
-    Internal function that collects relevant spectrum objects per telescope. This is used in 
-    each XGA xspec fitting function eg. single_temp_apec etc. 
+    Internal function that collects relevant spectrum objects per telescope. This is used in
+    each XGA XSPEC fitting function eg. single_temp_apec etc.
 
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
@@ -280,9 +280,9 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
     :param int src_ind: The index of the lists of radii to be used for the source.
     :param List[Quantity] inn_rad_vals: A list of inner radius quantities.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.

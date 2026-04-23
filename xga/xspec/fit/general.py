@@ -23,10 +23,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      freeze_met: bool = True, freeze_temp: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
-                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                     min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                      spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
                      stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
-                     force_gen: bool = False):
+                     force_gen: bool = False) -> Union[BaseSource, BaseSample, List[BaseSource]]:
     """
     This is a convenience function for fitting an absorbed single temperature apec model (constant*tbabs*apec) to an
     object. It would be possible to do the exact same fit using the custom_model function, but as it will
@@ -71,9 +71,9 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -92,6 +92,8 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :return: The source object(s) passed in.
+    :rtype: Union[BaseSource, BaseSample, List[BaseSource]]
     """
 
     # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
@@ -268,9 +270,9 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -410,10 +412,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                         freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
                         hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                         abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                        min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+                        min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
                         num_cores: int = NUM_CORES, spectrum_checking: bool = True,
                         timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
-                        telescope: Union[str, List[str]] = None):
+                        telescope: Union[str, List[str]] = None) -> Union[BaseSource, BaseSample, List[BaseSource]]:
     """
     This is a convenience function for fitting an absorbed multi temperature apec model (constant*tbabs*wdem) to
     spectra generated for XGA sources. The wdem model uses a power law distribution of the differential emission
@@ -448,9 +450,9 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -597,9 +599,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -733,7 +735,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         you are fitting for multiple sources then you can also pass a Quantity with one entry per source.
     :param bool redshifted: Whether the powerlaw that includes redshift (zpowerlw) should be used.
     :param Quantity lum_en: Energy bands in which to measure luminosity.
-    :param float start_temp: The starting value for the temperature of the blackbody.
+    :param Quantity start_temp: The starting value for the temperature of the blackbody.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
@@ -744,9 +746,9 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
@@ -783,6 +785,15 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         model = "constant*tbabs*bbody"
         par_names = "{factor nH kT norm}"
 
+    # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
+    if not start_temp.isscalar and len(start_temp) != len(sources):
+        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+                         "source. It currently has {n} for {s} sources.".format(n=len(start_temp), s=len(sources)))
+    # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif start_temp.isscalar:
+        start_temp = Quantity([start_temp.value]*len(sources), start_temp.unit)
+
     script_paths = []
     outfile_paths = []
     src_inds = []
@@ -795,7 +806,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                  inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
-            t = start_temp.to("keV", equivalencies=u.temperature_energy()).value
+            t = start_temp[src_ind].to("keV", equivalencies=u.temperature_energy()).value
 
             # For this model, we have to know the redshift of the source.
             if redshifted and source.redshift is None:
