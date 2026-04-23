@@ -25,7 +25,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                              freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
                              hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                              abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                             min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+                             min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
                              num_cores: int = NUM_CORES, spectrum_checking: bool = True,
                              timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
                              telescope: Union[str, List[str]] = None):
@@ -46,7 +46,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         is being analysed, but for multiple sources there should be a quantity (with at least three radii), PER
         source.
     :param Quantity start_temp: The initial temperature for the fit.
-    :param start_met: The initial metallicity for the fit (in ZSun).
+    :param float start_met: The initial metallicity for the fit (in ZSun).
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param bool freeze_nh: Whether the hydrogen column density should be frozen.
     :param bool freeze_met: Whether the metallicity parameter in the fit should be frozen.
@@ -59,9 +59,9 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.

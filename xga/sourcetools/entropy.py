@@ -24,13 +24,13 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
                                      fit_method: str = "mcmc", num_walkers: int = 20, num_steps: int = 20000,
                                      sb_pix_step: int = 1, sb_min_snr: Union[int, float] = 0.0,
                                      inv_abel_method: str = None,
-                                     temp_annulus_method: str = 'min_snr', temp_min_snr: float = 30,
+                                     temp_annulus_method: str = 'min_snr', temp_min_snr: Union[int, float] = 30,
                                      temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                                      temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
                                      temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
                                      temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                                      temp_hi_en: Quantity = Quantity(7.9, 'keV'),
-                                     group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: float = None,
+                                     group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None,
                                      over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                                      show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False,
                                      telescope: Union[str, List[str]] = None) -> Union[Dict[str, List[SpecificEntropy]],
@@ -104,7 +104,7 @@ def entropy_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int spec_min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param int/float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
     :param bool over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.

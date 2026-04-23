@@ -37,7 +37,7 @@ ALLOWED_INV_ABEL = ['direct', 'basex', 'hansen_law_ho0', 'hansen_law_ho1', 'onio
                     'two_point', 'three_point', 'daun']
 
 def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, lo_en: Quantity,
-                hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                hi_en: Quantity, group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None,
                 over_sample: float = None, obs_id: Union[Dict[str, str], Dict[str, list]] = None,
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
@@ -61,7 +61,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
     :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
     :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
         desired result were grouped by minimum counts.
-    :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted
+    :param int/float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted
         for the desired result were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were fitted.
     :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from.
@@ -406,7 +406,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                           psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, num_walkers: int = 20, num_steps: int = 20000, num_samples: int = 10000,
-                          group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                          group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None,
                           obs_id: Union[Dict[str, str], Dict[str, list]] = None,
                           inst: Union[Dict[str, str], Dict[str, list]] = None,
                           conv_temp: Union[Quantity, Dict[str, Quantity]] = None, conv_outer_radius: Quantity = "r500",
@@ -461,7 +461,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
     :param int min_counts: The minimum counts per channel, if the spectra that were used for
         fakeit were grouped by minimum counts.
-    :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for
+    :param int/float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for
         fakeit were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were used for
         fakeit.
@@ -661,7 +661,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                   min_snr: Union[int, float] = 0.0, abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
                   hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True, psf_model: str = "ELLBETA",
                   psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_samples: int = 10000,
-                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                  group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None,
                   obs_id: Union[str, list] = None, inst: Union[str, list] = None, conv_temp: Quantity = None,
                   conv_outer_radius: Quantity = "r500", conv_inner_radius: Quantity = Quantity(0, 'arcsec'),
                   num_cores: int = NUM_CORES, stacked_spectra: bool = False,
@@ -739,7 +739,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     :param bool group_spec: Whether the spectra that were used for fakeit were grouped.
     :param int min_counts: The minimum counts per channel, if the spectra that were used for fakeit
         were grouped by minimum counts.
-    :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for fakeit
+    :param int/float min_sn: The minimum signal-to-noise per channel, if the spectra that were used for fakeit
         were grouped by minimum signal-to-noise.
     :param float over_sample: The level of oversampling applied on the spectra that were used for fakeit.
     :param Dict[str, str]/Dict[str, list] obs_id: A specific ObsID(s) to measure the density from.
@@ -958,7 +958,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                           psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, allow_negative: bool = False,
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
-                          min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
+                          min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
                           freeze_met: bool = True, abund_table: str = "angr",
                           temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 10000,
@@ -984,7 +984,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
     :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr'
         (which will use the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the
         min_cnt_proj_temp_prof function).
-    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if
+    :param int/float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if
         annulus_method is set to 'min_snr'.
     :param int/Quantity min_cnt: The minimum background subtracted counts which are allowable in a
         given annulus, used if annulus_method is set to 'min_cnt'.
@@ -1020,7 +1020,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts
         per channel. To disable minimum counts, set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
         each channel. To disable minimum signal-to-noise, set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable.
         e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that

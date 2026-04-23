@@ -743,7 +743,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         generating for multiple sources then you can also pass a Quantity with one entry per source.
     :param str annulus_method: The method by which the annuli are designated, this can be 'min_snr' (which will use
         the min_snr_proj_temp_prof function), or 'min_cnt' (which will use the min_cnt_proj_temp_prof function).
-    :param float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if annulus_method
+    :param int/float min_snr: The minimum signal-to-noise which is allowable in a given annulus, used if annulus_method
         is set to 'min_snr'.
     :param int/Quantity min_cnt: The minimum background subtracted counts which are allowable in a given annulus, used
         if annulus_method is set to 'min_cnt'.

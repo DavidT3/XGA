@@ -25,9 +25,9 @@ XGA_XSPEC_ERRS = ["No acceptable spectra are left after the minimum channel step
                   "No acceptable spectra are left after the cleaning step"]
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
-        -> Tuple[Union[FITS, str], str, bool, list, list, str]:
+        -> Tuple[Union[str, None], str, bool, list, list, str]:
     """
-    This function is called for the local compute option. It will run the supplied XSPEC script, then check
+    This function is called for the local compute option. It will run the supplied XSPEC script, then
     parse the output for errors and check that the expected output file has been created.
 
     :param str x_script: The path to an XSPEC script to be run.
@@ -36,10 +36,10 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     :param str run_type: A flag that tells this function what type of run this is; e.g. fit or conv_factors.
     :param float timeout: The length of time (in seconds) which the XSPEC script is allowed to run for before being
         killed.
-    :return: FITS object of the results, string repr of the source associated with this fit, boolean variable
-        describing if this fit can be used, list of any errors found, list of any warnings found, and the telescope
-        that this script is related to.
-    :rtype: Tuple[Union[FITS, str], str, bool, list, list, str]
+    :return: The path to the results file (or None if unsuccessful), string repr of the source associated with
+        this fit, a boolean flag indicating if the fit is considered usable, list of any errors found, list of any
+        warnings found, and the telescope that this script is related to.
+    :rtype: Tuple[Union[str, None], str, bool, list, list, str]
     """
 
     # We assume the output will be usable to start with
@@ -157,6 +157,10 @@ def xspec_call(xspec_func):
     This is used as a decorator for functions that produce XSPEC scripts. Depending on the
     system that XGA is running on (and whether the user requests parallel execution), the method of
     executing the XSPEC commands will change. This supports multi-threading.
+
+    :param function xspec_func: The XSPEC fit/simulation function to be decorated.
+    :return: The decorated function.
+    :rtype: function
     """
 
     @wraps(xspec_func)

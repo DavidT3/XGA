@@ -381,12 +381,12 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
     
             output_dict = radii
 
-        # If the radii is input as a Dictionary of lists, the user wants the different radii for 
-        # each telescope, but the same radii for each source ie. all erosita spectra have one raddi
+        # If the radii is input as a Dictionary of lists, the user wants the different radii for
+        # each telescope, but the same radii for each source ie. all erosita spectra have one radii
         # all XMM spectra have another
         elif all(isinstance(value, Quantity) for value in radii.values()):
             output_dict = radii
-        
+
         else:
             raise ValueError("The 'radii' argument must be input as either; a Quantity - which is"
                              " applied to every source in every telescope; a List of Quantities - "
@@ -396,8 +396,8 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
                              "of Lists of Quantities - which specifies radii for each source for "
                              "each telescope. In this case the radii argument has been given as a "
                              "dictionary but with the incorrect format. Please change the radii "
-                             " input so that it matches one of the given options.")
-    
+                             "input so that it matches one of the given options.")
+
     else:
         raise ValueError("The 'radii' argument must be input as either; a Quantity - which is"
                     " applied to every source in every telescope; a List of Quantities - "
@@ -407,7 +407,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
                     "of Lists of Quantities - which specifies radii for each source for "
                     "each telescope. In this case the radii argument has been given as a "
                     "dictionary but with the incorrect format. Please change the radii "
-                    " input so that it matches one of the given options.")
+                    "input so that it matches one of the given options.")
 
     return output_dict
 

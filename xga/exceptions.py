@@ -46,7 +46,7 @@ class eSASSInputInvalid(Exception):
 class HeasoftError(Exception):
     def __init__(self, *args):
         """
-        Exception raised for unexpected output from HEASOFT calls, currently all encompassing.
+        Exception raised for unexpected output from HEASoft calls, currently all encompassing.
 
         :param expression:
         :param message:
@@ -182,7 +182,7 @@ class ProductGenerationError(Exception):
         if self.message:
             return '{0} '.format(self.message)
         else:
-            return 'A generic SASNotFoundError has been raised'
+            return 'ProductGenerationError has been raised'
 
 
 class UnknownCommandlineError(Exception):
@@ -224,7 +224,7 @@ class TelescopeNotAssociatedError(Exception):
         if self.message:
             return '{0} '.format(self.message)
         else:
-            return 'SourceNotFoundError has been raised'
+            return 'TelescopeNotAssociatedError has been raised'
 
 
 class FailedProductError(Exception):

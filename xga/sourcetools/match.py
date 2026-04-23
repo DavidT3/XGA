@@ -343,7 +343,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
     The user can also pass a list of strings (or a dictionary of lists of strings in the case of multiple telescopes
     being considered) to limit the ObsIDs from the census that are to be considered.
 
-    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+    :param str/List[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
         which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
         a single telescope name, or a list of telescope names, to control which are used.
     :param List[str]/dict obs_ids: ObsIDs that are to be considered
@@ -419,7 +419,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
 
 
 def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
+                     distance: Union[Quantity, dict] = None, telescope: Union[str, List[str]] = None,
                      num_cores: int = NUM_CORES, show_warnings: bool = True) \
         -> Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]:
     """
@@ -436,7 +436,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         all telescopes, a dictionary with keys corresponding to ALL or SOME of the telescopes specified by the
         'telescope' argument. In the case where only SOME of the telescopes are specified in a distance dictionary,
         the default XGA values will be used for any that are missing.
-    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+    :param str/List[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
         which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
         a single telescope name, or a list of telescope names, to control which are used.
     :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
@@ -600,7 +600,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
 
 
 def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                      distance: Union[Quantity, dict] = None, telescope: Union[str, list] = None,
+                      distance: Union[Quantity, dict] = None, telescope: Union[str, List[str]] = None,
                       num_cores: int = NUM_CORES) -> Union[dict, np.ndarray]:
     """
     A matching function that checks whether supplied coordinates lie on a detector by using exposure maps to determine
@@ -617,7 +617,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         corresponding to ALL or SOME of the telescopes specified by the 'telescope' argument. In the case where
         only SOME of the telescopes are specified in a distance dictionary, the default XGA values will be used for
         any that are missing.
-    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+    :param str/List[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
         which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
         a single telescope name, or a list of telescope names, to control which are used.
     :param int num_cores: The number of cores to use, default is set to 90% of system cores. This is only relevant
@@ -798,7 +798,7 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
         all telescopes, a dictionary with keys corresponding to ALL or SOME of the telescopes specified by the
         'telescope' argument. In the case where only SOME of the telescopes are specified in a distance dictionary,
         the default XGA values will be used for any that are missing.
-    :param str/list[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
+    :param str/List[str] telescope: The telescope censuses that should be searched for matches, the default is None, in
         which case all telescopes that have been set up with this installation of XGA will be used. The user may pass
         a single telescope name, or a list of telescope names, to control which are used.
     :param int num_cores: The number of cores that can be used for the matching process.

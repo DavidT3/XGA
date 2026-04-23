@@ -74,7 +74,7 @@ def rad_to_ang(rad: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Qua
 
     :param Quantity rad: Radius for conversion.
     :param Cosmology cosmo: An instance of an astropy cosmology, the default is a flat LambdaCDM concordance model.
-    :param float z: The _redshift of the source.
+    :param float z: The redshift of the source.
     :return: The radius in degrees.
     :rtype: Quantity
     """
@@ -159,14 +159,15 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
     return name
 
 
-def model_check(sources, model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) \
+def model_check(sources: Union[BaseSource, BaseSample, List[BaseSource]],
+                model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) \
         -> Union[List[BaseModel1D], List[str]]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources
     that have been passed. I can't imagine why a user would need this directly, its only here as these checks
     have to be performed in multiple places in sourcetools.
 
-    :param List[BaseSource]/BaseSample/BaseSource sources: The source(s) for which we are checking models.
+    :param BaseSource/BaseSample/List[BaseSource] sources: The source(s) for which we are checking models.
     :param str/List[str]/BaseModel1D/List[BaseModel1D] model: The model(s).
     :return: A list of model instances, or names of models.
     :rtype: Union[List[BaseModel1D], List[str]]

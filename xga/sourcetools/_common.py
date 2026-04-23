@@ -24,7 +24,7 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
     xga.sourcetools, the initial sources argument may be a list, so the 'telescopes' attribute can't be
     used.
 
-    :param BaseSource/List[BaseSource]/BaseSample sources: The sources to extract telescope information from.
+    :param BaseSource/BaseSample/List[BaseSource] sources: The sources to extract telescope information from.
     :return: A list of telescope names that are associated with at least one of the sources
         that were passed in.
     :rtype: List[str]
@@ -42,9 +42,10 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
     return all_telescopes
 
 
-def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_spec: bool,
-                  min_counts: int, min_sn: float, over_sample: float, num_cores: int, psf_bins: int,
-                  stacked_spectra: bool, telescope: List[str]) -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]:
+def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], outer_radius: Union[str, Quantity],
+                  global_radius: Union[str, Quantity], abund_table: str, group_spec: bool,
+                  min_counts: int, min_sn: Union[int, float], over_sample: float, num_cores: int, psf_bins: int,
+                  stacked_spectra: bool, telescope: Union[str, List[str]]) -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]:
     """
     Internal function to see if a source/sources have a measured global temperature, single_temp_apec
     is run before the check is done. It also runs the region_setup() method to fetch the outer radii
@@ -65,7 +66,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts
         per channel. To disable minimum counts set this parameter to None.
-    :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in
         each channel. To disable minimum signal to noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable.
         e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at
@@ -78,7 +79,7 @@ def _setup_global(sources, outer_radius, global_radius, abund_table: str, group_
         used for this XSPEC spectral fit. If a stacking procedure for a particular telescope is not
         supported, this function will instead use individual spectra for an ObsID. The default is
         False.
-    :param List[str] telescope: The telescope(s) for which we are setting up spectral fits.
+    :param str/List[str] telescope: The telescope(s) for which we are setting up spectral fits.
     :return: A tuple. The first elements are the sources. The second are the Quantity objects
         describing the outer_radii of the regions used for annular bins. The third is a dictionary
         with telescope keys, containing a list of True and False values, depending on if the source
@@ -155,7 +156,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
                                     temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                                     temp_hi_en: Quantity = Quantity(7.9, 'keV'), group_spec: bool = True,
-                                    spec_min_counts: int = 5, spec_min_sn: float = None, over_sample: float = None,
+                                    spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None, over_sample: float = None,
                                     one_rmf: bool = True, num_cores: int = NUM_CORES, show_warn: bool = True,
                                     psf_bins: int = 4, stacked_spectra: bool = False,
                                     telescope: Union[str, List[str]] = None) \
@@ -218,7 +219,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int spec_min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
+    :param int/float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal to noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
