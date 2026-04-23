@@ -205,6 +205,10 @@ if __name__ == "__main__":
         err = err.decode("UTF-8", errors='ignore')
         with open("coverage.txt", "w") as text_file:
             text_file.write(out + err)
+
+        # This generates the coverage badge - it requires the coverage-badge package
+        badge_cmd = 'coverage-badge -f -o coverage.svg'
+        Popen(badge_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
     
     else:
         # Discover and run tests
