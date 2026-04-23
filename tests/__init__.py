@@ -17,8 +17,8 @@ TEST_MODE = 'COV'
 
 # This is the main source for running the tests on
 SRC_INFO = {'ra': 226.0318, 'dec': -2.8046, 'z': 0.2093, 'name': "1eRASS_J150407.6-024816"}
-expected_xmm_obs = set(['0401040101', '0840580201', '0840580101'])
-expected_ero_obs = set(['227093', '227090', '224093'])
+expected_xmm_obs = {'0401040101', '0840580201', '0840580101'}
+expected_ero_obs = {'227093', '227090', '224093'}
 
 # This is another cluster that we can use to test ClusterSample objects
 SUPP_SRC_INFO = {'ra': 55.7164, 'dec': -53.6292, 'z': 0.0587, 'name': 'A3158'}
@@ -31,16 +31,30 @@ cluster_data = np.array([[SRC_INFO['name'], SRC_INFO['ra'], SRC_INFO['dec'], SRC
 CLUSTER_SMP = pd.DataFrame(data=cluster_data, columns=column_names)
 CLUSTER_SMP[['ra', 'dec', 'z', 'r500']] = CLUSTER_SMP[['ra', 'dec', 'z', 'r500']].astype(float)
 
-SRC_ALL_TELS = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')},
-                                     load_profiles=False)
+SRC_ALL_TELS = GalaxyCluster(SRC_INFO['ra'],
+                             SRC_INFO['dec'],
+                             SRC_INFO['z'],
+                             r500=Quantity(500, 'kpc'),
+                             name=SRC_INFO['name'],
+                             use_peak=False,
+                             search_distance={'erosita': Quantity(3.6, 'deg')},
+                             load_profiles=False)
     
-SRC_XMM = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     telescope='xmm', load_profiles=False)
-SRC_ERO = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     telescope='erosita',
-                                     search_distance={'erosita': Quantity(3.6, 'deg')},
-                                     load_profiles=False)
+SRC_XMM = GalaxyCluster(SRC_INFO['ra'],
+                        SRC_INFO['dec'],
+                        SRC_INFO['z'],
+                        r500=Quantity(500, 'kpc'),
+                        name=SRC_INFO['name'],
+                        use_peak=False,
+                        telescope='xmm',
+                        load_profiles=False)
+
+SRC_ERO = GalaxyCluster(SRC_INFO['ra'],
+                        SRC_INFO['dec'],
+                        SRC_INFO['z'],
+                        r500=Quantity(500, 'kpc'),
+                        name=SRC_INFO['name'],
+                        use_peak=False,
+                        telescope='erosita',
+                        search_distance={'erosita': Quantity(3.6, 'deg')},
+                        load_profiles=False)

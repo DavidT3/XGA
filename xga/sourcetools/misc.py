@@ -1,10 +1,12 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
 
+from __future__ import annotations
+
 import warnings
 from copy import deepcopy
 from subprocess import Popen, PIPE
-from typing import Union, List
+from typing import Union, List, TYPE_CHECKING
 
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Cosmology
@@ -14,6 +16,10 @@ from numpy import array, ndarray, pi
 from .. import DEFAULT_COSMO
 from ..exceptions import HeasoftError
 from ..models import BaseModel1D
+
+if TYPE_CHECKING:
+    from ..sources.base import BaseSource
+    from ..samples.base import BaseSample
 
 
 def nh_lookup(coord_pair: Quantity) -> Quantity:
