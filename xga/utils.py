@@ -405,7 +405,7 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
 #  is set then we use that, otherwise if XDG_CONFIG_HOME is set then use that (appending xga/), otherwise use
 #  this default config path. We'll then create this configuration directory if it doesn't already exist
 if 'XGA_CONFIG_DIR' in os.environ:
-    CONFIG_PATH = os.environ.get('XGA_CONFIG_DIR')
+    CONFIG_PATH = os.path.abspath(os.environ['XGA_CONFIG_DIR'])
 else:
     CONFIG_PATH = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config')), 'xga')
 
