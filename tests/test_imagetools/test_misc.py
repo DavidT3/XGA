@@ -1,6 +1,7 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:33. Copyright (c) The Contributors
 import unittest
+
 from astropy.units import Quantity
 from numpy import zeros
 from numpy.testing import assert_array_equal
@@ -8,6 +9,7 @@ from numpy.testing import assert_array_equal
 from xga.imagetools.misc import data_limits, edge_finder
 
 OFF_PIX = Quantity([20, 20], 'pix')
+
 
 class TestImageToolsMisc(unittest.TestCase):
     def test_data_lims_zeros(self):

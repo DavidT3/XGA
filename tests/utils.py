@@ -1,8 +1,9 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by Claude 23/04/2026. Copyright (c) The Contributors
+#  Last modified by David J Turner 23/04/2026. Copyright (c) The Contributors
 
 import unittest
 from functools import wraps
+
 from xga import SAS_AVAIL, ESASS_AVAIL, CIAO_AVAIL
 
 
