@@ -1,25 +1,85 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:20. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/25/26, 4:03 PM. Copyright (c) The Contributors.
 from . import _version
 __version__ = _version.get_versions()['version']
 
-from .utils import (xga_conf, CENSUS, OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, MODEL_PARS,
-                    MODEL_UNITS, ABUND_TABLES, XSPEC_FIT_METHOD, COUNTRATE_CONV_SCRIPT, NHC, BLACKLIST, HY_MASS, MEAN_MOL_WEIGHT,
-                    SAS_VERSION, XSPEC_VERSION, SAS_AVAIL, DEFAULT_COSMO, TELESCOPES, USABLE, DEFAULT_TELE_SEARCH_DIST, COMBINED_INSTS,
-                    ESASS_AVAIL, SRC_REGION_COLOURS, check_telescope_choices, PRETTY_TELESCOPE_NAMES, CIAO_AVAIL, CIAO_VERSION, CALDB_AVAIL,
-                    CALDB_VERSION, ESASS_VERSION, RAD_MATCH_PRECISION)
+# The set of variables that should be lazily loaded from utils
+_LAZY_VARS = (
+    'xga_conf', 'CENSUS', 'OUTPUT', 'NUM_CORES', 'XGA_EXTRACT', 'BASE_XSPEC_SCRIPT', 'MODEL_PARS',
+    'MODEL_UNITS', 'ABUND_TABLES', 'XSPEC_FIT_METHOD', 'COUNTRATE_CONV_SCRIPT', 'NHC', 'BLACKLIST', 'HY_MASS',
+    'MEAN_MOL_WEIGHT', 'SAS_VERSION', 'XSPEC_VERSION', 'SAS_AVAIL', 'DEFAULT_COSMO', 'TELESCOPES', 'USABLE',
+    'DEFAULT_TELE_SEARCH_DIST', 'COMBINED_INSTS', 'ESASS_AVAIL', 'SRC_REGION_COLOURS', 'check_telescope_choices',
+    'PRETTY_TELESCOPE_NAMES', 'CIAO_AVAIL', 'CIAO_VERSION', 'CALDB_AVAIL', 'CALDB_VERSION', 'ESASS_VERSION',
+    'RAD_MATCH_PRECISION', 'SASERROR_LIST', 'SASWARNING_LIST', 'xga_reinit', 'rebuild_census'
+)
 
-import sys
-from . import generate
+def __getattr__(name):
+    """
+    A module level __getattr__ which allows us to lazily load the XGA configuration and census from the utils
+    module. This helps to avoid race conditions when importing XGA from other modules (like DAXA).
+
+    :param str name: The name of the attribute to be returned.
+    :return: The value of the attribute.
+    """
+    import importlib
+    if name in _LAZY_VARS:
+        utils = importlib.import_module('.utils', __package__)
+        return getattr(utils, name)
+    elif name == 'sas':
+        generate = importlib.import_module('.generate', __package__)
+        return generate.sas
+    elif name == 'generate':
+        return importlib.import_module('.generate', __package__)
+    elif name == 'utils':
+        return importlib.import_module('.utils', __package__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 # Here we set up 'shims' to ensure that pre-multi-mission imports of SAS wrapper functions
 #  still function as intended.
-sys.modules['xga.sas'] = generate.sas
-sys.modules['xga.sas.phot'] = generate.sas.phot
-sys.modules['xga.sas.misc'] = generate.sas.misc
-sys.modules['xga.sas.spec'] = generate.sas.spec
-sys.modules['xga.sas.lightcurve'] = generate.sas.lightcurve
-sys.modules['xga.sas.run'] = generate.sas.run
+import sys
+from types import ModuleType
 
-# We also need to make sure that the modules are accessible as attributes of the xga module
-#  itself, as some parts of DAXA (and other older code) may use them that way.
-sas = generate.sas
+# We use a custom dictionary-like object for sys.modules to lazily import the sas modules
+class LazyModuleShim(ModuleType):
+    def __init__(self, target_name):
+        super().__init__(target_name)
+        self.target_name = target_name
+        self._module = None
+        # We set this to None to avoid triggering a load when someone checks for __file__
+        self.__file__ = None
+        self.__path__ = []
+
+    @property
+    def _real_module(self):
+        if self._module is None:
+            # We import xga.generate here, which will then allow us to access the submodules
+            import importlib
+            generate = importlib.import_module('xga.generate')
+            if self.target_name == 'xga.sas':
+                self._module = generate.sas
+            elif self.target_name == 'xga.sas.phot':
+                self._module = generate.sas.phot
+            elif self.target_name == 'xga.sas.misc':
+                self._module = generate.sas.misc
+            elif self.target_name == 'xga.sas.spec':
+                self._module = generate.sas.spec
+            elif self.target_name == 'xga.sas.lightcurve':
+                self._module = generate.sas.lightcurve
+            elif self.target_name == 'xga.sas.run':
+                self._module = generate.sas.run
+        return self._module
+
+    def __getattr__(self, name):
+        return getattr(self._real_module, name)
+
+    def __dir__(self):
+        return dir(self._real_module)
+
+# We populate sys.modules with our shims
+sys.modules['xga.sas'] = LazyModuleShim('xga.sas')
+sys.modules['xga.sas.phot'] = LazyModuleShim('xga.sas.phot')
+sys.modules['xga.sas.misc'] = LazyModuleShim('xga.sas.misc')
+sys.modules['xga.sas.spec'] = LazyModuleShim('xga.sas.spec')
+sys.modules['xga.sas.lightcurve'] = LazyModuleShim('xga.sas.lightcurve')
+sys.modules['xga.sas.run'] = LazyModuleShim('xga.sas.run')
