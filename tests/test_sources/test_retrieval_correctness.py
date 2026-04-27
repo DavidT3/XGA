@@ -1,17 +1,14 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:34 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:23 PM. Copyright (c) The Contributors.
 
-import os
-import sys
 import unittest
 
 from astropy.units import Quantity
 
+from tests import get_test_source
 from xga.generate.esass.phot import evtool_image, combine_phot_prod
 from xga.generate.sas.phot import evselect_image, emosaic
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from tests import get_test_source
 
 class TestProductRetrievalCorrectness(unittest.TestCase):
     @classmethod

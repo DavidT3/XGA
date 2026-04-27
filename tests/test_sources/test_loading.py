@@ -1,12 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:11 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:23 PM. Copyright (c) The Contributors.
 
-import os
-import sys
 import unittest
 
 from astropy.units import Quantity
 
+from tests import SRC_INFO, get_test_source
 from xga.generate.ciao.phot import chandra_image_expmap
 from xga.generate.ciao.spec import specextract_spectrum
 from xga.generate.sas.phot import evselect_image, eexpmap
@@ -14,10 +13,6 @@ from xga.generate.sas.spec import evselect_spectrum
 from xga.products.phot import Image, ExpMap
 from xga.products.spec import Spectrum
 from xga.sources import GalaxyCluster
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from tests import SRC_INFO, get_test_source
 
 
 class TestProductLoading(unittest.TestCase):
