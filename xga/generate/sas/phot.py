@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 09:50. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:03 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -97,12 +97,16 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             if not os.path.exists(OUTPUT + "xmm/" + obs_id):
                 os.mkdir(OUTPUT + 'xmm/' + obs_id)
 
-            # Check if this image already exists and is usable
-            exists = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
-            if not isinstance(exists, list):
-                exists = [exists]
-            if len(exists) == 1 and exists[0].usable:
-                continue
+            try:
+                # Check if this image already exists and is usable
+                exists = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
+                if not isinstance(exists, list):
+                    exists = [exists]
+                if len(exists) == 1 and exists[0].usable:
+                    continue
+            except NoProductAvailableError:
+                # In this case we definitely have to continue
+                pass
 
             evt_list = pack[-1]
             dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
