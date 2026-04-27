@@ -1,7 +1,8 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 13:49. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:06 AM. Copyright (c) The Contributors.
 
 from .base import BaseProduct, BaseAggregateProduct, BaseProfile1D, BaseAggregateProfile1D
+from .lightcurve import LightCurve, AggregateLightCurve
 from .misc import EventList
 from .phot import Image, ExpMap, RateMap, PSF, PSFGrid
 from .relation import ScalingRelation
