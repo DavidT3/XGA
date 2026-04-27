@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/25/26, 5:05 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 3:38 PM. Copyright (c) The Contributors.
 
 import json
 import os
@@ -492,7 +492,6 @@ def rebuild_census(telescope: Union[str, List[str]] = None, full_rebuild: bool =
                 # Level 1 means we delete the existing census file and start again
                 if os.path.exists(census_file):
                     os.remove(census_file)
-                print(f"Performing full rebuild of {tel} census...")
 
             # This handles both the full rebuild (since we just deleted the file)
             # and the standard 'find new data' update
@@ -518,7 +517,7 @@ def rebuild_census(telescope: Union[str, List[str]] = None, full_rebuild: bool =
                     CENSUS[tel] = census
                     # Save the cleaned census back to disk
                     census.to_csv(census_file, index=False)
-                    print(f"Cleaned {original_len - len(census)} dead entries from {tel} census.")
+                    warn(f"Cleaned {original_len - len(census)} dead entries from {tel} census.", stacklevel=2)
 
 
 def obs_id_test(test_tele: str, test_string: str) -> bool:
