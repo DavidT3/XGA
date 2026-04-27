@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/25/26, 4:03 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 11:51 AM. Copyright (c) The Contributors.
 from . import _version
 __version__ = _version.get_versions()['version']
 
@@ -12,19 +12,24 @@ def __getattr__(name):
     :return: The value of the attribute.
     """
     import importlib
-    # We import the utils module to check which variables are marked as lazy
+    # We import the utils module to check for requested attributes
     utils = importlib.import_module('.utils', __package__)
 
-    # We check if the requested name is in the set of lazy variables and NOT in the exclusion set
-    if name in utils._LAZY_VARS and name not in utils._KEEP_PRIVATE_LAZY_VARS:
-        return getattr(utils, name)
-    elif name == 'sas':
+    # 1. Handle shims and specific submodules first
+    if name == 'sas':
         generate = importlib.import_module('.generate', __package__)
         return generate.sas
     elif name == 'generate':
         return importlib.import_module('.generate', __package__)
     elif name == 'utils':
         return utils
+
+    # 2. Passthrough to utils for any other attribute, provided it's not explicitly hidden.
+    # This ensures that both lazy variables and static constants are accessible, fixing
+    # potential ImportErrors for internal XGA modules.
+    if hasattr(utils, name) and name not in getattr(utils, '_KEEP_PRIVATE_LAZY_VARS', set()):
+        return getattr(utils, name)
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
