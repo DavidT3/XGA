@@ -1,8 +1,10 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 21/04/2026, 11:21. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/24/26, 1:37 PM. Copyright (c) The Contributors.
 
 from unittest import TestCase
+
 from xga.utils import TELESCOPES, MISSION_XY_UNITS
+
 
 class TestUtils(TestCase):
     def test_mission_xy_units(self):

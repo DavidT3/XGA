@@ -1,22 +1,30 @@
-import unittest
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:24 AM. Copyright (c) The Contributors.
+
 import os
 import sys
+import unittest
 
 from astropy.units import Quantity
 
-import xga
-from xga.samples import ClusterSample
 from xga.generate.esass.phot import evtool_image, expmap
+from xga.samples import ClusterSample
+from ..utils import require_esass
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from .. import SRC_ALL_TELS, SRC_INFO, CLUSTER_SMP
+from .. import get_test_source, CLUSTER_SMP
 
 class TestEsassPhotFuncs(unittest.TestCase):
-    def test_evtool_image(self):
-        evtool_image(SRC_ALL_TELS, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
+    @classmethod
+    def setUpClass(cls):
+        cls.src = get_test_source('erosita')
 
-        im = SRC_ALL_TELS.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
+    @require_esass
+    def test_evtool_image(self):
+        evtool_image(self.src, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
+
+        im = self.src.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='erosita')[0]
         if isinstance(im, list):
             for i in im:
@@ -28,21 +36,22 @@ class TestEsassPhotFuncs(unittest.TestCase):
             assert im.energy_bounds[0] == Quantity(0.4, 'keV')
             assert im.energy_bounds[1] == Quantity(3, 'keV')
 
-
+    @require_esass
     def test_evtool_image_combined_obs(self):
-        evtool_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
+        evtool_image(self.src, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
 
-        im = SRC_ALL_TELS.get_combined_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'), 
+        im = self.src.get_combined_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='erosita')
 
         assert im.telescope == 'erosita'
         assert im.energy_bounds[0] == Quantity(0.5, 'keV')
         assert im.energy_bounds[1] == Quantity(3, 'keV')
 
+    @require_esass
     def test_expmap(self):
-        expmap(SRC_ALL_TELS, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
+        expmap(self.src, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
 
-        exp = SRC_ALL_TELS.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
+        exp = self.src.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='erosita')
 
         for e in exp:
@@ -50,16 +59,18 @@ class TestEsassPhotFuncs(unittest.TestCase):
             assert e.energy_bounds[0] == Quantity(0.4, 'keV')
             assert e.energy_bounds[1] == Quantity(3, 'keV')
 
+    @require_esass
     def test_expmap_combined_obs(self):
-        expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
+        expmap(self.src, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
 
-        exp = SRC_ALL_TELS.get_combined_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'), 
+        exp = self.src.get_combined_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'), 
                                       telescope='erosita')
 
         assert exp.telescope == 'erosita'
         assert exp.energy_bounds[0] == Quantity(0.5, 'keV')
         assert exp.energy_bounds[1] == Quantity(3, 'keV')
     
+    @require_esass
     def test_evtool_image_w_sample_w_odd_telescopes(self):
         """
         There was an old bug that occured when product generation functions were run with samples
@@ -76,3 +87,6 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
 if __name__ == "__main__":
      unittest.main()
+
+
+

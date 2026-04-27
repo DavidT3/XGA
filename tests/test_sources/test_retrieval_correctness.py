@@ -1,36 +1,37 @@
-import unittest
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:34 AM. Copyright (c) The Contributors.
+
 import os
 import sys
+import unittest
+
 from astropy.units import Quantity
 
-from xga.generate.sas.phot import evselect_image, emosaic
 from xga.generate.esass.phot import evtool_image, combine_phot_prod
-from xga.products.phot import Image
+from xga.generate.sas.phot import evselect_image, emosaic
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from tests import SRC_ALL_TELS, SRC_ERO
+from tests import get_test_source
 
 class TestProductRetrievalCorrectness(unittest.TestCase):
-    """
-    Ensures that product retrieval methods return the specific products requested,
-    avoiding accidental retrieval of combined products when individual ones are
-    requested, and vice versa.
-    """
+    @classmethod
+    def setUpClass(cls):
+        cls.src = get_test_source('xmm')
 
     def test_xmm_image_retrieval_specificity(self):
         """
         Test that XMM retrieval distinguishes between specific instrument and 'combined'.
         """
-        if 'xmm' not in SRC_ALL_TELS.telescopes:
+        if 'xmm' not in self.src.telescopes:
             self.skipTest("XMM data not associated")
 
         lo, hi = Quantity(0.5, 'keV'), Quantity(2.0, 'keV')
-        evselect_image(SRC_ALL_TELS, lo, hi)
-        emosaic(SRC_ALL_TELS, 'image', lo, hi)
+        evselect_image(self.src, lo, hi)
+        emosaic(self.src, 'image', lo, hi)
 
         # 1. Request specific instrument
         # Should return only PN/MOS1/MOS2 images, NOT the combined one
-        imgs = SRC_ALL_TELS.get_images(lo_en=lo, hi_en=hi, telescope='xmm')
+        imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='xmm')
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -39,7 +40,7 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
             self.assertNotEqual(im.obs_id, 'combined')
 
         # 2. Request combined instrument
-        comb_img = SRC_ALL_TELS.get_combined_images(lo_en=lo, hi_en=hi, telescope='xmm')
+        comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='xmm')
         self.assertEqual(comb_img.instrument, 'combined')
         self.assertEqual(comb_img.obs_id, 'combined')
 
@@ -47,17 +48,17 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
         """
         Test that eROSITA retrieval distinguishes between combination modes.
         """
-        if 'erosita' not in SRC_ALL_TELS.telescopes:
+        if 'erosita' not in self.src.telescopes:
             self.skipTest("eROSITA data not associated")
 
         lo, hi = Quantity(0.5, 'keV'), Quantity(2.0, 'keV')
         # Generate individual-obs images
-        evtool_image(SRC_ALL_TELS, lo, hi, combine_obs=False)
+        evtool_image(self.src, lo, hi, combine_obs=False)
         # Generate multi-obs combined images
-        combine_phot_prod(SRC_ALL_TELS, 'image', lo, hi)
+        combine_phot_prod(self.src, 'image', lo, hi)
 
         # 1. Request individual images
-        imgs = SRC_ALL_TELS.get_images(lo_en=lo, hi_en=hi, telescope='erosita')
+        imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='erosita')
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -65,7 +66,7 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
             self.assertNotEqual(im.obs_id, 'combined', "Retrieved combined image when individual ones expected")
 
         # 2. Request combined image
-        comb_img = SRC_ALL_TELS.get_combined_images(lo_en=lo, hi_en=hi, telescope='erosita')
+        comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='erosita')
         # Should return the combined one
         if isinstance(comb_img, list):
             comb_img = comb_img[0]
@@ -73,3 +74,6 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

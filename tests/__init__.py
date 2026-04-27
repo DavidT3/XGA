@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/24/26, 1:14 PM. Copyright (c) The Contributors.
 from astropy.units import Quantity
 import numpy as np
 import pandas as pd
@@ -31,30 +31,47 @@ cluster_data = np.array([[SRC_INFO['name'], SRC_INFO['ra'], SRC_INFO['dec'], SRC
 CLUSTER_SMP = pd.DataFrame(data=cluster_data, columns=column_names)
 CLUSTER_SMP[['ra', 'dec', 'z', 'r500']] = CLUSTER_SMP[['ra', 'dec', 'z', 'r500']].astype(float)
 
-SRC_ALL_TELS = GalaxyCluster(SRC_INFO['ra'],
-                             SRC_INFO['dec'],
-                             SRC_INFO['z'],
-                             r500=Quantity(500, 'kpc'),
-                             name=SRC_INFO['name'],
-                             use_peak=False,
-                             search_distance={'erosita': Quantity(3.6, 'deg')},
-                             load_profiles=False)
-    
-SRC_XMM = GalaxyCluster(SRC_INFO['ra'],
-                        SRC_INFO['dec'],
-                        SRC_INFO['z'],
-                        r500=Quantity(500, 'kpc'),
-                        name=SRC_INFO['name'],
-                        use_peak=False,
-                        telescope='xmm',
-                        load_profiles=False)
 
-SRC_ERO = GalaxyCluster(SRC_INFO['ra'],
-                        SRC_INFO['dec'],
-                        SRC_INFO['z'],
-                        r500=Quantity(500, 'kpc'),
-                        name=SRC_INFO['name'],
-                        use_peak=False,
-                        telescope='erosita',
-                        search_distance={'erosita': Quantity(3.6, 'deg')},
-                        load_profiles=False)
+# We use a factory pattern to provide the test sources, this is because they are expensive to instantiate
+#  and we don't want to do it at import time, as the configuration might not be set up yet.
+_CACHED_SOURCES = {}
+
+def get_test_source(telescope: str = 'all', shared: bool = True) -> GalaxyCluster:
+    """
+    A factory function to provide test sources. This is used to avoid instantiating them at import time.
+
+    :param str telescope: The telescope for which we want a source. Options are 'all', 'xmm', 'erosita'.
+    :param bool shared: Whether to return a shared (cached) instance or a fresh one.
+    :return: The requested source.
+    :rtype: GalaxyCluster
+    """
+    global _CACHED_SOURCES
+
+    # If a shared instance is requested, and we have one cached, return it
+    if shared and telescope in _CACHED_SOURCES:
+        return _CACHED_SOURCES[telescope]
+
+    # Otherwise we set up the requested source instance for testing.
+    if telescope == 'all':
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                            name=SRC_INFO['name'], use_peak=False,
+                            search_distance={'erosita': Quantity(3.6, 'deg')},
+                            load_profiles=False)
+    elif telescope == 'xmm':
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                            name=SRC_INFO['name'], use_peak=False,
+                            telescope='xmm', load_profiles=False)
+    elif telescope == 'erosita':
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                            name=SRC_INFO['name'], use_peak=False,
+                            telescope='erosita',
+                            search_distance={'erosita': Quantity(3.6, 'deg')},
+                            load_profiles=False)
+    else:
+        raise ValueError(f"Unknown mission name: {telescope}")
+
+    # If a shared instance was requested, cache it
+    if shared:
+        _CACHED_SOURCES[telescope] = src
+
+    return src

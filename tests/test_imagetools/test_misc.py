@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/04/2023, 23:33. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:29 AM. Copyright (c) The Contributors.
 import unittest
 
 from astropy.units import Quantity
@@ -17,10 +17,9 @@ class TestImageToolsMisc(unittest.TestCase):
         Testing that this function fails properly in the absence of any data in an array.
         """
         test_arr = zeros((512, 512))
-        
+
         with self.assertRaises(ValueError):
             data_limits(test_arr)
-
 
     def test_data_lims_array(self):
         """

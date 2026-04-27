@@ -1,24 +1,31 @@
-import unittest
-import sys 
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:10 AM. Copyright (c) The Contributors.
+
 import os
+import sys
+import unittest
 
 from astropy.units import Quantity
 
-import xga
-from xga.sources import GalaxyCluster
-from xga.generate.sas.spec import evselect_spectrum, spectrum_set
 from xga.generate.sas.lightcurve import evselect_lightcurve
+from xga.generate.sas.spec import evselect_spectrum, spectrum_set
 from xga.products import Spectrum, LightCurve, AnnularSpectra
+from ..utils import require_sas
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from .. import SRC_ALL_TELS
+from .. import get_test_source
 
 class TestSasSpecFuncs(unittest.TestCase):
-    def test_evselect_spectrum(self):
-        evselect_spectrum(SRC_ALL_TELS, 'r500')
+    @classmethod
+    def setUpClass(cls):
+        cls.src = get_test_source('xmm')
 
-        spec = SRC_ALL_TELS.get_spectra('r500', telescope='xmm')
+    @require_sas
+    def test_evselect_spectrum(self):
+        evselect_spectrum(self.src, 'r500')
+
+        spec = self.src.get_spectra('r500', telescope='xmm')
 
         if isinstance(spec, list):
             for sp in spec:
@@ -28,25 +35,27 @@ class TestSasSpecFuncs(unittest.TestCase):
             assert isinstance(spec, Spectrum)
             assert spec.telescope == 'xmm'
 
+    @require_sas
     def test_spectrum_set(self):
         """
         Testing spectrum_set for annular spectrum generation.
         """
         radii = Quantity([0, 100, 200, 500], 'kpc')
-        spectrum_set(SRC_ALL_TELS, radii)
+        spectrum_set(self.src, radii)
 
-        ann_spec = SRC_ALL_TELS.get_annular_spectra(radii, telescope='xmm')
+        ann_spec = self.src.get_annular_spectra(radii, telescope='xmm')
         assert isinstance(ann_spec, AnnularSpectra)
         assert ann_spec.telescope == 'xmm'
         assert len(ann_spec) == 3
 
+    @require_sas
     def test_evselect_lightcurve(self):
         """
         Testing evselect_lightcurve generation.
         """
-        evselect_lightcurve(SRC_ALL_TELS, 'r500')
+        evselect_lightcurve(self.src, 'r500')
 
-        lc = SRC_ALL_TELS.get_lightcurves('r500', telescope='xmm')
+        lc = self.src.get_lightcurves('r500', telescope='xmm')
 
         if isinstance(lc, list):
             for l in lc:
@@ -55,3 +64,6 @@ class TestSasSpecFuncs(unittest.TestCase):
         else:
             assert isinstance(lc, LightCurve)
             assert lc.telescope == 'xmm'
+
+
+

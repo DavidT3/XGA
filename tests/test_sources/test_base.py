@@ -1,3 +1,6 @@
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:10 AM. Copyright (c) The Contributors.
+
 import unittest
 import os
 import sys
@@ -14,12 +17,16 @@ from xga.generate.esass import srctool_spectrum
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from .. import SRC_INFO, SRC_ALL_TELS, expected_ero_obs, expected_xmm_obs
+from .. import SRC_INFO, get_test_source, expected_ero_obs, expected_xmm_obs
 
 
 class TestBaseSource(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.src = get_test_source('all')
+
     def test_obs_ids_assigned(self):
-        obs = SRC_ALL_TELS.obs_ids
+        obs = self.src.obs_ids
 
         xmm_obs = set(obs['xmm'])
         ero_obs = set(obs['erosita'])
@@ -31,7 +38,7 @@ class TestBaseSource(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for images.
         """
-        src = SRC_ALL_TELS
+        src = self.src
         evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'))
 
         del(src)
@@ -39,7 +46,7 @@ class TestBaseSource(unittest.TestCase):
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
-        
+
         img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erosita')
 
         assert all([isinstance(im, Image) for im in img])
@@ -48,7 +55,7 @@ class TestBaseSource(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for combined images.
         """
-        src = SRC_ALL_TELS
+        src = self.src
         evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'), combine_obs=True)
 
         del(src)
@@ -56,7 +63,7 @@ class TestBaseSource(unittest.TestCase):
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
-        
+
         img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erosita')
 
         assert isinstance(img, Image)
@@ -66,15 +73,15 @@ class TestBaseSource(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for spectra.
         """
-        src = SRC_ALL_TELS
+        src = self.src
         srctool_spectrum(src, 'r500', combine_obs=False)
-        
+
         del(src)
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
-        
+
         spec = src.get_spectra('r500', telescope='erosita')
 
         assert all(isinstance(sp, Spectrum) for sp in spec)
@@ -83,15 +90,15 @@ class TestBaseSource(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
         """
-        src = SRC_ALL_TELS
+        src = self.src
         srctool_spectrum(src, 'r500', combine_obs=True)
-        
+
         del(src)
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
-        
+
         spec = src.get_combined_spectra('r500', inst='combined', telescope='erosita')
 
         assert isinstance(spec, Spectrum)
@@ -100,15 +107,15 @@ class TestBaseSource(unittest.TestCase):
         """
         Testing _existing_xga_products() in BaseSource for spectra made from combined obs.
         """
-        src = SRC_ALL_TELS
+        src = self.src
         srctool_spectrum(src, 'r500', combine_obs=True, combine_tm=False)
-        
+
         del(src)
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
                                      search_distance={'erosita': Quantity(3.6, 'deg')})
-        
+
         spec = src.get_combined_spectra('r500', telescope='erosita', inst='tm1')
 
         assert isinstance(spec, Spectrum)
@@ -118,3 +125,5 @@ class TestBaseSource(unittest.TestCase):
 
 if __name__ == "__main__":
      unittest.main()
+
+

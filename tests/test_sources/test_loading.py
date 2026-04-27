@@ -1,38 +1,39 @@
-import unittest
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:11 AM. Copyright (c) The Contributors.
+
 import os
 import sys
+import unittest
 
 from astropy.units import Quantity
 
-import xga
-from xga.sources import GalaxyCluster
-from xga.generate.sas.phot import evselect_image, eexpmap
-from xga.generate.sas.spec import evselect_spectrum
 from xga.generate.ciao.phot import chandra_image_expmap
 from xga.generate.ciao.spec import specextract_spectrum
+from xga.generate.sas.phot import evselect_image, eexpmap
+from xga.generate.sas.spec import evselect_spectrum
 from xga.products.phot import Image, ExpMap
 from xga.products.spec import Spectrum
+from xga.sources import GalaxyCluster
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from tests import SRC_INFO, SRC_ALL_TELS
+from tests import SRC_INFO, get_test_source
 
 
 class TestProductLoading(unittest.TestCase):
-    """
-    Testing that multi-mission products (XMM and Chandra) are correctly loaded
-    by the _existing_xga_products mechanism in BaseSource.
-    """
+    @classmethod
+    def setUpClass(cls):
+        cls.src = get_test_source('xmm')
 
     def test_xmm_image_loading(self):
         """
         Test that existing XMM images are correctly identified and loaded.
         """
-        if 'xmm' not in SRC_ALL_TELS.telescopes:
+        if 'xmm' not in self.src.telescopes:
             self.skipTest("XMM data not associated with test source")
 
         # Ensure image is generated
-        evselect_image(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
+        evselect_image(self.src, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
 
         # Re-declare source to trigger product loading
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
@@ -52,11 +53,11 @@ class TestProductLoading(unittest.TestCase):
         """
         Test that existing XMM exposure maps are correctly identified and loaded.
         """
-        if 'xmm' not in SRC_ALL_TELS.telescopes:
+        if 'xmm' not in self.src.telescopes:
             self.skipTest("XMM data not associated with test source")
 
         # Ensure expmap is generated
-        eexpmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
+        eexpmap(self.src, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
 
         # Re-declare source
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
@@ -75,11 +76,11 @@ class TestProductLoading(unittest.TestCase):
         """
         Test that existing XMM spectra are correctly identified and loaded.
         """
-        if 'xmm' not in SRC_ALL_TELS.telescopes:
+        if 'xmm' not in self.src.telescopes:
             self.skipTest("XMM data not associated with test source")
 
         # Ensure spectrum is generated
-        evselect_spectrum(SRC_ALL_TELS, 'r500')
+        evselect_spectrum(self.src, 'r500')
 
         # Re-declare source
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
@@ -98,11 +99,11 @@ class TestProductLoading(unittest.TestCase):
         """
         Test that existing Chandra images are correctly identified and loaded.
         """
-        if 'chandra' not in SRC_ALL_TELS.telescopes:
+        if 'chandra' not in self.src.telescopes:
             self.skipTest("Chandra data not associated with test source")
 
         # Ensure image is generated
-        chandra_image_expmap(SRC_ALL_TELS, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
+        chandra_image_expmap(self.src, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
 
         # Re-declare source
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
@@ -122,11 +123,11 @@ class TestProductLoading(unittest.TestCase):
         """
         Test that existing Chandra spectra are correctly identified and loaded.
         """
-        if 'chandra' not in SRC_ALL_TELS.telescopes:
+        if 'chandra' not in self.src.telescopes:
             self.skipTest("Chandra data not associated with test source")
 
         # Ensure spectrum is generated
-        specextract_spectrum(SRC_ALL_TELS, 'r500')
+        specextract_spectrum(self.src, 'r500')
 
         # Re-declare source
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
@@ -144,3 +145,6 @@ class TestProductLoading(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
