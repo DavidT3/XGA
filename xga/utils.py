@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 3:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:18 PM. Copyright (c) The Contributors.
 
 import json
 import os
@@ -26,7 +26,9 @@ from tqdm import tqdm
 from .exceptions import XGAConfigError, InvalidTelescopeError, NoTelescopeDataError
 
 # This warning filter enables the DeprecationWarning which is in the _deprecated decorator
-simplefilter('default')
+# We set it to once so that the same warning is not shown multiple times in the same session,
+#  important for parallel processing where the module may be imported multiple times.
+simplefilter('once', DeprecationWarning)
 
 _INITIALISED = False
 # The set of variables that should be lazily loaded
@@ -693,7 +695,8 @@ def build_observation_census(tel: str, num_cores: int) -> Tuple[pd.DataFrame, pd
                     census_progress.update(1)
 
         # We add the new observations into our existing census dataframe
-        obs_lookup = pd.concat([obs_lookup, pd.DataFrame(new_census_rows)], ignore_index=True)
+        new_data = pd.DataFrame(new_census_rows, columns=obs_lookup.columns)
+        obs_lookup = pd.concat([obs_lookup, new_data], ignore_index=True)
         # This then saves the dataframe to its rightful place
         obs_lookup.to_csv(census_file, index=False)
 
