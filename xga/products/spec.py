@@ -1542,7 +1542,7 @@ class Spectrum(BaseProduct):
     def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
              hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
              src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
+             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True, show_residuals: bool = False,
              save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
@@ -1572,6 +1572,8 @@ class Spectrum(BaseProduct):
             fontsize will be fontsize + 1. Default is 14.
         :param bool show_model_fits: Whether any models fit to the spectrum by XSPEC should be shown. Default is
             True, but will be set to False if no fits have been performed.
+        :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
+            the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
@@ -1617,6 +1619,10 @@ class Spectrum(BaseProduct):
         elif show_model_fits and not energy:
             raise ValueError("As fitted spectra are extracted from XSPEC, and only spectra with energy x-axes are "
                              "extracted, plotting against channel is not supported.")
+
+        # Residuals can only be shown if model fits are being displayed
+        if show_residuals and not show_model_fits:
+            raise ValueError("Residuals can only be displayed when show_model_fits is True and a model has been fit.")
 
         # Here we grab the count-rates of the channels in this spectrum - either straight from the property
         #  or the get_grouped_data() method
@@ -1676,14 +1682,18 @@ class Spectrum(BaseProduct):
         # Simple error propagation to replace the nonsense uncertainty column in src_sub_bck_rate
         src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1]**2 + bck_rate[:, 1]**2)
 
-        # Create figure object
-        plt.figure(figsize=figsize)
+        if show_residuals:
+            fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex=True,
+                                            gridspec_kw={'height_ratios': [3, 1]})
+        else:
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+
+        plt.sca(ax)
 
         # Ensure axis is limited to the chosen energy range
-        plt.xlim(lo_lim, hi_lim)
+        ax.set_xlim(lo_lim, hi_lim)
 
         # Set the plot up to look nice and professional.
-        ax = plt.gca()
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
@@ -1719,38 +1729,45 @@ class Spectrum(BaseProduct):
         #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
         else:
             # Set the axis labels
-            plt.ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-            plt.xlabel("Energy [keV]", fontsize=fontsize)
+            ax.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
+            if not show_residuals:
+                ax.set_xlabel("Energy [keV]", fontsize=fontsize)
 
             for mod_ind, mod in enumerate(self._plot_data):
-                # Extract the x values which we gathered from XSPEC (they will be in keV)
                 x = self._plot_data[mod]["x"]
-                # Cut the x dataset to just the energy range we want
                 sel_x = (x > lo_lim) & (x < hi_lim)
                 plot_x = x[sel_x]
 
                 if mod_ind == 0:
-                    # Read out the data just for line length reasons
-                    # Make the cuts based on energy values supplied to the view method
                     plot_y = self._plot_data[mod]["y"][sel_x]
                     plot_xerr = self._plot_data[mod]["x_err"][sel_x]
                     plot_yerr = self._plot_data[mod]["y_err"][sel_x]
                     plot_mod = self._plot_data[mod]["model"][sel_x]
 
-                    plt.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
-                                 label="Background subtracted source data", zorder=1)
+                    ax.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
+                                label="Background subtracted source data", zorder=1)
                 else:
-                    # Don't want to re-plot data points as they should be identical, so if there is another model
-                    #  only it will be plotted
                     plot_mod = self._plot_data[mod]["model"][sel_x]
 
-                # The model line is put on
-                plt.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
+                ax.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
+
+                # Plot residuals if requested - using the first model only
+                if show_residuals and mod_ind == 0:
+                    residuals = plot_mod - plot_y
+                    ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
+                                    fmt="k+", zorder=1)
+                    ax_res.axhline(0, color='red', linewidth=1, linestyle='--')
+                    ax_res.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize-2)
+                    ax_res.set_xlabel("Energy [keV]", fontsize=fontsize)
+                    ax_res.minorticks_on()
+                    ax_res.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+                    ax_res.set_xscale(xscale)
+                    ax_res.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                    ax_res.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # Generate the legend for the data and model(s)
-        plt.legend(loc="best", fontsize=fontsize-1)
+        ax.legend(loc="best", fontsize=fontsize-1)
 
-        # Setting up the scaling aspects of the plot
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
         ax.xaxis.set_major_formatter(ScalarFormatter())
