@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 12:33 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:12 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -34,11 +34,16 @@ if __name__ == "__main__":
         from astropy.units import Quantity
         from daxa.archive import Archive
         from daxa.mission import XMMPointed, eRASS1DE, Chandra
-        from daxa.process.simple import full_process_xmm, full_process_erosita, full_process_chandra
+        from daxa.process.simple import full_process_erosita, full_process_chandra
+        from daxa.process.xmm.setup import cif_build, odf_ingest
+        from daxa.process.xmm.assemble import epchain, emchain, cleaned_evt_lists, merge_subexposures
+        from daxa.process.xmm.clean import espfilt
+        from daxa.process.xmm.generate import generate_images_expmaps
         from daxa.process._backend_check import find_sas, find_esass, find_ciao
         from daxa.exceptions import SASNotFoundError, eSASSNotFoundError, CIAONotFoundError
         from tests.source_info import SRC_INFO, SUPP_SRC_INFO
         from astropy.coordinates import SkyCoord
+        import xga
 
         # Create SkyCoord instances for the test sources
         test_coords = SkyCoord(ra=[SRC_INFO['ra'], SUPP_SRC_INFO['ra']],
@@ -84,17 +89,39 @@ if __name__ == "__main__":
             arch = Archive('xga_tests', missions)
             if esass_avail:
                 full_process_erosita(arch)
+
             if sas_avail:
-                full_process_xmm(arch)
+                # We re-implement full_process_xmm here so we can re-initialise XGA
+                #  at the right moment (after merged evts are created but before
+                #  DAXA tries to use XGA to make images).
+                cif_build(arch)
+                odf_ingest(arch)
+                try:
+                    epchain(arch)
+                except ValueError:
+                    pass
+                try:
+                    emchain(arch)
+                except ValueError:
+                    pass
+                espfilt(arch)
+                cleaned_evt_lists(arch)
+                merge_subexposures(arch)
+
+                # CRITICAL: Now that merged event lists exist, we re-initialise XGA
+                #  so its lazy-census-builder sees the new files and marks XMM as USABLE.
+                xga.reinitialise_xga(os.environ['XGA_CONFIG_DIR'])
+                xga.rebuild_census(full_rebuild=True)
+                # To make sure everything is lazy loaded ready for DAXA to use
+                _ = xga.CENSUS
+
+                # Now DAXA can safely use XGA internally
+                generate_images_expmaps(arch)
+
             if ciao_avail:
                 full_process_chandra(arch)
 
-            # Now that DAXA has processed the data, we want to ensure that XGA has a fresh,
-            #  accurate census for the tests to use. We use the reinitialise_xga function
-            #  to make sure the correct config directory is picked up, then trigger a full
-            #  rebuild of the census to ensure it matches the data just downloaded.
-            import xga
-            xga.reinitialise_xga(os.environ['XGA_CONFIG_DIR'])
+            # Final rebuild to ensure all censuses (censii?) are built
             xga.rebuild_census(full_rebuild=True)
         else:
             raise ValueError("No mission backends (SAS, eSASS, or CIAO) are available.")
