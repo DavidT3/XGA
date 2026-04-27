@@ -93,8 +93,16 @@ Before XGA can be used you must fill out a configuration file (a completed examp
 Follow these steps to fill out the configuration file:
 
 1. Import XGA to generate the initial, incomplete, configuration file.
+   * Note: XGA uses a **lazy loading** architecture. Importing the module does not perform any filesystem checks or software discovery immediately. These only occur when a configuration variable or data-dependent function is first accessed.
 2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is probably easier to navigate via the terminal.
-   * Note: The location of the configuration directory can be overridden by setting the ``XGA_CONFIG_DIR`` environment variable. If set, XGA will look for its configuration and store its census files in exactly that directory.
+   * Note: The location of the configuration directory can be overridden by setting the ``XGA_CONFIG_DIR`` environment variable. If set, XGA will look for its configuration and store its census files in exactly that directory. Because of XGA's lazy loading, you can even set this environment variable **after** importing XGA in a session.
+   * Note: If you need to switch configuration directories mid-session, you can use the ``reinitialise_xga()`` function:
+
+   .. code-block:: python
+
+       import xga
+       # Change to a new config directory
+       xga.reinitialise_xga('/path/to/new/config/')
 3. Take note of the entries that currently have /this/is/required at the beginning, without these entries the module will not function.
 4. Set the directory in which XGA will save the products and files it generates. It is advised to just set it to xga_output, so wherever you run a script that imports XGA it will create a folder called xga_output there. You could choose to use an absolute path and have a global XGA folder however, it wouldn't make a lot of sense.
 5. You may also set an optional parameter in the [XGA_SETUP] section, 'num_cores'. If you wish to manually limit the number of cores that XGA is allowed to use, then set this to an integer value, e.g. num_cores = 10. You can also set this at runtime, by importing NUM_CORES from xga and setting that to a value.
@@ -118,11 +126,28 @@ To mount a server, one can follow the steps detailed in this `guide <https://sft
 XGA's First Run After Configuration
 -----------------------------------
 
-The first time you import any part of XGA, it will create an 'observation census', where it will search through
+The first time you access any configuration-dependent part of XGA, it will create an 'observation census', where it will search through
 all the observations it can find (based on your entries in the configuration file), check that there are events
 lists present, and record the pointing RA and DEC. *This can take a while*, but will only take that long on the first
-run. The module will check the census against your observation directory and see if it needs to be updated on
+run. This process is fully parallelized and will utilize your available CPU cores to speed up the filesystem I/O.
+
+The module will check the census against your observation directory and see if it needs to be updated on
 every run.
+
+Census Management
+-----------------
+
+XGA provides the ``rebuild_census()`` function for manual management of the observation census. This is useful if you have deleted data from your disk or want to force a fresh scan of your archives.
+
+*   **Standard Update**: Calling ``rebuild_census()`` without arguments is equivalent to the update check performed at startup.
+*   **Full Rebuild**: ``rebuild_census(full_rebuild=True)`` deletes the existing census and parses every FITS header from scratch.
+*   **Cleanup**: ``rebuild_census(clean_dead=True)`` checks the current census against the filesystem and removes entries for ObsIDs that no longer exist.
+
+.. code-block:: python
+
+    import xga
+    # Prune census entries for data that has been deleted from disk
+    xga.rebuild_census(clean_dead=True)
 
 Blacklisting ObsIDs
 -------------------

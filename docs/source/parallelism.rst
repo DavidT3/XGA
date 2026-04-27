@@ -8,11 +8,19 @@ you call the functions.
 
 To see the number of cores which have automatically allocated to XGA, you can import the NUM_CORES constant from the
 base xga module. You can also manually set this value globally, before running anything. Either set the
-*num_cores* option in the [XGA_SETUP] section of the configuration file, or simply set the NUM_CORES constant
+*num_cores* option in the [XGA_SETUP] section of the configuration file (setting it to **auto** will
+instruct XGA to use 90% of available cores), or simply set the NUM_CORES constant
 imported from xga.
 
-To see the number of cores which have automatically allocated to XGA, you can import the NUM_CORES constant from the base xga module
+.. code-block:: python
 
-.. code-block::
     from xga import NUM_CORES
-    NUM_CORES
+    # You can override the global default like this
+    import xga
+    xga.NUM_CORES = 4
+
+Parallel Observation Census
+---------------------------
+Building the observation census (reading headers from thousands of FITS files) is one of the most I/O
+intensive parts of XGA's setup. This process is now fully parallelized and will utilize the global
+**NUM_CORES** value to speed up both the initial setup and any subsequent updates or manual rebuilds.
