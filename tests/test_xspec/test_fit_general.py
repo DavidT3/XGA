@@ -1,8 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:37 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:27 PM. Copyright (c) The Contributors.
 
-import os
-import sys
 import unittest
 
 import numpy as np
@@ -10,10 +8,8 @@ from astropy.units import Quantity
 
 from xga.samples import ClusterSample
 from xga.xspec.fit.general import single_temp_apec
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from .. import CLUSTER_SMP
+
 
 class TestBaseSample(unittest.TestCase):
     @classmethod
