@@ -3,16 +3,6 @@
 from . import _version
 __version__ = _version.get_versions()['version']
 
-# The set of variables that should be lazily loaded from utils
-_LAZY_VARS = (
-    'xga_conf', 'CENSUS', 'OUTPUT', 'NUM_CORES', 'XGA_EXTRACT', 'BASE_XSPEC_SCRIPT', 'MODEL_PARS',
-    'MODEL_UNITS', 'ABUND_TABLES', 'XSPEC_FIT_METHOD', 'COUNTRATE_CONV_SCRIPT', 'NHC', 'BLACKLIST', 'HY_MASS',
-    'MEAN_MOL_WEIGHT', 'SAS_VERSION', 'XSPEC_VERSION', 'SAS_AVAIL', 'DEFAULT_COSMO', 'TELESCOPES', 'USABLE',
-    'DEFAULT_TELE_SEARCH_DIST', 'COMBINED_INSTS', 'ESASS_AVAIL', 'SRC_REGION_COLOURS', 'check_telescope_choices',
-    'PRETTY_TELESCOPE_NAMES', 'CIAO_AVAIL', 'CIAO_VERSION', 'CALDB_AVAIL', 'CALDB_VERSION', 'ESASS_VERSION',
-    'RAD_MATCH_PRECISION', 'SASERROR_LIST', 'SASWARNING_LIST', 'xga_reinit', 'rebuild_census'
-)
-
 def __getattr__(name):
     """
     A module level __getattr__ which allows us to lazily load the XGA configuration and census from the utils
@@ -22,8 +12,11 @@ def __getattr__(name):
     :return: The value of the attribute.
     """
     import importlib
-    if name in _LAZY_VARS:
-        utils = importlib.import_module('.utils', __package__)
+    # We import the utils module to check which variables are marked as lazy
+    utils = importlib.import_module('.utils', __package__)
+
+    # We check if the requested name is in the set of lazy variables and NOT in the exclusion set
+    if name in utils._LAZY_VARS and name not in utils._KEEP_PRIVATE_LAZY_VARS:
         return getattr(utils, name)
     elif name == 'sas':
         generate = importlib.import_module('.generate', __package__)
@@ -31,7 +24,7 @@ def __getattr__(name):
     elif name == 'generate':
         return importlib.import_module('.generate', __package__)
     elif name == 'utils':
-        return importlib.import_module('.utils', __package__)
+        return utils
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

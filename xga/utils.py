@@ -38,9 +38,13 @@ _LAZY_VARS = {
     'USABLE', 'VALID_CONFIG', 'CENSUS_FILES', 'BLACKLIST_FILES',
     'SASERROR_LIST', 'SASWARNING_LIST', 'XSPEC_FIT_METHOD', 'ABUND_TABLES'
 }
+# This set contains any variables from _LAZY_VARS that should NOT be exposed at the top level
+#  of the xga module (i.e. via xga.VAR_NAME). This allows for internal lazy variables in utils.py.
+# Any variable name in this set must also be present in _LAZY_VARS
+_KEEP_PRIVATE_LAZY_VARS = set()
 
 
-def xga_reinit(config_dir: str = None):
+def reinitialise_xga(config_dir: str = None):
     """
     A function to re-initialise XGA, allowing the user to change the configuration directory
     mid-session, or to pick up changes to the configuration file.
@@ -82,7 +86,7 @@ def __getattr__(name):
 
 def _initialise_xga():
     """
-    The internal function which actually performs the XGA configuration and census loading, as well as
+    The internal function that actually performs the XGA configuration and census loading, as well as
     checking for the availability of backend software.
     """
     global _INITIALISED, CONFIG_PATH, CONFIG_FILE, xga_conf, VALID_CONFIG, USABLE, CENSUS, BLACKLIST, \
