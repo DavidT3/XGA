@@ -1751,7 +1751,7 @@ class Spectrum(BaseProduct):
 
                 ax.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
 
-                # Plot residuals if requested - using the first model only
+                # Plot residuals if requested - using the first model only!
                 if show_residuals and mod_ind == 0:
                     residuals = plot_mod - plot_y
                     ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
