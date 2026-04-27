@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:03 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:06 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -224,12 +224,17 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             if not os.path.exists(OUTPUT + "xmm/" + obs_id):
                 os.mkdir(OUTPUT + "xmm/" + obs_id)
 
-            # Check if this exposure map already exists and is usable
-            exists = source.get_expmaps(obs_id, inst, lo_en, hi_en, telescope='xmm')
-            if not isinstance(exists, list):
-                exists = [exists]
-            if len(exists) == 1 and exists[0].usable:
-                continue
+            try:
+                # Check if this exposure map already exists and is usable
+                exists = source.get_expmaps(obs_id, inst, lo_en, hi_en, telescope='xmm')
+                if not isinstance(exists, list):
+                    exists = [exists]
+                if len(exists) == 1 and exists[0].usable:
+                    continue
+            except NoProductAvailableError:
+                # Definitely need to generate in this case
+                pass
+
             # Generating an exposure map requires a reference image.
             ref_im = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
             if isinstance(ref_im, list):
