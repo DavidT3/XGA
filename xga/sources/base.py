@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 29/01/2026, 14:51. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 3:37 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -20,7 +20,6 @@ from numpy import ndarray
 from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelRegion, CirclePixelRegion, PixelRegion,
                      Regions)
 
-from .. import xga_conf, BLACKLIST
 from ..exceptions import (NotAssociatedError, NoValidObservationsError, NoProductAvailableError,
                           ModelNotAssociatedError, ParameterNotAssociatedError, NotSampleMemberError,
                           TelescopeNotAssociatedError, PeakConvergenceFailedError,
@@ -36,7 +35,13 @@ from ..sourcetools.match import _dist_from_source, census_match
 from ..sourcetools.misc import coord_to_name
 from ..utils import ALLOWED_PRODUCTS, dict_search, xmm_det, xmm_sky, OUTPUT, SRC_REGION_COLOURS, \
     DEFAULT_COSMO, ALLOWED_INST, COMBINED_INSTS, obs_id_test, PRETTY_TELESCOPE_NAMES, OBS_ID_REGEX, \
-    check_telescope_choices, RAD_MATCH_PRECISION
+    check_telescope_choices, RAD_MATCH_PRECISION, xga_conf
+
+# TODO RESTORE THIS WHEN DAXA'S BODGY OVERRIDING OF XGA BLACKLIST CENSUS ETC. HAS
+#  BEEN CHANGED SO THAT IT USES THE NEW REINIT XGA METHOD - BLACKLIST IS NOW
+#  IMPORTED INSIDE BASESOURCE, SO THAT WHEN DAXA OVERWRITES THE BLACKLIST VARIABLE NAME
+#  IN THIS FILE, THAT DOESN'T HAVE ANY EFFECT
+# BLACKLIST,
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -230,6 +235,8 @@ class BaseSource:
             # If we are declaring a NullSource, then the RA and Dec are going to be NaN - and we want to use the
             #  entire census of the telescopes specified by the user
             matches, excluded = census_match(telescope, sel_null_obs)
+
+        from ..utils import BLACKLIST
 
         # Observations that seem like they can be used are stored in this dictionary - though some of them may be
         #  removed later after some checks. The top level keys will be telescopes
