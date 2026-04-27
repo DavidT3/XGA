@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 3:52 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:05 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -104,7 +104,6 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     prods = []
     for p_ind, cur_p_path in enumerate(p_path):
         cur_p_type = p_type[p_ind]
-        print(cur_p_type)
 
         # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
         #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
