@@ -1,19 +1,15 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:24 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
 
-import os
-import sys
 import unittest
 
 from astropy.units import Quantity
 
 from xga.generate.esass.phot import evtool_image, expmap
 from xga.samples import ClusterSample
+from .. import get_test_source, CLUSTER_SMP
 from ..utils import require_esass
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from .. import get_test_source, CLUSTER_SMP
 
 class TestEsassPhotFuncs(unittest.TestCase):
     @classmethod

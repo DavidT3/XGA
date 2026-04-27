@@ -1,16 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/24/26, 1:36 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
 
-import os
-import sys
 import unittest
 
 from xga.generate.esass.misc import evtool_combine_evts
+from .. import get_test_source
 from ..utils import require_esass
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from .. import get_test_source
 
 class TestEsassMiscFuncs(unittest.TestCase):
     @classmethod

@@ -1,8 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:10 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
 
-import os
-import sys
 import unittest
 
 from astropy.units import Quantity
@@ -10,11 +8,9 @@ from astropy.units import Quantity
 from xga.generate.sas.lightcurve import evselect_lightcurve
 from xga.generate.sas.spec import evselect_spectrum, spectrum_set
 from xga.products import Spectrum, LightCurve, AnnularSpectra
+from .. import get_test_source
 from ..utils import require_sas
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from .. import get_test_source
 
 class TestSasSpecFuncs(unittest.TestCase):
     @classmethod

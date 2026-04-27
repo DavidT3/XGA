@@ -1,23 +1,21 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:10 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:14 PM. Copyright (c) The Contributors.
 
-import unittest
 import os
 import sys
+import unittest
 
 from astropy.units import Quantity
 
-import xga
-from xga.sources import GalaxyCluster
 from xga.generate.esass import evtool_image
+from xga.generate.esass import srctool_spectrum
 from xga.products.phot import Image
 from xga.products.spec import Spectrum
-from xga.generate.esass import srctool_spectrum
-
+from xga.sources import GalaxyCluster
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from .. import SRC_INFO, get_test_source, expected_ero_obs, expected_xmm_obs
+from .. import SRC_INFO, get_test_source, EXPECTED_ERO_OBS, EXPECTED_XMM_OBS
 
 
 class TestBaseSource(unittest.TestCase):
@@ -31,8 +29,8 @@ class TestBaseSource(unittest.TestCase):
         xmm_obs = set(obs['xmm'])
         ero_obs = set(obs['erosita'])
 
-        assert expected_ero_obs == ero_obs
-        assert expected_xmm_obs == xmm_obs
+        assert EXPECTED_ERO_OBS == ero_obs
+        assert EXPECTED_XMM_OBS == xmm_obs
 
     def test_existing_prods_loaded_in_img(self):
         """
