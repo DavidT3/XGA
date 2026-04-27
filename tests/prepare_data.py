@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 12:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 12:33 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -88,6 +88,14 @@ if __name__ == "__main__":
                 full_process_xmm(arch)
             if ciao_avail:
                 full_process_chandra(arch)
+
+            # Now that DAXA has processed the data, we want to ensure that XGA has a fresh,
+            #  accurate census for the tests to use. We use the reinitialise_xga function
+            #  to make sure the correct config directory is picked up, then trigger a full
+            #  rebuild of the census to ensure it matches the data just downloaded.
+            import xga
+            xga.reinitialise_xga(os.environ['XGA_CONFIG_DIR'])
+            xga.rebuild_census(full_rebuild=True)
         else:
             raise ValueError("No mission backends (SAS, eSASS, or CIAO) are available.")
 
