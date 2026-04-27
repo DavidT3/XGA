@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 01/11/2024, 16:30. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 11:03 AM. Copyright (c) The Contributors.
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -36,28 +36,11 @@ if not os.path.exists(config_path):
     # As this file lives in the docs/source folder, we go two levels up for the absolute path the XGA repo folder
     xga_path = '/'.join(current_path.split('/')[:-2])
 
-    # The test data includes a mostly complete config file, and census
-    # test_cfg_path = os.path.join(xga_path, 'tests', 'test_data', 'xga.cfg')
-    # test_census_path = os.path.join(xga_path, 'tests', 'test_data', 'census.csv')
-    # test_data_path = os.path.join(xga_path, 'tests', 'test_data')
-    #
-    # # Copy the config and census over to the place they should be on whatever system is building this
-    # shutil.copy(test_cfg_path, config_file_path)
-    # shutil.copy(test_census_path, census_file_path)
-    #
-    # with open(config_file_path, 'r') as cfg:
-    #     lines = cfg.readlines()
-    #
-    # lines = [line.replace('root_xmm_dir = ./', 'root_xmm_dir = {}'.format(test_data_path)) for line in lines]
-    #
-    # with open(config_file_path, 'w') as cfg:
-    #     cfg.write(''.join(lines))
-
 # -- Project information -----------------------------------------------------
 
 project = 'X-ray: Generate and Analyse (XGA)'
-copyright = '2024, David J Turner'
-author = 'David J Turner'
+copyright = '2026, The Contributors'
+author = 'David J Turner, XGA Team'
 
 # The full version, including alpha/beta/rc tags
 # release = '0.1'
