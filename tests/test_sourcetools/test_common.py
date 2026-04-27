@@ -1,26 +1,17 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 10:36 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:25 PM. Copyright (c) The Contributors.
 
 import unittest
-import sys
-import os
 
 from astropy.units import Quantity
 
-import xga
-from xga.sources import GalaxyCluster
-from xga.generate.esass.phot import evtool_image, expmap
-from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
-from xga.products.profile import GasDensity3D, GasTemperature3D
-from xga.sourcetools._common import _get_all_telescopes, _setup_global, \
-                                    _setup_inv_abel_dens_onion_temp
 from xga import NUM_CORES
-
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
+from xga.products.profile import GasDensity3D, GasTemperature3D
+from xga.sources import GalaxyCluster
+from xga.sourcetools._common import _get_all_telescopes, _setup_global, \
+    _setup_inv_abel_dens_onion_temp
 from .. import get_test_source
+
 
 class TestSetupFuncs(unittest.TestCase):
     @classmethod
@@ -38,9 +29,7 @@ class TestSetupFuncs(unittest.TestCase):
     def test_setup_global(self):
         res = _setup_global(self.src, Quantity(600, 'kpc'), Quantity(600, 'kpc'), 'angr', True,
                             5, None, None, NUM_CORES, 4, True, ['xmm', 'erosita'])
-        print('in test_setup_global')
-        print(res)
-        
+
         assert isinstance(res[0][0], GalaxyCluster)
         assert type(res[1][0]) == Quantity
         assert type(res[2]) == dict
@@ -52,8 +41,6 @@ class TestSetupFuncs(unittest.TestCase):
                                               'beta', 'king', 'vikhlinin_temp',
                                               Quantity(600, 'kpc'),
                                               stacked_spectra=True)
-        print('in test_setup_inv_abel_dens_onion_temp')
-        print(res)
 
         assert type(res[0]) == list
         assert len(res[0]) == 1
