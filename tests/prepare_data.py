@@ -1,10 +1,15 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:53 PM. Copyright (c) The Contributors.
 
 import os
 import sys
 
 if __name__ == "__main__":
+    # Ensure we are operating from the project root
+    script_path = os.path.abspath(__file__)
+    project_root = os.path.dirname(os.path.dirname(script_path))
+    os.chdir(project_root)
+
     cwd = os.getcwd()
 
     # DAXA does not yet support environment variable configuration overrides, so we have to
@@ -22,10 +27,10 @@ if __name__ == "__main__":
 
     # Now we copy the template daxa config into the correct place
     import shutil
-    shutil.copy('test_data/test_template_daxa.cfg', daxa_conf_path)
+    shutil.copy('tests/test_data/test_template_daxa.cfg', daxa_conf_path)
 
     # We set the XGA_CONFIG_DIR environment variable so that XGA knows where to look for/write its config
-    os.environ['XGA_CONFIG_DIR'] = os.path.join(cwd, 'test_data/config/')
+    os.environ['XGA_CONFIG_DIR'] = os.path.join(cwd, 'tests/test_data/config/')
 
     try:
         # Path logic to ensure we can import tests
