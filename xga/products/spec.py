@@ -1757,7 +1757,7 @@ class Spectrum(BaseProduct):
                     ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
                                     fmt="k+", zorder=1)
                     ax_res.axhline(0, color='red', linewidth=1, linestyle='--')
-                    ax_res.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize-2)
+                    ax_res.set_ylabel("Residuals", fontsize=fontsize-2)
                     ax_res.set_xlabel("Energy [keV]", fontsize=fontsize)
                     ax_res.minorticks_on()
                     ax_res.tick_params(axis='both', direction='in', which='both', top=True, right=True)
