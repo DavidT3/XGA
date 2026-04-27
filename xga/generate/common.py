@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 15:39. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 3:52 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -104,6 +104,7 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
     prods = []
     for p_ind, cur_p_path in enumerate(p_path):
         cur_p_type = p_type[p_ind]
+        print(cur_p_type)
 
         # This part for defining an image object used to make sure that the src wasn't a NullSource, as defining product
         #  objects is wasteful considering the purpose of a NullSource, but generating exposure maps requires a
@@ -149,7 +150,11 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         elif cur_p_type == 'ratemap':
             # The count-rate map files produced by Chandra software (for instance) cannot yet be read into XGA
             #  ratemap class instances - though we will include this at some point
-            continue
+            prod = None
+        elif "NullSource" in src:
+            # Even if we're not storing the product instances, the prod variable needs
+            #  to be set, otherwise there will be an error
+            prod = None
         else:
             raise NotImplementedError("Not implemented yet")
 
