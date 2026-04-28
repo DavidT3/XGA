@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/28/26, 11:56 AM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -15,15 +15,20 @@ from ..utils import require_sas
 class TestSasPhotFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Grab a source with XMM in
         cls.src = get_test_source('xmm')
+
+        # Additionally, grab one that we know DOESN'T have any XMM
+        cls.no_xmm_src = get_test_source('erosita')
 
     @require_sas
     def test_evselect_image_no_tel_error(self):
         """
-        Testing that TelescopeNotAssociatedError is raised when telescope isn't associated.
+        Testing that TelescopeNotAssociatedError is raised when a source with no XMM data is passed
+        to the XMM-specific evselect_image function.
         """
         with self.assertRaises(TelescopeNotAssociatedError):
-            evselect_image(self.src)
+            evselect_image(self.no_xmm_src)
 
     @require_sas
     def test_evselect_image(self):
