@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 3:37 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/28/26, 10:22 AM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -2240,12 +2240,13 @@ class BaseSource:
         return shape_str
 
     def _get_phot_prod(self, prod_type: str, obs_id: str = None, inst: str = None, lo_en: Quantity = None,
-                       hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
-                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, telescope: str = None) \
+                       hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
+                       psf_iter: int = 15, telescope: str = None) \
             -> Union[Image, ExpMap, RateMap, List[Image], List[ExpMap], List[RateMap]]:
         """
         An internal method which is the basis of the get_images, get_expmaps, and get_ratemaps methods.
 
+        :param str prod_type: XGA name for the type of phot product to be retrieved.
         :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
             which means all images/expmaps/ratemaps matching the other criteria will be returned.
         :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
@@ -2282,7 +2283,8 @@ class BaseSource:
             # We have energy limits here so we assemble the key that describes the energy range
             energy_key = "bound_{l}-{h}".format(l=lo_en.to('keV').value, h=hi_en.to('keV').value)
         else:
-            raise ValueError("lo_en and hi_en must be either BOTH None or BOTH an Astropy quantity.")
+            raise ValueError(f"'lo_en' ({lo_en}) and hi_en ({hi_en}) must be either BOTH"
+                             f" None or BOTH an Astropy quantity.")
 
         # If we are looking for a PSF corrected image/ratemap then we assemble the extra key with PSF details
         if psf_corr and prod_type in ["image", "ratemap"]:
@@ -3194,10 +3196,10 @@ class BaseSource:
         return self._get_phot_prod("ratemap", obs_id, inst, lo_en, hi_en, psf_corr, psf_model, psf_bins, psf_algo,
                                    psf_iter, telescope)
 
-    def get_combined_images(self, obs_id: str = 'combined', inst: str = None, lo_en: Quantity = None,
-                            hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+    def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None,
+                            psf_corr: bool = False, psf_model: str = "ELLBETA",
                             psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                            telescope: str = None) -> Union[Image, List[Image]]:
+                            telescope: str = None, obs_id: str = 'combined', inst: str = None) -> Union[Image, List[Image]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA Image objects.
         This is equivalent to calling get_images() with obs_id='combined' and/or inst='combined'.
@@ -3208,10 +3210,6 @@ class BaseSource:
         - obs_id=specific, inst='combined': Single obs + multi-inst
         - obs_id=None, inst=None: All combined images
 
-        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation images.
-        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
-            combined images matching the other criteria will be returned. Pass 'combined' to retrieve
-            multi-instrument combined images, or a specific instrument name for single-instrument combined.
         :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
             is None (which will retrieve all images regardless of energy limit).
         :param Quantity hi_en: The upper energy limit of the image you wish to retrieve, the default
@@ -3224,6 +3222,10 @@ class BaseSource:
         :param int psf_iter: If the image you want is PSF corrected, this is the number of iterations.
         :param str telescope: Optionally, a specific telescope to search for combined images can be supplied. The
             default is None, which means all combined images matching the other criteria will be returned.
+        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation images.
+        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
+            combined images matching the other criteria will be returned. Pass 'combined' to retrieve
+            multi-instrument combined images, or a specific instrument name for single-instrument combined.
         :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
             were multiple matching products).
         :rtype: Union[Image, List[Image]]
@@ -3232,16 +3234,13 @@ class BaseSource:
                               psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
                               telescope=telescope)
 
-    def get_combined_expmaps(self, obs_id: str = 'combined', inst: str = None, lo_en: Quantity = None,
-                             hi_en: Quantity = None, telescope: str = None) -> Union[ExpMap, List[ExpMap]]:
+    def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None,
+                             telescope: str = None, obs_id: str = 'combined',
+                             inst: str = None) -> Union[ExpMap, List[ExpMap]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA ExpMap objects.
         This is equivalent to calling get_expmaps() with obs_id='combined' and/or inst='combined'.
 
-        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation exposure maps.
-        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
-            combined exposure maps matching the other criteria will be returned. Pass 'combined' to retrieve
-            multi-instrument combined exposure maps.
         :param Quantity lo_en: The lower energy limit of the exposure maps you wish to retrieve, the default
             is None (which will retrieve all images regardless of energy limit).
         :param Quantity hi_en: The upper energy limit of the exposure maps you wish to retrieve, the default
@@ -3249,24 +3248,25 @@ class BaseSource:
         :param str telescope: Optionally, a specific telescope to search for combined exposure maps can be
             supplied. The default is None, which means all combined exposure maps matching the other criteria
             will be returned.
+        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation exposure maps.
+        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
+            combined exposure maps matching the other criteria will be returned. Pass 'combined' to retrieve
+            multi-instrument combined exposure maps.
         :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
         """
         return self.get_expmaps(obs_id=obs_id, inst=inst, lo_en=lo_en, hi_en=hi_en, telescope=telescope)
 
-    def get_combined_ratemaps(self, obs_id: str = 'combined', inst: str = None, lo_en: Quantity = None,
-                              hi_en: Quantity = None, psf_corr: bool = False, psf_model: str = "ELLBETA",
+    def get_combined_ratemaps(self, lo_en: Quantity = None, hi_en: Quantity = None,
+                              psf_corr: bool = False, psf_model: str = "ELLBETA",
                               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                              telescope: str = None) -> Union[RateMap, List[RateMap]]:
+                              telescope: str = None, obs_id: str = 'combined',
+                              inst: str = None) -> Union[RateMap, List[RateMap]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA RateMap objects.
         This is equivalent to calling get_ratemaps() with obs_id='combined' and/or inst='combined'.
 
-        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation ratemaps.
-        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
-            combined ratemaps matching the other criteria will be returned. Pass 'combined' to retrieve
-            multi-instrument combined ratemaps.
         :param Quantity lo_en: The lower energy limit of the ratemaps you wish to retrieve, the default
             is None (which will retrieve all ratemaps regardless of energy limit).
         :param Quantity hi_en: The upper energy limit of the ratemaps you wish to retrieve, the default
@@ -3279,6 +3279,10 @@ class BaseSource:
         :param int psf_iter: If the ratemap you want is PSF corrected, this is the number of iterations.
         :param str telescope: Optionally, a specific telescope to search for combined ratemaps can be supplied. The
             default is None, which means all combined ratemaps matching the other criteria will be returned.
+        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation ratemaps.
+        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
+            combined ratemaps matching the other criteria will be returned. Pass 'combined' to retrieve
+            multi-instrument combined ratemaps.
         :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
             were multiple matching products).
         :rtype: Union[RateMap, List[RateMap]]
