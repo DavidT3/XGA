@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 12:30. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/28/26, 11:45 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -472,7 +472,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                                                    cur_ev.instrument,
                                                    lo_en,
                                                    hi_en,
-                                                   telescope='erosita')[0]
+                                                   telescope=er_miss)
 
                     # Now we set up the final output directory for the expmap to be
                     #  generated, as well as the temporary working directory (with
@@ -527,7 +527,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 #  make, and if an exception is raised, we know we will
                 #  have to generate it.
                 try:
-                    ex_exists = source.get_combined_expmaps(lo_en, hi_en, er_miss)
+                    ex_exists = source.get_combined_expmaps(lo_en, hi_en, telescope=er_miss)
                     # If we get here, then the exposure map already exists, and
                     #  we can move to the next source
                     continue
@@ -543,7 +543,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                 # We need a combined image as a reference to make a new exposure map
                 cur_comb_ref_im = source.get_combined_images(lo_en,
                                                              hi_en,
-                                                             telescope='erosita')[0]
+                                                             telescope=er_miss)
 
                 # Now we set up the final output directory for the output COMBINED
                 #  image to be generated
