@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 10:36. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 10:45 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -177,7 +177,6 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
                                                   time_bin_size, {'pn': pn_patt, 'mos': mos_patt},
                                                   telescope='xmm')
                 exists = True
-                continue
             except NoProductAvailableError:
                 exists = False
 
