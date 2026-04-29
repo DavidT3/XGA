@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/07/2025, 11:31. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 4:56 PM. Copyright (c) The Contributors.
 
 import os
 import warnings
@@ -1784,8 +1784,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         :param List[Spectrum] spectra: A list of the XGA Spectrum objects which make up this set.
         """
-        if len(set([s.telescope for s in spectra])) != 1:
-            raise NotImplementedError("AnnularSpectra comprised of spectra from multiple telescopes are not "
+        all_spec_tels = set([s.telescope for s in spectra])
+        if len(all_spec_tels) != 1:
+            raise NotImplementedError(f"AnnularSpectra comprised of spectra from multiple telescopes {all_spec_tels} are not "
                                       "supported yet.")
         else:
             # Given the check above, we know that all the spectra are from the same telescope, so we just take
