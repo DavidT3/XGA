@@ -1,12 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 9:39 AM. Copyright (c) The Contributors.
 
 import unittest
 
 from astropy.units import Quantity
-
 from xga.generate.esass.phot import evtool_image, expmap
 from xga.samples import ClusterSample
+
 from .. import get_test_source, CLUSTER_SMP
 from ..utils import require_esass
 
@@ -70,7 +70,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
     def test_evtool_image_w_sample_w_odd_telescopes(self):
         """
         There was an old bug that occured when product generation functions were run with samples
-        with sources that didnt all have the same telescopes. So this is testing that this bug has
+        with sources that didn't all have the same telescopes. So this is testing that this bug has
         been fixed!
         """
         test_smp = ClusterSample(CLUSTER_SMP["ra"].values, CLUSTER_SMP["dec"].values, 
