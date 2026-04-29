@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 10:36. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 9:56 AM. Copyright (c) The Contributors.
 
 import os
 from copy import copy
@@ -210,13 +210,19 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if not os.path.exists(OUTPUT + "xmm/" + obs_id):
                 os.mkdir(OUTPUT + "xmm/" + obs_id)
 
-            # Got to check if this spectrum already exists
-            exists = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec, min_counts,
-                                        min_sn, over_sample, telescope='xmm')
-            if not isinstance(exists, list):
-                exists = [exists]
-            if len(exists) == 1 and exists[0].usable and not force_gen:
-                continue
+            try:
+                # Got to check if this spectrum already exists
+                exists = source.get_spectra(outer_radii[s_ind], obs_id, inst, inner_radii[s_ind], group_spec, min_counts,
+                                            min_sn, over_sample, telescope='xmm')
+                if not isinstance(exists, list):
+                    exists = [exists]
+                if len(exists) == 1 and exists[0].usable and not force_gen:
+                    # It exists, it is usable, and we haven't been told to regenerate it regardless, so
+                    #  we don't need to do anything further
+                    continue
+            except NoProductAvailableError:
+                # Here the spectrum doesn't exist, so we definitely need to generate it
+                pass
 
             # If there is no match to a region, the source region returned by this method will be None,
             #  and if the user wants to generate spectra from region files, we have to ignore that observations
