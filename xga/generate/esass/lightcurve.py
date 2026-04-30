@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 15:45. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/30/26, 1:29 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -240,7 +240,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += "mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; find . -maxdepth 1 -type f -exec mv {} ../ \;; cd ..; rm -r {d}".format(d=dest_dir)
 
             # If temporary region files were made, they will be here
             if os.path.exists(os.path.join(final_dest_dir, '/temp_regs_{i}'.format(i=rand_ident))):

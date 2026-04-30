@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 12/12/2025, 11:44. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/30/26, 1:32 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -46,7 +46,7 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
         sources = [sources]
 
     # Set up a template for the evtool command to be run
-    evtool_cmd = 'cd {d}; evtool eventfiles="{evts}" outfile="{out}"; mv * ../; cd ..; rm -r {d}'
+    evtool_cmd = 'cd {d}; evtool eventfiles="{evts}" outfile="{out}"; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}'
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function

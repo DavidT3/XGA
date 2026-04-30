@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/28/26, 11:45 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/30/26, 1:25 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -162,7 +162,7 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     # This is the template for the evtool command that will be run to make new images
     evtool_cmd = "cd {d}; evtool eventfiles={e} outfile={i} image=yes " \
                  "emin={l} emax={u} events=no size='{xs} {ys}' rebin={rb} " \
-                 "center_position='{c}'; mv * ../; cd ..; rm -r {d}"
+                 "center_position='{c}'; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
@@ -393,7 +393,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                  "emin={l} emax={u} mergedmaps={em} withweights=yes " \
                  "withdetmaps=yes; export HEADASNOQUERY=; " \
                  "export HEADASPROMPT=/dev/null; fthedit {em} " \
-                 "REFYCRVL delete; mv * ../; cd ..; rm -r {d}"
+                 "REFYCRVL delete; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
