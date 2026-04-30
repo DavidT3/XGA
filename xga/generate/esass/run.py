@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 15:20. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 11:03 PM. Copyright (c) The Contributors.
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -158,7 +158,7 @@ def esass_call(esass_func):
                 # In case they are components of an annular spectrum but they are either none or not usable
                 elif prod_type_str == "annular spectrum set components":
                     warn("An annular spectrum component ({a}) for {o}{i} has not been generated properly, contact "
-                         "the development team if a SAS error is not "
+                         "the development team if a eSASS error is not "
                          "shown.".format(a=product.storage_key, o=product.obs_id, i=product.instrument), stacklevel=2)
                 # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
                 #  object that already exists in our source
@@ -175,6 +175,11 @@ def esass_call(esass_func):
 
         if prod_type_str == "annular spectrum set components":
             for entry in ann_spec_comps:
+                if len(ann_spec_comps[entry]) == 0:
+                    warn("Entry {entry} - no annular spectrum components were successfully "
+                         "generated - contact the developers if you see this warning.", stacklevel=2)
+                    continue
+
                 # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
                 #  itself so the order doesn't matter
                 ann_spec = AnnularSpectra(ann_spec_comps[entry])
@@ -187,7 +192,7 @@ def esass_call(esass_func):
                 # And adding our exciting new set of annular spectra into the storage structure
                 sources[ind].update_products(ann_spec)
 
-        # Errors raised here should not be to do with SAS generation problems, but other purely pythonic errors
+        # Errors raised here should not be to do with eSASS generation problems, but other purely pythonic errors
         for error in raised_errors:
             raise error
 
