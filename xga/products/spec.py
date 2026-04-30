@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 4:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 10:26 PM. Copyright (c) The Contributors.
 
 import os
 import warnings
@@ -1784,9 +1784,14 @@ class AnnularSpectra(BaseAggregateProduct):
 
         :param List[Spectrum] spectra: A list of the XGA Spectrum objects which make up this set.
         """
+        # Get the unique telescope names associated with the passed spectral components
         all_spec_tels = set([s.telescope for s in spectra])
-        if len(all_spec_tels) != 1:
-            raise NotImplementedError(f"AnnularSpectra comprised of spectra from multiple telescopes {all_spec_tels} are not "
+        # This should happen in the super init I think, but we'll have to do the check here as well for safety
+        if len(all_spec_tels) == 0:
+            raise ValueError("No spectra have been passed to the AnnularSpectra class.")
+        # Currently we only support one telescope per AnnularSpectra
+        elif len(all_spec_tels) > 1:
+            raise NotImplementedError(f"AnnularSpectra comprised of spectra from multiple telescopes ({all_spec_tels}) are not "
                                       "supported yet.")
         else:
             # Given the check above, we know that all the spectra are from the same telescope, so we just take
@@ -1799,7 +1804,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #  have the same set ID
         set_idents = set([s.set_ident for s in spectra])
         if len(set_idents) != 1:
-            raise XGASetIDError("You have passed spectra that have set IDs that do not match")
+            raise XGASetIDError(f"All annular spectrum components must have matching set IDs, the following are present - ({set_idents}).")
 
         # Just put the set ID into an attribute in case anyone ever wants to know it
         self._set_id = list(set_idents)[0]
