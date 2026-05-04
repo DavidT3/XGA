@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 11:03 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/4/26, 12:21 PM. Copyright (c) The Contributors.
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -176,8 +176,8 @@ def esass_call(esass_func):
         if prod_type_str == "annular spectrum set components":
             for entry in ann_spec_comps:
                 if len(ann_spec_comps[entry]) == 0:
-                    warn("Entry {entry} - no annular spectrum components were successfully "
-                         "generated - contact the developers if you see this warning.", stacklevel=2)
+                    warn(f"Entry {entry} - no annular spectrum components were successfully "
+                         f"generated - contact the developers if you see this warning.", stacklevel=2)
                     continue
 
                 # So now we pass the list of spectra to a AnnularSpectra definition - and it will sort them out
