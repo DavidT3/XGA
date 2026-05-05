@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 17/11/2025, 17:30. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 1:41 PM. Copyright (c) The Contributors.
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -290,7 +290,6 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         XGA key that the spectra were stored under.
     :rtype: Tuple[str, str]
     """
-    # TODO This is unsustainable, but hopefully every telescope will soon (ish) have a stacking method
     try:
         if tel in ['erosita', 'erass'] and (len(source.obs_ids[tel]) > 1):
             # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
@@ -310,7 +309,11 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
         else:
             # Single observation (or non-eROSITA): use regular spectra
             # For multi-instrument stacking, inst='combined' retrieves Scenario 1 products
-            search_inst = 'combined' if stacked_spectra else None
+            # search_inst = 'combined' if stacked_spectra else None
+            # This part of the if-else will be for missions with no implemented spectrum
+            #  stacking method I think, so search_inst must be None.
+            search_inst = None
+
             spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
                                             group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                             over_sample=over_sample, telescope=tel, inst=search_inst)

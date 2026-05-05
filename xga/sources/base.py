@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 10:57 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 1:46 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -4692,22 +4692,32 @@ class BaseSource:
             the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
-        # TODO the refactoring got a bit dicey - take a look around and make sure I didn't destroy anything
         # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
-        if not stacked_spectra:
-            # If the user doesn't want the stacked spectra result, then we retrieve the spec objects
-            # from the get_spectra method
-            specs = self.get_spectra(outer_radius, None, None, inner_radius, group_spec, min_counts,
-                                     min_sn, over_sample, telescope=telescope)
-        elif stacked_spectra and telescope in ['erass', 'erosita'] and len(self.obs_ids[telescope]) > 1:
-            # Multi-obs eROSITA: retrieve multi-obs + multi-inst combined spectrum (Scenario 3)
-            specs = self.get_spectra(outer_radius, 'combined', 'combined', inner_radius, group_spec,
-                                    min_counts, min_sn, over_sample, telescope=telescope)
-        elif stacked_spectra:
-            # Single obs (any telescope) or single-obs eROSITA: retrieve multi-inst combined (Scenario 1)
-            specs = self.get_spectra(outer_radius, None, 'combined', inner_radius, group_spec,
-                                    min_counts, min_sn, over_sample, telescope=telescope)
+        if telescope in ['erosita', 'erass'] and (len(self.obs_ids[telescope]) > 1):
+            # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
+            # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument
+            if stacked_spectra:
+                # Multi-obs + multi-inst combined (obs_id='combined', inst='combined')
+                search_inst = 'combined'
+            else:
+                # Multi-obs + individual insts (obs_id='combined', inst=<specific>)
+                # Leaving inst=None returns all per-instrument combined-obs spectra
+                search_inst = None
+
+            specs = self.get_spectra(outer_radius, obs_id='combined', inst=search_inst, inner_radius=inner_radius,
+                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, telescope=telescope)
+        else:
+            # Single observation (or non-eROSITA): use regular spectra
+            # For multi-instrument stacking, inst='combined' retrieves Scenario 1 products
+            # search_inst = 'combined' if stacked_spectra else None
+            # This part of the if-else will be for missions with no implemented spectrum
+            #  stacking method I think, so search_inst must be None.
+            search_inst = None
+
+            specs = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                     telescope=telescope, inst=search_inst)
 
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
