@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/4/26, 11:18 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/4/26, 6:40 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy, copy
@@ -249,8 +249,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             # Then the ARF/RMF file paths for the backspec are modified versions of
             #  the background spectrum file path
-            b_rmf = b_spec.replace("_backspec.fits", ".rmf")
-            b_arf = b_spec.replace("_backspec.fits", ".arf")
+            b_rmf = b_spec.replace("_backspec.fits", "_back.rmf")
+            b_arf = b_spec.replace("_backspec.fits", "_back.arf")
 
             # Defining the grouping keywords
             if group_spec and min_counts is not None:
@@ -384,6 +384,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Image symlink will only be present if the source is extended
             if extended_src:
                 cmd_str += "; rm {esym}".format(esym=im_symlink_name)
+
+            # Depending on the eSASS version, we may have built up a ';;' somewhere in the command string,
+            #  which is very bad - this is introduced because some versions of eSASS have a null string
+            #  for remove_merged_cmd and remove_all_but_merged_cmd. This is a very lazy solution, but it will
+            #  do for now (famous last words)
+            cmd_str = cmd_str.replace(";;", ";")
 
             # Adds clean up commands to move all generated files and remove the temporary directory
             cmd_str += "; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(d=dest_dir)
@@ -520,20 +526,28 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
         back_sp_cmd += " writeinsts={wi}"
         pnt_sp_cmd += " writeinsts={wi}"
 
-    # TODO SORT THIS SHIT OUT?!
+        # Null versions of the extra commands set up below for eSASS4EDR
+        remove_merged_cmd = ""
+        remove_all_but_merged_cmd = ""
+
+    elif ESASS_VERSION == "ESASS4EDR":
+        # Command to remove the 'merged' spectra that eSASS4EDR srctool outputs, even when you only
+        #  request one instrument
+        remove_merged_cmd = 'rm *srctoolout_0*'
+        # We also set up a command that will remove all spectra BUT the combined one
+        remove_all_but_merged_cmd = "rm *srctoolout_*"
+
     # You can't control the whole names of srctool outputs, so this renames it to the XGA format
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn}'
-    # Having a string to remove the 'merged' spectra that srctool outputs, even when you only request one instrument
-    remove_merged_cmd = 'rm *srctoolout_0*'
+
+    # TODO SHOULD BE ABLE TO REMOVE THIS CHUNK
     # Commands to remove the merged files from eSASS4DR1. Will depend on instrument number. Insts 1, 2, 3, 4, 6 will use
     #   remove merged dr1_8; insts 5 and 7 will use remove_merged_dr1_9. Run in addition to remove_merged_cmd above.
     # Needed because in eSASS4DR1 srctool will output additional files for "TM8" and "TM9" which are the combined
     #   outputs of TMs 1, 2, 3, 4, 6 and TMs 5 & 7 respectively. This was done to supplement TM0 with a combined output
     #   that does not include the light leak affecting TMs 5 & 7.
-    remove_merged_dr1_8 = 'rm *srctoolout_8*'
-    remove_merged_dr1_9 = 'rm *srctoolout_9*'
-    # We also set up a command that will remove all spectra BUT the combined one
-    remove_all_but_merged_cmd = "rm *srctoolout_*"
+    # remove_merged_dr1_8 = 'rm *srctoolout_8*'
+    # remove_merged_dr1_9 = 'rm *srctoolout_9*'
 
     # Grouping the spectra will be done using the HEASoft tool 'ftgrouppha' - we make sure to remove the original
     #  ungrouped file. I think maybe that approach is safer than turning clobber on and just having the original
