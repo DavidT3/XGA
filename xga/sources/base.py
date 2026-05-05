@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 1:35 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 10:57 AM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.coordinates import SkyCoord
-from astropy.cosmology.core import Cosmology
+from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitBase, Unit, UnitConversionError, deg
 from fitsio import FITS
 from numpy import ndarray
