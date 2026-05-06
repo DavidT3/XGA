@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 10:02 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 10:38 AM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -5278,13 +5278,15 @@ class BaseSource:
                 continue
             else:
                 # We step through the telescopes we've incorporated so far - calling their exposure map
-                #  generating functions
+                #  generating functions. This ensures that relevant exposure maps exist for the
+                #  'how much of region is on detector' checking we'll do after.
+                # The particular exposure maps generated will vary depending on the telescope;
+                #  - For XMM we make and use individual exposure maps generated for each instrument of each observation.
+                #  - eROSITA has combined instrument, individual obs, exposure maps generated and used (as the
+                #    the TMs are well co-aligned, and it saves a lot of time).
                 if tel == 'xmm':
-                    # Again don't particularly want to do this local import, but its just easier
+                    # Combined
                     from xga.generate.sas import eexpmap
-
-                    # Going to ensure that individual exposure maps exist for each of the ObsID/instrument combinations
-                    #  first, then checking where the source lies on the exposure map
                     eexpmap(self, self._peak_lo_en, self._peak_hi_en)
                 elif tel == 'erosita' or tel == 'erass':
                     from xga.generate.esass import expmap
@@ -5294,8 +5296,16 @@ class BaseSource:
                     chandra_image_expmap(self, self._peak_lo_en, self._peak_hi_en)
 
                 for o in self.obs_ids[tel]:
-                    # Exposure maps of the peak finding energy range for this ObsID
-                    exp_maps = self.get_expmaps(o, lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+
+                    # For some telescopes, eROSITA for instance, we want to judge the coverage using
+                    #  the individual ObsID, combined instrument, exposure maps. For eROSITA this
+                    #  is because the TMs are well co-aligned, and it saves a great deal of time as
+                    #  we don't have to read in one exposure map per TM.
+                    if not tel in ['erass', 'erosita']:
+                        # Exposure maps of the peak finding energy range for this ObsID
+                        exp_maps = self.get_expmaps(o, lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+                    else:
+                        exp_maps = self.get_expmaps(o, 'combined', self._peak_lo_en, self._peak_hi_en, tel)
 
                     # Just making sure that the exp_maps variable can be iterated over
                     if not isinstance(exp_maps, list):
