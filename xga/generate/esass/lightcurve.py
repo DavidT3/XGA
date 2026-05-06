@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:04 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:28 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -166,23 +166,12 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             os.symlink(cur_evt_list.path, os.path.join(dest_dir, evt_symlink_name))
 
             # This constructs the eSASS strings/region files
-            reg = get_annular_esass_region(source,
-                                           src_inn_rad,
-                                           src_out_rad,
-                                           cur_evt_list.obs_id,
-                                           interloper_regions=interloper_regions,
-                                           central_coord=source.default_coord,
-                                           rand_ident=rand_ident,
-                                           out_root_path=final_dest_dir)
-            b_reg = get_annular_esass_region(source,
-                                             bck_inn_rad,
-                                             bck_out_rad,
-                                             cur_evt_list.obs_id,
-                                             interloper_regions=back_inter_reg,
-                                             central_coord=source.default_coord,
-                                             bkg_reg=True,
-                                             rand_ident=rand_ident,
-                                             out_root_path=final_dest_dir)
+            reg = get_annular_esass_region(source, src_inn_rad, src_out_rad, cur_evt_list.obs_id, er_miss,
+                                           interloper_regions=interloper_regions, central_coord=source.default_coord,
+                                           rand_ident=rand_ident, out_root_path=final_dest_dir)
+            b_reg = get_annular_esass_region(source, bck_inn_rad, bck_out_rad, cur_evt_list.obs_id, er_miss,
+                                             interloper_regions=back_inter_reg, central_coord=source.default_coord,
+                                             bkg_reg=True, rand_ident=rand_ident, out_root_path=final_dest_dir)
 
             # Set up a string describing the central coordinate in addition to the regions
             coord_str = "icrs;{ra},{dec}".format(ra=source.default_coord[0].value,

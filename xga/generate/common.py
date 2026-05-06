@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:05 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:32 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -11,7 +11,7 @@ import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 
-from xga.exceptions import XGADeveloperError
+from xga.exceptions import XGADeveloperError, InvalidTelescopeError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList
 from ..products.lightcurve import LightCurve
 from ..sources import BaseSource
@@ -198,7 +198,7 @@ def _interloper_esass_string(reg: EllipseSkyRegion) -> str:
     return shape_str
 
 
-def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str,
+def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_radius: Quantity, obs_id: str, telescope: str,
                              output_unit: Union[UnitBase, str] = deg, rot_angle: Quantity = Quantity(0, 'deg'),
                              interloper_regions: np.ndarray = None, central_coord: Quantity = None,
                              bkg_reg: bool = False, rand_ident: int = None, out_root_path: str = None) -> str:
@@ -215,6 +215,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         quantity has multiple elements then an elliptical region will be generated, with the first element
         being the outer radius on the semi-major axis, and the second on the semi-minor axis.
     :param str obs_id: The ObsID of the observation you wish to generate the eSASS region for.
+    :param str telescope: The particular eROSITA mission skew to create a region for; 'erosita' or 'erass'.
     :param UnitBase/str output_unit: The desired units for the region string/file to be written in.
     :param Quantity rot_angle: The rotation angle of the source region, default is zero degrees.
     :param np.ndarray interloper_regions: The interloper regions to remove from the source region,
@@ -233,6 +234,9 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
         contaminating regions.
     :rtype: str
     """
+    if telescope not in ['erosita', 'erass']:
+        raise InvalidTelescopeError("Pass either 'erosita' or 'erass' to this function's telescope argument.")
+
     if central_coord is None:
         central_coord = source.default_coord
 
@@ -260,9 +264,9 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     #  so that within_radii can just be called once externally for a set of ObsID-instrument combinations,
     #  like in evselect_spectrum for instance.
     if interloper_regions is None and inner_radius.isscalar:
-        interloper_regions = source.regions_within_radii(inner_radius, outer_radius, "erosita", central_coord)
+        interloper_regions = source.regions_within_radii(inner_radius, outer_radius, telescope, central_coord)
     elif interloper_regions is None and not inner_radius.isscalar:
-        interloper_regions = source.regions_within_radii(min(inner_radius), max(outer_radius), "erosita", central_coord)
+        interloper_regions = source.regions_within_radii(min(inner_radius), max(outer_radius), telescope, central_coord)
 
     # So now we convert our interloper regions into their eSASS equivalents
     esass_interloper = [_interloper_esass_string(i) for i in interloper_regions]
