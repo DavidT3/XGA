@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 08/07/2025, 12:27. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:17 PM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -14,7 +14,6 @@ from abel.onion_bordas import onion_bordas_transform
 from astropy.constants import m_p
 from astropy.units import Quantity, kpc
 from tqdm import tqdm
-import functools
 
 from ._common import _get_all_telescopes
 from .misc import model_check
@@ -235,7 +234,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         for src in sources:
             for tel in src_telescopes:
                 try:
-                    if tel == 'erosita':
+                    if tel in ['erosita', 'erass']:
                         # A temporary temperature variable
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
                                                         conv_inner_radius, group_spec, min_counts, min_sn,
@@ -278,16 +277,16 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
             # If we use inst = None in this function, then when we look for spectra to retrieve
             # a conversion factor for, it can retrieve spectra of individual instruments too
             # but if inst = None, we only want to retreive combined instrument spectra
-            if tel == 'erosita':
+            if tel in ['erosita', 'erass']:
                 if inst[tel][src_ind] is None:
                     lookup_inst = 'combined'
                 else:
                     lookup_inst = inst[tel][src_ind]
-                
-                if len(src.obs_ids['erosita']) > 1:
+
+                if len(src.obs_ids[tel]) > 1:
                     lookup_obs = 'combined'
                 else:
-                    lookup_obs = src.obs_ids['erosita'][0]
+                    lookup_obs = src.obs_ids[tel][0]
 
             else:
                 lookup_obs = obs_id[tel][src_ind]
@@ -336,12 +335,12 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
     """
 
     try:
-        if telescope == 'erosita':
-            if len(src.obs_ids['erosita']) > 1:
+        if telescope in ['erosita', 'erass']:
+            if len(src.obs_ids[telescope]) > 1:
                 use_combined = True
             else:
                 use_combined = False
-                obs_id = src.obs_ids['erosita'][0]
+                obs_id = src.obs_ids[telescope][0]
 
         else:
             if all([obs_id is None, inst is None]):
@@ -529,7 +528,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     #  all telescopes yet. We also check this in the loop as we have to temporarily change
     #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
     #  multiple sources
-    if 'erosita' in telescope and psf_corr:
+    if any([t in ['erosita', 'erass'] for t in telescope]) and psf_corr:
         warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
              "brightness profiles will not be corrected.", stacklevel=2)
 
@@ -542,7 +541,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
         e_to_p_ratio = NHC[abund_table]
         for src_ind, src in enumerate(sources):
             for tel in telescope:
-                if tel == 'erosita' and psf_corr:
+                if tel in ['erosita', 'erass'] and psf_corr:
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr
@@ -798,7 +797,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
     #  all telescopes yet. We also check this in the loop as we have to temporarily change
     #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
     #  multiple sources
-    if 'erosita' in telescope and psf_corr:
+    if any([t in ['erosita', 'erass'] for t in telescope]) and psf_corr:
         warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
              "brightness profiles will not be corrected.", stacklevel=2)
 
@@ -813,7 +812,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
             for tel in telescope:
                 # Have to check the psf correction flag, as we cannot necessarily PSF correct images for
                 #  all telescopes yet
-                if tel == 'erosita' and psf_corr:
+                if tel in ['erosita', 'erass'] and psf_corr:
                     use_psf_corr = False
                 else:
                     use_psf_corr = psf_corr

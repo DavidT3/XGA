@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 16:01. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:13 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -57,7 +57,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     #  one sky-tile), or combined in the sense of all TMs across all observations are added together. The distinction
     #  is important to how they are stored and retrieved in XGA - that may change soon, see issue #1320
     # TODO May need change when issue #1320 is resolved
-    if telescope == 'erosita' and len(source.obs_ids['erosita']) > 1:
+    if telescope in ['erosita', 'erass'] and len(source.obs_ids[telescope]) > 1:
         # for erosita, no psf correction is available yet
         get_combined = True
         psf_corr = None
@@ -65,7 +65,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
         psf_bins = None
         psf_algo = None
         psf_iter = None
-    elif telescope == 'erosita' and len(source.obs_ids['erosita']) == 1:
+    elif telescope in ['erosita', 'erass'] and len(source.obs_ids[telescope]) == 1:
         # for erosita, no psf correction is available yet
         get_combined = False
         psf_corr = None
@@ -529,9 +529,10 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 # The return for this function is two dictionaries of arrays ranked worst to best, so we
                 #  grab the first dictionary which contains arrays of lists of ObsIDs and instruments
                 # combos in ranked order
-                # Unfortunately eROSITA needs special treatment (for now at least). It gets stacked_inst
-                #  set to True, as we don't really want to deal with individual ObsID-inst combos there
-                stacked_inst = True if tel == 'erosita' else False
+                # Unfortunately eROSITA and eRASS need special treatment (for now at least).
+                #  They get stacked_inst set to True, as we don't really want to deal with
+                #  individual ObsID-inst combos there
+                stacked_inst = True if tel in ['erosita', 'erass'] else False
                 lowest_ranked = src.snr_ranking(out_rad_vals[src_ind], lo_en, hi_en, allow_negative, tel,
                                                 stacked_inst=stacked_inst)[tel][0]
 
@@ -675,9 +676,10 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 #  order of ascending counts).
                 # We then use the counts measured for each ObsID-Instrument combo (which are returned and
                 #  stored in cnts) to decide upon the median observation.
-                # Unfortunately eROSITA needs special treatment (for now at least). It gets stacked_inst
-                #  set to True, as we don't really want to deal with individual ObsID-inst combos there
-                stacked_inst = True if tel == 'erosita' else False
+                # Unfortunately eROSITA and eRASS need special treatment (for now at least).
+                #  They get stacked_inst set to True, as we don't really want to deal with
+                #  individual ObsID-inst combos there
+                stacked_inst = True if tel in ['erosita', 'erass'] else False
                 cnt_rnk, cnts = src.count_ranking(out_rad_vals[src_ind], lo_en, hi_en, tel,
                                                   stacked_inst=stacked_inst)[tel]
                 # Obviously the median counts will not necessarily line up with any particular ObsID-instrument, but we
