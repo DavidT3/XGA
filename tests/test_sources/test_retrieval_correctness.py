@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:24 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:38 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -41,12 +41,12 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
         self.assertEqual(comb_img.instrument, 'combined')
         self.assertEqual(comb_img.obs_id, 'combined')
 
-    def test_erosita_image_retrieval_specificity(self):
+    def test_erass_image_retrieval_specificity(self):
         """
-        Test that eROSITA retrieval distinguishes between combination modes.
+        Test that eRASS retrieval distinguishes between combination modes.
         """
-        if 'erosita' not in self.src.telescopes:
-            self.skipTest("eROSITA data not associated")
+        if 'erass' not in self.src.telescopes:
+            self.skipTest("eRASS data not associated")
 
         lo, hi = Quantity(0.5, 'keV'), Quantity(2.0, 'keV')
         # Generate individual-obs images
@@ -55,7 +55,7 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
         combine_phot_prod(self.src, 'image', lo, hi)
 
         # 1. Request individual images
-        imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='erosita')
+        imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='erass')
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -63,7 +63,7 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
             self.assertNotEqual(im.obs_id, 'combined', "Retrieved combined image when individual ones expected")
 
         # 2. Request combined image
-        comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='erosita')
+        comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='erass')
         # Should return the combined one
         if isinstance(comb_img, list):
             comb_img = comb_img[0]

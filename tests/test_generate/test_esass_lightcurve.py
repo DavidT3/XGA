@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:38 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -12,7 +12,7 @@ from ..utils import require_esass
 class TestEsassLcFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('erosita')
+        cls.src = get_test_source('erass')
 
     @require_esass
     def test_srctool_lightcurve_combine_insts_f_combine_obs_f(self):
@@ -21,17 +21,17 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         srctool_lightcurve(self.src, 'r500', combine_tm=False, combine_obs=False)
 
-        lc = self.src.get_lightcurves('r500', telescope='erosita', inst='tm1')
-        
+        lc = self.src.get_lightcurves('r500', telescope='erass', inst='tm1')
+
         if isinstance(lc, list):
             for l in lc:
                 assert isinstance(l, LightCurve)
-                assert l.telescope == 'erosita'
+                assert l.telescope == 'erass'
                 assert l.obs_id != 'combined'
                 assert l.instrument == 'tm1'
         else:
             assert isinstance(lc, LightCurve)
-            assert lc.telescope == 'erosita'
+            assert lc.telescope == 'erass'
             assert lc.obs_id != 'combined'
             assert lc.instrument == 'tm1'
 
@@ -42,17 +42,17 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         srctool_lightcurve(self.src, 'r500', combine_tm=True, combine_obs=False)
 
-        lc = self.src.get_lightcurves('r500', telescope='erosita', inst='combined')
+        lc = self.src.get_lightcurves('r500', telescope='erass', inst='combined')
 
         if isinstance(lc, list):
             for l in lc:
                 assert isinstance(l, LightCurve)
-                assert l.telescope == 'erosita'
+                assert l.telescope == 'erass'
                 assert l.obs_id != 'combined'
                 assert l.instrument == 'combined'
         else:
             assert isinstance(lc, LightCurve)
-            assert lc.telescope == 'erosita'
+            assert lc.telescope == 'erass'
             assert lc.obs_id != 'combined'
             assert lc.instrument == 'combined'
 
@@ -64,10 +64,10 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         srctool_lightcurve(self.src, 'r500', combine_tm=False, combine_obs=True)
 
-        lc = self.src.get_combined_lightcurves('r500', telescope='erosita', inst='tm1')
+        lc = self.src.get_combined_lightcurves('r500', telescope='erass', inst='tm1')
 
         assert isinstance(lc, LightCurve)
-        assert lc.telescope == 'erosita'
+        assert lc.telescope == 'erass'
         assert lc.obs_id == 'combined'
         assert lc.instrument == 'tm1'
 
@@ -78,17 +78,17 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         srctool_lightcurve(self.src, 'r500', combine_tm=True, combine_obs=True)
 
-        lc = self.src.get_combined_lightcurves('r500', telescope='erosita', inst='combined')
+        lc = self.src.get_combined_lightcurves('r500', telescope='erass', inst='combined')
 
         if isinstance(lc, list):
             for l in lc:
                 assert isinstance(l, LightCurve)
-                assert l.telescope == 'erosita'
+                assert l.telescope == 'erass'
                 assert l.obs_id == 'combined'
                 assert l.instrument == 'combined'
         else:
             assert isinstance(lc, LightCurve)
-            assert lc.telescope == 'erosita'
+            assert lc.telescope == 'erass'
             assert lc.obs_id == 'combined'
             assert lc.instrument == 'combined'
 

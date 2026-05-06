@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:57 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -15,13 +15,13 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
     def setUpClass(cls):
         cls.src = get_test_source('all')
 
-    def test_erosita_multiobs_combined_inst_param(self):
+    def test_erass_multiobs_combined_inst_param(self):
         """
         Test that inst parameter correctly filters multi-obs combined spectra.
         Tests obs='combined' with inst='tm1' vs inst='combined'.
         """
-        if 'erosita' not in self.src.obs_ids or len(self.src.obs_ids.get('erosita', [])) <= 1:
-            self.skipTest("Need multi-obs eROSITA data for disambiguation test")
+        if 'erass' not in self.src.obs_ids or len(self.src.obs_ids.get('erass', [])) <= 1:
+            self.skipTest("Need multi-obs eRASS data for disambiguation test")
 
         # Generate multi-obs + single inst
         try:
@@ -38,7 +38,7 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
         # Retrieve multi-obs + specific inst
         try:
             spec_tm1 = self.src.get_spectra(Quantity(500, 'kpc'), obs_id='combined', inst='tm1',
-                                          group_spec=True, min_counts=5, telescope='erosita')
+                                          group_spec=True, min_counts=5, telescope='erass')
             assert spec_tm1.obs_id == 'combined'
             assert spec_tm1.instrument == 'tm1'
         except NoProductAvailableError:
@@ -46,7 +46,7 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
 
         # Retrieve multi-obs + combined inst
         spec_comb = self.src.get_spectra(Quantity(500, 'kpc'), obs_id='combined', inst='combined',
-                                        group_spec=True, min_counts=5, telescope='erosita')
+                                        group_spec=True, min_counts=5, telescope='erass')
         assert spec_comb.obs_id == 'combined'
         assert spec_comb.instrument == 'combined'
 
@@ -55,8 +55,8 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
         Test that get_combined_spectra() wrapper behaves identically to
         get_spectra(obs_id='combined', ...).
         """
-        if 'erosita' not in self.src.obs_ids or len(self.src.obs_ids.get('erosita', [])) <= 1:
-            self.skipTest("Need multi-obs eROSITA data")
+        if 'erass' not in self.src.obs_ids or len(self.src.obs_ids.get('erass', [])) <= 1:
+            self.skipTest("Need multi-obs eRASS data")
 
         # Generate multi-obs + multi-inst
         try:
@@ -67,9 +67,9 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
         # Both methods should return same product
         try:
             spec_direct = self.src.get_spectra(Quantity(500, 'kpc'), obs_id='combined', inst='combined',
-                                             group_spec=True, min_counts=5, telescope='erosita')
+                                             group_spec=True, min_counts=5, telescope='erass')
             spec_wrapper = self.src.get_combined_spectra(Quantity(500, 'kpc'), inst='combined',
-                                                       group_spec=True, min_counts=5, telescope='erosita')
+                                                       group_spec=True, min_counts=5, telescope='erass')
 
             # Should be the same product
             if not isinstance(spec_direct, list):

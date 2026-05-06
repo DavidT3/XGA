@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/28/26, 11:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:56 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -19,7 +19,7 @@ class TestSasPhotFuncs(unittest.TestCase):
         cls.src = get_test_source('xmm')
 
         # Additionally, grab one that we know DOESN'T have any XMM
-        cls.no_xmm_src = get_test_source('erosita')
+        cls.no_xmm_src = get_test_source('erass')
 
     @require_sas
     def test_evselect_image_no_tel_error(self):

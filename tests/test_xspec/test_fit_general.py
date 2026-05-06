@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 10:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:47 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -44,17 +44,17 @@ class TestBaseSample(unittest.TestCase):
         cls.test_smp = ClusterSample(CLUSTER_SMP["ra"].values, CLUSTER_SMP["dec"].values,
                                  CLUSTER_SMP["z"].values, CLUSTER_SMP["name"].values,
                                  r500=Quantity(CLUSTER_SMP["r500"].values, 'kpc'), use_peak=False,
-                                 search_distance={'erosita': Quantity(3.6, 'deg')})
+                                 search_distance={'erass': Quantity(3.6, 'deg')})
 
         cls.smp_odd_tels = ClusterSample(CLUSTER_SMP["ra"].values, CLUSTER_SMP["dec"].values,
                                  CLUSTER_SMP["z"].values, CLUSTER_SMP["name"].values,
                                  r500=Quantity(CLUSTER_SMP["r500"].values, 'kpc'), use_peak=False,
-                                 search_distance={'erosita': Quantity(3.6, 'deg')})
-        cls.smp_odd_tels[0].disassociate_obs('erosita')
+                                 search_distance={'erass': Quantity(3.6, 'deg')})
+        cls.smp_odd_tels[0].disassociate_obs('erass')
 
     def test_Lx_w_stacked_spectra(self):
         single_temp_apec(self.test_smp, 'r500', stacked_spectra=True, spectrum_checking=False)
-        Lx = self.test_smp.Lx('r500', 'erosita', stacked_spectra=True)
+        Lx = self.test_smp.Lx('r500', 'erass', stacked_spectra=True)
 
         assert len(Lx) == 2
         assert isinstance(Lx, Quantity)
@@ -66,7 +66,7 @@ class TestBaseSample(unittest.TestCase):
         """
         single_temp_apec(self.smp_odd_tels, 'r500', stacked_spectra=True, spectrum_checking=False)
 
-        Lx = self.smp_odd_tels.Lx('r500', 'erosita', stacked_spectra=True)
+        Lx = self.smp_odd_tels.Lx('r500', 'erass', stacked_spectra=True)
 
         assert len(Lx) == 2
         assert np.isnan(Lx[0][0].value)

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:27 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:48 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -24,19 +24,19 @@ class TestTempFuncs(unittest.TestCase):
         cls.test_src = get_test_source('all')
         cls.all_tels = cls.test_src
 
-    def test_ann_bins_setup_working_with_erosita(self):
+    def test_ann_bins_setup_working_with_erass(self):
         """
-        Testing _ann_bins_setup doesn't error unexpectedly with erosita data.
+        Testing _ann_bins_setup doesn't error unexpectedly with erass data.
         """
         # need combined ratemaps already generated to have _ann_bins_setup run
         evtool_image(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
 
         retrn = _ann_bins_setup(self.test_src,  Quantity(500, 'kpc'), Quantity(20, 'kpc'),
-                                Quantity(0.5, 'keV'), Quantity(2, 'keV'), 'erosita')
+                                Quantity(0.5, 'keV'), Quantity(2, 'keV'), 'erass')
 
         # checking the rtmap is the correct telescope
-        assert retrn[0].telescope == 'erosita'
+        assert retrn[0].telescope == 'erass'
         # checking cur_rads is the correct type
         assert type(retrn[1]) == np.ndarray
         # checking max_ann is the correct type
@@ -52,16 +52,16 @@ class TestTempFuncs(unittest.TestCase):
         # checking pix_to_deg is the correct type and has correct units
         assert retrn[7].unit == 'deg/pix'
 
-    def test_snr_bins_working_with_erosita(self):
+    def test_snr_bins_working_with_erass(self):
         """
-        Testing _snr_bins doesn't error unexpectedly with erosita data.
+        Testing _snr_bins doesn't error unexpectedly with erass data.
         """
         # need combined ratemaps already generated to have _snr_bins_setup run
         evtool_image(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
 
         retrn = _snr_bins(self.test_src, Quantity(500, 'kpc'), 3, Quantity(20, 'kpc'),
-                          Quantity(0.5, 'keV'), Quantity(2, 'keV'), 'erosita')
+                          Quantity(0.5, 'keV'), Quantity(2, 'keV'), 'erass')
 
         # Checking that final_rads is the right type and in the right units
         assert retrn[0].unit == 'arcsec'
@@ -70,16 +70,16 @@ class TestTempFuncs(unittest.TestCase):
         # checking max_ann is the correct type
         assert type(retrn[2]) == int
 
-    def test_cnt_bins_working_with_erosita(self):
+    def test_cnt_bins_working_with_erass(self):
         """
-        Testing _cnt_bins doesn't error unexpectedly with erosita data.
+        Testing _cnt_bins doesn't error unexpectedly with erass data.
         """
         # need combined ratemaps already generated to have _snr_bins_setup run
         evtool_image(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.test_src, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
 
         retrn = _cnt_bins(self.test_src, Quantity(500, 'kpc'), 10, Quantity(20, 'kpc'),
-                          Quantity(0.5, 'keV'), Quantity(2, 'keV'), 'erosita')
+                          Quantity(0.5, 'keV'), Quantity(2, 'keV'), 'erass')
 
         # Checking that final_rads is the right type and in the right units
         assert retrn[0].unit == 'arcsec'
@@ -89,7 +89,7 @@ class TestTempFuncs(unittest.TestCase):
         assert type(retrn[2]) == int
 
     def test_min_snr_proj_temp_prof_w_two_tscopes(self):
-        # need combined ratemaps already generated for erosita
+        # need combined ratemaps already generated for erass
         evtool_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         # and for xmm
@@ -101,11 +101,11 @@ class TestTempFuncs(unittest.TestCase):
         all_rads = min_snr_proj_temp_prof(self.all_tels, Quantity(500, 'kpc'),
                                           stacked_spectra=True)
 
-        assert all_rads['erosita'][0].unit == 'arcsec'
+        assert all_rads['erass'][0].unit == 'arcsec'
         assert all_rads['xmm'][0].unit == 'arcsec'
 
     def test_min_cnt_proj_temp_prof_w_two_tscopes(self):
-        # need combined ratemaps already generated for erosita
+        # need combined ratemaps already generated for erass
         evtool_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         # and for xmm
@@ -117,11 +117,11 @@ class TestTempFuncs(unittest.TestCase):
         all_rads = min_cnt_proj_temp_prof(self.all_tels, Quantity(500, 'kpc'),
                                           stacked_spectra=True)
 
-        assert all_rads['erosita'].unit == 'arcsec'
+        assert all_rads['erass'].unit == 'arcsec'
         assert all_rads['xmm'].unit == 'arcsec'
 
     def test_onion_deproj_temp_prof(self):
-        # need combined ratemaps already generated for erosita
+        # need combined ratemaps already generated for erass
         evtool_image(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         expmap(self.all_tels, Quantity(0.5, 'keV'), Quantity(2, 'keV'), combine_obs=True)
         # and for xmm
@@ -134,7 +134,7 @@ class TestTempFuncs(unittest.TestCase):
                                      stacked_spectra=True)
 
         assert type(res['xmm'][0]) == GasDensity3D
-        assert type(res['erosita'][0]) == GasDensity3D
+        assert type(res['erass'][0]) == GasDensity3D
 
 
 if __name__ == "__main__":

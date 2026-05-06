@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:37 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -22,7 +22,7 @@ class TestBaseSource(unittest.TestCase):
         obs = self.src.obs_ids
 
         xmm_obs = set(obs['xmm'])
-        ero_obs = set(obs['erosita'])
+        ero_obs = set(obs['erass'])
 
         assert EXPECTED_ERO_OBS == ero_obs
         assert EXPECTED_XMM_OBS == xmm_obs
@@ -38,9 +38,9 @@ class TestBaseSource(unittest.TestCase):
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
+                                     search_distance={'erass': Quantity(3.6, 'deg')})
 
-        img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erosita')
+        img = src.get_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erass')
 
         assert all([isinstance(im, Image) for im in img])
 
@@ -55,9 +55,9 @@ class TestBaseSource(unittest.TestCase):
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
+                                     search_distance={'erass': Quantity(3.6, 'deg')})
 
-        img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erosita')
+        img = src.get_combined_images(lo_en=Quantity(0.3, 'keV'), hi_en=Quantity(3, 'keV'), telescope='erass')
 
         assert isinstance(img, Image)
         assert img.obs_id == 'combined'
@@ -73,9 +73,9 @@ class TestBaseSource(unittest.TestCase):
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
+                                     search_distance={'erass': Quantity(3.6, 'deg')})
 
-        spec = src.get_spectra('r500', telescope='erosita')
+        spec = src.get_spectra('r500', telescope='erass')
 
         assert all(isinstance(sp, Spectrum) for sp in spec)
 
@@ -90,9 +90,9 @@ class TestBaseSource(unittest.TestCase):
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
+                                     search_distance={'erass': Quantity(3.6, 'deg')})
 
-        spec = src.get_combined_spectra('r500', inst='combined', telescope='erosita')
+        spec = src.get_combined_spectra('r500', inst='combined', telescope='erass')
 
         assert isinstance(spec, Spectrum)
 
@@ -107,9 +107,9 @@ class TestBaseSource(unittest.TestCase):
 
         src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
                                      name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erosita': Quantity(3.6, 'deg')})
+                                     search_distance={'erass': Quantity(3.6, 'deg')})
 
-        spec = src.get_combined_spectra('r500', telescope='erosita', inst='tm1')
+        spec = src.get_combined_spectra('r500', telescope='erass', inst='tm1')
 
         assert isinstance(spec, Spectrum)
         assert spec.instrument == 'tm1'

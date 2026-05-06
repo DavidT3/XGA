@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:27 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:50 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -16,10 +16,10 @@ class TestMassFuncs(unittest.TestCase):
         cls.src = get_test_source('all')
 
     def test_inv_abel_dens_onion_temp(self):
-        res = inv_abel_dens_onion_temp(self.src, Quantity(600, 'kpc'), 'beta', 'king', 
+        res = inv_abel_dens_onion_temp(self.src, Quantity(600, 'kpc'), 'beta', 'king',
                                        'vikhlinin_temp', Quantity(600, 'kpc'), stacked_spectra=True)
         assert type(res) == dict
-        assert set(res.keys()) == set(['erosita', 'xmm'])
-        assert type(res['erosita'][0]) == HydrostaticMass
+        assert set(res.keys()) == {'erass', 'xmm'}
+        assert type(res['erass'][0]) == HydrostaticMass
 
 

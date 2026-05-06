@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:36 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -89,6 +89,56 @@ class TestProductLoading(unittest.TestCase):
 
         self.assertTrue(len(specs) > 0, "No XMM spectra loaded")
         self.assertTrue(all(isinstance(sp, Spectrum) for sp in specs))
+
+    def test_erass_image_loading(self):
+        """
+        Test that existing eRASS images are correctly identified and loaded.
+        """
+        if 'erass' not in self.src.telescopes:
+            self.skipTest("eRASS data not associated with test source")
+
+        from xga.generate.esass.phot import evtool_image
+        # Ensure image is generated
+        evtool_image(self.src, Quantity(0.5, 'keV'), Quantity(2.0, 'keV'))
+
+        # Re-declare source to trigger product loading
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                            name=SRC_INFO['name'], use_peak=False,
+                            search_distance={'erass': Quantity(3.6, 'deg')}, load_profiles=False)
+
+        # Retrieve and verify
+        imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='erass')
+        if not isinstance(imgs, list):
+            imgs = [imgs]
+
+        self.assertTrue(len(imgs) > 0, "No eRASS images loaded")
+        self.assertTrue(all(isinstance(im, Image) for im in imgs))
+        self.assertTrue(all(im.telescope == 'erass' for im in imgs))
+
+    def test_erass_spectrum_loading(self):
+        """
+        Test that existing eRASS spectra are correctly identified and loaded.
+        """
+        if 'erass' not in self.src.telescopes:
+            self.skipTest("eRASS data not associated with test source")
+
+        from xga.generate.esass.spec import srctool_spectrum
+        # Ensure spectrum is generated
+        srctool_spectrum(self.src, 'r500')
+
+        # Re-declare source
+        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
+                            name=SRC_INFO['name'], use_peak=False,
+                            search_distance={'erass': Quantity(3.6, 'deg')}, load_profiles=False)
+
+        # Retrieve and verify
+        specs = src.get_spectra('r500', telescope='erass')
+        if not isinstance(specs, list):
+            specs = [specs]
+
+        self.assertTrue(len(specs) > 0, "No eRASS spectra loaded")
+        self.assertTrue(all(isinstance(sp, Spectrum) for sp in specs))
+        self.assertTrue(all(sp.telescope == 'erass' for sp in specs))
 
     def test_chandra_image_loading(self):
         """
