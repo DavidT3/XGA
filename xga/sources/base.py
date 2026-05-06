@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 10:38 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:00 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -3727,7 +3727,8 @@ class BaseSource:
         if pattern is None:
             patt_search = "_pattern"
         elif isinstance(pattern, str):
-            pattern = {'xmm': {'pn': '<=4', 'mos': '<=12'}, 'erosita': {'tm': '15', 'combined': '15'}}
+            pattern = {'xmm': {'pn': '<=4', 'mos': '<=12'}, 'erosita': {'tm': '15', 'combined': '15'},
+                       'erass': {'tm': '15', 'combined': '15'}}
             patt_search = {inst: "_pattern" + check_pattern(patt, telescope)[1]
                            for inst, patt in pattern[telescope].items()}
         elif isinstance(pattern, dict):
