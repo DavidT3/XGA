@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 2:16 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:28 PM. Copyright (c) The Contributors.
 
 import importlib
 import json
@@ -904,6 +904,7 @@ with open(importlib.resources.files(__name__) / "files/xspec_model_units.json5",
 #  and instrument names should all be lowercase, that will be the general storage convention throughout XGA
 ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
                 "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"],
+                "erass": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"],
                 "chandra": ["acis"]}
 # TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
 XMM_INST = ALLOWED_INST['xmm']
@@ -911,11 +912,11 @@ XMM_INST = ALLOWED_INST['xmm']
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())
 # This dictionary won't be used much, but it's just so we have access to some properly formatted telescope names
-PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA', 'chandra': 'Chandra'}
+PRETTY_TELESCOPE_NAMES = {'xmm': 'XMM', 'erosita': 'eROSITA', 'erass': 'eRASS', 'chandra': 'Chandra'}
 # Here we define regular expressions that will allow use to verify the structure of an ObsID for a particular
 #  telescope - this functionality is also in DAXA mission classes, so we may just switch to using them in the
 #  future to avoid features duplication
-OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "chandra": '^[0-9]{1,5}'}
+OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "erass": '^[0-9]{6}$', "chandra": '^[0-9]{1,5}'}
 
 # This is another sort of duplication of a DAXA feature, and stores the default search distances to be used for
 #  each telescope in the xga.match.separation_match function. These are loosely based on the field of view of
@@ -924,11 +925,12 @@ OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "chandra": '^[0-9
 # TODO when I chuck ROSAT in here add an entry like 'rosat': {'PSPCB': Quantity(60, 'arcmin'),
 #  'PSPCC': Quantity(60, 'arcmin'), 'HRI': Quantity(19, 'arcmin'), 'RASS': Quantity(3, 'deg')}}
 DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'), 'erosita': Quantity(60, 'arcmin'),
-                            'chandra': Quantity(30, 'arcmin')}
+                            'erass': Quantity(108, 'arcmin'), 'chandra': Quantity(30, 'arcmin')}
 
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],
                 "erosita": ['CALIB', 'CLOSED'],
+                "erass": ['CALIB', 'CLOSED'],
                 "chandra": []}
 # ----------------------------------------------------------------------------
 
@@ -977,6 +979,15 @@ EROSITA_FILES = {"root_erosita_dir": "/this/is/required/erosita_obs/data/",
                  "erosita_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_expmap.fits",
                  "region_file": "/this/is/optional/erosita_obs/regions/{obs_id}/regions.reg"}
 
+# The information required to use eRASS data
+ERASS_FILES = {"root_erass_dir": "/this/is/required/erass_obs/data/",
+               "clean_erass_evts": "/this/is/required/{obs_id}/{obs_id}.fits",
+               "lo_en": ['0.50', '2.00'],
+               "hi_en": ['2.00', '10.00'],
+               "erass_image": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_img.fits",
+               "erass_expmap": "/this/is/optional/{obs_id}/{obs_id}-{lo_en}-{hi_en}keV_expmap.fits",
+               "region_file": "/this/is/optional/erass_obs/regions/{obs_id}/regions.reg"}
+
 # The information required to use Chandra data
 CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
                  "clean_acis_evts": "/this/is/required/{obs_id}/{obs_id}_ACIS_evts.fits",
@@ -990,7 +1001,7 @@ CHANDRA_FILES = {"root_chandra_dir": "/this/is/required/chandra_obs/data/",
                  "region_file": "/this/is/optional/chandra_obs/regions/{obs_id}/regions.reg"}
 
 # We set up this dictionary for later, it makes programmatically grabbing the section dictionaries easier.
-tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'chandra': CHANDRA_FILES}
+tele_conf_sects = {'xmm': XMM_FILES, 'erosita': EROSITA_FILES, 'erass': ERASS_FILES, 'chandra': CHANDRA_FILES}
 # -------------------------------------------------------------------------------
 
 

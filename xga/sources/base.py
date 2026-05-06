@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 10:40 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:24 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -194,19 +194,14 @@ class BaseSource:
         #  unfortunately - the position check will just remove eRASS from consideration if the source doesn't pass
         telescope = check_telescope_choices(telescope)
 
-        # TODO REMOVE THE SECOND PART OF THIS IF STATEMENT WHEN ERASS AND EROSITA ARE SEPARATE
-        #  TELESCOPES (SEE XGA ISSUE #1395)
-        if 'erass' in telescope or ('erass' not in ALLOWED_INST and 'erosita' in telescope):
-            # This can be removed when there is a clear split between eRASS and eROSITA
-            eros_rel_name = "erass" if "erass" in telescope else "erosita"
-
+        if 'erass' in telescope:
             # Convert the RA-DEC UDC into a galactic lat-long
             gal_udc = SkyCoord(ra, dec, frame='fk5', unit='deg').galactic
             # Then check the galactic coordinate against these boundary conditions to determine if
             #  the UDC is within the eRASS DR1 footprint or not
             if not (gal_udc.l > Quantity(179.94423568, 'deg') and gal_udc.b <= Quantity(359.94423568, 'deg')):
                 # Failing this condition means we won't even look for eRASS data for this source
-                telescope = [t for t in telescope if t != eros_rel_name]
+                telescope = [t for t in telescope if t != 'erass']
 
                 # And we have to check that there is at least one telescope remaining, otherwise we'll get some
                 #  quite strange errors later on!
@@ -216,8 +211,8 @@ class BaseSource:
                                                    "were specified.".format(s=self.name))
 
                 # We also have to change the search_distance argument to match
-                if search_distance is not None and eros_rel_name in search_distance:
-                    search_distance = {t: sd for t, sd in search_distance.items() if t != eros_rel_name}
+                if search_distance is not None and 'erass' in search_distance:
+                    search_distance = {t: sd for t, sd in search_distance.items() if t != 'erass'}
                     # And if we've actually removed all the entries, we set the search_distance to None
                     if len(search_distance) == 0:
                         search_distance = None
