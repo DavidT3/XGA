@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 5:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 5:57 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -117,8 +117,8 @@ class TestTempFuncs(unittest.TestCase):
         all_rads = min_cnt_proj_temp_prof(self.all_tels, Quantity(500, 'kpc'),
                                           stacked_spectra=True)
 
-        assert all_rads['erass'].unit == 'arcsec'
-        assert all_rads['xmm'].unit == 'arcsec'
+        assert all_rads['erass'][0].unit == 'arcsec'
+        assert all_rads['xmm'][0].unit == 'arcsec'
 
     def test_onion_deproj_temp_prof(self):
         # need combined ratemaps already generated for erass

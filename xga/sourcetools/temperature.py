@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 5:57 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -626,7 +626,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     if outer_radii != 'region':
         inn_rad_vals, out_rad_vals = region_setup(sources, outer_radii, Quantity(0, 'arcsec'), True, '')[1:]
     else:
-        raise NotImplementedError("I don't currently support fitting region spectra")
+        raise NotImplementedError("We no longer support fitting region spectra.")
 
     # Validate the selected abundance table
     if abund_table not in ABUND_TABLES:
