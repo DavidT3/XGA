@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 10:41 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:10 AM. Copyright (c) The Contributors.
 
 import os
 from typing import List, Union, Tuple, Dict
@@ -250,13 +250,13 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
                 warn("Spectrum stacking is not currently supported (or recommended) for XMM, and so combined "
                      "spectra will not be used for these XSPEC fits.", stacklevel=2)
             # We make sure the requested sets of annular spectra have actually been generated (for XMM)
-            spectrum_set(sources, radii['xmm'], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
+            spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
         elif tel in ['erosita', 'erass']:
             # The annular spectrum tool specific to eROSITA
-            esass_spectrum_set(sources, radii['erosita'], group_spec, min_counts, min_sn, num_cores,
+            esass_spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, num_cores,
                                combine_tm=stacked_spectra)
         elif tel == 'chandra':
-            ciao_spectrum_set(sources, radii['chandra'], group_spec, min_counts, min_sn, over_sample, False, num_cores)
+            ciao_spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, False, num_cores)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))

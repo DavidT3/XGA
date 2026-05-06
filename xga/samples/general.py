@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:03 AM. Copyright (c) The Contributors.
 
 from typing import Union, List
 from warnings import warn
@@ -368,7 +368,7 @@ class PointSample(BaseSample):
             emosaic(self, "image", peak_lo_en, peak_hi_en)
             emosaic(self, "expmap", peak_lo_en, peak_hi_en)
 
-        if 'erosita' in self.telescopes:
+        if 'erosita' in self.telescopes or 'erass' in self.telescopes:
             evtool_image(self, peak_lo_en, peak_hi_en)
             expmap(self, peak_lo_en, peak_hi_en)
 
