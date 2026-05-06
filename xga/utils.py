@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:25 AM. Copyright (c) The Contributors.
 
 import importlib
 import json
@@ -1074,6 +1074,9 @@ xmm_det = def_unit("xmm_det")
 erosita_sky = def_unit("erosita_sky")
 erosita_det = def_unit("erosita_det")
 #
+erass_sky = def_unit("erass_sky")
+erass_det = def_unit("erass_det")
+#
 chandra_sky = def_unit("chandra_sky")
 chandra_det = def_unit("chandra_det")
 
@@ -1081,7 +1084,7 @@ chandra_det = def_unit("chandra_det")
 #  allows us to test if we forgot to define a unit when adding a new mission.
 MISSION_XY_UNITS = {'xmm': {'skyxy': xmm_sky, 'detxy': xmm_det},
                     'erosita': {'skyxy': erosita_sky, 'detxy': erosita_det},
-                    'erass': {'skyxy': erosita_sky, 'detxy': erosita_det},
+                    'erass': {'skyxy': erass_sky, 'detxy': erass_det},
                     'chandra': {'skyxy': chandra_sky, 'detxy': chandra_det}
                     }
 
@@ -1099,7 +1102,8 @@ try:
 except ValueError:
     # Adding the unit instances we created to the astropy pool of units - means we can do things like just defining
     #  Quantity(10000, 'xmm_det') rather than importing xmm_det from utils and using it that way
-    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det, chandra_sky, chandra_det,
+    add_enabled_units([r200, r500, r2500, xmm_sky, xmm_det, erosita_sky, erosita_det,
+                       erass_sky, erass_det, chandra_sky, chandra_det,
                        SKY_XY_UNIT, DET_XY_UNIT])
 
     # We add the equivalencies for some of the custom units we defined
