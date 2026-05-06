@@ -1,6 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 10:38 AM. Copyright (c) The Contributors.
 
+import contextlib
 import gc
 import os
 import pickle
@@ -1417,135 +1418,106 @@ class BaseSource:
             ann_spec_usable = {}
             for obs in self.obs_ids[tel]:
                 if os.path.exists(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
-                    os.chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs))
-                    cur_d = os.getcwd() + '/'
-                    # Loads in the inventory file for this ObsID
-                    inven = pd.read_csv("inventory.csv", dtype=str)
+                    with contextlib.chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
+                        cur_d = os.getcwd() + '/'
+                        # Loads in the inventory file for this ObsID
+                        inven = pd.read_csv("inventory.csv", dtype=str)
 
-                    # Here we read in instruments and exposure maps which are relevant to this source
-                    im_lines = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
-                    # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
-                    #  the lower level. As such we can be sure here we're only reading in instruments we decided
-                    #  are valid
-                    # We add the 'combined' entry to account for the possibility of single ObsID combined instrument
-                    #  images being created - # TODO decide whether this would be better off in the 'combined' section
-                    for i in self.instruments[tel][obs] + ['combined']:
-                        # Fetches lines of the inventory which match the current ObsID and instrument
-                        rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
-                        for r_ind, r in rel_ims.iterrows():
-                            self.update_products(parse_image_like(cur_d+r['file_name'], r['type'], tel),
-                                                 update_inv=False)
+                        # Here we read in instruments and exposure maps which are relevant to this source
+                        im_lines = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
+                        # Instruments is a dictionary with ObsIDs on the top level and then valid instruments on
+                        #  the lower level. As such we can be sure here we're only reading in instruments we decided
+                        #  are valid
+                        # We add the 'combined' entry to account for the possibility of single ObsID combined instrument
+                        #  images being created - # TODO decide whether this would be better off in the 'combined' section
+                        for i in self.instruments[tel][obs] + ['combined']:
+                            # Fetches lines of the inventory which match the current ObsID and instrument
+                            rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
+                            for r_ind, r in rel_ims.iterrows():
+                                self.update_products(parse_image_like(cur_d+r['file_name'], r['type'], tel),
+                                                     update_inv=False)
 
-                    # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
-                    # This finds the lines of the inventory that are lightCurve entries
-                    lc_lines = inven[inven['type'] == 'lightcurve']
-                    for row_ind, row in lc_lines.iterrows():
-                        # The parse lightcurve function does check to see if an inventory entry is relevant to this
-                        #  source (using the source name), and if the ObsID and instrument are still associated.
-                        self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
+                        # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
+                        # This finds the lines of the inventory that are lightCurve entries
+                        lc_lines = inven[inven['type'] == 'lightcurve']
+                        for row_ind, row in lc_lines.iterrows():
+                            # The parse lightcurve function does check to see if an inventory entry is relevant to this
+                            #  source (using the source name), and if the ObsID and instrument are still associated.
+                            self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
 
-                    if load_spectra:
+                        if load_spectra:
 
-                        spec_lines = inven[inven['type'] == 'spectrum']
-                        for row_ind, row in spec_lines.iterrows():
-                            obj, set_id, ann_id = parse_spectrum(row, False)
-                            if set_id != None:
-                                obj.annulus_ident = ann_id
-                                obj.set_ident = set_id
-                                if set_id not in ann_spec_constituents:
-                                    ann_spec_constituents[set_id] = []
-                                    ann_spec_usable[set_id] = True
-                                ann_spec_constituents[set_id].append(obj)
-                            else:
-                                # And adding it to the source storage structure, but only if its not a member
-                                #  of an AnnularSpectra
-                                try:
-                                    self.update_products(obj, update_inv=False)
-                                except NotAssociatedError:
-                                    pass
-
-            os.chdir(og_dir)
+                            spec_lines = inven[inven['type'] == 'spectrum']
+                            for row_ind, row in spec_lines.iterrows():
+                                obj, set_id, ann_id = parse_spectrum(row, False)
+                                if set_id != None:
+                                    obj.annulus_ident = ann_id
+                                    obj.set_ident = set_id
+                                    if set_id not in ann_spec_constituents:
+                                        ann_spec_constituents[set_id] = []
+                                        ann_spec_usable[set_id] = True
+                                    ann_spec_constituents[set_id].append(obj)
+                                else:
+                                    # And adding it to the source storage structure, but only if its not a member
+                                    #  of an AnnularSpectra
+                                    try:
+                                        self.update_products(obj, update_inv=False)
+                                    except NotAssociatedError:
+                                        pass
 
             if load_profiles:
                 # Here we will load in existing xga profile objects
-                os.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name))
-                saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
-                for pf in saved_profs:
-                    try:
-                        with open(pf, 'rb') as reado:
-                            temp_prof = pickle.load(reado)
+                if os.path.exists(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name)):
+                    with contextlib.chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name)):
+                        saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
+                        for pf in saved_profs:
                             try:
-                                self.update_products(temp_prof, update_inv=False)
-                            except (NotAssociatedError, AttributeError):
-                                pass
-                    except (EOFError, pickle.UnpicklingError, AttributeError):
-                        warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
-                                    "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
-                        if not self._samp_member:
-                            # If these errors have been raised then I think that the pickle file has been
-                            #  broken (see issue #935)
-                            warn(warn_text, stacklevel=2)
-                        else:
-                            self._supp_warn.append(warn_text)
-                os.chdir(og_dir)
+                                with open(pf, 'rb') as reado:
+                                    temp_prof = pickle.load(reado)
+                                    try:
+                                        self.update_products(temp_prof, update_inv=False)
+                                    except (NotAssociatedError, AttributeError):
+                                        pass
+                            except (EOFError, pickle.UnpicklingError, AttributeError):
+                                warn_text = "A profile save ({}) appears to be corrupted, it has not been " \
+                                            "loaded; you can safely delete this file".format(os.getcwd() + '/' + pf)
+                                if not self._samp_member:
+                                    # If these errors have been raised then I think that the pickle file has been
+                                    #  broken (see issue #935)
+                                    warn(warn_text, stacklevel=2)
+                                else:
+                                    self._supp_warn.append(warn_text)
 
             # Here we load in any combined images and exposure maps that may have been generated
-            os.chdir(OUTPUT + '{t}/combined'.format(t=tel))
-            cur_d = os.getcwd() + '/'
-            # This creates a set of observation-instrument strings that describe the current combinations associated
-            #  with this source, for testing against to make sure we're loading in combined images/expmaps that
-            #  do belong with this source
-            src_oi_set = set([o+i for o in self.instruments[tel] for i in self.instruments[tel][o]])
+            if os.path.exists(OUTPUT + '{t}/combined'.format(t=tel)):
+                with contextlib.chdir(OUTPUT + '{t}/combined'.format(t=tel)):
+                    cur_d = os.getcwd() + '/'
+                    # This creates a set of observation-instrument strings that describe the current combinations associated
+                    #  with this source, for testing against to make sure we're loading in combined images/expmaps that
+                    #  do belong with this source
+                    src_oi_set = set([o+i for o in self.instruments[tel] for i in self.instruments[tel][o]])
 
-            # Loads in the inventory file for this ObsID
-            inven = pd.read_csv("inventory.csv", dtype=str)
-            rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
-            for row_ind, row in rel_inven.iterrows():
-                o_split = row['obs_ids'].split('/')
-                i_split = row['insts'].split('/')
-                # Assemble a set of observations-instrument strings for the current row, to test against the
-                #  src_oi_set we assembled earlier
-                test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-                # First we make sure the sets are the same length, if they're not then we know before starting that this
-                #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
-                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
-                #  match exactly and the product can be loaded
-                if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                    self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
-                                         update_inv=False)
+                    # Loads in the inventory file for this ObsID
+                    inven = pd.read_csv("inventory.csv", dtype=str)
+                    rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
+                    for row_ind, row in rel_inven.iterrows():
+                        o_split = row['obs_ids'].split('/')
+                        i_split = row['insts'].split('/')
+                        # Assemble a set of observations-instrument strings for the current row, to test against the
+                        #  src_oi_set we assembled earlier
+                        test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
+                        # First we make sure the sets are the same length, if they're not then we know before starting that this
+                        #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
+                        #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
+                        #  match exactly and the product can be loaded
+                        if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
+                            self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
+                                                 update_inv=False)
 
-            # now assigning combined event lists
-            rel_inven = inven[inven['type'] == 'events']
-            for row_ind, row in rel_inven.iterrows():
-                o_split = row['obs_ids'].split('/')
-                i_split = row['insts'].split('/')
-                # Assemble a set of observations-instrument strings for the current row, to test against the
-                #  src_oi_set we assembled earlier
-                test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
-                # getting a list of obs_ids to parse to the Eventlist object
-                obs_list = list(set(o_split))
-                # First we make sure the sets are the same length, if they're not then we know before starting that this
-                #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
-                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
-                #  match exactly and the product can be loaded
-                if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                    evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
-                    self.update_products(evt_list, update_inv=False)
-
-            # now assigning combined lightcurves
-            rel_inven = inven[inven['type'] == 'lightcurve']
-            for row_ind, row in rel_inven.iterrows():
-                self.update_products(parse_lightcurve(row, tel, True), update_inv=False)
-
-            if load_spectra:
-                rel_inven = inven[inven['type'] == 'spectrum']
-                for row_ind, row in rel_inven.iterrows():
-                    # Spectra can have combined observations but individual instruments.
-                    # Checking that a spectrum is associated to the source is different depending
-                    # on if the instrument is combined or not
-                    o_split = row['obs_ids'].split('/')
-                    # if there is a '/' in the insts entry, that means it should be all the instruments combined
-                    if '/' in row['insts']:
+                    # now assigning combined event lists
+                    rel_inven = inven[inven['type'] == 'events']
+                    for row_ind, row in rel_inven.iterrows():
+                        o_split = row['obs_ids'].split('/')
                         i_split = row['insts'].split('/')
                         # Assemble a set of observations-instrument strings for the current row, to test against the
                         #  src_oi_set we assembled earlier
@@ -1557,42 +1529,70 @@ class BaseSource:
                         #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
                         #  match exactly and the product can be loaded
                         if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                            obj, set_id, ann_id = parse_spectrum(row, True)
-                            if set_id != None:
-                                obj.annulus_ident = ann_id
-                                obj.set_ident = set_id
-                                if set_id not in ann_spec_constituents:
-                                    ann_spec_constituents[set_id] = []
-                                    ann_spec_usable[set_id] = True
-                                ann_spec_constituents[set_id].append(obj)
-                            else:
-                                # And adding it to the source storage structure, but only if its not a member
-                                #  of an AnnularSpectra
-                                try:
-                                    self.update_products(obj, update_inv=False)
-                                except NotAssociatedError:
-                                    pass
-                    # This condition deals with checking combined obs, individual instrument
-                    elif set(o_split) == set(self.obs_ids[tel]) and \
-                        all(row['insts'] in self.instruments[tel][o] for o in self.instruments[tel]):
-                        obj, set_id, ann_id = parse_spectrum(row, True)
-                        if set_id != None:
-                            obj.annulus_ident = ann_id
-                            obj.set_ident = set_id
-                            if set_id not in ann_spec_constituents:
-                                ann_spec_constituents[set_id] = []
-                                ann_spec_usable[set_id] = True
-                            ann_spec_constituents[set_id].append(obj)
-                        else:
-                            # And adding it to the source storage structure, but only if its not a member
-                            #  of an AnnularSpectra
-                            try:
-                                self.update_products(obj, update_inv=False)
-                            except NotAssociatedError:
-                                pass
+                            evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
+                            self.update_products(evt_list, update_inv=False)
 
-                    else:
-                        pass
+                    # now assigning combined lightcurves
+                    rel_inven = inven[inven['type'] == 'lightcurve']
+                    for row_ind, row in rel_inven.iterrows():
+                        self.update_products(parse_lightcurve(row, tel, True), update_inv=False)
+
+                    if load_spectra:
+                        rel_inven = inven[inven['type'] == 'spectrum']
+                        for row_ind, row in rel_inven.iterrows():
+                            # Spectra can have combined observations but individual instruments.
+                            # Checking that a spectrum is associated to the source is different depending
+                            # on if the instrument is combined or not
+                            o_split = row['obs_ids'].split('/')
+                            # if there is a '/' in the %%% insts entry, that means it should be all the instruments combined
+                            if '/' in row['insts']:
+                                i_split = row['insts'].split('/')
+                                # Assemble a set of observations-instrument strings for the current row, to test against the
+                                #  src_oi_set we assembled earlier
+                                test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
+                                # getting a list of obs_ids to parse to the Eventlist object
+                                obs_list = list(set(o_split))
+                                # First we make sure the sets are the same length, if they're not then we know before starting that this
+                                #  row's file can't be okay for us to load in. Then we compute the union between the test_oi_set and
+                                #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
+                                #  match exactly and the product can be loaded
+                                if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
+                                    obj, set_id, ann_id = parse_spectrum(row, True)
+                                    if set_id != None:
+                                        obj.annulus_ident = ann_id
+                                        obj.set_ident = set_id
+                                        if set_id not in ann_spec_constituents:
+                                            ann_spec_constituents[set_id] = []
+                                            ann_spec_usable[set_id] = True
+                                        ann_spec_constituents[set_id].append(obj)
+                                    else:
+                                        # And adding it to the source storage structure, but only if its not a member
+                                        #  of an AnnularSpectra
+                                        try:
+                                            self.update_products(obj, update_inv=False)
+                                        except NotAssociatedError:
+                                            pass
+                            # This condition deals with checking combined obs, individual instrument
+                            elif set(o_split) == set(self.obs_ids[tel]) and \
+                                all(row['insts'] in self.instruments[tel][o] for o in self.instruments[tel]):
+                                obj, set_id, ann_id = parse_spectrum(row, True)
+                                if set_id != None:
+                                    obj.annulus_ident = ann_id
+                                    obj.set_ident = set_id
+                                    if set_id not in ann_spec_constituents:
+                                        ann_spec_constituents[set_id] = []
+                                        ann_spec_usable[set_id] = True
+                                    ann_spec_constituents[set_id].append(obj)
+                                else:
+                                    # And adding it to the source storage structure, but only if its not a member
+                                    #  of an AnnularSpectra
+                                    try:
+                                        self.update_products(obj, update_inv=False)
+                                    except NotAssociatedError:
+                                        pass
+
+                            else:
+                                pass
 
             # If spectra that should be a part of annular spectra object(s) have been found, then I need to create
             #  those objects and add them to the storage structure
