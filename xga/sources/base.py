@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 1:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 10:40 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -2309,6 +2309,12 @@ class BaseSource:
                                               telescope=telescope)
             matched_prods = [p[-1] for p in broad_matches if extra_key in p[-2]]
 
+        # This part of the code ensures that if inst is None (the default), only products for 'real'
+        #  instruments are returned. To retrieve a multi-instrument combined product, the user must
+        #  explicitly specify inst='combined'.
+        if inst is None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
+
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -2344,6 +2350,12 @@ class BaseSource:
         """
         # Fetch all the matching profiles for the specified telescope
         matched_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
+
+        # This part of the code ensures that if inst is None (the default), only products for 'real'
+        #  instruments are returned. To retrieve a multi-instrument combined product, the user must
+        #  explicitly specify inst='combined'.
+        if inst is None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
 
         matched_prods: List[BaseProfile1D]
 
@@ -2442,6 +2454,12 @@ class BaseSource:
         # Grabbing every single lightcurve that matches ObsID, instrument, and telescope passed by the
         #  user (None by default) - we'll then sweep through whatever list is returned and narrow them down
         matched_prods = self.get_products(search_key, obs_id, inst, telescope=telescope)
+
+        # This part of the code ensures that if inst is None (the default), only products for 'real'
+        #  instruments are returned. To retrieve a multi-instrument combined product, the user must
+        #  explicitly specify inst='combined'.
+        if inst is None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
 
         matched_prods: List[LightCurve]
 
@@ -3353,6 +3371,12 @@ class BaseSource:
             matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
         else:
             matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
+
+        # This part of the code ensures that if inst is None (the default), only products for 'real'
+        #  instruments are returned. To retrieve a multi-instrument combined product, the user must
+        #  explicitly specify inst='combined'.
+        if inst is None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
 
         # Checking for matching radii first - this will likely whittle down the spectra best of all. We have
         #  had matching problems sometimes because of float precision (the last digit flips and is no longer
