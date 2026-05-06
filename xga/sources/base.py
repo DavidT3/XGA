@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:24 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 10:02 AM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -3215,7 +3215,7 @@ class BaseSource:
     def get_combined_images(self, lo_en: Quantity = None, hi_en: Quantity = None,
                             psf_corr: bool = False, psf_model: str = "ELLBETA",
                             psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
-                            telescope: str = None, obs_id: str = 'combined', inst: str = None) -> Union[Image, List[Image]]:
+                            telescope: str = None, obs_id: str = 'combined', inst: str = 'combined') -> Union[Image, List[Image]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA Image objects.
         This is equivalent to calling get_images() with obs_id='combined' and/or inst='combined'.
@@ -3224,7 +3224,7 @@ class BaseSource:
         - obs_id='combined', inst='combined': Multi-obs + multi-inst
         - obs_id='combined', inst='tm1' (or specific): Multi-obs + single inst
         - obs_id=specific, inst='combined': Single obs + multi-inst
-        - obs_id=None, inst=None: All combined images
+        - obs_id=None, inst=None: All combined ObsID images for 'real' instruments (e.g. tm1, tm2, etc.)
 
         :param Quantity lo_en: The lower energy limit of the image you wish to retrieve, the default
             is None (which will retrieve all images regardless of energy limit).
@@ -3239,9 +3239,9 @@ class BaseSource:
         :param str telescope: Optionally, a specific telescope to search for combined images can be supplied. The
             default is None, which means all combined images matching the other criteria will be returned.
         :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation images.
-        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
-            combined images matching the other criteria will be returned. Pass 'combined' to retrieve
-            multi-instrument combined images, or a specific instrument name for single-instrument combined.
+        :param str inst: Optionally, a specific instrument to search for. The default is 'combined', which
+            retrieves multi-instrument combined images, pass None to fetch all combined-obs, 'real' inst
+            images, or pass a specific instrument name for single-instrument combined obs.
         :return: An XGA Image object (if there is an exact match), or a list of XGA Image objects (if there
             were multiple matching products).
         :rtype: Union[Image, List[Image]]
@@ -3252,7 +3252,7 @@ class BaseSource:
 
     def get_combined_expmaps(self, lo_en: Quantity = None, hi_en: Quantity = None,
                              telescope: str = None, obs_id: str = 'combined',
-                             inst: str = None) -> Union[ExpMap, List[ExpMap]]:
+                             inst: str = 'combined') -> Union[ExpMap, List[ExpMap]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA ExpMap objects.
         This is equivalent to calling get_expmaps() with obs_id='combined' and/or inst='combined'.
@@ -3265,9 +3265,9 @@ class BaseSource:
             supplied. The default is None, which means all combined exposure maps matching the other criteria
             will be returned.
         :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation exposure maps.
-        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
-            combined exposure maps matching the other criteria will be returned. Pass 'combined' to retrieve
-            multi-instrument combined exposure maps.
+        :param str inst: Optionally, a specific instrument to search for. The default is 'combined', which
+            retrieves multi-instrument combined exposure maps, pass None to fetch all combined-obs, 'real' inst
+            exposure maps, or pass a specific instrument name for single-instrument combined obs.
         :return: An XGA ExpMap object (if there is an exact match), or a list of XGA ExpMap objects (if there
             were multiple matching products).
         :rtype: Union[ExpMap, List[ExpMap]]
@@ -3278,7 +3278,7 @@ class BaseSource:
                               psf_corr: bool = False, psf_model: str = "ELLBETA",
                               psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
                               telescope: str = None, obs_id: str = 'combined',
-                              inst: str = None) -> Union[RateMap, List[RateMap]]:
+                              inst: str = 'combined') -> Union[RateMap, List[RateMap]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA RateMap objects.
         This is equivalent to calling get_ratemaps() with obs_id='combined' and/or inst='combined'.
@@ -3296,9 +3296,9 @@ class BaseSource:
         :param str telescope: Optionally, a specific telescope to search for combined ratemaps can be supplied. The
             default is None, which means all combined ratemaps matching the other criteria will be returned.
         :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation ratemaps.
-        :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
-            combined ratemaps matching the other criteria will be returned. Pass 'combined' to retrieve
-            multi-instrument combined ratemaps.
+        :param str inst: Optionally, a specific instrument to search for. The default is 'combined', which
+            retrieves multi-instrument combined rate maps, pass None to fetch all combined-obs, 'real' inst
+            rate maps, or pass a specific instrument name for single-instrument combined obs.
         :return: An XGA RateMap object (if there is an exact match), or a list of XGA RateMap objects (if there
             were multiple matching products).
         :rtype: Union[RateMap, List[RateMap]]

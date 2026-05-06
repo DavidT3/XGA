@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/30/26, 1:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:58 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -362,7 +362,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
     :param BaseSource/NullSource/BaseSample sources: A single source object, or sample of sources.
     :param Quantity lo_en: The lower energy limit for the expmap, in astropy energy units.
     :param Quantity hi_en: The upper energy limit for the expmap, in astropy energy units.
-    :param bool combine_obs: Setting this to False will generate an image for each associated observation,
+    :param bool combine_obs: Setting this to False will generate an exposure map for each associated observation,
         instead of for one combined observation.
     :param int num_cores: The number of cores to use (if running locally), default is set to
         90% of available.
