@@ -27,7 +27,8 @@ from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
                min_sn: float = None, num_cores: int = NUM_CORES, disable_progress: bool = False,
-               combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False):
+               combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False,
+               telescope: str = None):
     """
     An internal function to generate all the commands necessary to produce a srctool spectrum, but is not
     decorated by the esass_call function, so the commands aren't immediately run. This means it can be used for
@@ -57,9 +58,11 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param bool combine_tm: Create spectra for individual ObsIDs that are a combination of the data from all the
         telescope modules used for that ObsID. This can help to offset the low signal-to-noise nature of the
         survey data eROSITA takes. Default is True.
-    :param bool combine_obs: Setting this to False will generate an image for each associated observation, 
+    :param bool combine_obs: Setting this to False will generate an spectrum for each associated observation,
         instead of for one combined observation.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :param str telescope: The telescope to make spectral generation commands for (either 'erass', 'erosita', or None). If None, then all available
+        eROSITA telescopes will be used.
     """
 
     def _make_spec_cmd_info(cur_evt_list: EventList):
@@ -588,7 +591,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Now we can continue with the rest of the sources
             continue
 
-        for er_miss in ['erosita', 'erass']:
+        for er_miss in (['erosita', 'erass'] if telescope is None else [telescope]):
             # Skip this iteration if the current skew of eROSITA isn't associated
             #  with the current source
             if er_miss not in source.telescopes:
@@ -977,115 +980,123 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
 
         spec_storage_name += extra_name
 
-        try:
-            exists = source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope='erosita')
-            # If it already exists though we don't need to bother generating
-            generate_spec = False
-        except NoProductAvailableError:
-            # If it doesn't exist then we do need to call the spectrum generation function
-            generate_spec = True
+        for er_miss in ['erosita', 'erass']:
+            if er_miss not in source.telescopes:
+                continue
 
-        if generate_spec or force_regen:
-            # Here we run through all the requested annuli for the current source
-            for r_ind in range(len(radii[s_ind])-1):
-                # Generate the eSASS commands for the current annulus of the current source, for all observations
-                spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                          min_sn, num_cores, disable_progress, combine_tm, combine_obs=True)
+            # This generates a random integer ID for this set of spectra
+            set_id = randint(0, 100_000_000)
 
-                # Read out some of the output into variables to be modified
-                interim_paths = spec_cmd_out[5][0]
-                interim_extras = spec_cmd_out[6][0]
-                interim_cmds = spec_cmd_out[0][0]
+            try:
+                exists = source.get_annular_spectra(radii[s_ind], group_spec, min_counts, min_sn, telescope=er_miss)
+                # If it already exists though we don't need to bother generating
+                generate_spec = False
+            except NoProductAvailableError:
+                # If it doesn't exist then we do need to call the spectrum generation function
+                generate_spec = True
 
-                # Modified paths and commands will be stored in here
-                new_paths = []
-                new_cmds = []
-                for p_ind, p in enumerate(interim_paths):
-                    cur_cmd = interim_cmds[p_ind]
+            if generate_spec or force_regen:
+                # Here we run through all the requested annuli for the current source
+                for r_ind in range(len(radii[s_ind])-1):
+                    # Generate the eSASS commands for the current annulus of the current source, for all observations
+                    spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
+                                              min_sn, num_cores, disable_progress, combine_tm, combine_obs=True,
+                                              telescope=er_miss)
 
-                    # Split up the current path, so we only modify the actual file name and not any
-                    #  other part of the string
-                    split_p = p.split('/')
-                    # We add the set and annulus identifiers
-                    new_spec = (split_p[-1].replace("_spec.fits", "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
-                                + "_spec.fits")
-                    # Not enough just to change the name passed through XGA, it has to be changed in
-                    #  the eSASS commands as well
-                    cur_cmd = cur_cmd.replace(split_p[-1], new_spec)
+                    # Read out some of the output into variables to be modified
+                    interim_paths = spec_cmd_out[5][0]
+                    interim_extras = spec_cmd_out[6][0]
+                    interim_cmds = spec_cmd_out[0][0]
 
-                    # Add the new filename back into the split spec file path
-                    split_p[-1] = new_spec
+                    # Modified paths and commands will be stored in here
+                    new_paths = []
+                    new_cmds = []
+                    for p_ind, p in enumerate(interim_paths):
+                        cur_cmd = interim_cmds[p_ind]
 
-                    # Add an annulus identifier to the extra_info dictionary
-                    interim_extras[p_ind].update({"set_ident": set_id, "ann_ident": r_ind})
+                        # Split up the current path, so we only modify the actual file name and not any
+                        #  other part of the string
+                        split_p = p.split('/')
+                        # We add the set and annulus identifiers
+                        new_spec = (split_p[-1].replace("_spec.fits", "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
+                                    + "_spec.fits")
+                        # Not enough just to change the name passed through XGA, it has to be changed in
+                        #  the eSASS commands as well
+                        cur_cmd = cur_cmd.replace(split_p[-1], new_spec)
 
-                    # Only need to modify the RMF paths if the universal RMF HASN'T been used
-                    if "universal" not in interim_extras[p_ind]['rmf_path']:
-                        # Much the same process as with the spectrum name
-                        split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
-                        # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
-                        new_rmf = split_r[-1].replace('.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
-                        # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
-                        #             + "_back.rmf"
+                        # Add the new filename back into the split spec file path
+                        split_p[-1] = new_spec
 
-                        # Replacing the names in the eSASS commands
-                        cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)
-                        # cur_cmd = cur_cmd.replace(split_br[-1], new_b_rmf)
+                        # Add an annulus identifier to the extra_info dictionary
+                        interim_extras[p_ind].update({"set_ident": set_id, "ann_ident": r_ind})
 
-                        split_r[-1] = new_rmf
-                        # split_br[-1] = new_b_rmf
+                        # Only need to modify the RMF paths if the universal RMF HASN'T been used
+                        if "universal" not in interim_extras[p_ind]['rmf_path']:
+                            # Much the same process as with the spectrum name
+                            split_r = copy(interim_extras[p_ind]['rmf_path']).split('/')
+                            # split_br = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
+                            new_rmf = split_r[-1].replace('.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".rmf"
+                            # new_b_rmf = split_br[-1].replace('_back.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                            #             + "_back.rmf"
 
-                        # Adding the new RMF paths into the extra info dictionary
-                        # interim_extras[p_ind].update({"rmf_path": "/".join(split_r),
-                        # "b_rmf_path": "/".join(split_br)})
-                        interim_extras[p_ind].update({"rmf_path": "/".join(split_r)})
+                            # Replacing the names in the eSASS commands
+                            cur_cmd = cur_cmd.replace(split_r[-1], new_rmf)
+                            # cur_cmd = cur_cmd.replace(split_br[-1], new_b_rmf)
 
-                    # Same process as RMFs but for the ARF, background ARF, and background spec
-                    split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
-                    # split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
-                    split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
+                            split_r[-1] = new_rmf
+                            # split_br[-1] = new_b_rmf
 
-                    new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
-                    # new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
-                    #             + "_back.arf"
-                    new_b_spec = (split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
-                                  + "_backspec.fits")
+                            # Adding the new RMF paths into the extra info dictionary
+                            # interim_extras[p_ind].update({"rmf_path": "/".join(split_r),
+                            # "b_rmf_path": "/".join(split_br)})
+                            interim_extras[p_ind].update({"rmf_path": "/".join(split_r)})
 
-                    split_brmf = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
-                    split_barf = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+                        # Same process as RMFs but for the ARF, background ARF, and background spec
+                        split_a = copy(interim_extras[p_ind]['arf_path']).split('/')
+                        # split_ba = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+                        split_bs = copy(interim_extras[p_ind]['b_spec_path']).split('/')
 
-                    new_b_rmf = split_r[-1].replace('_backspec.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + "_backspec.rmf"
-                    new_b_arf = split_barf[-1].replace('_backspec.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + "_backspec.arf"
+                        new_arf = split_a[-1].replace('.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + ".arf"
+                        # new_b_arf = split_ba[-1].replace('_back.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) \
+                        #             + "_back.arf"
+                        new_b_spec = (split_bs[-1].replace('_backspec.fits', "_ident{si}_{ai}".format(si=set_id, ai=r_ind))
+                                      + "_backspec.fits")
 
-                    # New names into the commands
-                    cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
-                    # cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
-                    cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
-                    cur_cmd = cur_cmd.replace(split_brmf[-1], new_b_rmf)
-                    cur_cmd = cur_cmd.replace(split_barf[-1], new_b_arf)
+                        split_brmf = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
+                        split_barf = copy(interim_extras[p_ind]['b_arf_path']).split('/')
+
+                        new_b_rmf = split_r[-1].replace('_backspec.rmf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + "_backspec.rmf"
+                        new_b_arf = split_barf[-1].replace('_backspec.arf', "_ident{si}_{ai}".format(si=set_id, ai=r_ind)) + "_backspec.arf"
+
+                        # New names into the commands
+                        cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
+                        # cur_cmd = cur_cmd.replace(split_ba[-1], new_b_arf)
+                        cur_cmd = cur_cmd.replace(split_bs[-1], new_b_spec)
+                        cur_cmd = cur_cmd.replace(split_brmf[-1], new_b_rmf)
+                        cur_cmd = cur_cmd.replace(split_barf[-1], new_b_arf)
 
 
-                    split_a[-1] = new_arf
-                    # split_ba[-1] = new_b_arf
-                    split_bs[-1] = new_b_spec
-                    split_brmf[-1] = new_b_rmf
-                    split_barf[-1] = new_b_arf
+                        split_a[-1] = new_arf
+                        # split_ba[-1] = new_b_arf
+                        split_bs[-1] = new_b_spec
+                        split_brmf[-1] = new_b_rmf
+                        split_barf[-1] = new_b_arf
 
-                    # Update the extra info dictionary some more
-                    # interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
-                    #                               "b_spec_path": "/".join(split_bs)})
-                    interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs),
-                                                  "b_rmf_path": "/".join(split_brmf), "b_arf_path": "/".join(split_barf)})
+                        # Update the extra info dictionary some more
+                        # interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_arf_path": "/".join(split_ba),
+                        #                               "b_spec_path": "/".join(split_bs)})
+                        interim_extras[p_ind].update({"arf_path": "/".join(split_a), "b_spec_path": "/".join(split_bs),
+                                                      "b_rmf_path": "/".join(split_brmf), "b_arf_path": "/".join(split_barf)})
 
-                    # Add the new paths and commands to their respective lists
-                    new_paths.append("/".join(split_p))
-                    new_cmds.append(cur_cmd)
+                        # Add the new paths and commands to their respective lists
+                        new_paths.append("/".join(split_p))
+                        new_cmds.append(cur_cmd)
 
-                src_paths = np.concatenate([src_paths, new_paths])
-                # Go through and concatenate things to the source lists defined above
-                src_cmds = np.concatenate([src_cmds, new_cmds])
-                src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
-                src_extras = np.concatenate([src_extras, interim_extras])
+                    src_paths = np.concatenate([src_paths, new_paths])
+                    # Go through and concatenate things to the source lists defined above
+                    src_cmds = np.concatenate([src_cmds, new_cmds])
+                    src_out_types += ['annular spectrum set components'] * len(spec_cmd_out[4][0])
+                    src_extras = np.concatenate([src_extras, interim_extras])
 
         src_out_types = np.array(src_out_types)
         # This adds the current sources final commands to the 'all sources' lists
