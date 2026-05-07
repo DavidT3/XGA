@@ -2598,9 +2598,6 @@ class AnnularSpectra(BaseAggregateProduct):
                              f"entries, but this AnnularSpectra has {self._num_ann} annuli."
                              f"Received 'lums': {lums}")
 
-            raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
-                             " number of entries as there are annuli.")
-
         for ai in range(0, self._num_ann):
             # Various global values of interest
             self._total_exp[ai] = float(tab_line[ai]["TOTAL_EXPOSURE"])
