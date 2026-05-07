@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:47 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 12:02 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -66,9 +66,9 @@ class TestBaseSample(unittest.TestCase):
         """
         single_temp_apec(self.smp_odd_tels, 'r500', stacked_spectra=True, spectrum_checking=False)
 
-        Lx = self.smp_odd_tels.Lx('r500', 'erass', stacked_spectra=True)
+        cur_lx = self.smp_odd_tels.Lx('r500', 'erass', stacked_spectra=True)
 
-        assert len(Lx) == 2
-        assert np.isnan(Lx[0][0].value)
-        assert isinstance(Lx, Quantity)
+        assert isinstance(cur_lx, Quantity)
+        assert len(cur_lx) == 2
+        assert np.isnan(cur_lx[0][0].value)
 

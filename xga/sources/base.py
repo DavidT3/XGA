@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:00 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 12:30 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -4712,7 +4712,15 @@ class BaseSource:
             the simultaneous fit.
         :return: The requested result value, and uncertainties.
         """
-        # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        # Have to check that the passed telescope is associated with this source - the len_fit_results
+        #  variable is used later on for further validity checks
+        try:
+            len_fit_results = len(self._fit_results[telescope])
+        except KeyError:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with {self.name} (only "
+                                              f"{self.telescopes}) so no fit results can be retrieved.")
+
+        # First, I want to retrieve the spectra that were fitted to produce the result they're looking for,
         #  because then I can just grab the storage key from one of them
         if telescope in ['erosita', 'erass'] and (len(self.obs_ids[telescope]) > 1):
             # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
@@ -4744,12 +4752,6 @@ class BaseSource:
             storage_key = specs[0].storage_key
         else:
             storage_key = specs.storage_key
-
-        try:
-            len_fit_results = len(self._fit_results[telescope])
-        except KeyError:
-            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
-                                              f"{self.name} so no results can be retrieved.")
 
         # Bunch of checks to make sure the requested results actually exist
         if len_fit_results == 0:
@@ -4829,6 +4831,19 @@ class BaseSource:
             the simultaneous fit.
         :return: The requested luminosity value, and uncertainties.
         """
+        # First, check if the passed telescope is actually associated with this source
+        if telescope not in self.telescopes:
+            raise TelescopeNotAssociatedError(f"No {telescope} data is associated with {self.name}, "
+                                              f"only {self.telescopes}.")
+
+        # Have to check that the passed telescope is associated with this source - the len_xspec_fits
+        #  variable is used later on for further validity checks
+        try:
+            len_xspec_fits = len(self._luminosities[telescope])
+        except KeyError:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with {self.name} (only "
+                                              f"{self.telescopes}) so no luminosities can be retrieved.")
+
         if not stacked_spectra:
             # If the user doesn't want the stacked spectra result, then we retrieve the spec objects
             # from the get_spectra method
@@ -4862,12 +4877,6 @@ class BaseSource:
             en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
         else:
             en_key = None
-
-        try:
-            len_xspec_fits = len(self._luminosities[telescope])
-        except KeyError:
-            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with "
-                                              f"{self.name} so no luminosities can be retrieved.")
 
         # Checks that the requested region, model and energy band actually exist
         if len_xspec_fits == 0:

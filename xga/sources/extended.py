@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 11:24 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -1134,9 +1134,19 @@ class GalaxyCluster(ExtendedSource):
         :return: A combined conversion factor that can be applied to a combined ratemap to calculate luminosity.
         :rtype: Quantity
         """
+        # For multi-obs eROSITA, we want to use the combined-obs + combined-instrument spectra
+        #  to avoid duplicate events and ensure we are using the product that matches the combined ratemaps
+        if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
+            use_obs_id = 'combined'
+            use_inst = 'combined'
+        else:
+            use_obs_id = None
+            use_inst = None
+
         # Grabbing the relevant spectra
-        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                min_sn=min_sn, over_sample=over_sample, telescope=telescope)
+        spec = self.get_spectra(outer_radius, obs_id=use_obs_id, inst=use_inst, inner_radius=inner_radius,
+                                group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                over_sample=over_sample, telescope=telescope)
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
         total_phot = 0
@@ -1201,16 +1211,19 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                              "vice versa.")
 
-        # For multi-obs eROSITA, use combined-obs spectra to avoid duplicate events
+        # For multi-obs eROSITA, use combined-observation and combined-instrument spectra to avoid duplicate events
+        #  and ensure we are using the product that matches the combined ratemaps
         if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
             use_obs_id = 'combined'
+            use_inst = 'combined'
         else:
             use_obs_id = obs_id
+            use_inst = inst
 
         # Retrieve the relevant spectra using unified get_spectra method
         spec = self.get_spectra(outer_radius, obs_id=use_obs_id, inner_radius=inner_radius, group_spec=group_spec,
                                min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                               inst=inst, telescope=telescope)
+                               inst=use_inst, telescope=telescope)
 
         # It's just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):
