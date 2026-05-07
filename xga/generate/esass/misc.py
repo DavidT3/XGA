@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/30/26, 1:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 10:21 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -130,23 +130,20 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
             comb_evt_name = "{os}_merged_events.fits".format(os=rand_ident)
 
             # Add the populated command string, and the expected output path for the
-            #  combined event list to the lists that are returned from this function
-            sources_cmds.append(np.array([evtool_cmd.format(d=dest_dir,
-                                                            evts=input_evts,
-                                                            out=comb_evt_name)]))
-            sources_paths.append(np.array([os.path.join(final_dest_dir,
-                                                        comb_evt_name)]))
+            #  combined event list to the local lists for this source
+            cmds.append(evtool_cmd.format(d=dest_dir, evts=input_evts, out=comb_evt_name))
+            final_paths.append(os.path.join(final_dest_dir, comb_evt_name))
 
             # This contains any other information that will be needed to instantiate
             #  the event list class once the eSASS cmd has run.
-            # The 'combined' values for obs and inst here are crucial, they will tell
-            #  the source object that the final product is assigned to that these
-            #  are merged products - combinations of all available data.
-            sources_extras.append(np.array([{"obs_id": "combined",
-                                             "instrument": "combined",
-                                             "telescope": er_miss,
-                                             "obs_ids": evt_obs_ids}]))
-            sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
+            extra_info.append({"obs_id": "combined", "instrument": "combined", "telescope": er_miss,
+                               "obs_ids": evt_obs_ids})
+
+        # Now that we've checked both eROSITA skews, we add the results for this source to the master lists
+        sources_cmds.append(np.array(cmds))
+        sources_paths.append(np.array(final_paths))
+        sources_extras.append(np.array(extra_info))
+        sources_types.append(np.full(sources_cmds[-1].shape, fill_value="combined events"))
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
