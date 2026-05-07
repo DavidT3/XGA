@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/29/26, 10:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 4:55 PM. Copyright (c) The Contributors.
 
 import os
 import warnings
@@ -2588,15 +2588,16 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
-            print('in first err')
-            print(len(tab_line))
-            print(self._num_ann)
-            raise ValueError("The dictionary passed in with the fit results in it does not have the same"
-                             " number of entries as there are annuli.")
+            raise ValueError(f"Fit results information passed to the 'tab_line' argument has {len(tab_line)} "
+                             f"entries, but this AnnularSpectra has {self._num_ann} annuli."
+                             f"Received 'tab_line': {tab_line}")
+
+        # Same check for luminosity input
         elif len(lums) != self._num_ann:
-            print('in second err')
-            print(len(lums))
-            print(self._num_ann)
+            raise ValueError(f"Fit luminosity information passed to the 'lums' argument has {len(lums)} "
+                             f"entries, but this AnnularSpectra has {self._num_ann} annuli."
+                             f"Received 'lums': {lums}")
+
             raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
                              " number of entries as there are annuli.")
 
