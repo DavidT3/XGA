@@ -1,8 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:16 PM. Copyright (c) The Contributors.
 
 import unittest
 
+from xga.exceptions import NoProductAvailableError
 from xga.generate.esass.lightcurve import srctool_lightcurve
 from xga.products.lightcurve import LightCurve
 from .. import get_test_source
@@ -19,21 +20,23 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         Testing srctool_lightcurve with the arguments combine_insts=False and combine_obs=False
         """
+        # Run the light curve generation - one light curve per eROSITA TM per Obs associated with this source
         srctool_lightcurve(self.src, 'r500', combine_tm=False, combine_obs=False)
 
-        lc = self.src.get_lightcurves('r500', telescope='erass', inst='tm1')
+        try:
+            lc = self.src.get_lightcurves('r500', telescope='erass', inst='tm1')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
-        if isinstance(lc, list):
-            for l in lc:
-                assert isinstance(l, LightCurve)
-                assert l.telescope == 'erass'
-                assert l.obs_id != 'combined'
-                assert l.instrument == 'tm1'
-        else:
-            assert isinstance(lc, LightCurve)
-            assert lc.telescope == 'erass'
-            assert lc.obs_id != 'combined'
-            assert lc.instrument == 'tm1'
+        # There should be more than one light curve returned in this test, so the
+        #  lc variable should be a list of LightCurve instances
+        assert type(lc) == list
+
+        for cur_lc in lc:
+            assert isinstance(cur_lc, LightCurve)
+            assert cur_lc.telescope == 'erass'
+            assert cur_lc.obs_id != 'combined'
+            assert cur_lc.instrument == 'tm1'
 
     @require_esass
     def test_srctool_lightcurve_combine_insts_t_combine_obs_f(self):
