@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/11/2025, 16:49. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 4:32 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -203,7 +203,7 @@ class BaseProduct:
             # The substrings we're looking for are different depending on if we're searching for
             #  errors or warnings
             if err_type == "error":
-                indicators = np.array(["**ERROR", '**STOP', "Fortran runtime error", "NoSuchFile"])
+                indicators = np.array(["**ERROR", '**STOP', "Fortran runtime error", "NoSuchFile", 'syntax error'])
             else:
                 indicators = np.array(["**WARN"])
 
