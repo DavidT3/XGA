@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 1:04 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 2:25 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -33,8 +33,12 @@ class TestBaseSource(unittest.TestCase):
         """
         # Make a new local reference to the source class
         src = self.src
-        # We make some images that won't already exist
-        evtool_image(src, Quantity(0.3, 'keV'), Quantity(3, 'keV'))
+        # We make some images that won't already exist - separate ObsID but
+        #  combined instruments
+        evtool_image(src,
+                     Quantity(0.3, 'keV'),
+                     Quantity(3, 'keV'),
+                     combine_obs=False)
 
         # Use the get_test_source function we defined in the test init, but have it
         #  define a new instance of the test GalaxyCluster, so that it will
@@ -44,7 +48,8 @@ class TestBaseSource(unittest.TestCase):
         try:
             img = redef_src.get_images(lo_en=Quantity(0.3, 'keV'),
                                        hi_en=Quantity(3, 'keV'),
-                                       telescope='erass')
+                                       telescope='erass',
+                                       inst='combined')
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised.")
 
@@ -82,12 +87,14 @@ class TestBaseSource(unittest.TestCase):
         Testing _existing_xga_products() in BaseSource for spectra.
         """
         src = self.src
-        srctool_spectrum(src, 'r500', combine_obs=False)
+        srctool_spectrum(src, 'r500', combine_obs=False, combine_tm=True)
 
         redef_src = get_test_source("all", shared=False)
 
         try:
-            spec = redef_src.get_spectra('r500', telescope='erass')
+            spec = redef_src.get_spectra('r500',
+                                         inst='combined',
+                                         telescope='erass')
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised.")
 

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 10:14 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 3:07 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy, copy
@@ -264,10 +264,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 # We made sure that the images we need have been generated in the
                 #  setup steps of the _spec_cmds function
                 if use_combine_obs and (len(source.obs_ids[evt_list.telescope]) > 1):
+                    # WE CURRENTLY ALWAYS USE THE COMBINED OBS COMBINED INST IMAGE AS
+                    #  THE EXTENT MAP (inst="combined"), EVEN IF WE ARE MAKING SPECTRA
+                    #  THAT HAVE OBS COMBINED AND TMs SEPARATE.
                     im = source.get_combined_images(lo_en=EROSITA_EXTMAP_LO_EN,
                                                     hi_en=EROSITA_EXTMAP_HI_EN,
                                                     telescope=evt_list.telescope,
-                                                    inst=inst)
+                                                    inst="combined")
                 else:
                     # We only need the image path for extended source generation
                     im = source.get_images(cur_evt_list.obs_id,
