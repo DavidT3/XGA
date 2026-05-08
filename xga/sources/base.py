@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 12:30 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 11:20 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -2285,7 +2285,9 @@ class BaseSource:
                              f" None or BOTH an Astropy quantity.")
 
         # If we are looking for a PSF corrected image/ratemap then we assemble the extra key with PSF details
-        if psf_corr and prod_type in ["image", "ratemap"]:
+        #  The use of np.char like that means we can catch when the product type has been
+        #  passed as 'combined_image' and 'combined_ratemap' as well
+        if psf_corr and (np.char.find(prod_type, ['image', 'ratemap']) != -1).any():
             extra_key = "_" + psf_model + "_" + str(psf_bins) + "_" + psf_algo + str(psf_iter)
 
         if not psf_corr and with_lims:
