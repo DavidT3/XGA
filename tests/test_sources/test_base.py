@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 12:31 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 1:04 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -10,8 +10,7 @@ from xga.generate.esass import evtool_image
 from xga.generate.esass import srctool_spectrum
 from xga.products.phot import Image
 from xga.products.spec import Spectrum
-from xga.sources import GalaxyCluster
-from .. import SRC_INFO, get_test_source, EXPECTED_ERO_OBS, EXPECTED_XMM_OBS
+from .. import get_test_source, EXPECTED_ERO_OBS, EXPECTED_XMM_OBS
 
 
 class TestBaseSource(unittest.TestCase):
@@ -85,14 +84,14 @@ class TestBaseSource(unittest.TestCase):
         src = self.src
         srctool_spectrum(src, 'r500', combine_obs=False)
 
-        del(src)
+        redef_src = get_test_source("all", shared=False)
 
-        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erass': Quantity(3.6, 'deg')})
+        try:
+            spec = redef_src.get_spectra('r500', telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
-        spec = src.get_spectra('r500', telescope='erass')
-
+        assert type(spec) == list
         assert all(isinstance(sp, Spectrum) for sp in spec)
 
     def test_existing_prods_loaded_in_comb_spectra(self):
@@ -102,13 +101,14 @@ class TestBaseSource(unittest.TestCase):
         src = self.src
         srctool_spectrum(src, 'r500', combine_obs=True)
 
-        del(src)
+        redef_src = get_test_source("all", shared=False)
 
-        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erass': Quantity(3.6, 'deg')})
-
-        spec = src.get_combined_spectra('r500', inst='combined', telescope='erass')
+        try:
+            spec = redef_src.get_combined_spectra('r500',
+                                                  inst='combined',
+                                                  telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
         assert isinstance(spec, Spectrum)
 
@@ -119,13 +119,14 @@ class TestBaseSource(unittest.TestCase):
         src = self.src
         srctool_spectrum(src, 'r500', combine_obs=True, combine_tm=False)
 
-        del(src)
+        redef_src = get_test_source("all", shared=False)
 
-        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                                     name=SRC_INFO['name'], use_peak=False,
-                                     search_distance={'erass': Quantity(3.6, 'deg')})
-
-        spec = src.get_combined_spectra('r500', telescope='erass', inst='tm1')
+        try:
+            spec = redef_src.get_combined_spectra('r500',
+                                                  telescope='erass',
+                                                  inst='tm1')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
         assert isinstance(spec, Spectrum)
         assert spec.instrument == 'tm1'
