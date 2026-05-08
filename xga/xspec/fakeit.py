@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 13:57. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 10:10 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -135,27 +135,30 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
 
             # Find matching spectrum objects associated with the current source,
             # and checking if they are valid
-            if tel in ['erosita', 'erass'] and len(source.obs_ids[tel]) > 1:
-                # For eROSITA with multiple observations, we need combined-obs spectra to avoid duplicated events
-                # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument
-                if stacked_spectra:
-                    # Multi-obs + multi-inst combined (obs_id='combined', inst='combined')
-                    search_inst = 'combined'
+            if tel in ['erosita', 'erass']:
+                if len(source.obs_ids[tel]) > 1:
+                    search_obs_id = 'combined'
                 else:
-                    # Multi-obs + individual insts (obs_id='combined', inst=<specific>)
-                    search_inst = None
+                    search_obs_id = None
 
-                spec_objs = source.get_spectra(out_rad_vals[s_ind], obs_id='combined', inst=search_inst,
+                # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
+                # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument.
+                # Due to strict instrument filtering in get_spectra, inst=None will only return 'real' TMs.
+                search_inst = 'combined' if stacked_spectra else None
+
+                spec_objs = source.get_spectra(out_rad_vals[s_ind], obs_id=search_obs_id, inst=search_inst,
                                                inner_radius=inn_rad_vals[s_ind],
                                                group_spec=group_spec, min_counts=min_counts,
                                                min_sn=min_sn, telescope=tel)
             else:
-                # Single observation (or non-eROSITA): use regular spectra
-                # For multi-instrument stacking, inst='combined' retrieves single-obs multi-inst products
-                search_inst = 'combined' if stacked_spectra else None
+                # For all missions that don't support stacking spectra
+                # search_inst = 'combined' if stacked_spectra else None
+                search_inst = None
+
                 spec_objs = source.get_spectra(out_rad_vals[s_ind], inner_radius=inn_rad_vals[s_ind],
-                                                group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                                over_sample=over_sample, telescope=tel, inst=search_inst)
+                                               group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                               over_sample=over_sample, telescope=tel, inst=search_inst)
+
             # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
             #  a cluster with only a single valid instrument for a single valid observation this may not be the case
             if isinstance(spec_objs, Spectrum):
