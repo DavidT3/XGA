@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/4/26, 12:21 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:15 PM. Copyright (c) The Contributors.
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -41,7 +41,7 @@ def esass_call(esass_func):
 
         # This is the output from whatever function this is a decorator for
         cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = esass_func(*args, **kwargs)
-        
+
         src_lookup = {}
         all_run = []  # Combined command list for all sources
         all_type = []  # Combined expected type list for all sources

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:12 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -228,6 +228,12 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             #  with every else in the temporary working directory
             cmd_str += "; rm {esym}".format(esym=evt_symlink_name)
 
+            # Depending on the eSASS version, we may have built up a ';;' somewhere in the command string,
+            #  which is very bad - this is introduced because some versions of eSASS have a null string
+            #  for remove_merged_cmd and remove_all_but_merged_cmd. This is a very lazy solution, but it will
+            #  do for now (famous last words)
+            cmd_str = cmd_str.replace(";;", ";")
+
             # Adds clean up commands to move all generated files and remove temporary directory
             cmd_str += "; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(d=dest_dir)
 
@@ -327,13 +333,7 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     lc_cmd = 'cd {d}; srctool eventfiles="{ef}" srccoord="{sc}" todo="LC LCCORR" ' \
              'srcreg="{reg}" exttype="POINT" tstep={ts} insts={i} psftype="2D_PSF" ' \
              'lctype="{lct}" lcpars="{lcp}" lcemin="{le}" lcemax="{lm}" ' \
-             'lcgamma="{lcg}" backreg="{breg}" pat_sel="{pat}";'
-
-    # The DR1 version of eSASS has an additional argument that can be passed to specify
-    #  which instruments should be written to output files - we want to be able to
-    #  set that to avoid some warnings that clog up the logs
-    if ESASS_VERSION == "ESASS4DR1":
-        lc_cmd += " writeinsts={wi}"
+             'lcgamma="{lcg}" backreg="{breg}" pat_sel="{pat}"'
 
     # From eSASS documentation:
     # "LC gamma - this parameter gives the photon index of the nominal power-law spectrum that will be used to
@@ -345,14 +345,30 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
     #  we assume is the default - gamma=1.9
     lc_gamma = '1.9'
 
+    # The DR1 version of eSASS has an additional argument that can be passed to specify
+    #  which instruments should be written to output files - we want to be able to
+    #  set that to avoid some warnings that clog up the logs
+    if ESASS_VERSION == "ESASS4DR1":
+        lc_cmd += " writeinsts={wi};"
+
+        # Null versions of the extra commands set up below for eSASS4EDR
+        remove_merged_cmd = ""
+        remove_all_but_merged_cmd = ""
+
+    elif ESASS_VERSION == "ESASS4EDR":
+        # Ridiculous really, but ensures that the light curve generation command has the
+        #  right divider on the end because this way of setting up terminal commands is
+        #  horrible
+        lc_cmd += ";"
+        # Having a string to remove the 'merged' lightcurves that srctool outputs, even when you only
+        #  request one instrument
+        remove_merged_cmd = 'rm *srctoolout_0*;'
+        # We also set up a command that will remove all lightcurves BUT the combined one, for when that is all the
+        #  user wants
+        remove_all_but_merged_cmd = "rm *srctoolout_*;"
+
     # You can't control the whole name of the output of srctool, so this renames it to the XGA format
     rename_cmd = 'mv srctoolout_{i_no}??_{type}* {nn};'
-    # Having a string to remove the 'merged' lightcurves that srctool outputs, even when you only
-    #  request one instrument
-    remove_merged_cmd = 'rm *srctoolout_0*;'
-    # We also set up a command that will remove all lightcurves BUT the combined one, for when that is all the
-    #  user wants
-    remove_all_but_merged_cmd = "rm *srctoolout_*;"
 
     stack = False  # This tells the esass_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
