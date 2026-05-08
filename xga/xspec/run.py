@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/12/2025, 17:27. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 10:55 AM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -12,6 +12,7 @@ from typing import Tuple, Union
 from warnings import warn
 
 import fitsio
+import numpy as np
 import pandas as pd
 from fitsio import FITS
 from tqdm import tqdm
@@ -371,14 +372,37 @@ def xspec_call(xspec_func):
                     # First two columns are skipped because they are energy limits
                     combos = list(set([c.split("_")[1] for c in res_table.columns[2:]]))
                     # Getting the spectra for each column, then assigning rates and lums
-                    # TODO this could be neater and better generalised
+                    # TODO this could be neater and better generalised - THIS WHOLE FUNCTION/SETUP
+                    #  IS AWFUL AND NEEDS BURNING DOWN AND REPLACING
                     for comb in combos:
-                        if tel in ['erosita', 'erass'] and len(s.obs_ids[tel]) == 1:
-                            spec = s.get_products("spectrum", comb[:6], comb[6:], extra_key=storage_key,
-                                                telescope=tel)[0]
-                        elif tel in ['erosita', 'erass']:
-                            spec = s.get_products("combined_spectrum", comb[:6], comb[6:], extra_key=storage_key,
-                                                telescope=tel)[0]
+
+                        # Deal with peculiarities of eROSITA first
+                        if tel in ['erosita', 'erass']:
+                            # If the comb string begins and ends with combined, and is longer than just "combined" (as
+                            #  if comb just equaled "combined" both startswith and endswith would return True - though
+                            #  that should never happen) then we set the current ObsID and instrument accordingly.
+                            if ((np.char.startswith(comb, "combined") and np.char.endswith(comb, "combined"))
+                                    and len(comb) != len("combined")):
+                                comb_oi = "combined"
+                                comb_inst = "combined"
+                            # Get this paranoid check out the way, it should never be triggered (we hope)
+                            elif ((np.char.startswith(comb, "combined") and np.char.endswith(comb, "combined"))
+                                  and len(comb) == len("combined")):
+                                raise XGADeveloperError(f"The 'comb' string used for conversion factor assignment "
+                                                        f"somehow consists just of {comb}.")
+                            # Now we deal with the cases of one or the other of ObsID and instrument being combined
+                            else:
+                                comb_oi = "combined" if np.char.startswith(comb, "combined") else comb[:6]
+                                comb_inst = "combined" if np.char.endswith(comb, "combined") else comb[6:]
+
+                            # Now onto retrieving spectra
+                            if len(s.obs_ids[tel]) == 1:
+                                spec = s.get_products("spectrum", comb_oi, comb_inst, extra_key=storage_key,
+                                                      telescope=tel)[0]
+                            else:
+                                spec = s.get_products("combined_spectrum", comb_oi, comb_inst, extra_key=storage_key,
+                                                      telescope=tel)[0]
+                        # Now Chandra
                         elif tel == 'chandra':
                             # We know that only ACIS is supported by XGA currently, so we can split on it to
                             #  get the correct ObsID (Chandra ObsIDs are not necessarily all the same
