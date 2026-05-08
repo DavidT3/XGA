@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:16 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:23 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -43,21 +43,23 @@ class TestEsassLcFuncs(unittest.TestCase):
         """
         Testing srctool_lightcurve with the arguments combine_insts=True and combine_obs=False
         """
+        # Run the light curve generation - one light curve per eROSITA Obs, combining all TMs
         srctool_lightcurve(self.src, 'r500', combine_tm=True, combine_obs=False)
 
-        lc = self.src.get_lightcurves('r500', telescope='erass', inst='combined')
+        try:
+            lc = self.src.get_lightcurves('r500', telescope='erass', inst='combined')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
-        if isinstance(lc, list):
-            for l in lc:
-                assert isinstance(l, LightCurve)
-                assert l.telescope == 'erass'
-                assert l.obs_id != 'combined'
-                assert l.instrument == 'combined'
-        else:
-            assert isinstance(lc, LightCurve)
-            assert lc.telescope == 'erass'
-            assert lc.obs_id != 'combined'
-            assert lc.instrument == 'combined'
+        # There should be more than one light curve returned in this test, so the
+        #  lc variable should be a list of LightCurve instances
+        assert type(lc) == list
+
+        for l in lc:
+            assert isinstance(l, LightCurve)
+            assert l.telescope == 'erass'
+            assert l.obs_id != 'combined'
+            assert l.instrument == 'combined'
 
 
     @require_esass
