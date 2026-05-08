@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 10:14 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy, copy
@@ -266,13 +266,15 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 if use_combine_obs and (len(source.obs_ids[evt_list.telescope]) > 1):
                     im = source.get_combined_images(lo_en=EROSITA_EXTMAP_LO_EN,
                                                     hi_en=EROSITA_EXTMAP_HI_EN,
-                                                    telescope=evt_list.telescope)
+                                                    telescope=evt_list.telescope,
+                                                    inst=inst)
                 else:
                     # We only need the image path for extended source generation
                     im = source.get_images(cur_evt_list.obs_id,
                                            lo_en=EROSITA_EXTMAP_LO_EN,
                                            hi_en=EROSITA_EXTMAP_HI_EN,
-                                           telescope=evt_list.telescope)
+                                           telescope=evt_list.telescope,
+                                           inst=inst)
 
                 # As with the paths to the event lists, it is possible that the image
                 #  file names will be too long for eSASS' srctool to handle. To
