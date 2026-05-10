@@ -1,11 +1,13 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:35 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:07 PM. Copyright (c) The Contributors.
 
 import unittest
 
 from astropy.units import Quantity
 
+from xga.exceptions import NoProductAvailableError
 from xga.generate.esass.phot import evtool_image, expmap
+from xga.products import Image
 from xga.samples import ClusterSample
 from .. import get_test_source, CLUSTER_SMP
 from ..utils import require_esass
@@ -16,32 +18,58 @@ class TestEsassPhotFuncs(unittest.TestCase):
     def setUpClass(cls):
         cls.src = get_test_source('erass')
 
+        # Set the lower and upper energy bounds of the phot products generated and retrieved
+        #  in the tests implemented in this class
+        cls._phot_lo_en = Quantity(0.4, "keV")
+        cls._phot_hi_en = Quantity(3.0, "keV")
+
     @require_esass
     def test_evtool_image(self):
-        evtool_image(self.src, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
+        """
+        Generates and retrieves one image per eROSITA ObsID (tile), with TMs combined, associated
+        with the source - then retrieves the image.
+        """
+        # Generate one image per ObsID, with TMs combined
+        evtool_image(self.src, self._phot_lo_en, self._phot_hi_en)
 
-        im = self.src.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'),
-                                      telescope='erass')[0]
-        if isinstance(im, list):
-            for i in im:
-                assert i.telescope == 'erass'
-                assert i.energy_bounds[0] == Quantity(0.4, 'keV')
-                assert i.energy_bounds[1] == Quantity(3, 'keV')
-        else:
-            assert im.telescope == 'erass'
-            assert im.energy_bounds[0] == Quantity(0.4, 'keV')
-            assert im.energy_bounds[1] == Quantity(3, 'keV')
+        try:
+            im = self.src.get_images(lo_en=self._phot_lo_en,
+                                     hi_en=self._phot_hi_en,
+                                     telescope='erass',
+                                     inst='combined')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
+        # We should have retrieved multiple images, so the return should be a list
+        assert type(im) == list
+
+        # Cycle through and check some properties of what was returned
+        for cur_im in im:
+            assert type(im) == Image
+            assert cur_im.telescope == 'erass'
+            assert cur_im.energy_bounds[0] == self._phot_lo_en
+            assert cur_im.energy_bounds[1] == self._phot_hi_en
 
     @require_esass
     def test_evtool_image_combined_obs(self):
-        evtool_image(self.src, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
+        """
+        Generates and retrieves eROSITA images with all available ObsIDs and TMs combined.
+        """
+        # Generate combined-Obs combined-TM image
+        evtool_image(self.src, self._phot_lo_en, self._phot_lo_en, combine_obs=True)
 
-        im = self.src.get_combined_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'),
-                                      telescope='erass')
+        try:
+            im = self.src.get_combined_images(lo_en=self._phot_lo_en,
+                                              hi_en=self._phot_hi_en,
+                                              telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
+        # Single combined-obs combined-TM image should have been generated/fetched
+        assert type(im) == Image
         assert im.telescope == 'erass'
-        assert im.energy_bounds[0] == Quantity(0.5, 'keV')
-        assert im.energy_bounds[1] == Quantity(3, 'keV')
+        assert im.energy_bounds[0] == self._phot_lo_en
+        assert im.energy_bounds[1] == self._phot_hi_en
 
     @require_esass
     def test_expmap(self):
