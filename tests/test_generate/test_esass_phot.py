@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:18 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -73,15 +73,30 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
     @require_esass
     def test_expmap(self):
-        expmap(self.src, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
+        """
+        Test generation and retrieval of eROSITA exposure maps for each Obs associated with
+        the source, with TMs combined.
+        """
+        # Generate new eROSITA exposure maps, one per ObsID, with TMs combined
+        expmap(self.src, self._phot_lo_en, self._phot_lo_en)
 
-        exp = self.src.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'),
-                                      telescope='erass')
+        try:
+            exp = self.src.get_expmaps(lo_en=self._phot_lo_en,
+                                       hi_en=self._phot_hi_en,
+                                       telescope='erass',
+                                       inst='combined')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
-        for e in exp:
-            assert e.telescope == 'erass'
-            assert e.energy_bounds[0] == Quantity(0.4, 'keV')
-            assert e.energy_bounds[1] == Quantity(3, 'keV')
+        # We know that multiple exposure maps should be retrieved, so check that
+        #  the return is a list
+        assert type(exp) == list
+
+        # Cycle through and check the exposure maps
+        for cur_ex in exp:
+            assert cur_ex.telescope == 'erass'
+            assert cur_ex.energy_bounds[0] == self._phot_lo_en
+            assert cur_ex.energy_bounds[1] == self._phot_hi_en
 
     @require_esass
     def test_expmap_combined_obs(self):
