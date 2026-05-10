@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:12 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -45,7 +45,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
 
         # Cycle through and check some properties of what was returned
         for cur_im in im:
-            assert type(im) == Image
+            assert type(cur_im) == Image
             assert cur_im.telescope == 'erass'
             assert cur_im.energy_bounds[0] == self._phot_lo_en
             assert cur_im.energy_bounds[1] == self._phot_hi_en
