@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:19 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -78,7 +78,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
         the source, with TMs combined.
         """
         # Generate new eROSITA exposure maps, one per ObsID, with TMs combined
-        expmap(self.src, self._phot_lo_en, self._phot_lo_en)
+        expmap(self.src, self._phot_lo_en, self._phot_hi_en)
 
         try:
             exp = self.src.get_expmaps(lo_en=self._phot_lo_en,
