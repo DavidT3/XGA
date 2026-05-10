@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:08 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -38,7 +38,7 @@ class TestSetupFuncs(unittest.TestCase):
 
     def test_setup_inv_abel_dens_onion_temp(self):
         res = _setup_inv_abel_dens_onion_temp(self.src, Quantity(600, 'kpc'),
-                                              'beta', ' king', 'vikhlinin_temp',
+                                              'beta', 'king', 'vikhlinin_temp',
                                               Quantity(600, 'kpc'),
                                               stacked_spectra=True)
 
