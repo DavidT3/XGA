@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 3:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:27 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy, copy
@@ -273,11 +273,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                                                     inst="combined")
                 else:
                     # We only need the image path for extended source generation
+                    # ALSO ALWAYS USED COMBINED FOR INST HERE, SEE THE NOTE ABOVE
                     im = source.get_images(cur_evt_list.obs_id,
                                            lo_en=EROSITA_EXTMAP_LO_EN,
                                            hi_en=EROSITA_EXTMAP_HI_EN,
                                            telescope=evt_list.telescope,
-                                           inst=inst)
+                                           inst="combined")
 
                 # As with the paths to the event lists, it is possible that the image
                 #  file names will be too long for eSASS' srctool to handle. To
@@ -779,7 +780,6 @@ def srctool_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                      min_counts: int = 5, min_sn: float = None, num_cores: int = NUM_CORES,
                      disable_progress: bool = False, combine_tm: bool = True, combine_obs: bool = True, force_gen: bool = False):
-
     """
     A wrapper for all the eSASS and Heasoft processes necessary to generate an eROSITA spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
