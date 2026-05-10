@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:19 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:49 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -102,8 +102,11 @@ class TestEsassPhotFuncs(unittest.TestCase):
     def test_expmap_combined_obs(self):
         expmap(self.src, Quantity(0.5, 'keV'), Quantity(3, 'keV'), combine_obs=True)
 
-        exp = self.src.get_combined_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'),
-                                      telescope='erass')
+        try:
+            exp = self.src.get_combined_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(3, 'keV'),
+                                          telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
 
         assert exp.telescope == 'erass'
         assert exp.energy_bounds[0] == Quantity(0.5, 'keV')

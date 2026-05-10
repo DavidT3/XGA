@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:52 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -45,8 +45,12 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
             pass  # May not exist if TM1 not available
 
         # Retrieve multi-obs + combined inst
-        spec_comb = self.src.get_spectra(Quantity(500, 'kpc'), obs_id='combined', inst='combined',
-                                        group_spec=True, min_counts=5, telescope='erass')
+        try:
+            spec_comb = self.src.get_spectra(Quantity(500, 'kpc'), obs_id='combined', inst='combined',
+                                            group_spec=True, min_counts=5, telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving multi-obs combined eRASS spectrum.")
+
         assert spec_comb.obs_id == 'combined'
         assert spec_comb.instrument == 'combined'
 
@@ -68,16 +72,20 @@ class TestCombinedProductDisambiguation(unittest.TestCase):
         try:
             spec_direct = self.src.get_spectra(Quantity(500, 'kpc'), obs_id='combined', inst='combined',
                                              group_spec=True, min_counts=5, telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised by get_spectra(obs_id='combined')")
+
+        try:
             spec_wrapper = self.src.get_combined_spectra(Quantity(500, 'kpc'), inst='combined',
                                                        group_spec=True, min_counts=5, telescope='erass')
-
-            # Should be the same product
-            if not isinstance(spec_direct, list):
-                assert spec_direct.path == spec_wrapper.path
-            else:
-                assert len(spec_direct) == len(spec_wrapper)
         except NoProductAvailableError:
-            self.skipTest("Combined spectra not available")
+            self.fail("NoProductAvailableError raised by get_combined_spectra()")
+
+        # Should be the same product
+        if not isinstance(spec_direct, list):
+            assert spec_direct.path == spec_wrapper.path
+        else:
+            assert len(spec_direct) == len(spec_wrapper)
 
 
 if __name__ == "__main__":

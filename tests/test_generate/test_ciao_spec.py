@@ -1,9 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
 import unittest
 
-from xga.exceptions import TelescopeNotAssociatedError
+from xga.exceptions import TelescopeNotAssociatedError, NoProductAvailableError
 from xga.generate.ciao.spec import specextract_spectrum
 from xga.products import Spectrum
 from .. import get_test_source
@@ -38,16 +38,16 @@ class TestCiaoSpecFuncs(unittest.TestCase):
         # Try to retrieve the generated products
         try:
             spec = self.src.get_spectra('r500', telescope='chandra')
-            if isinstance(spec, list):
-                for s in spec:
-                    assert s.telescope == 'chandra'
-                    assert isinstance(s, Spectrum)
-            else:
-                assert spec.telescope == 'chandra'
-                assert isinstance(spec, Spectrum)
-        except Exception:
-            # If retrieval fails, that's OK for now - at least generation didn't crash
-            pass
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving Chandra spectra.")
+
+        if isinstance(spec, list):
+            for s in spec:
+                assert s.telescope == 'chandra'
+                assert isinstance(s, Spectrum)
+        else:
+            assert spec.telescope == 'chandra'
+            assert isinstance(spec, Spectrum)
 
 
 if __name__ == "__main__":

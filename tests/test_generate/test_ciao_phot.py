@@ -1,11 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
 import unittest
 
 from astropy.units import Quantity
 
-from xga.exceptions import TelescopeNotAssociatedError
+from xga.exceptions import TelescopeNotAssociatedError, NoProductAvailableError
 from xga.generate.ciao.phot import chandra_image_expmap
 from xga.products import Image
 from .. import get_test_source
@@ -41,20 +41,20 @@ class TestCiaoPhotFuncs(unittest.TestCase):
         try:
             im = self.src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'),
                                          telescope='chandra')
-            if isinstance(im, list):
-                for i in im:
-                    assert i.telescope == 'chandra'
-                    assert i.energy_bounds[0] == Quantity(0.5, 'keV')
-                    assert i.energy_bounds[1] == Quantity(2.0, 'keV')
-                    assert isinstance(i, Image)
-            else:
-                assert im.telescope == 'chandra'
-                assert im.energy_bounds[0] == Quantity(0.5, 'keV')
-                assert im.energy_bounds[1] == Quantity(2.0, 'keV')
-                assert isinstance(im, Image)
-        except Exception:
-            # If retrieval fails, that's OK for now - at least generation didn't crash
-            pass
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving Chandra images.")
+
+        if isinstance(im, list):
+            for i in im:
+                assert i.telescope == 'chandra'
+                assert i.energy_bounds[0] == Quantity(0.5, 'keV')
+                assert i.energy_bounds[1] == Quantity(2.0, 'keV')
+                assert isinstance(i, Image)
+        else:
+            assert im.telescope == 'chandra'
+            assert im.energy_bounds[0] == Quantity(0.5, 'keV')
+            assert im.energy_bounds[1] == Quantity(2.0, 'keV')
+            assert isinstance(im, Image)
 
 
 if __name__ == "__main__":

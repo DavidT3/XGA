@@ -1,11 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
 import unittest
 
 from astropy.units import Quantity
 
-from xga.exceptions import TelescopeNotAssociatedError
+from xga.exceptions import TelescopeNotAssociatedError, NoProductAvailableError
 from xga.generate.sas.phot import evselect_image, eexpmap, emosaic
 from xga.products import Image, ExpMap
 from .. import get_test_source
@@ -34,8 +34,12 @@ class TestSasPhotFuncs(unittest.TestCase):
     def test_evselect_image(self):
         evselect_image(self.src, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
 
-        im = self.src.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
-                                      telescope='xmm')
+        try:
+            im = self.src.get_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'),
+                                          telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if isinstance(im, list):
             for i in im:
                 assert i.telescope == 'xmm'
@@ -52,8 +56,12 @@ class TestSasPhotFuncs(unittest.TestCase):
     def test_eexpmap(self):
         eexpmap(self.src, Quantity(0.4, 'keV'), Quantity(3, 'keV'))
 
-        exp = self.src.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
-                                       telescope='xmm')
+        try:
+            exp = self.src.get_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'),
+                                           telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if isinstance(exp, list):
             for e in exp:
                 assert e.telescope == 'xmm'
@@ -70,13 +78,17 @@ class TestSasPhotFuncs(unittest.TestCase):
     def test_emosaic_incorrect_input(self):
         with self.assertRaises(ValueError):
             emosaic(self.src, 'wrong')
-    
+
     @require_sas
     def test_emosaic_image(self):
         emosaic(self.src, 'image', lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'))
-        
-        im = self.src.get_combined_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
-                                               telescope='xmm')
+
+        try:
+            im = self.src.get_combined_images(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'),
+                                                   telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if isinstance(im, list):
             for i in im:
                 assert i.telescope == 'xmm'
@@ -93,9 +105,13 @@ class TestSasPhotFuncs(unittest.TestCase):
     @require_sas
     def test_emosaic_expmap(self):
         emosaic(self.src, 'expmap', lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'))
-        
-        exp = self.src.get_combined_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'), 
-                                               telescope='xmm')
+
+        try:
+            exp = self.src.get_combined_expmaps(lo_en=Quantity(0.4, 'keV'), hi_en=Quantity(3, 'keV'),
+                                                   telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if isinstance(exp, list):
             for e in exp:
                 assert e.telescope == 'xmm'

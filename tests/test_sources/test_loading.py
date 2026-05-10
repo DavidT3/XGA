@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:36 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
 import unittest
 
 from astropy.units import Quantity
 
+from xga.exceptions import NoProductAvailableError
 from xga.generate.ciao.phot import chandra_image_expmap
 from xga.generate.ciao.spec import specextract_spectrum
 from xga.generate.sas.phot import evselect_image, eexpmap
@@ -36,7 +37,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'xmm': Quantity(30, 'arcmin')}, load_profiles=False)
 
         # Retrieve and verify
-        imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='xmm')
+        try:
+            imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -60,7 +65,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'xmm': Quantity(30, 'arcmin')}, load_profiles=False)
 
         # Retrieve and verify
-        exps = src.get_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='xmm')
+        try:
+            exps = src.get_expmaps(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(exps, list):
             exps = [exps]
 
@@ -83,7 +92,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'xmm': Quantity(30, 'arcmin')}, load_profiles=False)
 
         # Retrieve and verify
-        specs = src.get_spectra('r500', telescope='xmm')
+        try:
+            specs = src.get_spectra('r500', telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(specs, list):
             specs = [specs]
 
@@ -107,7 +120,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'erass': Quantity(3.6, 'deg')}, load_profiles=False)
 
         # Retrieve and verify
-        imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='erass')
+        try:
+            imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -132,7 +149,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'erass': Quantity(3.6, 'deg')}, load_profiles=False)
 
         # Retrieve and verify
-        specs = src.get_spectra('r500', telescope='erass')
+        try:
+            specs = src.get_spectra('r500', telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(specs, list):
             specs = [specs]
 
@@ -156,7 +177,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'chandra': Quantity(10, 'arcmin')}, load_profiles=False)
 
         # Retrieve and verify
-        imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='chandra')
+        try:
+            imgs = src.get_images(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2.0, 'keV'), telescope='chandra')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -180,7 +205,11 @@ class TestProductLoading(unittest.TestCase):
                             search_distance={'chandra': Quantity(10, 'arcmin')}, load_profiles=False)
 
         # Retrieve and verify
-        specs = src.get_spectra('r500', telescope='chandra')
+        try:
+            specs = src.get_spectra('r500', telescope='chandra')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised.")
+
         if not isinstance(specs, list):
             specs = [specs]
 

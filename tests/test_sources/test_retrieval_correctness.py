@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
 
 import unittest
 
 from astropy.units import Quantity
 
+from xga.exceptions import NoProductAvailableError
 from xga.generate.esass.phot import evtool_image, combine_phot_prod
 from xga.generate.sas.phot import evselect_image, emosaic
 from .. import get_test_source
@@ -28,7 +29,11 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
 
         # 1. Request specific instrument
         # Should return only PN/MOS1/MOS2 images, NOT the combined one
-        imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='xmm')
+        try:
+            imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving individual XMM images.")
+
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -37,7 +42,11 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
             self.assertNotEqual(im.obs_id, 'combined')
 
         # 2. Request combined instrument
-        comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='xmm')
+        try:
+            comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='xmm')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving combined XMM image.")
+
         self.assertEqual(comb_img.instrument, 'combined')
         self.assertEqual(comb_img.obs_id, 'combined')
 
@@ -55,7 +64,11 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
         combine_phot_prod(self.src, 'image', lo, hi)
 
         # 1. Request individual images
-        imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='erass')
+        try:
+            imgs = self.src.get_images(lo_en=lo, hi_en=hi, telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving individual eRASS images.")
+
         if not isinstance(imgs, list):
             imgs = [imgs]
 
@@ -63,7 +76,11 @@ class TestProductRetrievalCorrectness(unittest.TestCase):
             self.assertNotEqual(im.obs_id, 'combined', "Retrieved combined image when individual ones expected")
 
         # 2. Request combined image
-        comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='erass')
+        try:
+            comb_img = self.src.get_combined_images(lo_en=lo, hi_en=hi, telescope='erass')
+        except NoProductAvailableError:
+            self.fail("NoProductAvailableError raised when retrieving combined eRASS image.")
+
         # Should return the combined one
         if isinstance(comb_img, list):
             comb_img = comb_img[0]
