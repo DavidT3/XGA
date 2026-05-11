@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 9:43 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 12:14 PM. Copyright (c) The Contributors.
 
 import os
 import warnings
@@ -17,7 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError, \
-    FailedProductError
+    FailedProductError, ProductNotUsableError
 from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
 from ..utils import dict_search
 
@@ -1786,9 +1786,11 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         # Get the unique telescope names associated with the passed spectral components
         all_spec_tels = set([s.telescope for s in spectra])
+
         # This should happen in the super init I think, but we'll have to do the check here as well for safety
         if len(all_spec_tels) == 0:
             raise ValueError("No spectra have been passed to the AnnularSpectra class.")
+
         # Currently we only support one telescope per AnnularSpectra
         elif len(all_spec_tels) > 1:
             raise NotImplementedError(f"AnnularSpectra comprised of spectra from multiple telescopes ({all_spec_tels}) are not "
@@ -1797,6 +1799,16 @@ class AnnularSpectra(BaseAggregateProduct):
             # Given the check above, we know that all the spectra are from the same telescope, so we just take
             #  the telescope name from the first one
             telescope = spectra[0].telescope
+
+        # We need to check that all the passed spectra are usable - it is particularly important for spectra, as
+        #  they actually need several different files to exist to be usable, so checking the main product
+        #  path exists (for instance) won't cut it. Besides, why do it again when the Spectrum
+        #  instances already did.
+        not_usable_reasons = {s: s.not_usable_reasons for s in spectra if not s.usable}
+        if len(not_usable_reasons) != 0:
+            not_usable_formatted = "\n".join([f"{os.path.basename(s.path)}: \n{nur}"
+                                              for s, nur in not_usable_reasons.items()])
+            raise ProductNotUsableError(f"Not all component spectra are usable:\n {not_usable_formatted}")
 
         super().__init__([s.path for s in spectra], 'annular_spectrum', "combined", "combined", telescope=telescope)
 
