@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 5:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 10:41 AM. Copyright (c) The Contributors.
 
 from functools import wraps
 from multiprocessing.dummy import Pool
@@ -157,9 +157,12 @@ def esass_call(esass_func):
                     ann_spec_comps[entry].append(product)
                 # In case they are components of an annular spectrum but they are either none or not usable
                 elif prod_type_str == "annular spectrum set components":
-                    warn("An annular spectrum component ({a}) for {o}{i} has not been generated properly, contact "
-                         "the development team if a eSASS error is not "
-                         "shown.".format(a=product.storage_key, o=product.obs_id, i=product.instrument), stacklevel=2)
+                    warn("An annular spectrum component ({a}) for {t} {o}{i} has not been generated properly (not usable "
+                         "reason - {nur}). The std_err entry is:\n\n {se}\n\n The std_out entry is:\n\n "
+                         "{so}".format(a=product.storage_key, t=product.telescope, o=product.obs_id,
+                                       i=product.instrument, nur=product.not_usable_reasons,
+                                       se=product.unprocessed_stderr, so=product.unprocessed_stdout), stacklevel=2)
+
                 # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
                 #  object that already exists in our source
                 elif prod_type_str == "cross arfs":
@@ -172,6 +175,17 @@ def esass_call(esass_func):
 
             if len(to_raise) != 0:
                 all_to_raise.append(to_raise)
+
+        # We raise the errors (though hopefully there aren't any) BEFORE setting up AnnularSpectra instances, as
+        #  if a product destined to be in an AnnularSpectra instace failed to generate properly then
+        #  the init of that class could fail and we'd never see the generation errors.
+        # Errors raised here should not be to do with eSASS generation problems, but other purely pythonic errors
+        for error in raised_errors:
+            raise error
+
+        # And here are all the errors during product generation, if any
+        if len(all_to_raise) != 0:
+            raise ProductGenerationError(all_to_raise)
 
         if prod_type_str == "annular spectrum set components":
             for entry in ann_spec_comps:
@@ -191,14 +205,6 @@ def esass_call(esass_func):
                     ann_spec.proper_radii = sources[ind].convert_radius(ann_spec.radii, 'kpc')
                 # And adding our exciting new set of annular spectra into the storage structure
                 sources[ind].update_products(ann_spec)
-
-        # Errors raised here should not be to do with eSASS generation problems, but other purely pythonic errors
-        for error in raised_errors:
-            raise error
-
-        # And here are all the errors during product generation, if any
-        if len(all_to_raise) != 0:
-            raise ProductGenerationError(all_to_raise)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.

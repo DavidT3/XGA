@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/7/26, 4:55 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 9:43 AM. Copyright (c) The Contributors.
 
 import os
 import warnings
@@ -1917,7 +1917,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #  aggregate product of all the relevant spectra. All fit results are stored on annular basis, then most
         #  will have different entries for different models
 
-        # The total exposure of the combined spectra, will be overwritten if multiple models are fit, but
+        # The total exposure of the combined spectra. Will be overwritten if multiple models are fit, but
         #  as its a property of the spectra and not the fit it should always be the same
         self._total_exp = {ai: None for ai in range(self._num_ann)}
         # These will be stored on a per model basis
