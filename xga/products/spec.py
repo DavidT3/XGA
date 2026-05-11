@@ -1542,8 +1542,8 @@ class Spectrum(BaseProduct):
     def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
              hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
              src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True, show_residuals: bool = False,
-             save_path: str = None):
+             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True, 
+             models: Union[None, str, List[str]] = None, show_residuals: bool = False, save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1572,12 +1572,29 @@ class Spectrum(BaseProduct):
             fontsize will be fontsize + 1. Default is 14.
         :param bool show_model_fits: Whether any models fit to the spectrum by XSPEC should be shown. Default is
             True, but will be set to False if no fits have been performed.
+        :param None/str/List[str] models: Name(s) of model(s) to be plotted on the output figure, if `show_model_fits=True`. 
         :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
             the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
         """
+        # TODO once merged into main we can check input model names against the new 'fitted_models' property
+        #  of Spectrum. May need to refactor this function as well, to account for new storage structures.
+        # Process and validate the input given for 'models'
+        if models is None:
+            models = list(self._plot_data.keys())
+        elif isinstance(models, (str, list)):
+            # Normalize input so that we have a list of strings, even if a single string was passed
+            models = models if isinstance(list) else [models]
 
+            # Check the validity of the specified model names
+            mod_not_fit = [cur_mod for cur_mod in models if cur_mod not in self._plot_data]
+            if len(mod_not_fit) != 0:
+                raise ModelNotAssociatedError(f"Some values passed to 'models' are not valid for this spectrum - {mod_not_fit}")
+                 
+        else:
+            raise TypeError("The 'models' argument must either be None, a string, or a list of strings.")
+                 
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
         #  associated with this Spectrum instance has actually been grouped - if not then we automatically
         #  set the method argument to False
@@ -1613,7 +1630,7 @@ class Spectrum(BaseProduct):
 
         # If the call to this method requested that models be plotted, we need to just make sure that there are models
         #  available, because the default is True, but we can look at spectra prior to fitting now
-        if show_model_fits and len(self._plot_data) == 0:
+        if show_model_fits and len(models) == 0:
             # If there are no model data to plot, we set this to False
             show_model_fits = False
         elif show_model_fits and not energy:
@@ -1622,7 +1639,7 @@ class Spectrum(BaseProduct):
 
         # Residuals can only be shown if model fits are being displayed
         if show_residuals and not show_model_fits:
-            raise ValueError("Residuals can only be displayed when show_model_fits is True and a model has been fit.")
+            raise ValueError("Residuals can only be displayed when 'show_model_fits=True' and a model has been fit.")
 
         # Here we grab the count-rates of the channels in this spectrum - either straight from the property
         #  or the get_grouped_data() method
@@ -1683,7 +1700,7 @@ class Spectrum(BaseProduct):
         src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1]**2 + bck_rate[:, 1]**2)
 
         if show_residuals:
-            fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex=True,
+            fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex="column",
                                              gridspec_kw={'height_ratios': [3, 1]})
         else:
             fig = plt.figure(figsize=figsize)
@@ -1731,33 +1748,38 @@ class Spectrum(BaseProduct):
         else:
             # Set the axis labels
             ax.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-            if not show_residuals:
-                ax.set_xlabel("Energy [keV]", fontsize=fontsize)
+            # Can set the xlabel for the spectrum axis regardless of whether we're showing
+            #  residuals or not, as if we _are_ showing residuals then we set up the
+            #  subplots to share the x-axis.
+            ax.set_xlabel("Energy [keV]", fontsize=fontsize)
 
-            for mod_ind, mod in enumerate(self._plot_data):
-                x = self._plot_data[mod]["x"]
+            for mod_ind, cur_mod in enumerate(models):
+                x = self._plot_data[cur_mod]["x"]
                 sel_x = (x > lo_lim) & (x < hi_lim)
                 plot_x = x[sel_x]
 
+                # Only want to plot the spectrum data points once, rather than once per model
                 if mod_ind == 0:
-                    plot_y = self._plot_data[mod]["y"][sel_x]
-                    plot_xerr = self._plot_data[mod]["x_err"][sel_x]
-                    plot_yerr = self._plot_data[mod]["y_err"][sel_x]
-                    plot_mod = self._plot_data[mod]["model"][sel_x]
+                    plot_y = self._plot_data[cur_mod]["y"][sel_x]
+                    plot_xerr = self._plot_data[cur_mod]["x_err"][sel_x]
+                    plot_yerr = self._plot_data[cur_mod]["y_err"][sel_x]
 
                     ax.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
                                 label="Background subtracted source data", zorder=1)
-                else:
-                    plot_mod = self._plot_data[mod]["model"][sel_x]
+                
+                # Grab the fit model line data points for the current model name
+                plot_mod = self._plot_data[cur_mod]["model"][sel_x]
 
-                ax.plot(plot_x, plot_mod, label=mod, linewidth=1.5)
+                # Now plot the model line, capturing the return so we can make the residual data
+                #  points the same colour as the model line (if the user wants to plot residuals).
+                mod_line = ax.plot(plot_x, plot_mod, label=cur_mod, linewidth=1.5)
 
-                # Plot residuals if requested - using the first model only!
-                if show_residuals and mod_ind == 0:
+                # Plot residuals if requested 
+                if show_residuals:
                     residuals = plot_mod - plot_y
                     ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
-                                    fmt="k+", zorder=1)
-                    ax_res.axhline(0, color='red', linewidth=1, linestyle='--')
+                                    fmt="k+", capsize=1.2, zorder=1, color=mod_line[0].get_color())
+                    ax_res.axhline(0, color='black', linewidth=1, linestyle='--')
                     ax_res.set_ylabel("Residuals", fontsize=fontsize-2)
                     ax_res.set_xlabel("Energy [keV]", fontsize=fontsize)
                     ax_res.minorticks_on()
