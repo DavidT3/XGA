@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 6:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 7:35 AM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -56,7 +56,7 @@ class TestEsassPhotFuncs(unittest.TestCase):
         Generates and retrieves eROSITA images with all available ObsIDs and TMs combined.
         """
         # Generate combined-Obs combined-TM image
-        evtool_image(self.src, self._phot_lo_en, self._phot_lo_en, combine_obs=True)
+        evtool_image(self.src, self._phot_lo_en, self._phot_hi_en, combine_obs=True)
 
         try:
             im = self.src.get_combined_images(lo_en=self._phot_lo_en,
