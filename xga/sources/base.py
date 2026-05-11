@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 11:20 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 6:04 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -1374,8 +1374,8 @@ class BaseSource:
             back = prod_gen_path + '_backspec.fits'
 
             if tel in ['erosita', 'erass']:
-                back_rmf = prod_gen_path + '_backspec.rmf'
-                back_arf = prod_gen_path + '_backspec.arf'
+                back_rmf = prod_gen_path + '_back.rmf'
+                back_arf = prod_gen_path + '_back.arf'
                 rmf = prod_gen_path + '.rmf'
 
             else:
