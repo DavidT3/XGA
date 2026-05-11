@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 28/02/2025, 20:19. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 10:56 AM. Copyright (c) The Contributors.
 
 
 class eROSITAImplentationError(Exception):
@@ -792,3 +792,24 @@ class XGADeveloperError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'XGADeveloperError has been raised'
+
+
+class ProductNotUsableError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a product instance is unusable, for reasons specified in the
+        not_usable_reasons property.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'ProductNotUsableError has been raised'
