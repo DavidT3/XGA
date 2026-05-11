@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:25 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 4:53 PM. Copyright (c) The Contributors.
 
 import importlib
 import json
@@ -39,7 +39,7 @@ _LAZY_VARS = {
     'ESASS_VERSION', 'CIAO_AVAIL', 'CIAO_VERSION', 'CALDB_AVAIL',
     'CALDB_VERSION', 'XSPEC_VERSION', 'OUTPUT', 'NUM_CORES',
     'USABLE', 'VALID_CONFIG', 'CENSUS_FILES', 'BLACKLIST_FILES',
-    'SASERROR_LIST', 'SASWARNING_LIST', 'XSPEC_FIT_METHOD', 'ABUND_TABLES'
+    'ABUND_TABLES'
 }
 # This set contains any variables from _LAZY_VARS that should NOT be exposed at the top level
 #  of the xga module (i.e. via xga.VAR_NAME). This allows for internal lazy variables in utils.py.
