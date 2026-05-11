@@ -1,20 +1,240 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 6:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 1:05 PM. Copyright (c) The Contributors.
 
 import os
 import sys
+from functools import wraps
+from multiprocessing.dummy import Pool
 from subprocess import Popen, PIPE
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Callable
 from warnings import warn
 
 import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
+from tqdm import tqdm
+from xga.exceptions import XGADeveloperError, InvalidTelescopeError, ProductGenerationError
 
-from xga.exceptions import XGADeveloperError, InvalidTelescopeError
-from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList
+from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList, AnnularSpectra
 from ..products.lightcurve import LightCurve
+from ..samples.base import BaseSample
 from ..sources import BaseSource
+from ..sources.base import NullSource
+
+
+def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
+    """
+    This is a generic decorator for functions that produce command strings for mission-specific software (like SAS,
+    eSASS, or CIAO). It handles the setup of multiprocessing pools, the execution of commands, and the assignment
+    of resulting product objects to the relevant source objects.
+
+    :param str mission_name: The name of the mission/software being called (e.g., 'xmm', 'erosita', 'chandra').
+    :param Callable avail_check: A function that checks if the necessary software and environment variables are
+        available. Should raise an appropriate error if not.
+    """
+    # Using the standard XGA pretty names for the progress bar
+    from xga import PRETTY_TELESCOPE_NAMES
+    disp_name = PRETTY_TELESCOPE_NAMES[mission_name]
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Checking software is installed and available on the system
+            avail_check()
+
+            # The first argument of all of these mission software functions will be the source object (or a list of),
+            # so rather than return them from the function I'll just access them like this.
+            if isinstance(args[0], (BaseSource, NullSource)):
+                sources = [args[0]]
+            elif isinstance(args[0], (BaseSample, list)):
+                sources = args[0]
+            else:
+                raise TypeError("Please pass a source, NullSource, or sample object.")
+
+            # This is the output from whatever function this is a decorator for
+            cmd_list, to_stack, to_execute, cores, p_type, paths, extra_info, disable = func(*args, **kwargs)
+
+            src_lookup = {}
+            all_run = []  # Combined command list for all sources
+            all_type = []  # Combined expected type list for all sources
+            all_path = []  # Combined expected path list for all sources
+            all_extras = []  # Combined extra information list for all sources
+            source_rep = []  # For repr calls of each source object, needed for assigning products to sources
+            for ind in range(len(cmd_list)):
+                source = sources[ind]
+                if len(cmd_list[ind]) > 0:
+                    src_lookup[repr(source)] = ind
+                    # If there are commands to add to a source queue, then do it
+                    source.update_queue(cmd_list[ind], p_type[ind], paths[ind], extra_info[ind], to_stack)
+
+                # If we do want to execute the commands this time round, we read them out for all sources
+                # and add them to these master lists
+                if to_execute:
+                    to_run, expected_type, expected_path, extras = source.get_queue()
+                    all_run += to_run
+                    all_type += expected_type
+                    all_path += expected_path
+                    all_extras += extras
+                    source_rep += [repr(source)] * len(to_run)
+
+            # This is what the returned products get stored in before they're assigned to sources
+            results = {s: [] for s in src_lookup}
+            # Any errors raised shouldn't be software-specific, as they are stored within the product object.
+            raised_errors = []
+            # Making sure something is defined for this variable
+            prod_type_str = ""
+            if to_execute and len(all_run) > 0:
+                # Will run the commands locally in a pool
+                # This flattening logic is necessary for CIAO but safe for all
+                prod_type_str = ", ".join(set(np.array(all_type).flatten().tolist()))
+                with tqdm(total=len(all_run), desc="Generating {} products of type(s) ".format(disp_name) +
+                                                   prod_type_str, disable=disable) as gen, Pool(cores) as pool:
+                    def callback(results_in: Tuple[Union[BaseProduct, List[BaseProduct]], str]):
+                        """
+                        Callback function for the apply_async pool method, gets called when a task finishes
+                        and something is returned.
+                        :param Tuple[Union[BaseProduct, List[BaseProduct]], str] results_in: Results of the command call.
+                        """
+                        nonlocal gen  # The progress bar will need updating
+                        nonlocal results  # The dictionary the command call results are added to
+                        if results_in[0] is None:
+                            gen.update(1)
+                            return
+                        else:
+                            prod_obj, rel_src = results_in
+                            if isinstance(prod_obj, list):
+                                results[rel_src] += prod_obj
+                            else:
+                                results[rel_src].append(prod_obj)
+                            gen.update(1)
+
+                    def err_callback(err):
+                        """
+                        The callback function for errors that occur inside a task running in the pool.
+                        :param err: An error that occurred inside a task.
+                        """
+                        nonlocal raised_errors
+                        nonlocal gen
+                        nonlocal src_lookup
+                        nonlocal sources
+
+                        if err is not None:
+                            # We used a memory address laden source name representation when we adjusted the error
+                            # message in execute_cmd, so we'll replace it with an actual name here
+                            if len(err.args) == 1 and isinstance(err.args[0], str) and \
+                                    ' is the associated source' in err.args[0]:
+                                err_src_rep = err.args[0].split(' is the associated source')[0].split('- ')[-1].strip()
+                                act_src_name = sources[src_lookup[err_src_rep]].name
+                                err.args = (err.args[0].replace(err_src_rep, act_src_name),)
+                            elif len(err.args) > 1 and isinstance(err.args[1], str) and \
+                                    ' is the associated source' in err.args[1]:
+                                err_src_rep = err.args[1].split(' is the associated source')[0].split('- ')[-1].strip()
+                                act_src_name = sources[src_lookup[err_src_rep]].name
+                                err.args = (err.args[0], err.args[1].replace(err_src_rep, act_src_name))
+
+                            # Rather than throwing an error straight away I append them all to a list for later.
+                            raised_errors.append(err)
+                        gen.update(1)
+
+                    for cmd_ind, cmd in enumerate(all_run):
+                        # These are just the relevant entries in all these lists for the current command
+                        exp_type = all_type[cmd_ind]
+                        exp_path = all_path[cmd_ind]
+                        ext = all_extras[cmd_ind]
+                        src = source_rep[cmd_ind]
+
+                        pool.apply_async(execute_cmd, args=(str(cmd), exp_type, exp_path, ext, src),
+                                         error_callback=err_callback, callback=callback)
+                    pool.close()  # No more tasks can be added to the pool
+                    pool.join()  # Joins the pool, the code will only move on once the pool is empty.
+
+            elif to_execute and len(all_run) == 0:
+                # It is possible to call a wrapped function and find that the products already exist.
+                pass
+
+            # Now we assign products to source objects
+            all_to_raise = []
+            # This is for the special case of generating an AnnularSpectra product
+            ann_spec_comps = {k: [] for k in results}
+            for entry in results:
+                # Made this lookup list earlier, using string representations of source objects.
+                # Finds the ind of the list of sources that we should add this set of products to
+                ind = src_lookup[entry]
+                to_raise = []
+                for product in results[entry]:
+                    product: BaseProduct
+                    ext_info = "- {s} is the associated source, the specific data used is " \
+                               "{t} {o}-{i}.".format(s=sources[ind].name, t=product.telescope,
+                                                     o=product.obs_id, i=product.instrument)
+                    if len(product.gen_errors) == 1:
+                        to_raise.append(ProductGenerationError(product.gen_errors[0] + ext_info))
+                    elif len(product.gen_errors) > 1:
+                        errs = [ProductGenerationError(e + ext_info) for e in product.gen_errors]
+                        to_raise += errs
+
+                    if len(product.errors) == 1:
+                        to_raise.append(ProductGenerationError(product.errors[0] + "-" + ext_info))
+                    elif len(product.errors) > 1:
+                        errs = [ProductGenerationError(e + "-" + ext_info) for e in product.errors]
+                        to_raise += errs
+
+                    # If the product type is None we don't store it
+                    if product.type is not None and product.usable and prod_type_str != "annular spectrum set components":
+                        # For each product produced for this source, we add it to the storage hierarchy
+                        sources[ind].update_products(product)
+                    elif product.type is not None and product.usable and prod_type_str == "annular spectrum set components":
+                        # Really we're just re-creating the results dictionary here, but I want these products
+                        # to go through the error checking stuff like everything else does
+                        ann_spec_comps[entry].append(product)
+                    # In case they are components of an annular spectrum but they are either none or not usable
+                    elif prod_type_str == "annular spectrum set components":
+                        warn("An annular spectrum component ({a}) for {t} {o}{i} has not been generated properly (not "
+                             "usable reason - {nur}). The std_err entry is:\n\n {se}\n\n The std_out entry is:\n\n "
+                             "{so}".format(a=product.storage_key, t=product.telescope, o=product.obs_id,
+                                           i=product.instrument, nur=product.not_usable_reasons,
+                                           se=product.unprocessed_stderr, so=product.unprocessed_stdout), stacklevel=2)
+                    # Here the generated product was a cross-arf, and needs to be added to the right annular spectrum
+                    # object that already exists in our source
+                    elif prod_type_str == "cross arfs":
+                        ei = product._extra_info
+                        ann_spec = sources[ind].get_annular_spectra(set_id=ei['ann_spec_set_id'])
+                        ann_spec.add_cross_arf(product, ei['obs_id'], ei['inst'], ei['src_ann_id'], ei['cross_ann_id'],
+                                               ei['ann_spec_set_id'])
+
+                if len(to_raise) != 0:
+                    all_to_raise.append(to_raise)
+
+            # We raise the errors BEFORE setting up AnnularSpectra instances, as if a product destined to be in an
+            # AnnularSpectra instance failed to generate properly then the init of that class could fail and we'd
+            # never see the generation errors.
+            if len(raised_errors) != 0:
+                raise Exception(raised_errors)
+
+            if len(all_to_raise) != 0:
+                raise ProductGenerationError(all_to_raise)
+
+            if prod_type_str == "annular spectrum set components":
+                for entry in ann_spec_comps:
+                    if len(ann_spec_comps[entry]) == 0:
+                        warn(f"Entry {entry} - no annular spectrum components were successfully "
+                             f"generated - contact the developers if you see this warning.", stacklevel=2)
+                        continue
+
+                    # So now we pass the list of spectra to a AnnularSpectra definition
+                    ann_spec = AnnularSpectra(ann_spec_comps[entry])
+                    ind = src_lookup[entry]
+                    if sources[ind].redshift is not None:
+                        # If we know the redshift we will add the radii to the annular spectra in proper distance units
+                        ann_spec.proper_radii = sources[ind].convert_radius(ann_spec.radii, 'kpc')
+                    # And adding our exciting new set of annular spectra into the storage structure
+                    sources[ind].update_products(ann_spec)
+
+            # If only one source was passed, turn it back into a source object rather than a list.
+            if len(sources) == 1:
+                sources = sources[0]
+            return sources
+        return wrapper
+    return decorator
 
 
 def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_info: dict,
