@@ -1686,7 +1686,8 @@ class Spectrum(BaseProduct):
             fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex=True,
                                              gridspec_kw={'height_ratios': [3, 1]})
         else:
-            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            fig = plt.figure(figsize=figsize)
+            ax = plt.gca()
 
         plt.sca(ax)
 
