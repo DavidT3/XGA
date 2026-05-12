@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 6:02 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/12/26, 7:27 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy, copy
@@ -1059,8 +1059,8 @@ def esass_spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List
                         split_brmf = copy(interim_extras[p_ind]['b_rmf_path']).split('/')
                         split_barf = copy(interim_extras[p_ind]['b_arf_path']).split('/')
 
-                        new_b_rmf = split_r[-1].replace('_back.rmf', "_ident{si}_{ai}_backspec.rmf".format(si=set_id, ai=r_ind))
-                        new_b_arf = split_barf[-1].replace('_back.arf', "_ident{si}_{ai}_backspec.arf".format(si=set_id, ai=r_ind))
+                        new_b_rmf = split_brmf[-1].replace('_back.rmf', "_ident{si}_{ai}_back.rmf".format(si=set_id, ai=r_ind))
+                        new_b_arf = split_barf[-1].replace('_back.arf', "_ident{si}_{ai}_back.arf".format(si=set_id, ai=r_ind))
 
                         # New names into the commands
                         cur_cmd = cur_cmd.replace(split_a[-1], new_arf)
