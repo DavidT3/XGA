@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 6:04 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/12/26, 9:12 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -24,7 +24,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from ..exceptions import (NotAssociatedError, NoValidObservationsError, NoProductAvailableError,
                           ModelNotAssociatedError, ParameterNotAssociatedError, NotSampleMemberError,
                           TelescopeNotAssociatedError, PeakConvergenceFailedError,
-                          XGADeveloperError)
+                          XGADeveloperError, ProductNotUsableError)
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -1408,10 +1408,6 @@ class BaseSource:
         # We iterate through the associated telescopes - the XGA generated products are stored in telescope/ObsID
         #  subdirectories
         for tel in self.telescopes:
-            # Read out the allowed instruments for this particular telescopes - this method won't work like this
-            #  eventually, but at the moment I'm just converting what is already here
-            all_inst = ALLOWED_INST[tel]
-
             # This is used for spectra that should be part of an AnnularSpectra object
             ann_spec_constituents = {}
             # This is to store whether all components could be loaded in successfully
@@ -1602,7 +1598,7 @@ class BaseSource:
                         # If an obsID used to generate an existing Annuluar Spectra was dissasociated
                         # then the following line will lead to a value error, so we add in a try
                         # except so that a source can still be declared if the AnnularSpectra
-                        # cant be declared
+                        # can't be declared
                         try:
                             ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
 
@@ -1612,7 +1608,17 @@ class BaseSource:
                                 ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
                             self.update_products(ann_spec_obj, update_inv=False)
 
-                        except ValueError:
+                        # Hopefully this won't get triggered. However, if there is an issue in declaring the
+                        #  annular spectrum instance or adding it to the product store, then at least
+                        #  we can insulate the user from not being able to declare a source.
+                        except (ValueError, ProductNotUsableError) as ann_spec_err:
+                            warn_text = (f"{self.name} failed to load a previously generated {tel} AnnularSpectra "
+                                         f"with the following error:\n\n{ann_spec_err}")
+
+                            if not self._samp_member:
+                                warn(warn_text, stacklevel=2)
+                            else:
+                                self._supp_warn.append(warn_text)
                             pass
 
             os.chdir(og_dir)
