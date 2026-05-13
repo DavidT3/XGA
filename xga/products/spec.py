@@ -1539,10 +1539,10 @@ class Spectrum(BaseProduct):
         plt.tight_layout()
         plt.show()
 
-    def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
+        def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
              hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
              src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True, 
+             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
              models: Union[None, str, List[str]] = None, show_residuals: bool = False, save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
@@ -1572,7 +1572,7 @@ class Spectrum(BaseProduct):
             fontsize will be fontsize + 1. Default is 14.
         :param bool show_model_fits: Whether any models fit to the spectrum by XSPEC should be shown. Default is
             True, but will be set to False if no fits have been performed.
-        :param None/str/List[str] models: Name(s) of model(s) to be plotted on the output figure, if `show_model_fits=True`. 
+        :param None/str/List[str] models: Name(s) of model(s) to be plotted on the output figure, if `show_model_fits=True`.
         :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
             the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
@@ -1590,11 +1590,12 @@ class Spectrum(BaseProduct):
             # Check the validity of the specified model names
             mod_not_fit = [cur_mod for cur_mod in models if cur_mod not in self._plot_data]
             if len(mod_not_fit) != 0:
-                raise ModelNotAssociatedError(f"Some values passed to 'models' are not valid for this spectrum - {mod_not_fit}")
-                 
+                raise ModelNotAssociatedError(
+                    f"Some values passed to 'models' are not valid for this spectrum - {mod_not_fit}")
+
         else:
             raise TypeError("The 'models' argument must either be None, a string, or a list of strings.")
-                 
+
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
         #  associated with this Spectrum instance has actually been grouped - if not then we automatically
         #  set the method argument to False
@@ -1691,20 +1692,41 @@ class Spectrum(BaseProduct):
 
         # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
         #  values, which scales the background flux to the same area as the source
-        bck_rate = (self.header['BACKSCAL']/self.back_header['BACKSCAL']) * (bct / self.back_header['AREASCAL'])
+        bck_rate = (self.header['BACKSCAL'] / self.back_header['BACKSCAL']) * (bct / self.back_header['AREASCAL'])
 
         # And finally subtracting one from the other - they both have error columns which are also subtracted
         #  here (which is completely meaningless of course), but don't worry we'll fix that on the next line!
         src_sub_bck_rate = src_rate - bck_rate
         # Simple error propagation to replace the nonsense uncertainty column in src_sub_bck_rate
-        src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1]**2 + bck_rate[:, 1]**2)
+        src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1] ** 2 + bck_rate[:, 1] ** 2)
 
         if show_residuals:
             fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex="col",
                                              gridspec_kw={'height_ratios': [3, 1]})
+            # Shrink the vertical gap between the panels to zero
+            fig.subplots_adjust(hspace=0)
         else:
             fig = plt.figure(figsize=figsize)
             ax = plt.gca()
+
+        # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
+        if energy:
+            rel_y_label = "Counts s$^{-1}$ keV$^{-1}$"
+            rel_y_label = "Normalised" + rel_y_label if show_model_fits else rel_y_label
+
+            rel_x_label = "Energy [keV]"
+        else:
+            rel_y_label = "Counts s$^{-1}$ Channel$^{-1}$"
+            rel_y_label = "Normalised" + rel_y_label if show_model_fits else rel_y_label
+
+            rel_x_label = "Channel"
+
+        # The axis that gets the x-axis labels depends on whether we're plotting residuals or not
+        if not show_residuals:
+            ax.set_xlabel(rel_x_label, fontsize=fontsize)
+        else:
+            ax_res.set_xlabel(rel_x_label, fontsize=fontsize)
+        ax.set_ylabel(rel_y_label, fontsize=fontsize)
 
         plt.sca(ax)
 
@@ -1717,7 +1739,7 @@ class Spectrum(BaseProduct):
 
         # Set the title with all relevant information about the spectrum object in it
         plt.title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
-                  fontsize=fontsize+1)
+                  fontsize=fontsize + 1)
 
         # This is an ugly way of doing this, but I hope that in the future I'll be able to implement this 'properly'
         #  and just undo this
@@ -1730,29 +1752,14 @@ class Spectrum(BaseProduct):
                              label="Background subtracted source data", zorder=1)
             else:
                 # But if we're not wanting background subtracted, we need to plot the source and background spectra
-                plt.errorbar(x_dat, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x, fmt="+",
-                             color=src_colour, label="Source data", zorder=1)
-                plt.errorbar(x_dat, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x, fmt="x",
-                             color=bck_colour, label="Background data", zorder=1)
-
-            # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
-            if energy:
-                plt.ylabel("Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-                plt.xlabel("Energy [keV]", fontsize=fontsize)
-            else:
-                plt.ylabel("Counts s$^{-1}$ Channel$^{-1}$", fontsize=fontsize)
-                plt.xlabel("Channel", fontsize=fontsize)
+                plt.errorbar(x_dat, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x,
+                             fmt="+", color=src_colour, label="Source data", zorder=1)
+                plt.errorbar(x_dat, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x,
+                             fmt="x", color=bck_colour, label="Background data", zorder=1)
 
         # In this case the user wants the fitted spectra, and there ARE fits to plot, so rather than plot our own
         #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
         else:
-            # Set the axis labels
-            ax.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-            # Can set the xlabel for the spectrum axis regardless of whether we're showing
-            #  residuals or not, as if we _are_ showing residuals then we set up the
-            #  subplots to share the x-axis.
-            ax.set_xlabel("Energy [keV]", fontsize=fontsize)
-
             for mod_ind, cur_mod in enumerate(models):
                 x = self._plot_data[cur_mod]["x"]
                 sel_x = (x > lo_lim) & (x < hi_lim)
@@ -1766,7 +1773,7 @@ class Spectrum(BaseProduct):
 
                     ax.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
                                 label="Background subtracted source data", zorder=1)
-                
+
                 # Grab the fit model line data points for the current model name
                 plot_mod = self._plot_data[cur_mod]["model"][sel_x]
 
@@ -1774,13 +1781,13 @@ class Spectrum(BaseProduct):
                 #  points the same colour as the model line (if the user wants to plot residuals).
                 mod_line = ax.plot(plot_x, plot_mod, label=cur_mod, linewidth=1.5)
 
-                # Plot residuals if requested 
+                # Plot residuals if requested
                 if show_residuals:
                     residuals = plot_mod - plot_y
                     ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
-                                    fmt="k+", capsize=1.2, zorder=1, color=mod_line[0].get_color())
+                                    fmt="+", capsize=1.2, zorder=1, color=mod_line[0].get_color())
                     ax_res.axhline(0, color='black', linewidth=1, linestyle='--')
-                    ax_res.set_ylabel("Residuals", fontsize=fontsize-2)
+                    ax_res.set_ylabel("Residuals", fontsize=fontsize - 2)
                     ax_res.set_xlabel("Energy [keV]", fontsize=fontsize)
                     ax_res.minorticks_on()
                     ax_res.tick_params(axis='both', direction='in', which='both', top=True, right=True)
@@ -1789,7 +1796,7 @@ class Spectrum(BaseProduct):
                     ax_res.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # Generate the legend for the data and model(s)
-        ax.legend(loc="best", fontsize=fontsize-1)
+        ax.legend(loc="best", fontsize=fontsize - 1)
 
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
@@ -1797,8 +1804,10 @@ class Spectrum(BaseProduct):
         ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
-        # Removing extraneous whitespace around the plot
-        plt.tight_layout()
+        # Removing extraneous whitespace around the plot - we have h_pad=0 in the call to stop
+        #  tight_layout from changing the 0-height vertical spacing we set between spectrum and
+        #  residual axes (if we are plotting residuals that is).
+        plt.tight_layout(h_pad=0)
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
