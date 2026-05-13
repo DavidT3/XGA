@@ -1585,7 +1585,7 @@ class Spectrum(BaseProduct):
             models = list(self._plot_data.keys())
         elif isinstance(models, (str, list)):
             # Normalize input so that we have a list of strings, even if a single string was passed
-            models = models if isinstance(list) else [models]
+            models = models if isinstance(models, list) else [models]
 
             # Check the validity of the specified model names
             mod_not_fit = [cur_mod for cur_mod in models if cur_mod not in self._plot_data]
@@ -1700,7 +1700,7 @@ class Spectrum(BaseProduct):
         src_sub_bck_rate[:, 1] = np.sqrt(src_rate[:, 1]**2 + bck_rate[:, 1]**2)
 
         if show_residuals:
-            fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex="column",
+            fig, (ax, ax_res) = plt.subplots(2, 1, figsize=figsize, sharex="col",
                                              gridspec_kw={'height_ratios': [3, 1]})
         else:
             fig = plt.figure(figsize=figsize)
