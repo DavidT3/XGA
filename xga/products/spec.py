@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 12:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 4:12 PM. Copyright (c) The Contributors.
 
 import os
 import warnings
@@ -1539,11 +1539,11 @@ class Spectrum(BaseProduct):
         plt.tight_layout()
         plt.show()
 
-        def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
-             hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-             src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
-             models: Union[None, str, List[str]] = None, show_residuals: bool = False, save_path: str = None):
+    def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
+         hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
+         src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
+         yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
+         models: Union[None, str, List[str]] = None, show_residuals: bool = False, save_path: str = None):
         """
         A method for viewing the data associated with this Spectrum instance.
 
