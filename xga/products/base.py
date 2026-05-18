@@ -1,12 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:44 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:24 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
 import pickle
 from copy import deepcopy
 from random import randint
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, Optional
 from warnings import warn
 
 import corner
@@ -1862,15 +1862,21 @@ class BaseProfile1D:
                      fontsize=14, y=1.02)
         plt.show()
 
-    def view_getdist_corner(self, model: str, settings: dict = {}, figsize: tuple = (10, 10)):
+    def view_getdist_corner(self, model: str, settings: Optional[dict] = None, figsize: tuple = (10, 10)):
         """
         A view method to see a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
 
         :param str model: The name of the model for which to view the corner plot.
-        :param dict settings: The settings dictionary for a getdist MCSample.
+        :param dict settings: The settings dictionary for a getdist MCSample, default is None, which
+            corresponds to an empty dictionary.
         :param tuple figsize: A tuple to set the size of the figure.
         """
+        # Replace a null value for settings with an empty dictionary (avoids having a mutable default value
+        #  in the function signature, which can cause serious problems).
+        if settings is None:
+            settings = {}
+
         # Grab the flattened chains
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
@@ -1933,11 +1939,11 @@ class BaseProfile1D:
         return realisations
 
     def get_view(self, fig: Figure, main_ax: Axes, xscale: str = "log", yscale: str = "log", xlim: tuple = None,
-                 ylim: tuple = None, models: bool = True,  back_sub: bool = True, just_models: bool = False,
-                 custom_title: str = None, draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False,
+                 ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
+                 custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False,
                  y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
                  data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
-                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: Optional[dict] = None,
                  auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
@@ -2229,34 +2235,36 @@ class BaseProfile1D:
         plt.suptitle(title_str, y=0.91)
 
         # If the user has passed radii to plot, then we plot them
-        for r_name in draw_rads:
-            d_rad = (draw_rads[r_name] / x_norm).value
-            main_ax.axvline(d_rad, linestyle='dashed', color='black')
-            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+        if draw_rads is not None:
+            for r_name in draw_rads:
+                d_rad = (draw_rads[r_name] / x_norm).value
+                main_ax.axvline(d_rad, linestyle='dashed', color='black')
+                main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                                 color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # Use the axis limits quite a lot in these next bits, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
         y_axis_lims = main_ax.get_ylim()
 
         # If the user has passed extra values to plot, then we plot them
-        for v_name in draw_vals:
-            d_val = (draw_vals[v_name] / y_norm).value
-            if draw_vals[v_name].isscalar:
-                main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
-                                label=v_name)
-            elif len(d_val) == 2:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
-                                     alpha=0.5)
-            elif len(d_val) == 3:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
-                                     alpha=0.5)
+        if draw_vals is not None:
+            for v_name in draw_vals:
+                d_val = (draw_vals[v_name] / y_norm).value
+                if draw_vals[v_name].isscalar:
+                    main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
+                                    label=v_name)
+                elif len(d_val) == 2:
+                    main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                    label=v_name)
+                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
+                                         alpha=0.5)
+                elif len(d_val) == 3:
+                    main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                    label=v_name)
+                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
+                                         alpha=0.5)
 
-            main_ax.set_xlim(x_axis_lims)
+                main_ax.set_xlim(x_axis_lims)
 
         # If the user wants a legend to be shown, then we create one
         if show_legend:
@@ -2314,10 +2322,10 @@ class BaseProfile1D:
 
     def view(self, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None, ylim: tuple = None,
              models: bool = True, back_sub: bool = True, just_models: bool = False, custom_title: str = None,
-             draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False,
+             draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False,
              x_label: str = None, y_label: str = None, data_colour: str = 'black',
              model_colour: Union[str, List[str]] = 'seagreen', show_legend: bool = True, show_residual_ax: bool = True,
-             draw_vals: dict = {}, auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
+             draw_vals: Optional[dict] = None, auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -2389,10 +2397,10 @@ class BaseProfile1D:
 
     def save_view(self, save_path: str, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None,
                   ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
-                  custom_title: str = None, draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False,
+                  custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False,
                   y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
                   data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
-                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: Optional[dict] = None,
                   auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
@@ -3123,9 +3131,9 @@ class BaseAggregateProfile1D:
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
+             just_model: bool = False, custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: bool = False,
              y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
-             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = None,
+             draw_vals: Optional[dict] = None, auto_legend: bool = True, axis_formatters: dict = None,
              show_residual_ax: bool = True, joined_points: bool = False):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
@@ -3396,40 +3404,42 @@ class BaseAggregateProfile1D:
             plt.suptitle(custom_title, y=0.91)
 
         # If the user has passed radii to plot, then we plot them
-        for r_name in draw_rads:
-            d_rad = (draw_rads[r_name] / x_norms[0]).value
-            main_ax.axvline(d_rad, linestyle='dashed', color='black')
-            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+        if draw_rads is not None:
+            for r_name in draw_rads:
+                d_rad = (draw_rads[r_name] / x_norms[0]).value
+                main_ax.axvline(d_rad, linestyle='dashed', color='black')
+                main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                                 color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # Reads out the axis limits of the plot thus far
         x_axis_lims = main_ax.get_xlim()
         # If the user has passed extra values to plot, then we plot them
-        for v_name in draw_vals:
-            if isinstance(draw_vals[v_name], Quantity):
-                d_val = draw_vals[v_name].value
-                cur_col = None
-                is_scalar = draw_vals[v_name].isscalar
-            else:
-                d_val = draw_vals[v_name][0].value
-                cur_col = draw_vals[v_name][1]
-                is_scalar = draw_vals[v_name][0].isscalar
+        if draw_vals is not None:
+            for v_name in draw_vals:
+                if isinstance(draw_vals[v_name], Quantity):
+                    d_val = draw_vals[v_name].value
+                    cur_col = None
+                    is_scalar = draw_vals[v_name].isscalar
+                else:
+                    d_val = draw_vals[v_name][0].value
+                    cur_col = draw_vals[v_name][1]
+                    is_scalar = draw_vals[v_name][0].isscalar
 
-            if is_scalar:
-                main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
-                                label=v_name)
-            elif len(d_val) == 2:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
-                                     alpha=0.5)
-            elif len(d_val) == 3:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
-                                     alpha=0.5)
+                if is_scalar:
+                    main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
+                                    label=v_name)
+                elif len(d_val) == 2:
+                    main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                    label=v_name)
+                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
+                                         alpha=0.5)
+                elif len(d_val) == 3:
+                    main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                    label=v_name)
+                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
+                                         alpha=0.5)
 
-            main_ax.set_xlim(x_axis_lims)
+                main_ax.set_xlim(x_axis_lims)
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
