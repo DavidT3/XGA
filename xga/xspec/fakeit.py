@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 10:57 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:51 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -218,7 +218,7 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 # Checks through the spectrum objects we retrieved earlier, and the energy limits,
                 #  to look for conversion factor results, if they exist they aren't run again, otherwise an error
                 #  is triggered and the scripts get added to the pile to run.
-                res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec", tel)
+                res = [s.get_conv_factor(e_pair[0], e_pair[1], "tbabs*apec")
                        for e_pair in conv_en for s in spec_objs]
             except (ModelNotAssociatedError, ParameterNotAssociatedError):
                 script_paths.append(script_file)

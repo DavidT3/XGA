@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 11:22 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:45 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -425,7 +425,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
 def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                      distance: Union[Quantity, dict] = None, telescope: Union[str, List[str]] = None,
                      num_cores: int = NUM_CORES, show_warnings: bool = True) \
-        -> Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]:
+        -> Tuple[Union[dict, List[DataFrame]], Union[dict, List[DataFrame], dict]]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that match to the input coordinates (either a single
     coordinate or a set). This is done for a set of telescopes (or a single telescope), and a match is made by the
@@ -450,7 +450,7 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         each dictionary corresponds to an input RA-Dec (in the same order), and the dictionary keys correspond to
         different telescopes. The second return is structured exactly the same, but represents observations that were
         completely excluded in the blacklist.
-    :rtype: Tuple[Union[List[DataFrame], dict], Union[List[DataFrame], dict]]
+    :rtype: Tuple[Union[dict, List[DataFrame]], Union[dict, List[DataFrame]]]
     """
 
     # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
