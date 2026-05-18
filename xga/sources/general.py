@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 11:08 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:23 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -409,10 +409,10 @@ class ExtendedSource(BaseSource):
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
         if obs_id == "combined" or inst == "combined":
-            interim_prods = self.get_combined_profiles("brightness", central_coord, radii, lo_en=lo_en, hi_en=hi_en,
+            interim_prods = self.get_combined_profiles("brightness", inst=inst, central_coord=central_coord, radii=radii, lo_en=lo_en, hi_en=hi_en,
                                                        telescope=telescope)
         else:
-            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii, lo_en=lo_en,
+            interim_prods = self.get_profiles("brightness", obs_id, inst, central_coord, radii=radii, lo_en=lo_en,
                                               hi_en=hi_en, telescope=telescope)
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need

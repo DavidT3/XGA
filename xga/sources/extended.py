@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 4:29 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:23 PM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -901,9 +901,9 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
         if (obs_id == "combined" or inst == "combined" or obs_id is None or inst is None) and method != 'spec':
-            interim_prods = self.get_combined_profiles("gas_density", central_coord, radii, telescope=telescope)
+            interim_prods = self.get_combined_profiles("gas_density", central_coord=central_coord, radii=radii, telescope=telescope)
         elif method != 'spec':
-            interim_prods = self.get_profiles("gas_density", obs_id, inst, central_coord, radii)
+            interim_prods = self.get_profiles("gas_density", obs_id, inst, central_coord, radii=radii, telescope=telescope)
         elif (obs_id == "combined" or inst == "combined" or obs_id is None or inst is None) and method == 'spec':
             interim_prods = self._get_spec_based_profiles('combined_gas_density_profile', radii, group_spec, min_counts,
                                                           min_sn, over_sample, set_id, telescope, spec_model, spec_fit_conf)
