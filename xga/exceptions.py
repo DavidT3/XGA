@@ -1,26 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 10:56 AM. Copyright (c) The Contributors.
-
-
-class eROSITAImplentationError(Exception):
-    def __init__(self, *args):
-        """
-        Exception raised for when the user tries to use XGA for functions that have not been
-        fully implemented for eROSITA yet.
-
-        :param expression:
-        :param message:
-        """
-        if args:
-            self.message = args[0]
-        else:
-            self.message = None
-
-    def __str__(self):
-        if self.message:
-            return '{0} '.format(self.message)
-        else:
-            return 'eROSITAImplementationError has been raised'
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:20 PM. Copyright (c) The Contributors.
 
 
 class eSASSInputInvalid(Exception):
@@ -813,3 +792,22 @@ class ProductNotUsableError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'ProductNotUsableError has been raised'
+
+
+class FitConfNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a supplied fit configuration isn't associated with the source, model, or spectrum.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'FitConfNotAssociatedError has been raised'

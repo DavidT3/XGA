@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 5:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:00 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -855,8 +855,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
             #  just use that one rather than making another (which would be silly and also eat up more storage
             #  because they are automatically saved to disk).
             try:
-                existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident,
-                                                                 telescope=tel)
+                existing_3d_temp_prof = src.get_3d_temp_profiles(set_id=proj_temp.set_ident)
                 all_3d_temp_profs[tel][src_ind] = existing_3d_temp_prof
                 continue
             except NoProductAvailableError:

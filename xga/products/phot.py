@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:42. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:59 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -11,12 +11,12 @@ import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.convolution import Kernel, Gaussian2DKernel, convolve_fft
-from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
+from astropy.io import fits
+from astropy.units import Quantity, UnitBase, deg, pix, UnitConversionError, Unit
 from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, ManualInterval
 from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
     LinearStretch
-from astropy.io import fits
-from fitsio import read, read_header, FITSHDR
+from fitsio import read, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
@@ -28,7 +28,7 @@ from scipy.signal import fftconvolve
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det, ALLOWED_INST, PRETTY_TELESCOPE_NAMES
+from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
@@ -288,6 +288,7 @@ class Image(BaseProduct):
         from ..imagetools.misc import find_all_wcs
 
         errored = False
+
         try:
             self._read_header_on_demand()
         except OSError as err:
@@ -423,7 +424,7 @@ class Image(BaseProduct):
         #  are all in pixel coordinates (it makes it easier for plotting etc. later)
         for obs_id, matched_reg in matched_reg_input.items():
             if matched_reg is not None and not isinstance(matched_reg, PixelRegion):
-                matched_reg_input[obs_id] = matched_reg.to_pixel(self._wcs_radec)
+                matched_reg_input[obs_id] = matched_reg.to_pixel(self.radec_wcs)
 
         return matched_reg_input
 

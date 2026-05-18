@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/5/26, 11:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 3:16 PM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -23,6 +23,7 @@ from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, \
 from ..generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 from ..generate.sas._common import region_setup
 from ..imagetools.profile import radial_brightness
+from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
@@ -41,7 +42,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
                 inst: Union[Dict[str, str], Dict[str, list]] = None,
                 conv_temp: Union[Quantity, Dict[str, Quantity]] = None,
                 conv_outer_radius: Quantity = "r500", conv_inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None, 
+                num_cores: int = NUM_CORES, stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
                 timeout: Quantity = Quantity(300, 's')) \
         -> Tuple[Union[ClusterSample, List], Dict[str, List[Quantity]], Union[Dict[str, str], Dict[str, list]],
                  Union[Dict[str, str], Dict[str, list]], List[str]]:
@@ -93,7 +94,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         instead use individual spectra for an ObsID. The default is False.
     :param int num_cores: The number of cores that the evselect call and XSPEC functions are allowed
         to use.
-    :param Quantity timeout: How long xspec should run for before timing out. 
+    :param Quantity timeout: How long xspec should run for before timing out.
     :return: The source object(s)/sample that was passed in, a dictionary of an array of the
         calculated conversion factors to take the count-rate/volume to a number density of hydrogen
         for each telescope, the parsed obs_id variable, and the parsed inst variable.
@@ -117,8 +118,8 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
     else:
         src_telescopes = telescope
 
-    # If it's a single source, I shove it in a list, so I can just iterate over the 'sources' parameter
-    #  like I do when it's a Sample object
+    # If a single source is passed it goes in a list, so we can iterate over the one-element list the same
+    #  way we iterate over a sample instance
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -151,7 +152,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
                 raise ValueError("If the 'obs_id' argument is set, it must be a dictionary with "
                                  "telescope keys and values that are either a string of one ObsID "
                                  "if one source is being analysed, or a list with an ObsID for "
-                                 "each source. If the telescope is not associated to a source put " 
+                                 "each source. If the telescope is not associated to a source put "
                                  "in an empty string.")
 
         if isinstance(inst, dict):
@@ -224,7 +225,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         # calling this function will also make sure that they are generated
         single_temp_apec(sources, conv_outer_radius, conv_inner_radius, abund_table=abund_table,
                          group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra, 
+                         over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
                          telescope=telescope, timeout=timeout)
 
         # Then we need to grab the temperatures and pass them through to the cluster conversion
@@ -234,18 +235,21 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
         for src in sources:
             for tel in src_telescopes:
                 try:
+                    # A temporary temperature variable - the 'fit_conf' value is set as a dictionary with an entry for
+                    #  the abundance table because that is the only possible change from default single_temp_apec
+                    #  fitting for the call in this function
                     if tel in ['erosita', 'erass']:
                         # A temporary temperature variable
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
                                                         conv_inner_radius, group_spec, min_counts, min_sn,
-                                                        over_sample, stacked_spectra=stacked_spectra)[0]
+                                                        over_sample, stacked_spectra=stacked_spectra,
+                                                        fit_conf={'abund_table': abund_table})[0]
                     else:
                         temp_temp = src.get_temperature(conv_outer_radius, tel, "constant*tbabs*apec",
                                                         conv_inner_radius, group_spec, min_counts, min_sn,
-                                                        over_sample)[0]
+                                                        over_sample, fit_conf={'abund_table': abund_table})[0]
                 except (ModelNotAssociatedError, ParameterNotAssociatedError):
-                    warn("{s}'s temperature fit is not valid, so we are defaulting to a temperature "
-                        "of 3keV".format(s=src.name), stacklevel=2)
+                    warn("{s}'s temperature fit was not successful - defaulting to 3 keV".format(s=src.name), stacklevel=2)
                     temp_temp = Quantity(3, 'keV')
                 temps[tel].append(temp_temp.value)
 
@@ -261,7 +265,7 @@ def _dens_setup(sources: Union[GalaxyCluster, ClusterSample], abund_table: str, 
     cluster_cr_conv(sources, conv_outer_radius, conv_inner_radius, temps, abund_table=abund_table,
                     num_cores=num_cores, group_spec=group_spec, min_counts=min_counts,
                     min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra, telescope=telescope)
-    
+
     # This where the combined conversion factor that takes a count-rate/volume to a squared number
     # density of hydrogen
     to_dens_convs = {key : [] for key in src_telescopes}
@@ -528,9 +532,13 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
     #  all telescopes yet. We also check this in the loop as we have to temporarily change
     #  the PSF correction boolean flag, but warn here to save it repeatedly popping up for
     #  multiple sources
-    if any([t in ['erosita', 'erass'] for t in telescope]) and psf_corr:
-        warn("PSF correction is not yet implemented for the eROSITA telescope, and surface "
+    if any([t in ['erosita', 'erass', 'chandra'] for t in telescope]) and psf_corr:
+        warn("PSF correction is not yet implemented for the eROSITA and Chandra telescopes, and surface "
              "brightness profiles will not be corrected.", stacklevel=2)
+    elif any([t in ['xmm'] for t in telescope]) and psf_corr:
+        # We make sure that PSF corrected ratemaps are available, if they have been
+        #  requested (and we can generate) - and also available with the specified configuration
+        rl_psf(sources, psf_iter, psf_model, lo_en, hi_en, psf_bins, num_cores)
 
     # Setting up dict to store profiles in
     final_dens_profs = {cur_tel : [None]*len(sources) for cur_tel in telescope}
@@ -777,6 +785,10 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
         that telescope associated or the profile construction process failed.
     :rtype: Dict[str, List[Union[GasDensity3D, None]]]
     """
+    # If a source (rather than a sample) is input, we put it in a list - that way we can iterate over them the same
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
     # Run the setup function, calculates the factors that translate 3D count-rate to density
     #  Also checks parameters and runs any spectra/fits that need running
     sources, conv_factors, obs_id, inst, telescope = _dens_setup(sources, abund_table, lo_en, hi_en, group_spec,
@@ -1099,7 +1111,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                     dens_prof = apec_norm_prof.gas_density_profile(src.redshift, src.cosmo,
                                                                    abund_table, num_data_real,
                                                                    sigma, num_dens)
-                        
+
                     # Then I store it in the source
                     src.update_products(dens_prof)
                     final_dens_profs[tel][src_ind] = dens_prof

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 4:53 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 9:59 PM. Copyright (c) The Contributors.
 
 import importlib
 import json
@@ -886,6 +886,7 @@ SASWARNING_LIST = warnings["WarnName"].values
 XGA_EXTRACT = importlib.resources.files(__name__) / "xspec_scripts/xga_extract.tcl"
 BASE_XSPEC_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/general_xspec_fit.xcm"
 COUNTRATE_CONV_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/cr_conv_calc.xcm"
+CROSS_ARF_XSPEC_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/crossarf_xspec_fit.xcm"
 
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
 with open(importlib.resources.files(__name__) / "files/xspec_model_pars.json5", 'r') as filey:
@@ -894,6 +895,8 @@ with open(importlib.resources.files(__name__) / "files/xspec_model_pars.json5", 
 with open(importlib.resources.files(__name__) / "files/xspec_model_units.json5", 'r') as filey:
     MODEL_UNITS = json.load(filey)
 
+with open(importlib.resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
+    MISSION_COL_DB = json.load(filey)
 # --------------------------------------------------------------------------
 
 
@@ -906,8 +909,7 @@ ALLOWED_INST = {"xmm": ["pn", "mos1", "mos2"],
                 "erosita": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"],
                 "erass": ["tm1", "tm2", "tm3", "tm4", "tm5", "tm6", "tm7"],
                 "chandra": ["acis"]}
-# TODO remove this when everything is generalised and a specific XMM_INST constant isn't required
-XMM_INST = ALLOWED_INST['xmm']
+
 # I provide a list of the top-level keys of the ALLOWED_INST dictionary, as a quick way of accessing the supported
 #  telescope names
 TELESCOPES = list(ALLOWED_INST.keys())

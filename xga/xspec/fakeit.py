@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 10:10 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 10:57 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -118,6 +118,8 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
     script_paths = []
     outfile_paths = []
     src_inds = []
+    fit_confs = []
+    inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for s_ind, source in enumerate(sources):
         for tel in telescope:
@@ -204,9 +206,9 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
 
             # Populates the fakeit conversion factor template script
             script = script.format(ab=abund_table, H0=source.cosmo.H0.value, q0=0., lamb0=source.cosmo.Ode0,
-                                rmf=rmf_paths, arf=arf_paths, obs=obs, inst=inst, m=model, pn=par_names,
-                                pv=par_values, lll=convert_low_lims, lul=convert_upp_lims,
-                                redshift=source.redshift, of=out_file, rid=rid)
+                                   rmf=rmf_paths, arf=arf_paths, obs=obs, inst=inst, m=model, pn=par_names,
+                                   pv=par_values, lll=convert_low_lims, lul=convert_upp_lims,
+                                   redshift=source.redshift, of=out_file, rid=rid)
 
             # Write out the filled-in template to its destination
             with open(script_file, 'w') as xcm:
@@ -222,13 +224,15 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(s_ind)
+                fit_confs.append('')
+                inv_ents.append('')
 
-    # New feature of XSPEC interface, tells the xspec_call decorator what type of output from the script
-    #  to expect
+    # Tells the xspec_call decorator what type of output from the script to expect
     run_type = "conv_factors"
-    # I don't allow the user to set a timeout for fakeit runs because its unnecessary, but the run code still
+    # I don't allow the user to set a timeout for fakeit runs because it's unnecessary, but the run code still
     #  needs a value
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour')
+    return (script_paths, outfile_paths, num_cores, run_type, src_inds, None, Quantity(1, 'hour'), model,
+            fit_confs, inv_ents)
 
 
 

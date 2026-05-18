@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 9:59 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -13,7 +13,8 @@ from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
 from ..exceptions import (NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-                          NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError)
+                          NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError,
+                          FitConfNotAssociatedError)
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
 from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
@@ -151,9 +152,9 @@ class BaseSample:
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
-            raise NoValidObservationsError("No sources have been declared, likely meaning that none of the sample have"
-                                           " valid {t} data.".format(t='/'.join(nice_tels)))
+            nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
+            raise NoValidObservationsError(f"No sources have been declared, likely meaning that none of the sample have"
+                                           f" valid {nice_tels} data.")
 
         # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
@@ -163,9 +164,10 @@ class BaseSample:
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0 and type(self) == BaseSample:
-            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
-            warn("The following do not appear to have any {t} data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+            nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
+            no_data_str = "/".join(no_data)
+            warn(f"The following do not appear to have any {nice_tels} data, and will not be included in the "
+                 f"sample (can also check .failed_names); {no_data_str}",
                  stacklevel=2)
 
         # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
@@ -375,7 +377,7 @@ class BaseSample:
     def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False):
+           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False, fit_conf: Union[str, dict] = None):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -412,6 +414,9 @@ class BaseSample:
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
             a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
@@ -424,18 +429,22 @@ class BaseSample:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
-        if outer_radius != 'region':
-            # This just parses the input inner and outer radii into something predictable
-            inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
-        else:
-            raise NotImplementedError("Sorry region fitting is currently not supported")
+        # At one point we allowed the 'outer_radius' argument to be 'region', but we no longer
+        #  support that
+        if outer_radius == 'region':
+            raise ValueError("The string 'region' is no longer a valid option for "
+                             "the 'outer_radius' argument.")
+
+        # This just parses the input inner and outer radii into something predictable
+        inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
 
         lums = []
+        warns = []
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
                 lx_val = src.get_luminosities(out_rads[src_ind], telescope, model, inn_rads[src_ind], lo_en, hi_en,
-                                              group_spec, min_counts, min_sn, over_sample, stacked_spectra)
+                                              group_spec, min_counts, min_sn, over_sample, stacked_spectra, fit_conf)
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
                 if quality_checks and len(frac_err[frac_err >= 1]) != 0:
@@ -444,10 +453,11 @@ class BaseSample:
                     lums.append(lx_val)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
-                    NotAssociatedError) as err:
-                # If any of the possible errors are thrown, we print the error as a warning and replace
-                #  that entry with a NaN
-                warn(str(err), stacklevel=2)
+                    NotAssociatedError, FitConfNotAssociatedError) as err:
+                # If any of the possible errors are thrown, we grab the name of the source and replace
+                #  that entry with a NaN - the names will be included in a warning at the end
+                # warn(str(err))
+                warns.append(src.name)
                 lums.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
@@ -457,6 +467,12 @@ class BaseSample:
         check_lums = lums[~np.isnan(lums)]
         if len(check_lums) == 0:
             raise ValueError("All luminosities appear to be NaN.")
+
+        # If there were any errors for any of the sources, we include their names in a warning here
+        if len(warns) > 0:
+            warn_text = ("Problems occurred (there may have been no successful model fit) while attempting to retrieve "
+                         "luminosities for the following sources; {}".format(",".join(warns)))
+            warn(warn_text, stacklevel=2)
 
         return lums
 
@@ -577,7 +593,6 @@ class BaseSample:
 
         # Show the figure
         plt.show()
-    # The length of the sample object will be the number of associated sources.
 
     def info(self):
         """

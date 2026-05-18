@@ -1,5 +1,6 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 13:53. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:24 PM. Copyright (c) The Contributors.
+
 
 from typing import Tuple, List, Union
 
@@ -8,7 +9,7 @@ from astropy.units import Quantity, pix, deg, UnitConversionError, UnitBase, Uni
 from astropy.wcs import WCS
 from fitsio import FITSHDR
 
-from ..products import Image, RateMap, ExpMap
+from ..products.phot import Image, RateMap, ExpMap
 from ..sourcetools import ang_to_rad, rad_to_ang
 from ..utils import xmm_sky
 
@@ -302,7 +303,6 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
     as an argument, and construct astropy wcs objects. Very simply looks for different WCS entries in the
     header, and uses their critical values to construct astropy WCS objects.
 
-    :param FITSHDR hdr: The header object to extract WCS information from.
     :return: A list of astropy WCS objects extracted from the input header.
     :rtype: List[WCS]
     """

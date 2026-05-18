@@ -1,0 +1,57 @@
+# Large parts of this are directly copied or adapted from 
+#  https://packaging.python.org/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+
+# This action triggers the first stage of publishing this module. When a new tag is created and pushed to the remote repository, this action
+#  will begin. It builds the module, just as it would for an actual PyPI release, then uploads it to the Test PyPI index. That way I can test install
+#  the package from the test PyPI and not expose the real PyPI index to a potentially buggered version. When I verify that it works, a real publishing can
+#  be triggered by releasing the module.
+
+# As a reminder to myself, the installation from test PyPI has to be done using this command, to make sure the dependancies are installed from the real
+#  PyPI index. PIP also seems to have issues with fitsio and regions v0.4 - but conda installing them works:
+# pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple xga
+
+# The overall name of the action
+name: Test build of sdist and wheel, triggered by tag
+
+# This action triggers when there is a push to the repo
+on: push
+
+# Now the actual jobs we want the action to do are setup
+jobs:
+  # The only job in this action, building and publishing the XGA Python module
+  build:
+    name: Build and publish XGA
+    # I actually only want to run this one if the pushed commit has a tag - I will only do this for new versions of the module
+    if: startsWith(github.ref, 'refs/tags')
+    # The build/publishing process runs on the latest version of Ubuntu - not super important what this is for this use case, so long as its not Windows
+    runs-on: ubuntu-latest
+
+    # This job has several steps
+    steps:
+      # Checks out the master branch (what we want to build and publish - hopefully with the VCS info that versioneer needs), then
+      #  activates a relatively recent version of Python
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+    - name: Setup the Python install
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+
+    # The next two chunks set up PIP properly and build the module
+    - name: Install pypa/build
+      run: >-
+        python -m
+        pip install
+        build
+        --user
+
+    - name: Build a binary wheel and source tarball
+      run: >-
+        python -m
+        build
+        --sdist
+        --wheel
+        --outdir dist/
+        .

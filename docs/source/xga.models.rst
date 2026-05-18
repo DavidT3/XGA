@@ -25,6 +25,14 @@ models.density module
    :undoc-members:
    :show-inheritance:
 
+models.entropy module
+---------------------
+
+.. automodule:: xga.models.entropy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 models.fitting module
 ---------------------
 
@@ -33,10 +41,26 @@ models.fitting module
    :undoc-members:
    :show-inheritance:
 
+models.mass module
+------------------
+
+.. automodule:: xga.models.mass
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 models.misc module
 ------------------
 
 .. automodule:: xga.models.misc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+models.pressure module
+------------------
+
+.. automodule:: xga.models.pressure
    :members:
    :undoc-members:
    :show-inheritance:

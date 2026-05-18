@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/8/26, 4:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:44 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -26,12 +26,12 @@ from ..exceptions import ProductGenerationError, UnknownCommandlineError, XGAFit
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT
+from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT, PRETTY_TELESCOPE_NAMES
 
 
 class BaseProduct:
     """
-    The super class for all products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
+    The super class for all X-ray products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
     It can also parse the std_err output of some generation processes into specific errors.
 
     :param str path: The path to where the product file SHOULD be located.
@@ -44,10 +44,15 @@ class BaseProduct:
         object for later use by another processing step. It isn't intended for use by a user and will only be
         accessible when defining a BaseProduct.
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
+            a remote dataset, and to use fsspec to read/stream the data.
+    :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+        datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+        argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
     """
 
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None, telescope: str = None):
+                 extra_info: dict = None, telescope: str = None, force_remote: bool = False, fsspec_kwargs: dict = None):
         """
         The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
         relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
@@ -63,19 +68,68 @@ class BaseProduct:
             object for later use by another processing step. It isn't intended for use by a user and will only be
             accessible when defining a BaseProduct.
         :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
+            a remote dataset, and to use fsspec to read/stream the data.
+        :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
+            datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
+            argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
+
+        # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
+        #  interact with it in the various product sub-classes
+        if force_remote:
+            # Here the user has forced us to treat the path as remote
+            self._local_file = False
+            self._remote_type = 'unknown'
+        elif path[:5] == "s3://" or path[:5] == "gs://":
+            # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
+            #  use with resources like the HEASARC open S3 bucket
+            self._local_file = False
+            self._remote_type = "s3"
+        elif path[:8] == "https://":
+            self._local_file = False
+            self._remote_type = "https"
+        else:
+            # Otherwise we decide that the file is local
+            self._local_file = True
+            self._remote_type = None
+
+        # Keep track of whether the user forced the path to be considered as a remote url or not, that information
+        #  may be required in some warning/error messages later on
+        self._force_remote = force_remote
+
+        # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
+        #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
+        if fsspec_kwargs is None and self._remote_type == "s3":
+            fsspec_kwargs = {"anon": True}
+        # We store the optional keyword arguments that the user can pass to facilitate access to
+        #  remote files in an attribute
+        self._fsspec_kwargs = fsspec_kwargs
+
         # This attribute stores strings that indicate why a product object has been deemed as unusable
         self._why_unusable = []
 
-        # So this flag indicates whether we think this data product can be used for analysis
+        # This flag indicates whether we think this data product can be used for analysis - it can be set to False
+        #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
-        if os.path.exists(path):
+
+        # Try to determine if the file exists - this will not currently check remote files
+        if self._local_file and os.path.exists(path):
             self._path = path
-        else:
+        elif self._local_file:
             self._path = None
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
-        # Saving this in attributes for future reference
+        else:
+            self._path = path
+
+        # Turning null stderr and stdouts (for instance, if the product is just being loaded in, as opposed to it
+        #  being generated by XGA and needing to be checked for process success) into empty strings
+        if stdout_str is None:
+            stdout_str = ""
+        if stderr_str is None:
+            stderr_str = ""
+        # Keeping them in class attributes
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
 
@@ -84,7 +138,12 @@ class BaseProduct:
         self._obs_id = obs_id
         self._inst = instrument
         self._tele = telescope
+
+        # Replacing a null input for the generation command with an empty string
+        if gen_cmd is None:
+            gen_cmd = ""
         self._og_cmd = gen_cmd
+
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
@@ -134,6 +193,41 @@ class BaseProduct:
             self._usable = False
             self._why_unusable.append("ProductPathDoesNotExist")
         self._path = prod_path
+
+    @property
+    def local_file(self) -> bool:
+        """
+         A file is deemed remote by the presence of certain strings at the beginning of the path, or the
+         user passing 'force_remote=True' at product initialization, otherwise it is considered to be local.
+
+        :return: Returns a boolean flag describing if we think this product is pointed at a local file (True) or
+            a remote file (False).
+        :rtype: bool
+        """
+        return self._local_file
+
+    @property
+    def force_remote(self) -> bool:
+        """
+        A property providing the value of the 'force_remote' argument passed to this product at instantiation - that
+        value controls how the init treats the file path.
+
+        :return: The value of 'force_remote' argument passed to this product at instantiation.
+        :rtype: bool
+        """
+        return self._force_remote
+
+    @property
+    def fsspec_kwargs(self) -> Union[dict, None]:
+        """
+        Property getter for the attribute containing the fsspec keyword arguments passed to this
+        product at instantiation. These are for passing configuration information such as credentials for
+        the remote access of S3 buckets
+
+        :return: The fsspec keyword arguments passed to this product at instantiation.
+        :rtype: dict
+        """
+        return self._fsspec_kwargs
 
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
@@ -436,16 +530,6 @@ class BaseProduct:
                 raise UnknownCommandlineError("{}".format(error))
 
     @property
-    def obs_id(self) -> str:
-        """
-        Property getter for the ObsID of the observation that this product was derived from.
-
-        :return: The ObsID of this product.
-        :rtype: str
-        """
-        return self._obs_id
-
-    @property
     def telescope(self) -> str:
         """
         Property getter for the name of the telescope that this product was derived from.
@@ -454,6 +538,36 @@ class BaseProduct:
         :rtype: str
         """
         return self._tele
+
+    @property
+    def pretty_telescope_name(self) -> Union[str, None]:
+        """
+        Property getter for a 'pretty' version of a telescope name, for inclusion in
+        figure labels, titles, etc. - only if a 'pretty' name is defined in xga.utils.
+
+        :return: The 'pretty' version of the telescope name if available, the usual
+            form of the telescope name if not, and None if no telescope name is set.
+        :rtype: Union[str, None]
+        """
+        if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
+            pretty_name = PRETTY_TELESCOPE_NAMES[self.telescope]
+        elif (self.telescope is not None and
+              self.telescope not in PRETTY_TELESCOPE_NAMES):
+            pretty_name = self.telescope
+        else:
+            pretty_name = None
+
+        return pretty_name
+
+    @property
+    def obs_id(self) -> str:
+        """
+        Property getter for the ObsID of the observation that this product was derived from.
+
+        :return: The ObsID of this product.
+        :rtype: str
+        """
+        return self._obs_id
 
     @property
     def instrument(self) -> str:
@@ -772,12 +886,19 @@ class BaseProfile1D:
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
     :param str telescope: The telescope that this profile is derived from. Default is None.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
 
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, telescope: str = None):
+                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, telescope: str = None, spec_model: str = None,
+                 fit_conf: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -804,6 +925,12 @@ class BaseProfile1D:
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
             is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         :param str telescope: The telescope that this profile is derived from. Default is None.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         if type(radii) != Quantity or type(values) != Quantity:
             raise TypeError("Both the radii and values passed into this object definition must "
@@ -845,12 +972,12 @@ class BaseProfile1D:
         # I'm also going to require that the profiles have knowledge of radii in degree units, also so I can make
         #  predictable storage strings. I don't really like to do this as it feels bodgy, but oh well
         if not radii.unit.is_equivalent('deg') and deg_radii is None and set_storage_key is None:
-            raise ValueError("If the radii variable is not in units that are convertible to degrees, please pass "
-                             "radii in degrees to deg_radii, this profile needs knowledge of the radii in degrees"
+            raise ValueError("If the 'radii' variable is not in units that are convertible to degrees, please pass "
+                             "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
                              " to construct a storage key.")
         elif not radii.unit.is_equivalent('deg') and set_storage_key is None and len(deg_radii) != len(radii):
-            raise ValueError("deg_radii is a different length to radii, they should be equivelant quantities, simply"
-                             " in different units.")
+            raise ValueError("'deg_radii' is a different length to 'radii', they should be equivalent "
+                             "quantities, simply in different units.")
         elif radii.unit.is_equivalent('deg') and set_storage_key is None:
             deg_radii = radii.to('deg')
 
@@ -925,7 +1052,7 @@ class BaseProfile1D:
         #  have them (like brightness profiles for instance)
         self._energy_bounds = (None, None)
 
-        # Checking the if associated_set_id is supplied, so is set_storage_key, and vica versa
+        # Checking if associated_set_id is supplied, so is set_storage_key, and vice versa
         if not all([associated_set_id is None, set_storage_key is None]) and \
                 not all([associated_set_id is not None, set_storage_key is not None]):
             raise ValueError("Both associated_set_id and set_storage_key must be None, or both must be not None.")
@@ -936,6 +1063,21 @@ class BaseProfile1D:
         # Don't think this one will get a property, I can't see why the user would need it.
         self._set_storage_key = set_storage_key
 
+        # Here we define attributes to store the fit_conf and spec_model parameters - which detail the exact
+        #  spectral model and configuration that was used to produce the profile (as such only relevant to
+        #  profiles that come from annular spectral properties
+        # First, we make sure that we don't have one of these passed without the other - that wouldn't make sense
+        #  There must be a more elegant way of doing checks like this?
+        if any([fit_conf is None, spec_model is None]) and not all([fit_conf is None, spec_model is None]):
+            raise ValueError("Both the 'fit_conf' and 'spec_model' arguments must be None, or both must be not None.")
+        # Currently restrict the input of fit_conf - only the string version is allowed.
+        elif fit_conf is not None and not isinstance(fit_conf, str):
+            raise TypeError("The 'fit_conf' argument must be the string-form of the spectral fit "
+                            "configuration, not the dictionary-form.")
+
+        self._spec_fit_conf = fit_conf
+        self._spec_model = spec_model
+
         # Here we generate a storage key for the profile to use to place itself in XGA's storage structure
         if self._set_storage_key is not None:
             # If there is a storage key for a spectrum which generated this available, then our life becomes
@@ -944,6 +1086,16 @@ class BaseProfile1D:
             # In fact as the profile will also be indexed under the profile type name, we can just use this as
             #  our storage key
             self._storage_key = self._set_storage_key
+
+            # There will only be a set storage key if this profile came from an annular spectrum, so now we can
+            #  check if we were given a fit configuration key as well - if we were, we'll include it in the
+            #  storage key. We don't check if both self._spec_fit_conf and self._spec_model are None here because
+            #  we've already ensured that both variables have been set, or not set.
+            if self._spec_fit_conf is not None:
+                # TODO I NEED TO ENSURE THAT THE SPEC FIT CONF PASSED TO THESE PROFILES IS THE STRING VERSION, NOT
+                #  THE DICTIONARY VERSION. TROUBLE IS I WROTE ALL OF THIS STUFF DEALING WITH DIFFERENT CONFIGURATIONS
+                #  OF THE SAME MODEL SO LONG AGO NOW THAT I HAVE FORGOTTEN HOW
+                self._storage_key += ("_" + self._spec_model + "_" + self._spec_fit_conf)
         else:
             # Default storage key for profiles that don't implement their own storage key will include their radii
             #  and the central coordinate
@@ -976,6 +1128,11 @@ class BaseProfile1D:
         #  outside of an XGA source analysis. All profiles created by XGA processes running through XGA sources will
         #  autosave, but the default behaviour of the class will be not to autosave.
         self._auto_save = auto_save
+
+        # This attribute is null by default, and can only be set through a property - if set then (when profiles
+        #  are combined into an BaseAggregateProfile1D for the purposes of plotting) the value will be used as the
+        #  label for the profile, rather than just the name
+        self._custom_agg_label = None
 
     def _model_allegiance(self, model: BaseModel1D):
         """
@@ -1044,16 +1201,20 @@ class BaseProfile1D:
         else:
             self._model_allegiance(model)
 
+        # Trying to read out the raw output unit of the model with current start parameters, rather than the
+        #  final unit set by each model - this is to make sure we're doing regression on data of the right unit
+        raw_mod_unit = model.model(self.radii[0], *model.start_pars).unit
+
         # I'm just defining these here so that the lines don't get too long for PEP standards
-        y_data = (self.values.copy() - self._background).value
-        y_errs = self.values_err.copy().value
+        y_data = (self.values.copy() - self._background).to(raw_mod_unit).value
+        y_errs = self.values_err.copy().to(raw_mod_unit).value
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
 
         for prior in model.par_priors:
             if prior['type'] != 'uniform':
-                raise NotImplementedError("Sorry but I don't yet support non-uniform priors for profile fitting!")
+                raise NotImplementedError("Non-uniform priors for profile fitting are not currently supported - please contact the developers if you need this feature.")
 
         prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
@@ -1081,7 +1242,8 @@ class BaseProfile1D:
         #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
         if find_to_replace(base_start_pars, prior_arr).any():
             warn("Maximum likelihood estimator has produced at least one start parameter that is outside"
-                 " the allowed values defined by the prior, reverting to default start parameters for this model.")
+                 " the allowed values defined by the prior, reverting to default start parameters for this model.",
+                 stacklevel=2)
             base_start_pars = model.unitless_start_pars
 
         # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
@@ -1109,7 +1271,7 @@ class BaseProfile1D:
         if any(all_bad):
             warn("All walker starting parameters for one or more of the model parameters are outside the priors, which"
                  "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
-                 " drawn from the priors directly.")
+                 " drawn from the priors directly.", stacklevel=2)
             # This replacement only affects those parameters for which ALL start positions are outside the
             #  prior range
             all_bad_inds = np.argwhere(all_bad).T[0]
@@ -1191,10 +1353,10 @@ class BaseProfile1D:
                     # Store the current unit
                     u = p_dist.unit
                     # Measure the 50th percentile value of the current parameter distribution
-                    fiftieth = np.percentile(p_dist, 50).value
+                    fiftieth = np.nanpercentile(p_dist, 50).value
                     # Find the upper and lower bounds of the 1sigma region of the distribution
-                    upper = np.percentile(p_dist, 84.1).value
-                    lower = np.percentile(p_dist, 15.9).value
+                    upper = np.nanpercentile(p_dist, 84.1).value
+                    lower = np.nanpercentile(p_dist, 15.9).value
                     # Store the upper and lower uncertainties with the correct units
                     model_par_errs.append(Quantity([fiftieth - lower, upper - fiftieth], u))
 
@@ -1245,8 +1407,12 @@ class BaseProfile1D:
         else:
             self._model_allegiance(model)
 
-        y_data = (self.values.copy() - self._background).value
-        y_errs = self.values_err.copy().value
+        # Trying to read out the raw output unit of the model with current start parameters, rather than the
+        #  final unit set by each model - this is to make sure we're doing regression on data of the right unit
+        raw_mod_unit = model.model(self.radii[0], *model.start_pars).unit
+
+        y_data = (self.values.copy() - self._background).to(raw_mod_unit).value
+        y_errs = self.values_err.copy().to(raw_mod_unit).value
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
@@ -1352,7 +1518,7 @@ class BaseProfile1D:
 
     def fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
             num_steps: int = 30000, num_walkers: int = 20, progress_bar: bool = True,
-            show_warn: bool = True) -> BaseModel1D:
+            show_warn: bool = True, force_refit: bool = False) -> BaseModel1D:
         """
         Method to fit a model to this profile's data, then store the resulting model parameter results. Each
         profile can store one instance of a type of model per fit method. So for instance you could fit both
@@ -1373,6 +1539,8 @@ class BaseProfile1D:
         :param bool progress_bar: Only applicable if using MCMC fitting, should a progress bar be shown.
         :param bool show_warn: Should warnings be printed out, otherwise they are just stored in the model
             instance (this also happens if show_warn is True).
+        :param bool force_refit: Controls whether the profile will re-run the fit of a model that already has a good
+            model fit stored. The default is False.
         :return: The fitted model object. The fitted model is also stored within the profile object.
         :rtype: BaseModel1D
         """
@@ -1414,13 +1582,13 @@ class BaseProfile1D:
 
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
-        if model.name in self._good_model_fits[method]:
+        if not force_refit and model.name in self._good_model_fits[method]:
             warn("{m} already has a successful fit result for this profile using {me}, with those start "
-                 "parameters".format(m=model.name, me=method))
+                 "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = True
         elif model.name in self._bad_model_fits[method]:
             warn("{m} already has a failed fit result for this profile using {me} with those start "
-                 "parameters".format(m=model.name, me=method))
+                 "parameters".format(m=model.name, me=method), stacklevel=2)
             already_done = False
         else:
             already_done = False
@@ -1559,6 +1727,35 @@ class BaseProfile1D:
             # This method means that a change has happened to the model, so it should be re-saved
             self.save()
 
+    def remove_model_fit(self, model: Union[str, BaseModel1D], method: str):
+        """
+        This will remove an existing model fit for a particular fit method.
+
+        :param str/BaseModel1D model: The model fit to delete.
+        :param str method: The method used to fit the model.
+        """
+        # Making sure we have a string model name
+        if isinstance(model, BaseModel1D):
+            model = model.name
+
+        # Checking the input model is valid for this profile
+        if model not in PROF_TYPE_MODELS[self._prof_type]:
+            raise XGAInvalidModelError("{m} is not a valid model for a {p} "
+                                       "profile.".format(m=model, p=self._y_axis_name.lower()))
+
+        # Checking that the method passed is valid
+        if method not in self._fit_methods:
+            allowed = ", ".join(self._fit_methods)
+            raise XGAFitError("{me} is not a valid fitting method, the following are allowed; "
+                              "{a}".format(me=method, a=allowed))
+
+        if model not in self._good_model_fits[method]:
+            raise XGAInvalidModelError("{m} is valid for this profile, but cannot be removed as it has not been "
+                                       "fit.".format(m=model))
+        else:
+            # Finally remove the model
+            del self._good_model_fits[method][model]
+
     def get_sampler(self, model: str) -> em.EnsembleSampler:
         """
         A get method meant to retrieve the MCMC ensemble sampler used to fit a particular
@@ -1678,9 +1875,14 @@ class BaseProfile1D:
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
 
-        # Need to remove $ from the labels because getdist adds them itself
-        stripped_labels = [n.replace('$', '') for n in model_obj.par_publication_names]
+        # Setting up parameter label name and unit pairs - will strip them of '$' in the next line - didn't do it
+        #  here to make it a little easier to read
+        labels = [[par_name, model_obj.par_units[par_ind].to_string('latex')] for par_ind, par_name
+                  in enumerate(model_obj.par_publication_names)]
 
+        # Need to remove $ from the labels because getdist adds them itself
+        stripped_labels = [(lab_pair[0] + ((r"\: \left[" + lab_pair[1] + r'\right]')
+                            if lab_pair[1] != '$\\mathrm{}$' else '')).replace('$', '') for lab_pair in labels]
         # Setup the getdist sample object
         gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
                             settings=settings)
@@ -1730,10 +1932,11 @@ class BaseProfile1D:
 
         return realisations
 
-    def get_view(self, fig: Figure, main_ax: Axes, xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-                 back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-                 x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-                 y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
+    def get_view(self, fig: Figure, main_ax: Axes, xscale: str = "log", yscale: str = "log", xlim: tuple = None,
+                 ylim: tuple = None, models: bool = True,  back_sub: bool = True, just_models: bool = False,
+                 custom_title: str = None, draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False,
+                 y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
+                 data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
                  auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
@@ -1767,7 +1970,12 @@ class BaseProfile1D:
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         :param str data_colour: Used to set the colour of the data points.
-        :param str model_colour: Used to set the colour of a model fit.
+        :param str/List[str] model_colour: The matplotlib colour(s) that should be used for plotted model fits (if
+            applicable). Either a single colour name, or a list of colour names, may be passed depending on the number
+            of models that are being plotted - if there are multiple models, and a single colour is passed, the plot
+            will revert to the default matplotlib colour cycler. If a list is passed, those colours will be cycled
+            through instead (if there are insufficient entries for the number of models an error will be raised). The
+            default value is 'seagreen'.
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
@@ -1890,6 +2098,23 @@ class BaseProfile1D:
                             color=line[0].get_color())
 
         if models:
+            # Runs through the model fit methods, and the models fit with each method, and counts them - makes
+            #  it a little neater to check how many colours we need for our colour cycles down below
+            num_to_plot = len([1 for method in self._good_model_fits for model in self._good_model_fits[method]])
+
+            # Now we have make sure that the model colours are set up properly - the user can either pass a string
+            #  name or a list of string names, so we will either stick with one colour for one model, revert to the
+            #  standard colour cycle if they only gave one colour for multiple models, accept the list of colours for
+            #  a set of models, or throw an error that they didn't pass a long enough list of colours
+            if isinstance(model_colour, str) and num_to_plot == 1:
+                model_colour = [model_colour]
+            elif isinstance(model_colour, str) and num_to_plot != 1:
+                model_colour = [None]*num_to_plot
+            elif isinstance(model_colour, list) and len(model_colour) != num_to_plot:
+                raise ValueError("If the 'model_colour' argument is a list, it must have one entry per model-method "
+                                 "combination. The passed list has {p} entries, and there are {mm} model-method "
+                                 "combinations.".format(p=len(model_colour), mm=num_to_plot))
+
             # We use the slightly-no-longer-useful fit_radii property (it is only useful if any of the radii values
             #  are at zero, which used to be the case for most of the profiles generated by XGA). In the case where
             #  no radii values are zero, then fit_radii will just be the radii. Then we subtract the errors and add
@@ -1900,28 +2125,30 @@ class BaseProfile1D:
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
-            mod_rads = np.linspace(lo_rad, hi_rad, 100)
+            mod_rads = np.linspace(lo_rad, hi_rad, 500)
 
+            mod_col_ind = 0
             for method in self._good_model_fits:
                 for model in self._good_model_fits[method]:
                     model_obj = self._good_model_fits[method][model]
                     mod_reals = model_obj.get_realisations(mod_rads)
                     # mean_model = np.mean(mod_reals, axis=1)
-                    median_model = np.percentile(mod_reals, 50, axis=1)
+                    median_model = np.nanpercentile(mod_reals, 50, axis=1)
 
-                    upper_model = np.percentile(mod_reals, 84.1, axis=1)
-                    lower_model = np.percentile(mod_reals, 15.9, axis=1)
+                    upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
+                    lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
 
                     mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
-                    main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm, label=mod_lab,
-                                 color=model_colour)
+                    cur_line = main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm, label=mod_lab,
+                                 color=model_colour[mod_col_ind])
+                    cur_color = cur_line[0].get_color()
 
                     main_ax.fill_between(mod_rads.value / x_norm.value, lower_model.value / y_norm.value,
                                          upper_model.value / y_norm.value, alpha=0.7, interpolate=True,
-                                         where=upper_model.value >= lower_model.value, facecolor=model_colour)
-                    main_ax.plot(mod_rads.value / x_norm.value, lower_model.value / y_norm.value, color=model_colour,
+                                         where=upper_model.value >= lower_model.value, facecolor=cur_color)
+                    main_ax.plot(mod_rads.value / x_norm.value, lower_model.value / y_norm.value, color=cur_color,
                                  linestyle="dashed")
-                    main_ax.plot(mod_rads.value / x_norm.value, upper_model.value / y_norm.value, color=model_colour,
+                    main_ax.plot(mod_rads.value / x_norm.value, upper_model.value / y_norm.value, color=cur_color,
                                  linestyle="dashed")
 
                     # I only want this to trigger if the user has decided they want a residual axis. I expect most
@@ -1930,9 +2157,12 @@ class BaseProfile1D:
                     if show_residual_ax:
                         # This calculates and plots the residuals between the model and the data on the extra
                         #  axis we added near the beginning of this method
-                        res = np.percentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
+                        res = np.nanpercentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
                               - (plot_y_vals * y_norm)
-                        res_ax.plot(rad_vals.value, res.value, 'D', color=model_colour)
+                        res_ax.plot(rad_vals.value, res.value, 'D', color=cur_color)
+
+                    # Move the colour on!
+                    mod_col_ind += 1
 
         # Parsing the astropy units so that if they are double height then the square brackets will adjust size
         x_unit = r"$\left[" + rad_vals.unit.to_string("latex").strip("$") + r"\right]$"
@@ -2082,12 +2312,12 @@ class BaseProfile1D:
         else:
             return main_ax, None
 
-    def view(self, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-             back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-             x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-             y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen', show_legend: bool = True,
-             show_residual_ax: bool = True, draw_vals: dict = {}, auto_legend: bool = True,
-             joined_points: bool = False, axis_formatters: dict = None):
+    def view(self, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None, ylim: tuple = None,
+             models: bool = True, back_sub: bool = True, just_models: bool = False, custom_title: str = None,
+             draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False,
+             x_label: str = None, y_label: str = None, data_colour: str = 'black',
+             model_colour: Union[str, List[str]] = 'seagreen', show_legend: bool = True, show_residual_ax: bool = True,
+             draw_vals: dict = {}, auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -2118,7 +2348,12 @@ class BaseProfile1D:
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         :param str data_colour: Used to set the colour of the data points.
-        :param str model_colour: Used to set the colour of a model fit.
+        :param str/List[str] model_colour: The matplotlib colour(s) that should be used for plotted model fits (if
+            applicable). Either a single colour name, or a list of colour names, may be passed depending on the number
+            of models that are being plotted - if there are multiple models, and a single colour is passed, the plot
+            will revert to the default matplotlib colour cycler. If a list is passed, those colours will be cycled
+            through instead (if there are insufficient entries for the number of models an error will be raised). The
+            default value is 'seagreen'.
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
@@ -2152,10 +2387,11 @@ class BaseProfile1D:
         # Wipe the figure
         plt.close("all")
 
-    def save_view(self, save_path: str, figsize=(10, 7), xscale="log", yscale="log", xlim=None, ylim=None, models=True,
-                  back_sub: bool = True, just_models: bool = False, custom_title: str = None, draw_rads: dict = {},
-                  x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False, x_label: str = None,
-                  y_label: str = None, data_colour: str = 'black', model_colour: str = 'seagreen',
+    def save_view(self, save_path: str, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None,
+                  ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
+                  custom_title: str = None, draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False,
+                  y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
+                  data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
                   show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
                   auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
@@ -2191,7 +2427,12 @@ class BaseProfile1D:
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
         :param str data_colour: Used to set the colour of the data points.
-        :param str model_colour: Used to set the colour of a model fit.
+        :param str/List[str] model_colour: The matplotlib colour(s) that should be used for plotted model fits (if
+            applicable). Either a single colour name, or a list of colour names, may be passed depending on the number
+            of models that are being plotted - if there are multiple models, and a single colour is passed, the plot
+            will revert to the default matplotlib colour cycler. If a list is passed, those colours will be cycled
+            through instead (if there are insufficient entries for the number of models an error will be raised). The
+            default value is 'seagreen'.
         :param bool show_legend: Whether the legend should be displayed or not. Default is True.
         :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
             model (if a model is fitted and being shown) is displayed. Default is True.
@@ -2510,6 +2751,29 @@ class BaseProfile1D:
         return self._set_id
 
     @property
+    def spec_fit_conf(self) -> str:
+        """
+        If this profile was generated from an annular spectrum, this property provides the fit-configuration key of
+        the spectral fits that provided the properties used to build it.
+
+        :return: The spectral fit-configuration key. If the spectral fit configuration key was never set, the
+            return will be None.
+        :rtype: str
+        """
+        return self._spec_fit_conf
+
+    @property
+    def spec_model(self) -> str:
+        """
+        If this profile was generated from an annular spectrum, this property provides the name of the model
+        that was fit to the spectra in order to measure the properties used to build it.
+
+        :return: The spectral model name. If the spectral model name was never set, the return will be None.
+        :rtype: str
+        """
+        return self._spec_model
+
+    @property
     def y_axis_label(self) -> str:
         """
         Property to return the name used for labelling the y-axis in any plot generated by a profile object.
@@ -2649,6 +2913,29 @@ class BaseProfile1D:
         """
         return self._outer_rad
 
+    @property
+    def custom_aggregate_label(self) -> str:
+        """
+        This property is a label that should be used in place of the source name associated with this profile when
+        plotting multiple profiles on one axis through an aggregate profile instance.
+
+        :return: The custom label, default is None.
+        :rtype: str
+        """
+        return self._custom_agg_label
+
+    @custom_aggregate_label.setter
+    def custom_aggregate_label(self, new_val: str):
+        """
+        Setter for the custom_aggregate_label property.
+
+        :param str new_val: The new label.
+        """
+        if isinstance(new_val, str) or new_val is None:
+            self._custom_agg_label = new_val
+        else:
+            raise TypeError("'custom_aggregate_label' must be a string, or None.")
+
     def __len__(self) -> int:
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
@@ -2687,18 +2974,14 @@ class BaseAggregateProfile1D:
 
         :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this aggregate profile.
         """
-        # This checks that all types of profiles in the profiles list are the same
-        types = [type(p) for p in profiles]
-        if len(set(types)) != 1:
-            raise TypeError("All component profiles must be of the same type")
 
-        # This checks that all profiles have the same x units
+        # This checks that all profiles have the same x units - we used to explicitly check for Python instance
+        #  type, but actually we do want profiles to be plottable on the same axis if they have the same units
         x_units = [p.radii_unit.to_string() for p in profiles]
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
-        # THis checks that they all have the same y units. This is likely to be true if they are the same
-        #  type, but you never know
+        # This checks that they all have the same y units.
         y_units = [p.values_unit.to_string() for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
@@ -2958,10 +3241,12 @@ class BaseAggregateProfile1D:
             else:
                 p_name = p.src_name + " {t}".format(t=p.telescope)
 
-            if p.type == "brightness_profile" and p.psf_corrected:
+            if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
                 leg_label = p_name + " PSF Corrected"
-            else:
+            elif p.custom_aggregate_label is None:
                 leg_label = p_name
+            else:
+                leg_label = p.custom_aggregate_label
 
             # This subtracts the background if the user wants a background subtracted plot
             plot_y_vals = p.values.copy()
@@ -3026,12 +3311,12 @@ class BaseAggregateProfile1D:
                         else:
                             lo_rad = p.fit_radii.min()
                             hi_rad = p.fit_radii.max()
-                        mod_rads = np.linspace(lo_rad, hi_rad, 100)
+                        mod_rads = np.linspace(lo_rad, hi_rad, 500)
                         mod_reals = model_obj.get_realisations(mod_rads)
-                        median_model = np.percentile(mod_reals, 50, axis=1)
+                        median_model = np.nanpercentile(mod_reals, 50, axis=1)
 
-                        upper_model = np.percentile(mod_reals, 84.1, axis=1)
-                        lower_model = np.percentile(mod_reals, 15.9, axis=1)
+                        upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
+                        lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
 
                         colour = line[0].get_color()
 
@@ -3051,7 +3336,7 @@ class BaseAggregateProfile1D:
                         if show_residual_ax:
                             # This calculates and plots the residuals between the model and the data on the extra
                             #  axis we added near the beginning of this method
-                            res = np.percentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
+                            res = np.nanpercentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
                                   (plot_y_vals * y_norms[p_ind])
                             res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
 

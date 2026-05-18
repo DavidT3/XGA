@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/09/2025, 15:56. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:51 PM. Copyright (c) The Contributors.
 
 import inspect
 import pickle
@@ -17,6 +17,7 @@ from cycler import cycler
 from getdist import plots, MCSamples
 from matplotlib import cm
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.colors import TABLEAU_COLORS, BASE_COLORS, Colormap, CSS4_COLORS, Normalize
 from matplotlib.ticker import FuncFormatter
 
@@ -248,11 +249,9 @@ class ScalingRelation:
         else:
             self._chains = chains
 
-        # If the user hasn't passed the name of the relation then I'll generate one from what I know so far
-        if relation_name is None:
-            self._name = self._y_name + '-' + self._x_name + ' ' + self.fit_method
-        else:
-            self._name = relation_name
+        # If the user hasn't passed the name of the relation then the view method will generate one for itself, which
+        #  is the main place that it is used
+        self._name = relation_name
 
         # For relations from literature especially I need to give credit the author, and the original paper
         self._author = relation_author
@@ -310,7 +309,7 @@ class ScalingRelation:
 
         # Set an attribute for name of the telescope used to build this relation
         self._telescope = telescope
-    
+
     @property
     def core_excised(self) -> bool:
         """
@@ -321,7 +320,7 @@ class ScalingRelation:
         :rtype: bool
         """
         return self._core_excised
-    
+
     @property
     def outer_aperture(self) -> Union[str, Quantity, None]:
         """
@@ -946,23 +945,23 @@ class ScalingRelation:
 
         return predicted_y
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = None,
-             data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
-             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
-             x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
-             save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
-             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-             third_dim_cmap: Union[str, Colormap] = 'plasma', y_lims: Quantity = None, one_to_one: bool = False):
+    def get_view(self, ax: Axes, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None,
+                 data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
+                 custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, x_ticks: list = None,
+                 x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
+                 label_points: bool = False, point_label_colour: str = 'black', point_label_size: int = 10,
+                 point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
+                 third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
+                 third_dim_axis_formatters: dict = None, y_lims: Quantity = None, one_to_one: bool = False):
         """
-        A method that produces a high quality plot of this scaling relation (including the data it is based upon,
-        if available).
+        A get method that will populate a matplotlib axes with a high quality plot of this scaling relation (including
+        the data it is based upon, if available), and then return it.
 
+        :param Axes ax: The axes on which to draw the plot.
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
             this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-        :param tuple figsize: A custom figure size for the plot, default is (8, 8) if NO third data axis is being
-            shown, and (10, 8) if there is one.
         :param str data_colour: The colour to use for the data points in the plot, default is black.
         :param str model_colour: The colour to use for the model in the plot. Default is None in which case
             the value of the model_colour property of the relation is used.
@@ -973,7 +972,6 @@ class ScalingRelation:
         :param str custom_y_label: Passing a string to this variable will override the y axis label
             of this plot, including the unit string.
         :param float fontsize: The fontsize for axis labels.
-        :param float legend_fontsize: The fontsize for text in the legend.
         :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
             case they are determined automatically.
         :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
@@ -982,8 +980,6 @@ class ScalingRelation:
             case they are determined automatically.
         :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
             None in which case they are determined automatically.
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
         :param bool label_points: If True, and source name information for each point was passed on the declaration of
             this scaling relation, then points will be accompanied by an index that can be used with the 'point_names'
             property to retrieve the source name for a point. Default is False.
@@ -999,6 +995,16 @@ class ScalingRelation:
         :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
             A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
             overwrites the 'data_colour' argument if show_third_dim is True.
+        :param Normalize third_dim_norm_cmap: A matplotlib 'Normalize' class/subclass (e.g. LogNorm, SymLogNorm, etc.)
+            that will be used to scale the colouring of the data points by the third data dimension. Note that
+            a class, NOT A CLASS INSTANCE (e.g. LogNorm()) must be passed, as the normalisation will be set up in
+            this method. Default is Normalization (linear scaling).
+        :param dict third_dim_axis_formatters: A dictionary of formatters that can be applied to the colorbar
+            axis. Allowed keys are; 'major' and 'minor'. The values associated with the keys should be
+            instantiated matplotlib formatters.
+        :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
+            data point coordinates to determine the location a label should be added. You can use this to fine-tune
+            the label positions relative to their data point.
         :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
             relation line - setting any value other than None will override that.
         :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
@@ -1016,59 +1022,33 @@ class ScalingRelation:
                                       'scaling relation ({xr}).'.format(xl=x_lims.unit.to_string(),
                                                                         xr=self.x_unit.to_string()))
         elif x_lims is None and len(self._x_data) != 0:
-            max_x_ind = np.argmax(self._x_data)
-            min_x_ind = np.argmin(self._x_data)
-            x_lims = [0.9*(self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
-                      1.1*(self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
+            max_x_ind = np.nanargmax(self._x_data)
+            min_x_ind = np.nanargmin(self._x_data)
+            x_lims = [0.9 * (self._x_data[min_x_ind].value - self._x_err[min_x_ind].value),
+                      1.1 * (self._x_data[max_x_ind].value + self._x_err[max_x_ind].value)]
         elif x_lims is None and len(self._x_data) == 0:
-            raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
+            raise ValueError('There are no data available to infer suitable axis limits from, please pass x limits.')
 
         # Just grabs the model colour from the property if the user doesn't set a value for model_colour
         if model_colour is None:
             model_colour = self.model_colour
 
-        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
-        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
-        #  don't have to worry about/see that warning.
-        if show_third_dim is None and self.third_dimension_data is None:
-            show_third_dim = False
-        elif show_third_dim is None and self.third_dimension_data is not None:
-            show_third_dim = True
-
-        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
-        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
-        #  have set show_third_dim=True, we set it back to False
-        if show_third_dim and self.third_dimension_data is None:
-            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
-                 "the creation of this scaling relation. Setting 'show_third_dim' to False.", stacklevel=2)
-            show_third_dim = False
-
-        # We then set the default figure size (assuming the user hasn't passed one they want to replace it) with
-        #  (8, 8) or (9, 8) - it is variable because with a third data dimension a color-bar gets added, so we want
-        #  the x-size to be longer to accommodate it
-        if not show_third_dim and figsize is None:
-            figsize = (8, 8)
-        elif show_third_dim and figsize is None:
-            figsize = (10, 8)
-
-        # Setting up the matplotlib figure
-        fig = plt.figure(figsize=figsize)
-        fig.tight_layout()
-        ax = plt.gca()
-
         # Setting the axis limits
         ax.set_xlim(x_lims)
-
-        # Making the scale log if requested
-        if log_scale:
-            ax.set_xscale("log")
-            ax.set_yscale("log")
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
         ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
 
-        # Plot the data with uncertainties, if any data is present in this scaling relation.
+        # Checks on the validity of the value of show_third_dim are now in the view() method that
+        #  wraps this get_view. That is primarily because the knowledge of whether there IS
+        #  a third dimension to be plotted is required to set the default figure size.
+        # Check that the passed normalization class is actually valid
+        if ((show_third_dim and third_dim_norm_cmap != Normalize) and
+                not Normalize.__subclasscheck__(third_dim_norm_cmap)):
+            raise TypeError("The 'third_dim_norm_cmap' argument must be a subclass of matplotlib.color.Normalize")
+
+        # Plot the data with uncertainties if any data is present in this scaling relation.
         if len(self.x_data) != 0 and not show_third_dim:
             ax.errorbar(self._x_data.value, self._y_data.value, xerr=self._x_err.value, yerr=self._y_err.value,
                         fmt="x", color=data_colour, capsize=2)
@@ -1079,7 +1059,8 @@ class ScalingRelation:
             else:
                 cmap = third_dim_cmap
             # We want to normalise this colourmap to our specific data range
-            norm = Normalize(vmin=self.third_dimension_data.value.min(), vmax=self.third_dimension_data.value.max())
+            norm = third_dim_norm_cmap(vmin=self.third_dimension_data.value.min(),
+                                       vmax=self.third_dimension_data.value.max())
             # Now this mapper can be constructed so that we can take that information about the cmap and normalisation
             #  and use it with our data to calculate colours
             cmap_mapper = cm.ScalarMappable(norm=norm, cmap=cmap)
@@ -1109,15 +1090,15 @@ class ScalingRelation:
                     # This does the same thing with the y-data
                     y_dat_lims = ax.get_ylim()
                     y_size = ax.transData.transform((0, y_dat_lims[1]))[1] - \
-                                ax.transData.transform((0, y_dat_lims[0]))[1]
+                             ax.transData.transform((0, y_dat_lims[0]))[1]
                     # Then we convert the current data coordinate into display coordinate system
                     cur_fig_coord = ax.transData.transform((cur_x, cur_y))
                     # And make a label coordinate by offsetting the x and y data coordinate by some fraction of the
                     #  overall size of the axis, in display coordinates, with the final coordinate transformed back
                     #  to data coordinates.
                     inv_tran = ax.transData.inverted()
-                    lab_data_coord = inv_tran.transform((cur_fig_coord[0]+(point_label_offset[0]*x_size),
-                                                         cur_fig_coord[1]+(point_label_offset[1]*y_size)))
+                    lab_data_coord = inv_tran.transform((cur_fig_coord[0] + (point_label_offset[0] * x_size),
+                                                         cur_fig_coord[1] + (point_label_offset[1] * y_size)))
                     plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
                              color=point_label_colour)
 
@@ -1135,9 +1116,9 @@ class ScalingRelation:
         lower = 50 - (conf_level / 2)
 
         model_realisations = self._model_func(model_xs, *model_par_dists.T) * self._y_norm
-        model_mean = np.mean(model_realisations, axis=1)
-        model_lower = np.percentile(model_realisations, lower, axis=1)
-        model_upper = np.percentile(model_realisations, upper, axis=1)
+        model_median = np.nanmedian(model_realisations, axis=1)
+        model_lower = np.nanpercentile(model_realisations, lower, axis=1)
+        model_upper = np.nanpercentile(model_realisations, upper, axis=1)
 
         # I want the name of the function to include in labels and titles, but if its one defined in XGA then
         #  I can grab the publication version of the name - it'll be prettier
@@ -1147,8 +1128,7 @@ class ScalingRelation:
 
         relation_label = " ".join([self._author, self._year, '-', mod_name,
                                    "- {cf}% Confidence".format(cf=conf_level)])
-        plt.plot(model_x * self._x_norm.value, self._model_func(model_x, *model_pars[0, :]) * self._y_norm.value,
-                 color=model_colour, label=relation_label)
+        plt.plot(model_x * self._x_norm.value, model_median, color=model_colour, label=relation_label)
 
         plt.plot(model_x * self._x_norm.value, model_upper, color=model_colour, linestyle="--")
         plt.plot(model_x * self._x_norm.value, model_lower, color=model_colour, linestyle="--")
@@ -1164,6 +1144,11 @@ class ScalingRelation:
         elif y_lims is not None:
             y_lims = y_lims.to(self.y_unit)
             plt.ylim(*y_lims.value)
+
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
@@ -1252,14 +1237,131 @@ class ScalingRelation:
             ax.set_xticks(y_minor_ticks, minor=True)
             ax.set_xticklabels(y_minor_ticks, minor=True)
 
-        # If we did colour the data by a third dimension then we should add a colour-bar to the relation
+        # If we did colour the data by a third dimension, then we should add a colour-bar to the relation
         if show_third_dim:
+            # Setting up the colorbar axis
             cbar = plt.colorbar(cmap_mapper, ax=plt.gca())
+            # And making sure we include units
             if self.third_dimension_data.unit.is_equivalent(''):
                 cbar_lab = self.third_dimension_name
             else:
                 cbar_lab = self.third_dimension_name + ' [' + self.third_dimension_data.unit.to_string('latex') + ']'
+
+            # Set the axis label for the colobar
             cbar.ax.set_ylabel(cbar_lab, fontsize=fontsize)
+
+            # Now we check to see if the user passed custom axis formatters for the colorbar axis, and if so then
+            #  we apply them
+            if third_dim_axis_formatters is not None:
+                # Checks for and uses formatters that the user may have specified for the plot
+                if 'minor' in third_dim_axis_formatters:
+                    cbar.ax.yaxis.set_minor_formatter(third_dim_axis_formatters['minor'])
+                if 'major' in third_dim_axis_formatters:
+                    cbar.ax.yaxis.set_major_formatter(third_dim_axis_formatters['major'])
+
+        return ax
+
+
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = None,
+             data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
+             custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
+             x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
+             save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
+             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
+             third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
+             third_dim_axis_formatters: dict = None, y_lims: Quantity = None, one_to_one: bool = False):
+        """
+        A method that produces a high quality plot of this scaling relation (including the data it is based upon,
+        if available).
+
+        :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
+            this relation is based upon, if that data is not available an error will be thrown.
+        :param bool log_scale: If True, then the x and y axes of the plot will be log-scaled.
+        :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+        :param tuple figsize: A custom figure size for the plot, default is (8, 8) if NO third data axis is being
+            shown, and (10, 8) if there is one.
+        :param str data_colour: The colour to use for the data points in the plot, default is black.
+        :param str model_colour: The colour to use for the model in the plot. Default is None in which case
+            the value of the model_colour property of the relation is used.
+        :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+        :param int conf_level: The confidence level to use when plotting the model.
+        :param str custom_x_label: Passing a string to this variable will override the x axis label
+            of this plot, including the unit string.
+        :param str custom_y_label: Passing a string to this variable will override the y axis label
+            of this plot, including the unit string.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
+        :param bool label_points: If True, and source name information for each point was passed on the declaration of
+            this scaling relation, then points will be accompanied by an index that can be used with the 'point_names'
+            property to retrieve the source name for a point. Default is False.
+        :param str point_label_colour: The colour of the label text.
+        :param int point_label_size: The fontsize of the label text.
+        :param bool show_third_dim: Colour the data points by the third dimension data passed in on creation of this
+            scaling relation, with a colour bar to communicate values. Only possible if data were passed to
+            'third_dim_info' on initialization. Default is None, which automatically gets converted to True if there
+            is a third data dimension, and converted to False if there is not.
+        :param str/Colormap third_dim_cmap: The colour map which should be used for the third dimension data points.
+            A matplotlib colour map name or a colour map object may be passed. Default is 'plasma'. This essentially
+            overwrites the 'data_colour' argument if show_third_dim is True.
+        :param Normalize third_dim_norm_cmap: A matplotlib 'Normalize' class/subclass (e.g. LogNorm, SymLogNorm, etc.)
+            that will be used to scale the colouring of the data points by the third data dimension. Note that
+            a class, NOT A CLASS INSTANCE (e.g. LogNorm()) must be passed, as the normalisation will be set up in
+            this method. Default is Normalization (linear scaling).
+        :param dict third_dim_axis_formatters: A dictionary of formatters that can be applied to the colorbar
+            axis. Allowed keys are; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
+        :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
+            data point coordinates to determine the location a label should be added. You can use this to fine-tune
+            the label positions relative to their data point.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
+        """
+
+        # I wanted this to react to whether there is a third dimension of data or not, so that the warning below
+        #  is still shown if the user sets show_third_dim=True when there is no third dimension, but otherwise they
+        #  don't have to worry about/see that warning.
+        if show_third_dim is None and self.third_dimension_data is None:
+            show_third_dim = False
+        elif show_third_dim is None and self.third_dimension_data is not None:
+            show_third_dim = True
+
+        # We check to see a) whether the user wants a third dimension of data communicated via the colour of the
+        #  data, and b) if they actually passed the data necessary to make that happen. If there is no data but they
+        #  have set show_third_dim=True, we set it back to False
+        if show_third_dim and self.third_dimension_data is None:
+            warn("The 'show_third_dim' argument should only be set to True if 'third_dim_info' was set on "
+                 "the creation of this scaling relation. Setting 'show_third_dim' to False.", stacklevel=2)
+            show_third_dim = False
+
+        # We then set the default figure size (assuming the user hasn't passed one they want to replace it) with
+        #  (8, 8) or (9, 8) - it is variable because with a third data dimension a color-bar gets added, so we want
+        #  the x-size to be longer to accommodate it
+        if not show_third_dim and figsize is None:
+            figsize = (8, 8)
+        elif show_third_dim and figsize is None:
+            figsize = (10, 8)
+
+        # Setting up the matplotlib figure
+        fig = plt.figure(figsize=figsize)
+        fig.tight_layout()
+        ax = plt.gca()
+
+        ax = self.get_view(ax, x_lims, log_scale, plot_title, data_colour, model_colour, grid_on, conf_level,
+                           custom_x_label, custom_y_label, fontsize, x_ticks, x_minor_ticks, y_ticks, y_minor_ticks,
+                           label_points, point_label_colour, point_label_size, point_label_offset, show_third_dim,
+                           third_dim_cmap, third_dim_norm_cmap, third_dim_axis_formatters, y_lims, one_to_one)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
@@ -1459,28 +1561,27 @@ class AggregateScalingRelation:
 
         plt.show()
 
-    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (8, 8),
-             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
-             fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
-             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
-             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
-             y_lims: Quantity = None, one_to_one: bool = False):
+    def get_view(self, ax: Axes, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None,
+                 colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+                 fontsize: float = 15, x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None,
+                 y_minor_ticks: list = None, data_colour_list: list = None, data_shape_list: list = None,
+                 custom_x_label: str = None, custom_y_label: str = None, y_lims: Quantity = None,
+                 one_to_one: bool = False):
         """
-        A method that produces a high quality plot of the component scaling relations in this
-        AggregateScalingRelation.
+        A method that populates a passed matplotlib axis with a high quality plot of the component scaling
+        relations in this AggregateScalingRelation, and then returns it.
 
+        :param Axes ax: The matplotlib Axes object to draw on.
         :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
             this relation is based upon, if that data is not available an error will be thrown.
         :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
         :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
-        :param tuple figsize: A custom figure size for the plot, default is (8, 8).
         :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
         :param bool grid_on: If True then a grid will be included on the plot. Default is True.
         :param int conf_level: The confidence level to use when plotting the model.
         :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
             confusing with multiple relations on one axis.
         :param float fontsize: The fontsize for axis labels.
-        :param float legend_fontsize: The fontsize for text in the legend.
         :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
             case they are determined automatically.
         :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
@@ -1489,8 +1590,6 @@ class AggregateScalingRelation:
             case they are determined automatically.
         :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
             None in which case they are determined automatically.
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
         :param list data_colour_list: A list of matplotlib colours to use as a colour cycle specifically for
             data points. This should be used when you want data points to be a different colour to their model.
         :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
@@ -1558,26 +1657,17 @@ class AggregateScalingRelation:
         elif comb_x_lims is not None:
             x_lims = np.array([comb_x_lims.value.min(), comb_x_lims.value.max()])
         elif x_lims is None and len(comb_x_data) != 0:
-            max_x_ind = np.argmax(comb_x_data[:, 0])
-            min_x_ind = np.argmin(comb_x_data[:, 0])
+            max_x_ind = np.nanargmax(comb_x_data[:, 0])
+            min_x_ind = np.nanargmin(comb_x_data[:, 0])
             x_lims = [0.9 * (comb_x_data[min_x_ind, 0].value - comb_x_data[min_x_ind, 1].value),
                       1.1 * (comb_x_data[max_x_ind, 0].value + comb_x_data[max_x_ind, 1].value)]
         elif x_lims is None and len(comb_x_data) == 0:
             raise ValueError('There is no data available to infer suitable axis limits from, please pass x limits.')
 
-        # Setting up the matplotlib figure
-        fig = plt.figure(figsize=figsize)
-        fig.tight_layout()
-        ax = plt.gca()
         ax.set_prop_cycle(new_col_cycle)
 
         # Setting the axis limits
         ax.set_xlim(x_lims)
-
-        # Making the scale log if requested
-        if log_scale:
-            ax.set_xscale("log")
-            ax.set_yscale("log")
 
         # Setup the aesthetics of the axis
         ax.minorticks_on()
@@ -1611,9 +1701,9 @@ class AggregateScalingRelation:
             lower = 50 - (conf_level / 2)
 
             model_realisations = rel.model_func(model_xs, *model_par_dists.T) * rel._y_norm
-            model_mean = np.mean(model_realisations, axis=1)
-            model_lower = np.percentile(model_realisations, lower, axis=1)
-            model_upper = np.percentile(model_realisations, upper, axis=1)
+            model_median = np.nanmedian(model_realisations, axis=1)
+            model_lower = np.nanpercentile(model_realisations, lower, axis=1)
+            model_upper = np.nanpercentile(model_realisations, upper, axis=1)
 
             # I want the name of the function to include in labels and titles, but if its one defined in XGA then
             #  I can grab the publication version of the name - it'll be prettier
@@ -1621,12 +1711,12 @@ class AggregateScalingRelation:
             for m_name in MODEL_PUBLICATION_NAMES:
                 mod_name = mod_name.replace(m_name, MODEL_PUBLICATION_NAMES[m_name])
 
-            if rel.author != 'XGA':
+            if rel.name is None:
                 relation_label = " ".join([rel.author, rel.year])
             else:
                 relation_label = rel.name + ' Scaling Relation'
-            plt.plot(model_x * rel.x_norm.value, rel.model_func(model_x, *model_pars[0, :]) * rel.y_norm.value,
-                     color=m_colour, label=relation_label)
+
+            plt.plot(model_x * rel.x_norm.value, model_median, color=m_colour, label=relation_label)
 
             plt.plot(model_x * rel.x_norm.value, model_upper, color=m_colour, linestyle="--")
             plt.plot(model_x * rel.x_norm.value, model_lower, color=m_colour, linestyle="--")
@@ -1642,6 +1732,11 @@ class AggregateScalingRelation:
         elif y_lims is not None:
             y_lims = y_lims.to(self.y_unit)
             plt.ylim(*y_lims.value)
+
+        # Making the scale log if requested
+        if log_scale:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
 
         # I can dynamically grab the units in LaTeX formatting from the Quantity objects (thank you astropy)
         #  However I've noticed specific instances where the units can be made prettier
@@ -1729,6 +1824,62 @@ class AggregateScalingRelation:
         if y_minor_ticks is not None:
             ax.set_xticks(y_minor_ticks, minor=True)
             ax.set_xticklabels(y_minor_ticks, minor=True)
+
+        return ax
+
+    def view(self, x_lims: Quantity = None, log_scale: bool = True, plot_title: str = None, figsize: tuple = (8, 8),
+             colour_list: list = None, grid_on: bool = False, conf_level: int = 90, show_data: bool = True,
+             fontsize: float = 15, legend_fontsize: float = 13, x_ticks: list = None, x_minor_ticks: list = None,
+             y_ticks: list = None, y_minor_ticks: list = None, save_path: str = None, data_colour_list: list = None,
+             data_shape_list: list = None, custom_x_label: str = None, custom_y_label: str = None,
+             y_lims: Quantity = None, one_to_one: bool = False):
+        """
+        A method that produces a high quality plot of the component scaling relations in this
+        AggregateScalingRelation.
+
+        :param Quantity x_lims: If not set, this method will attempt to take appropriate limits from the x-data
+            this relation is based upon, if that data is not available an error will be thrown.
+        :param bool log_scale: If true then the x and y axes of the plot will be log-scaled.
+        :param str plot_title: A custom title to be used for the plot, otherwise one will be generated automatically.
+        :param tuple figsize: A custom figure size for the plot, default is (8, 8).
+        :param list colour_list: A list of matplotlib colours to use as a custom colour cycle.
+        :param bool grid_on: If True then a grid will be included on the plot. Default is True.
+        :param int conf_level: The confidence level to use when plotting the model.
+        :param bool show_data: Controls whether data points are shown on the view, as it can quickly become
+            confusing with multiple relations on one axis.
+        :param float fontsize: The fontsize for axis labels.
+        :param float legend_fontsize: The fontsize for text in the legend.
+        :param list x_ticks: Customise which major x-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list x_minor_ticks: Customise which minor x-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param list y_ticks: Customise which major y-axis ticks and labels are on the figure, default is None in which
+            case they are determined automatically.
+        :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
+            None in which case they are determined automatically.
+        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
+            which case the figure will not be saved.
+        :param list data_colour_list: A list of matplotlib colours to use as a colour cycle specifically for
+            data points. This should be used when you want data points to be a different colour to their model.
+        :param list data_shape_list: A list of matplotlib format shapes, to manually set the shapes of plotted
+            data points.
+        :param str custom_x_label: Passing a string to this variable will override the x-axis label of this
+            plot, including the unit string.
+        :param str custom_y_label: Passing a string to this variable will override the y-axis label of this
+            plot, including the unit string.
+        :param Quantity y_lims: If not set, this method will attempt to take appropriate limits from the y-data and/or
+            relation line - setting any value other than None will override that.
+        :param bool one_to_one: If True, a one-to-one line will be plotted on the scaling relation view. Default is
+            False.
+        """
+        # Setting up the matplotlib figure
+        fig = plt.figure(figsize=figsize)
+        fig.tight_layout()
+        ax = plt.gca()
+
+        ax = self.get_view(ax, x_lims, log_scale, plot_title, colour_list, grid_on, conf_level, show_data, fontsize,
+                           x_ticks, x_minor_ticks, y_ticks, y_minor_ticks, data_colour_list, data_shape_list,
+                           custom_x_label, custom_y_label, y_lims, one_to_one)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()

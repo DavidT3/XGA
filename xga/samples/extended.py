@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:08. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 12:38 PM. Copyright (c) The Contributors.
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from tqdm import tqdm
 
 from .base import BaseSample
 from .. import DEFAULT_COSMO, PRETTY_TELESCOPE_NAMES
-from ..exceptions import PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-    NoProductAvailableError, NoValidObservationsError, NotAssociatedError, TelescopeNotAssociatedError
+from ..exceptions import (PeakConvergenceFailedError, ModelNotAssociatedError, ParameterNotAssociatedError,
+                          NoProductAvailableError, NoValidObservationsError, NotAssociatedError,
+                          TelescopeNotAssociatedError, FitConfNotAssociatedError)
 from ..products.profile import GasDensity3D
 from ..relations.fit import *
 from ..sources.extended import GalaxyCluster
@@ -575,7 +576,7 @@ class ClusterSample(BaseSample):
     def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
            hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False):
+           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False, fit_conf: Union[str, dict] = None):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -612,15 +613,20 @@ class ClusterSample(BaseSample):
             a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
         :return: A Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: An Nx3 array Quantity where N is the number of sources. First column is the luminosity, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN
         :rtype: Quantity
         """
         return super().Lx(outer_radius, telescope, model, inner_radius, lo_en, hi_en, group_spec, min_counts,
-                          min_sn, over_sample, quality_checks, stacked_spectra)
+                          min_sn, over_sample, quality_checks, stacked_spectra, fit_conf)
 
     def Tx(self, telescope: str, outer_radius: Union[str, Quantity] = 'r500', model: str = 'constant*tbabs*apec',
            inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True, min_counts: int = 5,
-           min_sn: float = None, over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False):
+           min_sn: float = None, over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False,
+           fit_conf: Union[str, dict] = None):
         """
         A get method for temperatures measured for the constituent clusters of this sample. An error will be
         thrown if temperatures haven't been measured for the given region (the default is R_500) and model (default
@@ -654,6 +660,9 @@ class ClusterSample(BaseSample):
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
             a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
         :return: An Nx3 array Quantity where N is the number of clusters. First column is the temperature, second
             column is the -err, and 3rd column is the +err. If a fit failed then that entry will be NaN.
         :rtype: Quantity
@@ -666,18 +675,21 @@ class ClusterSample(BaseSample):
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
-        if outer_radius != 'region':
-            # This just parses the input inner and outer radii into something predictable
-            inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
-        else:
-            raise NotImplementedError("Sorry region fitting is currently not supported")
+        # At one point we allowed the 'outer_radius' argument to be 'region', but we no longer
+        #  support that
+        if outer_radius == 'region':
+            raise ValueError("The string 'region' is no longer a valid option for "
+                             "the 'outer_radius' argument.")
+
+        # This just parses the input inner and outer radii into something predictable
+        inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
 
         temps = []
         for src_ind, gcs in enumerate(self._sources.values()):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
                 gcs_temp = gcs.get_temperature(out_rads[src_ind], telescope, model, inn_rads[src_ind], group_spec,
-                                               min_counts, min_sn, over_sample, stacked_spectra).value
+                                               min_counts, min_sn, over_sample, stacked_spectra, fit_conf).value
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
@@ -701,12 +713,12 @@ class ClusterSample(BaseSample):
                 elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
                     gcs_temp = np.array([np.nan, np.nan, np.nan])
                     warn("The temperature value - the average error goes below zero for {s}, this makes the "
-                         "temperature hard to use for scaling relations as values are often logged".format(s=gcs.name),
-                         stacklevel=2)
+                         "temperature hard to use for scaling relations as values are often "
+                         "logged".format(s=gcs.name), stacklevel=2)
                 temps.append(gcs_temp)
 
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
-                NotAssociatedError) as err:
+                    NotAssociatedError, FitConfNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
                 #  that entry with a NaN
                 warn(str(err), stacklevel=2)

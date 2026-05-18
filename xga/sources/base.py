@@ -1,11 +1,13 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/12/26, 9:12 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:07 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
+import glob
 import os
 import pickle
 from copy import deepcopy
+from glob import glob
 from shutil import move, copyfile
 from typing import Tuple, List, Dict, Union
 from warnings import warn, simplefilter
@@ -24,7 +26,7 @@ from regions import (SkyRegion, EllipseSkyRegion, CircleSkyRegion, EllipsePixelR
 from ..exceptions import (NotAssociatedError, NoValidObservationsError, NoProductAvailableError,
                           ModelNotAssociatedError, ParameterNotAssociatedError, NotSampleMemberError,
                           TelescopeNotAssociatedError, PeakConvergenceFailedError,
-                          XGADeveloperError, ProductNotUsableError)
+                          ProductNotUsableError, XGADeveloperError, FitConfNotAssociatedError)
 from ..imagetools.misc import pix_deg_scale
 from ..imagetools.misc import sky_deg_scale
 from ..imagetools.profile import annular_mask
@@ -487,10 +489,12 @@ class BaseSource:
         # Initialisation of fit result attributes
         self._fit_results = {tel: {} for tel in self.telescopes}
         self._test_stat = {tel: {} for tel in self.telescopes}
+        self._fit_stat = {tel: {} for tel in self.telescopes}
         self._dof = {tel: {} for tel in self.telescopes}
         self._total_count_rate = {tel: {} for tel in self.telescopes}
         self._total_exp = {tel: {} for tel in self.telescopes}
         self._luminosities = {tel: {} for tel in self.telescopes}
+        self._failed_fits = {tel: {} for tel in self.telescopes}
 
         # Initialisation of attributes related to Extended and GalaxyCluster sources
         # Initialisation of allowed overdensity radii as None
@@ -767,10 +771,10 @@ class BaseSource:
         return self._ang_diam_dist
 
     @property
-    def fitted_models(self) -> List[str]:
+    def all_fitted_models(self) -> List[str]:
         """
-        This property cycles through all the available fit results, and finds the unique names of XSPEC models
-        that have been fitted to this source.
+        This property cycles through all the available telescopes and fit results, and finds the unique
+        names of XSPEC models that have been fitted to this source.
 
         :return: A list of model names.
         :rtype: List[str]
@@ -780,9 +784,50 @@ class BaseSource:
             for s_key in self._fit_results[tel]:
                 models += list(self._fit_results[tel][s_key].keys())
 
-        models = list(set(models))
-
         return models
+
+    @property
+    def fitted_models(self) -> dict:
+        """
+        Property that returns the names of spectral models that have been fit to spectra associated with
+        this source, for each telescope associated with this source. The return is a nested dictionary, storing
+        the relevant model names for each spectrum storage key related to each telescope.
+
+        :return: A nested dictionary with telescope names as top level keys, spectrum storage identifiers as lower
+            levels keys, and lists of model names fit to the corresponding spectra as values.
+        :rtype: dict
+        """
+
+        return {tel: {s_ident: list(self._fit_results[tel][s_ident].keys()) for s_ident in self._fit_results[tel]} for tel in self.telescopes}
+
+    @property
+    def fitted_model_configurations(self) -> dict:
+        """
+        Property that returns a nested dictionary with telescope names as top level keys, spectrum storage
+        identifiers as mid level keys, model names as lower level keys, and lists of fit configuration
+        identifiers as values.
+
+        :return: Nested dictionary with with telescope names as top level keys, spectrum storage
+            identifiers as mid level keys, model names as lower level keys, and lists of model configuration
+            identifiers as values.
+        :rtype: dict
+        """
+        return {tel: {s_ident: {m: list(self._fit_results[tel][s_ident][m].keys()) for m in self.fitted_models[tel][s_ident]}
+                      for s_ident in self._fit_results[tel]} for tel in self.telescopes}
+
+    @property
+    def fitted_model_failures(self) -> dict:
+        """
+        Property that returns a nested dictionary with telescope names as top level keys, spectrum storage
+        identifiers as middle level keys, model names as lower level keys, and lists of fit configuration
+        identifiers that correspond to FAILED fits.
+
+        :return: Nested dictionary with telescope names as top level keys, spectrum storage
+            identifiers as middle level keys, model names as lower level keys, and lists of model configuration
+            identifiers as values.
+        :rtype: dict
+        """
+        return self._failed_fits
 
     @property
     def peak_lo_en(self) -> Quantity:
@@ -1410,8 +1455,12 @@ class BaseSource:
         for tel in self.telescopes:
             # This is used for spectra that should be part of an AnnularSpectra object
             ann_spec_constituents = {}
-            # This is to store whether all components could be loaded in successfully
-            ann_spec_usable = {}
+
+            # Here we store paths to annular spectra cross-arf files that will need to be added to annular spectra
+            #  after their declaration. They are not guaranteed to exist as they represent an optional product
+            #  generation step that users can take for certain missions (e.g. XMM).
+            ann_spec_carfs = {}
+
             for obs in self.obs_ids[tel]:
                 if os.path.exists(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
                     with contextlib.chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
@@ -1441,18 +1490,43 @@ class BaseSource:
                             #  source (using the source name), and if the ObsID and instrument are still associated.
                             self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
 
+                        # Loading spectra can be disabled, by the user and in some circumstances by XGA (when doing
+                        #  the initial setup of BaseSample for a sample class instance for instance). So we have
+                        #  to check the passed 'load_spectra' boolean variable
                         if load_spectra:
-
+                            # Find only the lines of the inventory file that are to do with spectra
                             spec_lines = inven[inven['type'] == 'spectrum']
                             for row_ind, row in spec_lines.iterrows():
                                 obj, set_id, ann_id = parse_spectrum(row, False)
-                                if set_id != None:
+                                if set_id is not None:
                                     obj.annulus_ident = ann_id
                                     obj.set_ident = set_id
-                                    if set_id not in ann_spec_constituents:
-                                        ann_spec_constituents[set_id] = []
-                                        ann_spec_usable[set_id] = True
+                                    # Ensures that a default empty list is set as the entry for the current
+                                    #  spectrum-set ID, if the set_id key doesn't exist in the dict yet.
+                                    ann_spec_constituents.setdefault(set_id, [])
+                                    # Add the current spectrum instance to the list of spectra for the current
+                                    #  spectrum set ID - once we've gone through all the inventory files, this
+                                    #  dictionary will be used to instantiate an AnnularSpectra instance (or instances,
+                                    #  if there are multiple spectrum-set ID entries.
                                     ann_spec_constituents[set_id].append(obj)
+
+                                    # The user may have generated 'cross-arfs' for this AnnularSpectra instance.
+                                    # Cross-arfs describe the sensitivity lost to PSF-scattering between different
+                                    #  regions of the detector, when analysing extended sources. Their generation and
+                                    #  use is an optional step for some mission (e.g. XMM), so they are not guaranteed
+                                    #  to exist.
+                                    # This should find all files in the current directory that have the current spectrum as
+                                    #  the originator of the scattered light (cross_{ann_id}).
+                                    rel_carfs = glob(f"*{self.name}*ident{set_id}_cross_{ann_id}_*.arf")
+
+                                    # Check whether any cross-arfs were found, and if they were then add
+                                    #  them to the dictionary under the current set-id key
+                                    if len(rel_carfs) != 0:
+                                        # We only ensure that there is an entry for the current spectrum-set ID in the
+                                        #  cross-arf storage dictionary if there ARE some cross-arfs
+                                        ann_spec_carfs.setdefault(set_id, [])
+                                        ann_spec_carfs[set_id] += [os.path.abspath(carf_file) for carf_file in rel_carfs]
+
                                 else:
                                     # And adding it to the source storage structure, but only if its not a member
                                     #  of an AnnularSpectra
@@ -1533,6 +1607,9 @@ class BaseSource:
                     for row_ind, row in rel_inven.iterrows():
                         self.update_products(parse_lightcurve(row, tel, True), update_inv=False)
 
+                    # TODO THIS IS PRETTY BAD, A LOT OF IT IS A REPEAT OF THE CODE FROM LOADING SPECIFIC OBSID
+                    #  SPECTRA AND SPECTRUM-SET COMPONENTS - WILL NEED TO BE REWRITTEN, THOUGH ISSUE #1504 WILL
+                    #  NECESSITATE A REWRITE OF THIS WHOLE METHOD ANYWAY I THINK.
                     if load_spectra:
                         rel_inven = inven[inven['type'] == 'spectrum']
                         for row_ind, row in rel_inven.iterrows():
@@ -1554,13 +1631,30 @@ class BaseSource:
                                 #  match exactly and the product can be loaded
                                 if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
                                     obj, set_id, ann_id = parse_spectrum(row, True)
-                                    if set_id != None:
+                                    if set_id is not None:
                                         obj.annulus_ident = ann_id
                                         obj.set_ident = set_id
-                                        if set_id not in ann_spec_constituents:
-                                            ann_spec_constituents[set_id] = []
-                                            ann_spec_usable[set_id] = True
+
+                                        ann_spec_constituents.setdefault(set_id, [])
                                         ann_spec_constituents[set_id].append(obj)
+
+                                        # The user may have generated 'cross-arfs' for this AnnularSpectra instance.
+                                        # Cross-arfs describe the sensitivity lost to PSF-scattering between different
+                                        #  regions of the detector, when analysing extended sources. Their generation and
+                                        #  use is an optional step for some mission (e.g. XMM), so they are not guaranteed
+                                        #  to exist.
+                                        # This should find all files in the current directory that have the current spectrum as
+                                        #  the originator of the scattered light (cross_{ann_id}).
+                                        rel_carfs = glob(f"*{self.name}*ident{set_id}_cross_{ann_id}_*.arf")
+
+                                        # Check whether any cross-arfs were found, and if they were then add
+                                        #  them to the dictionary under the current set-id key
+                                        if len(rel_carfs) != 0:
+                                            # We only ensure that there is an entry for the current spectrum-set ID in the
+                                            #  cross-arf storage dictionary if there ARE some cross-arfs
+                                            ann_spec_carfs.setdefault(set_id, [])
+                                            ann_spec_carfs[set_id] += [os.path.abspath(carf_file) for carf_file in rel_carfs]
+
                                     else:
                                         # And adding it to the source storage structure, but only if its not a member
                                         #  of an AnnularSpectra
@@ -1569,16 +1663,32 @@ class BaseSource:
                                         except NotAssociatedError:
                                             pass
                             # This condition deals with checking combined obs, individual instrument
-                            elif set(o_split) == set(self.obs_ids[tel]) and \
-                                all(row['insts'] in self.instruments[tel][o] for o in self.instruments[tel]):
+                            elif set(o_split) == set(self.obs_ids[tel]) and all(row['insts'] in self.instruments[tel][o] for o in self.instruments[tel]):
                                 obj, set_id, ann_id = parse_spectrum(row, True)
-                                if set_id != None:
+                                if set_id is not None:
                                     obj.annulus_ident = ann_id
                                     obj.set_ident = set_id
-                                    if set_id not in ann_spec_constituents:
-                                        ann_spec_constituents[set_id] = []
-                                        ann_spec_usable[set_id] = True
+
+                                    ann_spec_constituents.setdefault(set_id, [])
                                     ann_spec_constituents[set_id].append(obj)
+
+                                    # The user may have generated 'cross-arfs' for this AnnularSpectra instance.
+                                    # Cross-arfs describe the sensitivity lost to PSF-scattering between different
+                                    #  regions of the detector, when analysing extended sources. Their generation and
+                                    #  use is an optional step for some mission (e.g. XMM), so they are not guaranteed
+                                    #  to exist.
+                                    # This should find all files in the current directory that have the current spectrum as
+                                    #  the originator of the scattered light (cross_{ann_id}).
+                                    rel_carfs = glob(f"*{self.name}*ident{set_id}_cross_{ann_id}_*.arf")
+
+                                    # Check whether any cross-arfs were found, and if they were then add
+                                    #  them to the dictionary under the current set-id key
+                                    if len(rel_carfs) != 0:
+                                        # We only ensure that there is an entry for the current spectrum-set ID in the
+                                        #  cross-arf storage dictionary if there ARE some cross-arfs
+                                        ann_spec_carfs.setdefault(set_id, [])
+                                        ann_spec_carfs[set_id] += [os.path.abspath(carf_file) for carf_file in rel_carfs]
+
                                 else:
                                     # And adding it to the source storage structure, but only if its not a member
                                     #  of an AnnularSpectra
@@ -1594,176 +1704,378 @@ class BaseSource:
             #  those objects and add them to the storage structure
             if len(ann_spec_constituents) != 0:
                 for set_id in ann_spec_constituents:
-                    if ann_spec_usable[set_id]:
-                        # If an obsID used to generate an existing Annuluar Spectra was dissasociated
-                        # then the following line will lead to a value error, so we add in a try
-                        # except so that a source can still be declared if the AnnularSpectra
-                        # can't be declared
-                        try:
-                            ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
-
-                            if self._redshift is not None:
-                                # If we know the redshift we will add the radii to the annular spectra in proper
-                                #  distance units
-                                ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
-                            self.update_products(ann_spec_obj, update_inv=False)
-
-                        # Hopefully this won't get triggered. However, if there is an issue in declaring the
-                        #  annular spectrum instance or adding it to the product store, then at least
-                        #  we can insulate the user from not being able to declare a source.
-                        except (ValueError, ProductNotUsableError) as ann_spec_err:
-                            warn_text = (f"{self.name} failed to load a previously generated {tel} AnnularSpectra "
-                                         f"with the following error:\n\n{ann_spec_err}")
-
-                            if not self._samp_member:
-                                warn(warn_text, stacklevel=2)
-                            else:
-                                self._supp_warn.append(warn_text)
-                            pass
-
-            os.chdir(og_dir)
-
-            # Now loading in previous fits
-            if os.path.exists(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name) and read_fits and load_spectra:
-                ann_obs_order = {}
-                ann_results = {}
-                ann_lums = {}
-                prev_fits = [OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name + "/" + f
-                             for f in os.listdir(OUTPUT + "{t}/XSPEC/".format(t=tel) + self.name)
-                             if ".xcm" not in f and ".fits" in f]
-                for fit in prev_fits:
-                    fit_name = fit.split("/")[-1]
-                    fit_info = fit_name.split("_")
-                    # Indexing like this because the last two underscores are for the model name, and then the
-                    #  telescope name
-                    storage_key = "_".join(fit_info[1:-2])
-                    # Load in the results table
-                    fit_data = FITS(fit)
-
-                    # This bit is largely copied from xspec.py, sorry for my laziness
-                    global_results = fit_data["RESULTS"][0]
-                    model = global_results["MODEL"].strip(" ")
-
-                    if "_ident" in storage_key:
-                        set_id, ann_id = storage_key.split("_ident")[-1].split("_")
-                        set_id = int(set_id)
-                        ann_id = int(ann_id)
-                        if set_id not in ann_results:
-                            ann_results[set_id] = {}
-                            ann_lums[set_id] = {}
-                            ann_obs_order[set_id] = {}
-
-                        if model not in ann_results[set_id]:
-                            ann_results[set_id][model] = {}
-                            ann_lums[set_id][model] = {}
-                            ann_obs_order[set_id][model] = {}
-
-                    else:
-                        set_id = None
-                        ann_id = None
-
+                    # If an obsID used to generate an existing Annular Spectra was disassociated
+                    # then the following line will lead to a value error, so we add in a try
+                    # except so that a source can still be declared if the AnnularSpectra
+                    # can't be declared
                     try:
-                        inst_lums = {}
-                        obs_order = []
-                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
-                            # We need to check if this spectrum is a combined_spectrum or not
-                            # this can be done by seeing which directory it is stored in
-                            directory = line["SPEC_PATH"].strip(" ").split("/")[-2]
-                            if directory == 'combined':
-                                comb_spec = True
-                            else:
-                                comb_spec = False
+                        ann_spec_obj = AnnularSpectra(ann_spec_constituents[set_id])
 
-                            sp_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
-                            # Want to derive the spectra storage key from the file name, this strips off some
-                            #  unnecessary info
-                            sp_key = line["SPEC_PATH"].strip(" ").split("/")[-1].split('ra')[-1].split('_spec.fits')[0]
+                        if self._redshift is not None:
+                            # If we know the redshift we will add the radii to the annular spectra in proper
+                            #  distance units
+                            ann_spec_obj.proper_radii = self.convert_radius(ann_spec_obj.radii, 'kpc')
 
-                            # If its not an AnnularSpectra fit then we can just fetch the spectrum from the source
-                            #  the normal way
-                            if set_id is None:
-                                # This adds ra back on, and removes any ident information if it is there
-                                sp_key = 'ra' + sp_key
+                        # TODO THIS SHOULD IMPROVE A LOT WHEN WE IMPLEMENT ISSUE #1504, BUT THEN THIS ENTIRE
+                        #  METHOD OF BASESOURCE WILL IMPROVE WHEN THOSE CHANGES ARE MADE
+                        # Here we check if any cross-arf files were identified for this AnnularSpectra instance, and
+                        #  if they were then we set about adding them to the annular spectrum prior to adding it
+                        #  to product storage for this source
+                        if set_id in ann_spec_carfs:
+                            for rel_carf_path in ann_spec_carfs[set_id]:
+                                cur_f_name = os.path.basename(rel_carf_path)
+                                f_name_parts = cur_f_name.split('.arf')[0].split('_')
+                                cur_oi = f_name_parts[0]
+                                cur_inst = f_name_parts[1]
+                                inn_ann = f_name_parts[-2]
+                                out_ann = f_name_parts[-1]
+                                ann_spec_obj.add_cross_arf(rel_carf_path, cur_oi, cur_inst, int(inn_ann), int(out_ann),
+                                                           ann_spec_obj.set_ident)
 
-                                if not comb_spec:
-                                    # Finds the appropriate matching spectrum object for the current table line
-                                    spec = self.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
-                                                            telescope=tel)[0]
-                                else:
-                                    spec = self.get_products("combined_spectrum", extra_key=sp_key, telescope=tel)[0]
-                            else:
-                                sp_key = 'ra' + sp_key.split('_ident')[0]
-                                ann_spec = self.get_annular_spectra(set_id=set_id)
-                                spec = ann_spec.get_spectra(ann_id, sp_info[0], sp_info[1])
-                                obs_order.append([sp_info[0], sp_info[1]])
+                        # Finally add the instantiated annular spectrum to product storage for this source
+                        self.update_products(ann_spec_obj, update_inv=False)
 
-                            # Adds information from this fit to the spectrum object.
-                            spec.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)])
+                    # Hopefully this won't get triggered. However, if there is an issue in declaring the
+                    #  annular spectrum instance or adding it to the product store, then at least
+                    #  we can insulate the user from not being able to declare a source.
+                    except (ValueError, ProductNotUsableError) as ann_spec_err:
+                        warn_text = (f"{self.name} failed to load a previously generated {tel} AnnularSpectra "
+                                     f"with the following error:\n\n{ann_spec_err}")
 
-                            # The add_fit_data method formats the luminosities nicely, so we grab them back out
-                            #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
-                            processed_lums = spec.get_luminosities(model)
-                            if spec.instrument not in inst_lums:
-                                inst_lums[spec.instrument] = processed_lums
-
-                        if tel == 'xmm':
-                            # Ideally the luminosity reported in the source object will be a PN lum, but it's
-                            #  not impossible that a PN value won't be available. - it shouldn't matter much, lums
-                            #  across the cameras are consistent
-                            if "pn" in inst_lums:
-                                chosen_lums = inst_lums["pn"]
-                            # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
-                            elif "mos2" in inst_lums:
-                                chosen_lums = inst_lums["mos2"]
-                            else:
-                                chosen_lums = inst_lums["mos1"]
-                        else:
-                            # TODO THIS ISN'T NECESSARILY THE WAY I WANT TO DO THIS
-                            chosen_lums = processed_lums
-
-                        if set_id is not None:
-                            ann_results[set_id][model][spec.annulus_ident] = global_results
-                            ann_lums[set_id][model][spec.annulus_ident] = chosen_lums
-                            ann_obs_order[set_id][model][spec.annulus_ident] = obs_order
-                        else:
-                            # Push global fit results, luminosities etc. into the corresponding source object.
-                            self.add_fit_data(model, global_results, chosen_lums, sp_key, tel)
-                    except (OSError, NoProductAvailableError, IndexError, NotAssociatedError):
-                        chosen_lums = {}
-                        warn_text = "{src} fit {f} could not be loaded in as there are no matching spectra " \
-                                    "available".format(src=self.name, f=fit_name)
                         if not self._samp_member:
                             warn(warn_text, stacklevel=2)
                         else:
                             self._supp_warn.append(warn_text)
+                        pass
+
+            os.chdir(og_dir)
+
+            # Now loading in previous fits
+            rel_fit_inv_path = os.path.join(OUTPUT, tel, "XSPEC", self.name, "inventory.csv")
+            if os.path.exists(rel_fit_inv_path) and read_fits:
+                # TODO I NEED TO PUT SO MANY COMMENTS ON THE NEW WAY THIS HAS BEEN SET UP
+                # Everything in this file will be relevant to the current source
+                cur_fit_inv = pd.read_csv(rel_fit_inv_path, dtype={'set_ident': 'Int64', 'obs_ids': str})
+
+                # TODO DECIDE HOW TO HANDLE THIS PROPERLY - JUST DROPPING DUPLICATES IS NOT SUFFICIENT FOR ANNULAR SPECTRA
+                #  IN PARTICULAR.
+                # TODO LATER DAVID NOTE - THIS WILL BE HANDLED IN THE CHANGES PLANNED FOR ISSUE #1504
+                # cur_fit_inv = cur_fit_inv.drop_duplicates(['spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name',
+                #                                            'type', 'set_ident']).reset_index(drop=True)
+                glob_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'global']
+
+                for row_ind, row in glob_cur_fit_inv.iterrows():
+                    # We'll read out some key information from the row into variables to make our life a little neater
+                    fit_file = os.path.join(OUTPUT, tel, 'XSPEC', self.name, row['results_file'])
+                    spec_key = row['spec_key']
+                    fit_conf = row['fit_conf_key']
+                    fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                    fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                    oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                               for oi in list(set(fit_ois))}
+
+                    # Now we check to see if the same observations are associated with the source currently as they
+                    #  were at the time of the original fit - if they are not then we are stopping the load process
+                    #  here and moving onto the next entry
+                    if oi_dict != self.instruments[tel]:
+                        break
+
+                    # Load in the results table
+                    fit_data = FITS(fit_file)
+                    global_results = fit_data["RESULTS"][0]
+                    model = global_results["MODEL"].strip(" ")
+
+                    inst_lums = {}
+
+                    assign_res = True
+                    rel_sps = []
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        sp_oi, sp_inst = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")[:2]
+                        # We need to check if this spectrum is a combined_spectrum or not
+                        # this can be done by seeing which directory it is stored in
+                        directory = line["SPEC_PATH"].strip(" ").split("/")[-2]
+                        if directory == 'combined':
+                            # Finds the appropriate matching spectrum object for the current table line
+                            rel_sp = self.get_products("spectrum", sp_oi, sp_inst, extra_key=spec_key,
+                                                       telescope=tel)
+                        else:
+                            rel_sp = self.get_products("combined_spectrum", extra_key=spec_key, telescope=tel)
+
+                        if len(rel_sp) != 1:
+                            assign_res = False
+                            break
+                        else:
+                            rel_sps.append(rel_sp[0])
+
+                    # TODO I was going to use this
+                    #  or len(rel_sps) != len(self.get_products('spectrum', extra_key=spec_key))
+                    #  to check for spectra that match our description but weren't included in the fit output, but
+                    #  I realise that would break cases where spectrum_checking has excluded some spectra
+                    if not assign_res:
+                        break
+
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        rel_sp = rel_sps[line_ind]
+
+                        # Adds information from this fit to the spectrum object.
+                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)], fit_conf)
+
+                        # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                        #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                        processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                        if rel_sp.instrument not in inst_lums:
+                            inst_lums[rel_sp.instrument] = processed_lums
+
+                    if tel == 'xmm':
+                        # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                        #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                        #  consistent
+                        if "pn" in inst_lums:
+                            chosen_lums = inst_lums["pn"]
+                            # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                        elif "mos2" in inst_lums:
+                            chosen_lums = inst_lums["mos2"]
+                        elif "mos1" in inst_lums:
+                            chosen_lums = inst_lums["mos1"]
+                        else:
+                            chosen_lums = None
+                    else:
+                        # TODO THIS ISN'T NECESSARILY THE WAY I WANT TO DO THIS
+                        chosen_lums = processed_lums
+
+                    # Make sure we close the fits file containing the fit information we've been using
                     fit_data.close()
 
-                if len(ann_results) != 0:
-                    for set_id in ann_results:
-                        try:
-                            rel_ann_spec = self.get_annular_spectra(set_id=set_id)
-                            for model in ann_results[set_id]:
-                                rel_ann_spec.add_fit_data(model, ann_results[set_id][model], ann_lums[set_id][model],
-                                                          ann_obs_order[set_id][model])
-                                # if model == "constant*tbabs*apec":
-                                #     temp_prof = rel_ann_spec.generate_profile(model, 'kT', 'keV')
-                                #     self.update_products(temp_prof)
-                                #
-                                #     # Normalisation profiles can be useful for many things, so we generate them too
-                                #     norm_prof = rel_ann_spec.generate_profile(model, 'norm', 'cm^-5')
-                                #     self.update_products(norm_prof)
-                                #
-                                #     if 'Abundanc' in rel_ann_spec.get_results(0, 'constant*tbabs*apec'):
-                                #         met_prof = rel_ann_spec.generate_profile(model, 'Abundanc', '')
-                                #         self.update_products(met_prof)
-                        except (NoProductAvailableError, ValueError):
-                            warn_text = "A previous annular spectra profile fit for {src} was not successful, or no " \
-                                        "matching spectrum has been loaded, so it cannot be read " \
-                                        "in".format(src=self.name)
-                            if not self._samp_member:
-                                warn(warn_text, stacklevel=2)
+                    # Push global fit results, luminosities etc. into the corresponding source object.
+                    self.add_fit_data(model, global_results, chosen_lums, tel, spec_key, fit_conf)
+
+                # ------------ ANNULAR FIT READ IN ------------
+                ann_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann'].reset_index(drop=True)
+
+                ann_cur_fit_inv['fit_ident'] = ann_cur_fit_inv['results_file'].apply(lambda x: x.split("_")[1])
+                ann_ids = ann_cur_fit_inv['results_file'].apply(lambda x: x.split("_annid")[-1].replace('.fits', ''))
+                ann_cur_fit_inv['ann_id'] = ann_ids
+
+                for fit_ident in ann_cur_fit_inv['fit_ident'].unique():
+                    fit_ann_inv_ent = ann_cur_fit_inv[ann_cur_fit_inv['fit_ident'] == fit_ident].reset_index(drop=True)
+
+                    obs_order = {int(an_id): [] for an_id in fit_ann_inv_ent['ann_id'].values}
+                    ann_lums = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
+                    ann_res = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
+
+                    # The passing of 'tel' isn't strictly necessary, as the set-idents should be unique identifiers, but
+                    #  it is a useful visual reminder that we are in the telescope loop
+                    rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'], telescope=tel)
+
+                    assign_res = True
+                    for row_ind, row in fit_ann_inv_ent.iterrows():
+                        if not assign_res:
+                            break
+
+                        # We'll read out some key information from the row into variables to make our life a little neater
+                        fit_file = os.path.join(OUTPUT, tel, 'XSPEC', self.name, row['results_file'])
+                        fit_conf = row['fit_conf_key']
+                        fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                        fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                        oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                                   for oi in list(set(fit_ois))}
+
+                        # Now we check to see if the same observations are associated with the source currently as they
+                        #  were at the time of the original fit - if they are not then we are stopping the load process
+                        #  here and moving onto the next entry
+                        if oi_dict != self.instruments:
+                            assign_res = False
+                            break
+
+                        # Load in the results table
+                        fit_data = FITS(fit_file)
+                        global_results = fit_data["RESULTS"][0]
+                        model = global_results["MODEL"].strip(" ")
+
+                        rel_sps = []
+                        inst_lums = {}
+                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                            spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                            sp_oi, sp_inst = spec_info[:2]
+                            sp_ann_id = int(spec_info[-2])
+
+                            try:
+                                rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
+                                rel_sps.append(rel_sp)
+                            except NoProductAvailableError:
+                                assign_res = False
+                                break
+
+                            obs_order[sp_ann_id].append([sp_oi, sp_inst])
+
+                        if not assign_res:
+                            break
+
+                        for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                            rel_sp = rel_sps[line_ind]
+
+                            # Adds information from this fit to the spectrum object.
+                            rel_sp.add_fit_data(str(model), line, fit_data["PLOT"+str(line_ind+1)], fit_conf)
+
+                            # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                            #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                            processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                            if rel_sp.instrument not in inst_lums:
+                                inst_lums[rel_sp.instrument] = processed_lums
+
+                        if tel == "xmm":
+                            # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                            #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                            #  consistent
+                            if "pn" in inst_lums:
+                                chosen_lums = inst_lums["pn"]
+                                # mos2 generally better than mos1, as mos1 has CCD damage after a certain point in its life
+                            elif "mos2" in inst_lums:
+                                chosen_lums = inst_lums["mos2"]
+                            elif "mos1" in inst_lums:
+                                chosen_lums = inst_lums["mos1"]
                             else:
-                                self._supp_warn.append(warn_text)
+                                chosen_lums = None
+                        else:
+                            # TODO THIS ISN'T NECESSARILY THE WAY I WANT TO DO THIS
+                            chosen_lums = processed_lums
+
+                        ann_lums[int(row['ann_id'])] = chosen_lums
+                        ann_res[int(row['ann_id'])] = global_results
+                        fit_data.close()
+
+                    if assign_res:
+                        try:
+                            rel_ann_sp.add_fit_data(model, ann_res, ann_lums, obs_order, fit_conf)
+                        except ValueError:
+                            # If the results dictionaries don't have the right number of entries a value error may be
+                            #  thrown
+                            pass
+
+                # ------------ CROSS-ARF ANNULAR FIT READ IN ------------
+                carf_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann_carf']
+
+                for row_ind, row in carf_cur_fit_inv.iterrows():
+                    # Grab the relevant annular spectrum - passing telescope here isn't strictly
+                    #  necessary, as the spectrum-set IDs are unique identifiers, but it is a helpful
+                    #  visual reminder that we are in the telescope loop.
+                    rel_ann_sp = self.get_annular_spectra(set_id=row['set_ident'], telescope=tel)
+
+                    # We'll read out some key information from the row into variables to make our life a little neater
+                    fit_file = os.path.join(OUTPUT, tel, 'XSPEC', self.name, row['results_file'])
+                    spec_key = row['spec_key']
+                    fit_conf = row['fit_conf_key']
+                    fit_ois = np.array(row['obs_ids'].split('/')).flatten()
+                    fit_insts = np.array(row['insts'].split('/')).flatten()
+
+                    oi_dict = {oi: list(fit_insts[np.argwhere(fit_ois == oi).T[0]].astype(str))
+                               for oi in list(set(fit_ois))}
+
+                    # Now we check to see if the same observations are associated with the source currently as they
+                    #  were at the time of the original fit - if they are not then we are stopping the load process
+                    #  here and moving onto the next entry
+                    if oi_dict != self.instruments:
+                        break
+
+                    # Load in the results table
+                    fit_data = FITS(fit_file)
+                    global_results = fit_data["RESULTS"][0]
+                    model = global_results["MODEL"].strip(" ")
+
+                    inst_lums = {ann_id: {} for ann_id in rel_ann_sp.annulus_ids}
+                    obs_order = {int(an_id): [] for an_id in rel_ann_sp.annulus_ids}
+
+                    assign_res = True
+                    rel_sps = []
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
+                        sp_oi, sp_inst = spec_info[:2]
+                        sp_ann_id = int(spec_info[-2])
+
+                        try:
+                            rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
+                        except NoProductAvailableError:
+                            assign_res = False
+                            break
+
+                        rel_sps.append(rel_sp)
+
+                    if not assign_res:
+                        break
+
+                    for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
+                        rel_sp = rel_sps[line_ind]
+
+                        # Adds information from this fit to the spectrum object.
+                        rel_sp.add_fit_data(str(model), line, fit_data["PLOT" + str(line_ind + 1)], fit_conf)
+
+                        obs_order[rel_sp.annulus_ident].append([rel_sp.obs_id, rel_sp.instrument])
+
+                        # The add_fit_data method formats the luminosities nicely, so we grab them back out
+                        #  to help grab the luminosity needed to pass to the source object 'add_fit_data' method
+                        processed_lums = rel_sp.get_luminosities(model, fit_conf=fit_conf)
+                        if rel_sp.instrument not in inst_lums[rel_sp.annulus_ident]:
+                            inst_lums[rel_sp.annulus_ident][rel_sp.instrument] = processed_lums
+
+                    # Ideally the luminosity reported in the source object will be a PN lum, but its not impossible
+                    #  that a PN value won't be available. - it shouldn't matter much, lums across the cameras are
+                    #  consistent
+                    chosen_lums = {}
+                    for cur_ann_id in inst_lums:
+                        if tel == 'xmm':
+                            if "pn" in inst_lums[cur_ann_id]:
+                                cur_chos_lum = inst_lums[cur_ann_id]["pn"]
+                            elif "mos2" in inst_lums[cur_ann_id]:
+                                cur_chos_lum = inst_lums[cur_ann_id]["mos2"]
+                            else:
+                                cur_chos_lum = inst_lums[cur_ann_id]["mos1"]
+                        else:
+                            # TODO THIS MIGHT BE COMPLETELY WRONG - WAS ADDED DURING THE MERGE
+                            #  BETWEEN XGA-MM AND THE NEW FIT_CONF CAPABILITIES
+                            cur_chos_lum = list(inst_lums[cur_ann_id].values())[0]
+                        chosen_lums[cur_ann_id] = cur_chos_lum
+
+                    # Here our main problem is untangling the parameters in the results table for this fit, as
+                    #  we need to be able to assign them to our N annuli. This starts by reading out all
+                    #  the column names, and figuring out where the fit parameters (which will be relevant
+                    #  to a particular annulus) start.
+                    col_names = np.array(global_results.dtype.names)
+                    # We know that fit parameters start after the DOF entry, because that is how we designed
+                    #  the output files, so we can figure out what index to split on that will let us get
+                    #  fit parameters in one array and the general parameters in the other.
+                    arg_split = np.argwhere(col_names == 'DOF')[0][0]
+                    # We split off the columns that aren't parameters
+                    not_par_names = col_names[:arg_split + 1]
+                    # Then we tile them, as we're going to be reading out these values repeatedly (i.e. N times
+                    #  where N is the number of annuli). Strictly speaking all the goodness of fit info is not
+                    #  for individual annuli like it is when we don't cross-arf-fit, but the annular spectrum
+                    #  still expects there to be an entry per annulus
+                    not_par_names = np.tile(not_par_names[..., None], rel_ann_sp.num_annuli).T
+                    # We select only the column names which were fit parameters, these we need to split up
+                    #  by figuring out which belong to each annulus
+                    col_names = col_names[arg_split + 1:]
+                    # Now we figure out how many parameters per annuli there are, this approach is valid
+                    #  because the model setups of each annuli are going to be identical
+                    par_per_ann = len(col_names) / rel_ann_sp.num_annuli
+                    if (par_per_ann % 1) != 0:
+                        raise XGADeveloperError("Assigning results to annular spectrum after cross-arf fit"
+                                                " has resulted in a non-integer number of parameters per"
+                                                " annulus. This is the fault of the developers.")
+                    # Now we can split the parameter names into those that belong with each
+                    par_for_ann = col_names.reshape(rel_ann_sp.num_annuli, int(par_per_ann))
+                    # Now we're adding the not-fit-parameters back on to the front of each row - that way
+                    #  the not-fit-parameter info will be added into each annulus' information to be passed
+                    #  to the annular spectrum
+                    par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
+
+                    # Then we put the results in a dictionary, the way the annulus wants it
+                    ann_results = {ann_id: fit_data['RESULTS'][par_for_ann[ann_id]][0]
+                                   for ann_id in rel_ann_sp.annulus_ids}
+
+                    rel_ann_sp.add_fit_data(model, ann_results, chosen_lums, obs_order, fit_conf)
+                    fit_data.close()
 
             os.chdir(og_dir)
 
@@ -2325,9 +2637,112 @@ class BaseSource:
 
         return matched_prods
 
+    def _get_spec_prod(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                       min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                       telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+        """
+        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
+        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
+        spectra(um) will be provided to you. If no match is found then a NoProductAvailableError will be raised.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
+            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
+        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
+            default this is zero arcseconds, resulting in a circular spectrum.
+        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
+        :param int min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
+            the minimum number of counts?
+        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
+            the minimum signal-to-noise.
+        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
+            over sampling used?
+        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
+            which means all spectra matching the other criteria will be returned.
+        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
+            were multiple matching products).
+        :rtype: Union[Spectrum, List[Spectrum]]
+        """
+        if isinstance(inner_radius, Quantity):
+            inn_rad_num = self.convert_radius(inner_radius, 'deg')
+        elif isinstance(inner_radius, str):
+            inn_rad_num = self.get_radius(inner_radius, 'deg')
+        else:
+            raise TypeError("You may only pass a quantity or a string as inner_radius")
+
+        if isinstance(outer_radius, Quantity):
+            out_rad_num = self.convert_radius(outer_radius, 'deg')
+        elif isinstance(outer_radius, str):
+            out_rad_num = self.get_radius(outer_radius, 'deg')
+        else:
+            raise TypeError("You may only pass a quantity or a string as outer_radius")
+
+        # Checking spectrum generation inputs, and making sure they are in the right types
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
+
+        # Combined products are those where EITHER obs_id OR inst (or both) equals 'combined'
+        # This covers all three scenarios:
+        # Combined products are those where the obs_id equals 'combined', and we want to make sure that they
+        #  have the combined_ prefix on their product type key
+        if obs_id == 'combined':
+            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
+        else:
+            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
+
+        # This part of the code ensures that if inst is None (the default), only products for 'real'
+        #  instruments are returned. To retrieve a multi-instrument combined product, the user must
+        #  explicitly specify inst='combined'.
+        if inst is None:
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
+
+        # Checking for matching radii first - this will likely whittle down the spectra best of all. We have
+        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
+        #  an exact match to the other radius)
+        matched_prods = [m_prod for m_prod in matched_prods
+                         if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)
+                         and np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # Now we match central coordinates
+        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
+
+        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
+        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
+        #  because we have to distinguish between searching for grouped and ungrouped spectra
+        final_matched_prods = []
+        for m_prod in matched_prods:
+            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
+            if not group_spec == m_prod.grouped:
+                continue
+            # Getting here means that the grouped status of the current spectrum matches the user
+            #  specification, and then if they aren't grouped we don't need to do the other comparisons
+            elif not group_spec:
+                final_matched_prods.append(m_prod)
+                continue
+
+            # If we're here then we have to compare this spectrum's grouping settings to those passed by
+            #  the user
+            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
+                final_matched_prods.append(m_prod)
+
+        if len(final_matched_prods) == 1:
+            final_matched_prods = final_matched_prods[0]
+        elif len(final_matched_prods) == 0:
+            raise NoProductAvailableError("Cannot find any spectra matching your input.")
+
+        return final_matched_prods
+
     def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                       radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None, telescope: str = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                       radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
+                       hi_en: Quantity = None, telescope: str = None, spec_model: str = None,
+                       spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
         searches for full and partial matches in this source's product storage structure.
@@ -2341,45 +2756,81 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
         :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
             which means all profiles matching the other criteria will be returned.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
+
+        # Combined products are those where the obs_id equals 'combined', and we want to make sure that they
+        #  have the combined_ prefix on their product type key
+        if obs_id == 'combined' and not search_key.startswith('combined_'):
+            search_key = 'combined_' + search_key
+            warn("A request for a combined ObsID profile was made without the 'combined_' prefix in the product type; "
+                 "this has been corrected, but please contact the developers.", stacklevel=2)
+
+        # Just making sure it ends with profile before we pass to get_products
+        if not search_key.endswith("_profile"):
+            search_key += "_profile"
+
+        # Show a warning if a strange profile type has been passed.
+        if prof_type := search_key.replace("combined_", "") not in ALLOWED_PRODUCTS:
+            prof_allowed = list(set([ptype for ptype in ALLOWED_PRODUCTS if 'profile' in ptype]))
+            warn(f"{prof_type} is not a recognized profile type; those are {prof_allowed}.", stacklevel=2)
+
+        # Now we convert the input radii to degrees for future comparisons to profile annuli radii - whether those
+        #  radii be annular bounds or central radii
+        if all([radii is not None, annuli_bound_radii is not None]):
+            raise ValueError("Both the 'radii' and 'annuli_bound_radii' arguments are not None - please supply one"
+                             " or the other.")
+        elif radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+        elif annuli_bound_radii is not None:
+            annuli_bound_radii = self.convert_radius(annuli_bound_radii, 'deg')
+
         # Fetch all the matching profiles for the specified telescope
-        matched_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
+        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
+        broad_prods: List[BaseProfile1D]
 
         # This part of the code ensures that if inst is None (the default), only products for 'real'
         #  instruments are returned. To retrieve a multi-instrument combined product, the user must
         #  explicitly specify inst='combined'.
         if inst is None:
-            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
+            matched_prods = [m_prod for m_prod in broad_prods if m_prod.instrument != 'combined']
 
-        matched_prods: List[BaseProfile1D]
-
-        # Matching the radii is going to take a maybe slightly (but practically not really) dangerous approach. The
-        #  radii passed here can either mean annulus bounds, or centres of those annuli. So we compare the passed
-        #  radii to both of those pieces of information for each profile.
+        # The radii argument refers specifically to the central radii of annular bins, rather than the
+        #  boundaries of those bins
         if radii is not None:
-            # Makes sure the radii are in degrees, as this is the base distance unit used in XGA
-            radii = self.convert_radius(radii, 'deg')
-
             # First we'll check which profiles have the same number of radii as those that have
             #  been passed in by the user
-            matched_prods = [m_prod for m_prod in matched_prods if len(radii) == len(m_prod.radii) or
-                             len(radii) == len(m_prod.annulus_bounds)]
+            matched_prods = [m_prod for m_prod in matched_prods if len(radii) == len(m_prod.radii)]
             # Then look for actual radii matches - we use the allclose() method here to check that the
             #  radii of the annuli are all within a very small tolerance of the passed radii. This is
             #  to head off problems we've had with float precision, the last digit of the float gets flipped
             #  and then exact comparisons no longer work
             matched_prods = [m_prod for m_prod in matched_prods
-                             if np.allclose(radii, m_prod.deg_radii, rtol=0, atol=RAD_MATCH_PRECISION)
-                             or np.allclose(radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
+                             if np.allclose(radii, m_prod.deg_radii, rtol=0, atol=RAD_MATCH_PRECISION)]
+
+        # This is the same check as above, but for annular boundary radii
+        if annuli_bound_radii is not None:
+            matched_prods = [m_prod for m_prod in matched_prods if len(annuli_bound_radii) == len(m_prod.annulus_bounds)]
+
+            matched_prods = [m_prod for m_prod in matched_prods
+                             if np.allclose(radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
                                             atol=RAD_MATCH_PRECISION)]
 
         # Now onto matching to some of the other information that may have been passed to this method
@@ -2395,6 +2846,36 @@ class BaseSource:
         #  user didn't pass anything else in to override that
         check_coord = self.default_coord if central_coord is None else central_coord
         matched_prods = [m_prod for m_prod in matched_prods if (m_prod.centre == check_coord).all()]
+
+        # At this point, we might have to impose more checks on the keys of the identified products - if the
+        #  user has passed information that indicates the profile originated from an annular spectrum, then the
+        #  profile key will have an additional component that identifies the spectral model and fit configuration
+        #  that it originates from.
+        if spec_model is not None:
+            matched_prods = [p for p in matched_prods if p.spec_model == spec_model]
+
+        # Then the fit configuration
+        if spec_fit_conf is not None:
+            from ..xspec.fit import PROF_FIT_FUNC_MODEL_NAMES
+            from ..xspec.fitconfgen import fit_conf_from_function
+
+            # At this point we've already applied any constraints on the spectral model name, so we just
+            #  cycle through the profiles, and see if any of their stored spectral fit configuration match the
+            #  fit configuration that was passed to this method. We give the passed spec_fit_conf to the
+            #  fit_conf_from_function function to ensure that fit configuration dictionaries are converted
+            #  to full fit configuration keys
+            new_matched_prods = []
+            for p in matched_prods:
+                try:
+                    cur_gen_fit_conf = fit_conf_from_function(PROF_FIT_FUNC_MODEL_NAMES[p.spec_model], spec_fit_conf)
+                    if cur_gen_fit_conf == p.spec_fit_conf:
+                        new_matched_prods.append(p)
+
+                # If there is a KeyError, that means that the passed spec_fit_conf isn't compatible with the
+                #  model of the current profile, so we skip right on by
+                except KeyError:
+                    pass
+            matched_prods = new_matched_prods
 
         return matched_prods
 
@@ -2627,6 +3108,82 @@ class BaseSource:
         #         else:
         #             self._peaks[obs][rt.instrument] = self.ra_dec
         #             self._peaks_near_edge[obs][rt.instrument] = rt.near_edge(self.ra_dec)
+
+    def _get_fit_checks(self, spec_storage_key: str, telescope: str, model: str = None, par: str = None,
+                        fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
+        """
+        An internal function to perform input checks and pre-processing for get methods that access fit results, or
+        other related information such as fit statistic.
+
+        :param str spec_storage_key: The XGA product storage key of the spectrum for which we're checking
+            spectral fit configurations.
+        :param str telescope: The telescope for which the spectra that have been fit were generated.
+        :param str model: The name of the fitted model that you're requesting the results from
+            (e.g. constant*tbabs*apec).
+        :param str par: The name of the parameter you want a result for.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the spectrum
+            fitting function and values being the changed values (only values changed-from-default need be included)
+            or a full string representation of the fit configuration that is being requested.
+        :return: The model name and fit configuration.
+        :rtype: Tuple[str, str]
+        """
+
+        if telescope not in self.telescopes:
+            raise NotAssociatedError(f"The {telescope} telescope is not associated with {self.name}.")
+
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fitconfgen import fit_conf_from_function
+
+        # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
+        #  has been fit to this spectrum - otherwise how are we to know which model they want?
+        if len(self.fitted_models[telescope]) == 0:
+            raise ModelNotAssociatedError(f"There are no {telescope} XSPEC fits associated with {self.name}.")
+        elif spec_storage_key not in self.fitted_models[telescope]:
+            raise ModelNotAssociatedError(f"There are no XSPEC fits associated with the specified Spectrum object ({telescope} - {spec_storage_key}).")
+        elif model is None and len(self.fitted_models[telescope][spec_storage_key]) != 1:
+            av_mods = ", ".join(self.fitted_models[telescope][spec_storage_key])
+            raise ValueError(f"Multiple models have been fit to the specified spectrum ({telescope} - {spec_storage_key}), so model=None is not "
+                             f"valid; available models are {av_mods}")
+        elif model is None:
+            # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
+            #  automatically select it for them
+            model = self.fitted_models[telescope][spec_storage_key][0]
+        elif model is not None and model not in self.fitted_models[telescope][spec_storage_key]:
+            av_mods = ", ".join(self.fitted_models[telescope][spec_storage_key])
+            raise ModelNotAssociatedError("{m} has not been fitted to the specified spectrum; available "
+                                          "models are {a}".format(m=model, a=av_mods))
+
+        # Checks the input fit configuration values - if they are completely illegal we throw an error
+        if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
+            raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
+                            "changed-from-default fit function arguments as keys and changed values as items.")
+        # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
+        #  as a string
+        elif isinstance(fit_conf, dict):
+            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+        # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
+        elif fit_conf is None and len(self.fitted_model_configurations[telescope][spec_storage_key][model]) != 1:
+            av_fconfs = ", ".join(self.fitted_model_configurations[telescope][spec_storage_key][model])
+            raise ValueError("The {m} model has been fit to the specified spectrum with multiple configuration, so "
+                             "fit_conf=None is not valid; available fit configurations are "
+                             "{a}".format(m=model, a=av_fconfs))
+        # However here they passed no fit configuration, and only one has been used for the model, so we're all good
+        #  and will select it for them
+        elif fit_conf is None and len(self.fitted_model_configurations[telescope][spec_storage_key][model]) == 1:
+            fit_conf = self.fitted_model_configurations[telescope][spec_storage_key][model][0]
+
+        # Check to make sure the requested results actually exist
+        if fit_conf not in self._fit_results[telescope][spec_storage_key][model]:
+            av_fconfs = ", ".join(self.fitted_model_configurations[telescope][spec_storage_key][model])
+            raise FitConfNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to the "
+                                            "specified spectrum; available fit configurations are "
+                                            "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+        elif par is not None and par not in self._fit_results[telescope][spec_storage_key][model][fit_conf]:
+            av_pars = ", ".join(self._fit_results[telescope][spec_storage_key][model][fit_conf].keys())
+            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to the specified spectra; "
+                                              "available parameters are {a}".format(p=par, m=model, a=av_pars))
+
+        return model, fit_conf
 
     # This is used to name files and directories so this is not allowed to change.
     def update_queue(self, cmd_arr: np.ndarray, p_type_arr: np.ndarray, p_path_arr: np.ndarray,
@@ -3315,108 +3872,6 @@ class BaseSource:
                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
                                 telescope=telescope)
 
-    def _get_spec_prod(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
-                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                       min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                       telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
-        """
-        A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
-        Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
-        spectra(um) will be provided to you. If no match is found then a NoProductAvailableError will be raised.
-
-        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
-            the spectrum (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If
-            'region' is chosen (to use the regions in region files), then any inner radius will be ignored.
-        :param str obs_id: Optionally, a specific obs_id to search for can be supplied. The default is None,
-            which means all spectra matching the other criteria will be returned.
-        :param str inst: Optionally, a specific instrument to search for can be supplied. The default is None,
-            which means all spectra matching the other criteria will be returned.
-        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
-            the spectrum (for instance 'r500' would be acceptable for a GalaxyCluster, or Quantity(300, 'kpc')). By
-            default this is zero arcseconds, resulting in a circular spectrum.
-        :param bool group_spec: Was the spectrum you wish to retrieve grouped?
-        :param int min_counts: If the spectrum you wish to retrieve was grouped on minimum counts, what was
-            the minimum number of counts?
-        :param float min_sn: If the spectrum you wish to retrieve was grouped on minimum signal to noise, what was
-            the minimum signal-to-noise.
-        :param float over_sample: If the spectrum you wish to retrieve was over sampled, what was the level of
-            over sampling used?
-        :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
-            which means all spectra matching the other criteria will be returned.
-        :return: An XGA Spectrum object (if there is an exact match), or a list of XGA Spectrum objects (if there
-            were multiple matching products).
-        :rtype: Union[Spectrum, List[Spectrum]]
-        """
-        if isinstance(inner_radius, Quantity):
-            inn_rad_num = self.convert_radius(inner_radius, 'deg')
-        elif isinstance(inner_radius, str):
-            inn_rad_num = self.get_radius(inner_radius, 'deg')
-        else:
-            raise TypeError("You may only pass a quantity or a string as inner_radius")
-
-        if isinstance(outer_radius, Quantity):
-            out_rad_num = self.convert_radius(outer_radius, 'deg')
-        elif isinstance(outer_radius, str):
-            out_rad_num = self.get_radius(outer_radius, 'deg')
-        else:
-            raise TypeError("You may only pass a quantity or a string as outer_radius")
-
-        # Checking spectrum generation inputs, and making sure they are in the right types
-        over_sample = int(over_sample) if over_sample is not None else None
-        min_counts = int(min_counts) if min_counts is not None else None
-        min_sn = float(min_sn) if min_sn is not None else None
-
-        # Combined products are those where EITHER obs_id OR inst (or both) equals 'combined'
-        # This covers all three scenarios:
-        # Combined products are those where the obs_id equals 'combined', and we want to make sure that they
-        #  have the combined_ prefix on their product type key
-        if obs_id == 'combined':
-            matched_prods = self.get_products('combined_spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
-        else:
-            matched_prods = self.get_products('spectrum', obs_id=obs_id, inst=inst, telescope=telescope)
-
-        # This part of the code ensures that if inst is None (the default), only products for 'real'
-        #  instruments are returned. To retrieve a multi-instrument combined product, the user must
-        #  explicitly specify inst='combined'.
-        if inst is None:
-            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
-
-        # Checking for matching radii first - this will likely whittle down the spectra best of all. We have
-        #  had matching problems sometimes because of float precision (the last digit flips and is no longer
-        #  an exact match to the other radius)
-        matched_prods = [m_prod for m_prod in matched_prods
-                         if np.isclose(inn_rad_num, m_prod.inner_rad, rtol=0, atol=RAD_MATCH_PRECISION)
-                         and np.isclose(out_rad_num, m_prod.outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)]
-
-        # Now we match central coordinates
-        matched_prods = [m_prod for m_prod in matched_prods if (m_prod.central_coord ==  self.default_coord).all()]
-
-        # Separating the matching steps can also give us the opportunity to say exactly where matching failed
-        #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
-        #  because we have to distinguish between searching for grouped and ungrouped spectra
-        final_matched_prods = []
-        for m_prod in matched_prods:
-            # If the current spectrum doesn't match user specified grouping (or not) boolean, we move on
-            if not group_spec == m_prod.grouped:
-                continue
-            # Getting here means that the grouped status of the current spectrum matches the user
-            #  specification, and then if they aren't grouped we don't need to do the other comparisons
-            elif not group_spec:
-                final_matched_prods.append(m_prod)
-                continue
-
-            # If we're here then we have to compare this spectrum's grouping settings to those passed by
-            #  the user
-            if min_counts == m_prod.min_counts and min_sn == m_prod.min_sn and over_sample == m_prod.over_sample:
-                final_matched_prods.append(m_prod)
-
-        if len(final_matched_prods) == 1:
-            final_matched_prods = final_matched_prods[0]
-        elif len(final_matched_prods) == 0:
-            raise NoProductAvailableError("Cannot find any spectra matching your input.")
-
-        return final_matched_prods
-
     def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                     min_counts: int = 5, min_sn: float = None, over_sample: float = None,
@@ -3524,7 +3979,7 @@ class BaseSource:
             that you wish to retrieve. By default this is None, which means the method will return annular
             spectra with any radii.
         :param bool group_spec: Was the spectrum set you wish to retrieve grouped?
-        :param float min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
+        :param int min_counts: If the spectrum set you wish to retrieve was grouped on minimum counts, what was
             the minimum number of counts?
         :param float min_sn: If the spectrum set you wish to retrieve was grouped on minimum signal to
             noise, what was the minimum signal to noise.
@@ -3544,6 +3999,7 @@ class BaseSource:
         # These set identifiers are unique to a single AnnularSpectra, so if we can't find any matched products
         #  here we're going to throw an error
         if set_id is not None:
+            set_id = int(set_id)
             matched_products = [m_prod for m_prod in matched_prods if m_prod.set_ident == set_id]
 
             # In this case there are no matching annular spectra
@@ -3604,12 +4060,13 @@ class BaseSource:
             final_matched_prods = final_matched_prods[0]
         elif len(final_matched_prods) == 0:
             raise NoProductAvailableError("No matching AnnularSpectra can be found.")
-        
+
         return final_matched_prods
 
     def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                     radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                     telescope: str = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                     radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
+                     telescope: str = None, spec_model: str = None,
+                     spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         This is the generic get method for XGA profile objects stored in this source. You still must remember
         the profile type value to use it, but once entered it will return a list of all matching profiles (or a
@@ -3626,31 +4083,34 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
         :param str telescope: Optionally, a specific telescope to search for can be supplied. The default is None,
             which means all profiles matching the other criteria will be returned.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        if "profile" in profile_type:
-            warn("The profile_type you passed contains the word 'profile', which is appended onto a profile type "
-                 "by XGA, you need to try this again without profile on the end, unless you gave a generic "
-                 "profile a type with 'profile' in.", stacklevel=2)
 
         # Combined profiles are those where EITHER obs_id OR inst (or both) equals 'combined'
         if obs_id == 'combined' or inst == 'combined':
             search_key = "combined_" + profile_type + "_profile"
         else:
             search_key = profile_type + "_profile"
-        if search_key not in ALLOWED_PRODUCTS:
-            warn("{} seems to be a custom profile, not an XGA default type. If this is not true then you have "
-                 "passed an invalid profile type.".format(search_key), stacklevel=2)
 
-        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, lo_en, hi_en, telescope)
+        matched_prods = self._get_prof_prod(search_key, obs_id, inst, central_coord, radii, annuli_bound_radii, lo_en,
+                                            hi_en, telescope, spec_model, spec_fit_conf)
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
         elif len(matched_prods) == 0:
@@ -3658,16 +4118,15 @@ class BaseSource:
 
         return matched_prods
 
-    def get_combined_profiles(self, profile_type: str, obs_id: str = 'combined', inst: str = None,
-                              central_coord: Quantity = None, radii: Quantity = None,
-                              lo_en: Quantity = None, hi_en: Quantity = None, telescope: str = None) \
-            -> Union[BaseProfile1D, List[BaseProfile1D]]:
+    def get_combined_profiles(self, profile_type: str, inst: str = None, central_coord: Quantity = None,
+                              radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
+                              hi_en: Quantity = None, telescope: str = None, spec_model: str = None,
+                              spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA profile objects.
         This is equivalent to calling get_profiles() with obs_id='combined' and/or inst='combined'.
 
         :param str profile_type: The string profile type of the profile(s) you wish to retrieve.
-        :param str obs_id: The obs_id to search for. Default is 'combined' for multi-observation profiles.
         :param str inst: Optionally, a specific instrument to search for. The default is None, which means all
             combined profiles matching the other criteria will be returned. Pass 'combined' to retrieve
             multi-instrument combined profiles.
@@ -3675,18 +4134,28 @@ class BaseSource:
             is None which means the method will use the default coordinate of this source.
         :param Quantity radii: The central radii of the profile points, it is not likely that this option will be
             used often as you likely won't know the radial values a priori.
+        :param Quantity annuli_bound_radii: The radial boundaries of the annuli of the profile you wish to
+            retrieve, the inner and outer radii of the annuli (the centres of which can instead be passed to
+            the 'radii' argument). The default is None, in which no matching on annuli radii will be performed.
         :param Quantity lo_en: The lower energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed hi_en must be too.
         :param Quantity hi_en: The higher energy bound of the profile you wish to retrieve (if applicable), default
             is None, and if this argument is passed lo_en must be too.
         :param str telescope: Optionally, a specific telescope to search for combined profiles can be supplied. The
             default is None, which means all combined profiles matching the other criteria will be returned.
+        :param str spec_model: The name of the spectral model from which the profile originates.
+        :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
+            uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
+            spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
+            the names of parameters passed to the spectrum fitting function and values being the changed values (only
+            values changed-from-default need be included) or a full string representation of the fit configuration.
         :return: An XGA profile object (if there is an exact match), or a list of XGA profile objects (if there
             were multiple matching products).
         :rtype: Union[BaseProfile1D, List[BaseProfile1D]]
         """
-        return self.get_profiles(profile_type, obs_id=obs_id, inst=inst, central_coord=central_coord,
-                                radii=radii, lo_en=lo_en, hi_en=hi_en, telescope=telescope)
+        return self.get_profiles(profile_type, obs_id="combined", inst=inst, central_coord=central_coord,
+                                 radii=radii, annuli_bound_radii=annuli_bound_radii, lo_en=lo_en, hi_en=hi_en,
+                                 telescope=telescope, spec_model=spec_model, spec_fit_conf=spec_fit_conf)
 
     def get_lightcurves(self, outer_radius: Union[str, Quantity] = None, obs_id: str = None, inst: str = None,
                         inner_radius: Union[str, Quantity] = None, lo_en: Quantity = None,
@@ -4078,7 +4547,7 @@ class BaseSource:
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
         back_mask = bck_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
-        
+
         # If the masks are None, then they are set to an array of zeros
         if mask is None:
             mask = np.zeros(mask_image.shape)
@@ -4614,13 +5083,15 @@ class BaseSource:
 
         return final_src
 
-    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str, telescope: str):
+    def add_fit_data(self, model: str, tab_line, lums: dict, spec_storage_key: str, telescope: str, fit_conf: str):
         """
-        A method that stores fit results and global information about a set of spectra in a source object.
+        A method that stores fit results and global information for a set of spectra in a source object.
         Any variable parameters in the fit are stored in an internal dictionary structure, as are any luminosities
         calculated. Other parameters of interest are store in other internal attributes. This probably shouldn't
         ever be used by the user, just other parts of XGA, hence why I've asked for a spec_storage_key to be passed
         in rather than all the spectrum configuration options individually.
+
+        This method should not need to be directly called by the user - only by other XGA functions.
 
         :param str model: The XSPEC definition of the model used to perform the fit. e.g. constant*tbabs*apec
         :param tab_line: The table line with the fit data.
@@ -4629,24 +5100,32 @@ class BaseSource:
             ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
             settings when the spectra were generated.
         :param str telescope: The telescope for which the spectra that have been fit were generated.
+        :param str fit_conf: In order to be able to store results for different fit configurations (e.g. different
+            starting pars, abundance tables, all that), we need to have a key that identifies the configuration. We
+            do not expect the user to be adding fit data, so this will be a key generated by the fit function.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
         not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
                    'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
 
         if telescope not in self.telescopes:
-            raise NotAssociatedError("The {t} telescope is not associated with {n}.".format(t=telescope, n=self.name))
+            raise NotAssociatedError(f"The {telescope} telescope is not associated with {self.name}.")
 
-        # Various global values of interest
+        # Various global values of interest - setting up the dictionary storage structure
         self._total_exp[telescope][spec_storage_key] = float(tab_line["TOTAL_EXPOSURE"])
-        if spec_storage_key not in self._total_count_rate[telescope]:
-            self._total_count_rate[telescope][spec_storage_key] = {}
-            self._test_stat[telescope][spec_storage_key] = {}
-            self._dof[telescope][spec_storage_key] = {}
-        self._total_count_rate[telescope][spec_storage_key][model] = [float(tab_line["TOTAL_COUNT_RATE"]),
-                                                                      float(tab_line["TOTAL_COUNT_RATE_ERR"])]
-        self._test_stat[telescope][spec_storage_key][model] = float(tab_line["TEST_STATISTIC"])
-        self._dof[telescope][spec_storage_key][model] = float(tab_line["DOF"])
+        self._total_count_rate.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._test_stat.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._fit_stat.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._dof.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._fit_results.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._luminosities.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+
+        # Now we start actually storing things
+        self._total_count_rate[telescope][spec_storage_key][model][fit_conf] = [float(tab_line["TOTAL_COUNT_RATE"]),
+                                                                                float(tab_line["TOTAL_COUNT_RATE_ERR"])]
+        self._test_stat[telescope][spec_storage_key][model][fit_conf] = float(tab_line["TEST_STATISTIC"])
+        self._fit_stat[telescope][spec_storage_key][model][fit_conf] = float(tab_line["FIT_STATISTIC"])
+        self._dof[telescope][spec_storage_key][model][fit_conf] = float(tab_line["DOF"])
 
         # The parameters available will obviously be dynamic, so have to find out what they are and then
         #  for each result find the +- errors
@@ -4676,26 +5155,52 @@ class BaseSource:
 
             mod_res[par_name][ident][pos] = float(tab_line[par])
 
-        # Storing the fit results
-        if spec_storage_key not in self._fit_results[telescope]:
-            self._fit_results[telescope][spec_storage_key] = {}
-        self._fit_results[telescope][spec_storage_key][model] = mod_res
+        # Storing the fit results - we know the correct nested dictionary structure already exists
+        #  because we set it up at the top of this method.
+        self._fit_results[telescope][spec_storage_key][model][fit_conf] = mod_res
 
-        # And now storing the luminosity results
-        if spec_storage_key not in self._luminosities[telescope]:
-            self._luminosities[telescope][spec_storage_key] = {}
-        self._luminosities[telescope][spec_storage_key][model] = lums
+        # And now storing the luminosity results - same deal as _fit_results, we know the structure
+        #  exists already
+        self._luminosities[telescope][spec_storage_key][model][fit_conf] = lums
+
+    def add_fit_failure(self, model: str, spec_storage_key: str, telescope: str, fit_conf: str):
+        """
+        A method that keeps a record of when a model fit to a set of spectra, with particular spectrum generation
+        and fit configuration, was not successful. It is helpful to keep track of these in order to avoid wasting
+        compute time re-running previously failed fits.
+
+        :param str model: The XSPEC definition of the model used to perform the fit. e.g. constant*tbabs*apec
+        :param str spec_storage_key: The storage key of any spectrum that was used in this particular fit. The
+            ObsID and instrument used don't matter, as the storage key will be the same and is based off of the
+            settings when the spectra were generated.
+        :param str telescope: The telescope for which the spectra that have been fit were generated.
+        :param str fit_conf: In order to be able to store results for different fit configurations (e.g. different
+            starting pars, abundance tables, all that), we need to have a key that identifies the configuration. We
+            do not expect the user to be adding fit data, so this will be a key generated by the fit function.
+        """
+        if telescope not in self.telescopes:
+            raise NotAssociatedError(f"The {telescope} telescope is not associated with {self.name}.")
+
+        # Make sure that the _failed_fits attribute has the structure we want (top level keys spectrum storage
+        #  identifiers, lower level keys model names, values lists of fit configurations
+        self._failed_fits.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, [])
+        # Then we add the failed fit configuration to the storage structure
+        self._failed_fits[telescope][spec_storage_key][model].append(fit_conf)
 
     def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
                     group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                    stacked_spectra: bool = False):
+                    stacked_spectra: bool = False, fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
         column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
         of such numpy arrays, with the keys corresponding to parameter names.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -4718,13 +5223,14 @@ class BaseSource:
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
             simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested result value, and uncertainties.
+        :rtype: Union[dict, Quantity]
         """
-        # Have to check that the passed telescope is associated with this source - the len_fit_results
-        #  variable is used later on for further validity checks
-        try:
-            len_fit_results = len(self._fit_results[telescope])
-        except KeyError:
+        # Have to check that the passed telescope is associated with this source
+        if telescope not in self._fit_results:
             raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with {self.name} (only "
                                               f"{self.telescopes}) so no fit results can be retrieved.")
 
@@ -4757,29 +5263,15 @@ class BaseSource:
 
         # I just take the first spectrum in the list because the storage key will be the same for all of them
         if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
             storage_key = specs[0].storage_key
         else:
             storage_key = specs.storage_key
 
-        # Bunch of checks to make sure the requested results actually exist
-        if len_fit_results == 0:
-            raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(t=telescope,
-                                                                                                   s=self.name))
-        elif storage_key not in self._fit_results[telescope]:
-            raise ModelNotAssociatedError("Those {t} spectra have no associated XSPEC fit to {s}".format(t=telescope,
-                                                                                                         s=self.name))
-        elif model not in self._fit_results[telescope][storage_key]:
-            av_mods = ", ".join(self._fit_results[telescope][storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to those {t} spectra of {s}; available "
-                                          "models are {a}".format(m=model, s=self.name, a=av_mods, t=telescope))
-        elif par is not None and par not in self._fit_results[telescope][storage_key][model]:
-            av_pars = ", ".join(self._fit_results[telescope][storage_key][model].keys())
-            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m} fit to those {t} spectra of "
-                                              "{s}, the options are {a}".format(p=par, m=model, s=self.name, a=av_pars,
-                                                                                t=telescope))
+        model, fit_conf = self._get_fit_checks(storage_key, telescope, model, par, fit_conf)
 
         # Read out into variable for readabilities sake
-        fit_data = self._fit_results[telescope][storage_key][model]
+        fit_data = self._fit_results[telescope][storage_key][model][fit_conf]
         proc_data = {}  # Where the output will ive
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into
@@ -4805,15 +5297,256 @@ class BaseSource:
         else:
             return proc_data[par]
 
+    def get_fit_statistic(self, outer_radius: Union[str, Quantity], telescope: str, model: str = None,
+                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                          min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                          stacked_spectra: bool = False, fit_conf: Union[str, dict] = None) -> float:
+        """
+        Method that will retrieve fit statistic from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        # Have to check that the passed telescope is associated with this source
+        if telescope not in self._fit_results:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with {self.name} (only "
+                                              f"{self.telescopes}) so no fit results can be retrieved.")
+
+        # First, I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        if telescope in ['erosita', 'erass'] and (len(self.obs_ids[telescope]) > 1):
+            # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
+            # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument
+            if stacked_spectra:
+                # Multi-obs + multi-inst combined (obs_id='combined', inst='combined')
+                search_inst = 'combined'
+            else:
+                # Multi-obs + individual insts (obs_id='combined', inst=<specific>)
+                # Leaving inst=None returns all per-instrument combined-obs spectra
+                search_inst = None
+
+            specs = self.get_spectra(outer_radius, obs_id='combined', inst=search_inst, inner_radius=inner_radius,
+                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, telescope=telescope)
+        else:
+            # Single observation (or non-eROSITA): use regular spectra
+            # For multi-instrument stacking, inst='combined' retrieves Scenario 1 products
+            # search_inst = 'combined' if stacked_spectra else None
+            # This part of the if-else will be for missions with no implemented spectrum
+            #  stacking method I think, so search_inst must be None.
+            search_inst = None
+
+            specs = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                     telescope=telescope, inst=search_inst)
+
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, telescope, model, None, fit_conf)
+
+        return self._fit_stat[telescope][storage_key][model][fit_conf]
+
+    def get_test_statistic(self, outer_radius: Union[str, Quantity], telescope: str, model: str = None,
+                           inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                           min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                           stacked_spectra: bool = False, fit_conf: Union[str, dict] = None) -> float:
+        """
+        Method that will retrieve test statistic from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        # Have to check that the passed telescope is associated with this source
+        if telescope not in self._fit_results:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with {self.name} (only "
+                                              f"{self.telescopes}) so no fit results can be retrieved.")
+
+        # First, I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        if telescope in ['erosita', 'erass'] and (len(self.obs_ids[telescope]) > 1):
+            # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
+            # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument
+            if stacked_spectra:
+                # Multi-obs + multi-inst combined (obs_id='combined', inst='combined')
+                search_inst = 'combined'
+            else:
+                # Multi-obs + individual insts (obs_id='combined', inst=<specific>)
+                # Leaving inst=None returns all per-instrument combined-obs spectra
+                search_inst = None
+
+            specs = self.get_spectra(outer_radius, obs_id='combined', inst=search_inst, inner_radius=inner_radius,
+                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, telescope=telescope)
+        else:
+            # Single observation (or non-eROSITA): use regular spectra
+            # For multi-instrument stacking, inst='combined' retrieves Scenario 1 products
+            # search_inst = 'combined' if stacked_spectra else None
+            # This part of the if-else will be for missions with no implemented spectrum
+            #  stacking method I think, so search_inst must be None.
+            search_inst = None
+
+            specs = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                     telescope=telescope, inst=search_inst)
+
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, telescope, model, None, fit_conf)
+        return self._test_stat[telescope][storage_key][model][fit_conf]
+
+    def get_fit_dof(self, outer_radius: Union[str, Quantity], telescope: str, model: str = None,
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    stacked_spectra: bool = False, fit_conf: Union[str, dict] = None) -> int:
+        """
+        Method that will retrieve DOF from the specified spectrum object. If no model name is supplied, but
+        only one model has been fit to the spectrum of interest, then that model will be automatically selected - this
+        behavior also applies to the fit configuration (fit_conf) parameter; if a model was only fit with one fit
+        configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
+        :return: The requested fit statistic.
+        :rtype: float
+        """
+        # Have to check that the passed telescope is associated with this source
+        if telescope not in self._fit_results:
+            raise TelescopeNotAssociatedError(f"The telescope {telescope} is not associated with {self.name} (only "
+                                              f"{self.telescopes}) so no fit results can be retrieved.")
+
+        # First, I want to retrieve the spectra that were fitted to produce the result they're looking for,
+        #  because then I can just grab the storage key from one of them
+        if telescope in ['erosita', 'erass'] and (len(self.obs_ids[telescope]) > 1):
+            # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
+            # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument
+            if stacked_spectra:
+                # Multi-obs + multi-inst combined (obs_id='combined', inst='combined')
+                search_inst = 'combined'
+            else:
+                # Multi-obs + individual insts (obs_id='combined', inst=<specific>)
+                # Leaving inst=None returns all per-instrument combined-obs spectra
+                search_inst = None
+
+            specs = self.get_spectra(outer_radius, obs_id='combined', inst=search_inst, inner_radius=inner_radius,
+                                     group_spec=group_spec, min_counts=min_counts, min_sn=min_sn, telescope=telescope)
+        else:
+            # Single observation (or non-eROSITA): use regular spectra
+            # For multi-instrument stacking, inst='combined' retrieves Scenario 1 products
+            # search_inst = 'combined' if stacked_spectra else None
+            # This part of the if-else will be for missions with no implemented spectrum
+            #  stacking method I think, so search_inst must be None.
+            search_inst = None
+
+            specs = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec,
+                                     min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                                     telescope=telescope, inst=search_inst)
+
+        # I just take the first spectrum in the list because the storage key will be the same for all of them
+        if isinstance(specs, list):
+            # This goes through the selected spectra and just finds the one with
+            storage_key = specs[0].storage_key
+        else:
+            storage_key = specs.storage_key
+
+        model, fit_conf = self._get_fit_checks(storage_key, telescope, model, None, fit_conf)
+
+        return self._dof[telescope][storage_key][model][fit_conf]
+
     def get_luminosities(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
                          hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None, stacked_spectra: bool = False):
+                         over_sample: float = None, stacked_spectra: bool = False,
+                         fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
 
         :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
             the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
@@ -4837,7 +5570,11 @@ class BaseSource:
         :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
             a simultaneously fitted spectra. By default this method will retrieve the result from
             the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
+            spectrum fitting function and values being the changed values (only values changed-from-default need
+            be included) or a full string representation of the fit configuration that is being requested.
         :return: The requested luminosity value, and uncertainties.
+        :rtype: Union[dict, Quantity]
         """
         # First, check if the passed telescope is actually associated with this source
         if telescope not in self.telescopes:
@@ -4877,6 +5614,8 @@ class BaseSource:
         else:
             storage_key = specs.storage_key
 
+        model, fit_conf = self._get_fit_checks(storage_key, telescope, model, None, fit_conf)
+
         # Checking the input energy limits are valid, and assembles the key to look for lums in those energy
         #  bounds. If the limits are none then so is the energy key
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
@@ -4886,36 +5625,25 @@ class BaseSource:
         else:
             en_key = None
 
-        # Checks that the requested region, model and energy band actually exist
-        if len_xspec_fits == 0:
-            raise ModelNotAssociatedError("There are no {t} XSPEC fits associated with {s}".format(s=self.name,
-                                                                                                   t=telescope))
-        elif storage_key not in self._luminosities[telescope]:
-            raise ModelNotAssociatedError("These {t} spectra have no associated XSPEC fit to {s}.".format(t=telescope,
-                                                                                                          s=self.name))
-        elif model not in self._luminosities[telescope][storage_key]:
-            av_mods = ", ".join(self._luminosities[telescope][storage_key].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to these {t} spectra of {s}; "
-                                          "available models are {a}".format(m=model, s=self.name, a=av_mods,
-                                                                            t=telescope))
-        elif en_key is not None and en_key not in self._luminosities[telescope][storage_key][model]:
+        # Checks the energy band actually exists
+        if en_key is not None and en_key not in self._luminosities[telescope][storage_key][model][fit_conf]:
             av_bands = ", ".join([en.split("_")[-1] + "keV"
-                                  for en in self._luminosities[telescope][storage_key][model].keys()])
-            raise ParameterNotAssociatedError("{l}-{u}keV was not a luminosity energy band for the fit to those {t} "
-                                              "spectra with {m}; available energy bands are "
-                                              "{b}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value,
-                                                           m=model, b=av_bands, t=telescope))
+                                  for en in self._luminosities[telescope][storage_key][model][fit_conf].keys()])
+            raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
+                                              "energy bands are {b}".format(l=lo_en.to("keV").value,
+                                                                            u=hi_en.to("keV").value,
+                                                                            m=model, b=av_bands))
 
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
             parsed_lums = {}
-            for lum_key in self._luminosities[telescope][storage_key][model]:
-                lum_value = self._luminosities[telescope][storage_key][model][lum_key]
+            for lum_key in self._luminosities[telescope][storage_key][model][fit_conf]:
+                lum_value = self._luminosities[telescope][storage_key][model][fit_conf][lum_key]
                 parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
                 parsed_lums[lum_key] = parsed_lum
             return parsed_lums
         else:
-            lum_value = self._luminosities[telescope][storage_key][model][en_key]
+            lum_value = self._luminosities[telescope][storage_key][model][fit_conf][en_key]
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
@@ -4935,8 +5663,7 @@ class BaseSource:
             out_unit = Unit(out_unit)
 
         if out_unit.is_equivalent('kpc') and self._redshift is None:
-            raise UnitConversionError("You cannot convert to {} without redshift "
-                                      "information.".format(out_unit.to_string()))
+            raise UnitConversionError(f"You cannot convert to {out_unit.to_string()} without redshift information.")
 
         if radius.unit.is_equivalent('deg') and out_unit.is_equivalent('deg'):
             out_rad = radius.to(out_unit)
@@ -4947,7 +5674,7 @@ class BaseSource:
         elif radius.unit.is_equivalent('kpc') and out_unit.is_equivalent('deg'):
             out_rad = rad_to_ang(radius, self._redshift, self._cosmo).to(out_unit)
         else:
-            raise UnitConversionError("Cannot understand {} as a distance unit".format(str(out_unit)))
+            raise UnitConversionError(f"Cannot understand {out_unit.to_string()} as a distance unit.")
 
         return out_rad
 
@@ -5174,10 +5901,12 @@ class BaseSource:
                     self._interloper_masks[tel]["combined"] = {}
                 self._fit_results[tel] = {}
                 self._test_stat[tel] = {}
+                self._fit_stat[tel] = {}
                 self._dof[tel] = {}
                 self._total_count_rate[tel] = {}
                 self._total_exp[tel] = {}
                 self._luminosities[tel] = {}
+                self._failed_fits[tel] = {}
 
             # This will be set to True if a whole ObsID of this telescope is removed, not just some instruments
             #  associated with an ObsID - later on in this method that will trigger the reset of interloper regions
@@ -5731,14 +6460,14 @@ class BaseSource:
             print("Spectra associated - {}".format(len(self.get_products("spectrum", telescope=tel))))
 
             if len(self._fit_results[tel]) != 0:
-                print("Fitted Models - {}".format(" | ".join(self.fitted_models)))
+                print("Fitted Models - {}".format(" | ".join(self.all_fitted_models)))
 
             if 'get_temperature' in dir(self):
                 try:
                     tx = self.get_temperature('r500', tel, 'constant*tbabs*apec').value.round(2)
                     # Just average the uncertainty for this
                     print("R500 Tx - {0}±{1}[keV]".format(tx[0], tx[1:].mean().round(2)))
-                except (ModelNotAssociatedError, NoProductAvailableError):
+                except (ModelNotAssociatedError, NoProductAvailableError, ValueError):
                     pass
 
                 try:
@@ -5746,7 +6475,7 @@ class BaseSource:
                                                hi_en=Quantity(2.0, 'keV')).to('10^44 erg/s').value.round(2)
                     print("R500 0.5-2.0keV Lx - {0}±{1}[e+44 erg/s]".format(lx[0], lx[1:].mean().round(2)))
 
-                except (ModelNotAssociatedError, NoProductAvailableError):
+                except (ModelNotAssociatedError, NoProductAvailableError, ValueError):
                     pass
         print("-----------------------------------------------------\n")
 

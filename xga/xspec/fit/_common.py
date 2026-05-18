@@ -1,13 +1,15 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 2:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 9:31 PM. Copyright (c) The Contributors.
 
 import os
+from random import randint
 from typing import List, Union, Tuple, Dict
 from warnings import warn
 
 from astropy.units import Quantity, UnitConversionError
 
-from ... import OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD, ABUND_TABLES
+from ... import (OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD,
+                 ABUND_TABLES, CROSS_ARF_XSPEC_SCRIPT)
 from ...exceptions import NoProductAvailableError
 from ...generate.ciao.spec import specextract_spectrum, ciao_spectrum_set
 from ...generate.esass import srctool_spectrum
@@ -16,7 +18,7 @@ from ...generate.sas import evselect_spectrum, region_setup
 from ...generate.sas import spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
-from ...sources import BaseSource, ExtendedSource, PointSource
+from ...sources import ExtendedSource, PointSource, BaseSource
 
 
 def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_en: Quantity, hi_en: Quantity,
@@ -38,6 +40,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
+
     # This function supports passing both individual sources and samples of sources, but I do require that
     #  the sources object is iterable
     if isinstance(sources, BaseSource):
@@ -47,7 +50,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     if not all([isinstance(src, (ExtendedSource, PointSource)) for src in sources]):
         raise TypeError("This convenience function cannot be used with BaseSource objects.")
     elif not all([src.detected for src in sources]):
-        warn("Not all of these sources have been detected, you may get a poor fit.")
+        warn("Not all of these sources have been detected, you may get a poor fit.", stacklevel=2)
 
     # Checks that the luminosity energy bands are pairs of values
     if lum_en.shape[1] != 2:
@@ -67,8 +70,8 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
                          "{a}.".format(f=fit_method, a=", ".join(XSPEC_FIT_METHOD)))
 
     if abund_table not in ABUND_TABLES:
-        raise ValueError("{a} is not an XSPEC abundance table, allowed abundance tables are; "
-                         "{av}.".format(a=abund_table, av=", ".join(ABUND_TABLES)))
+        raise ValueError(f"{abund_table} is not an XSPEC abundance table, allowed abundance tables are; "
+                         f"{", ".join(ABUND_TABLES)}.")
 
     if not timeout.unit.is_equivalent('second'):
         raise UnitConversionError("The timeout quantity must be in units which can be converted to seconds, you have"
@@ -334,7 +337,7 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
 
     return specs, storage_key
 
-def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quantity], Dict[str, Quantity], 
+def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quantity], Dict[str, Quantity],
                        Dict[str, List[Quantity]]]) -> Union[Dict[str, Quantity], Dict[str, List[Quantity]]]:
     """
     Internal function to parse the user input of the 'radii' argument of spectral fitting methods
@@ -349,12 +352,12 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
     :rtype: Union[Dict[str, Quantity], Dict[str, List[Quantity]]]
     """
     output_dict = {}
-    # If the radii is input as a Quantity, that means the user wants the same radii for all 
+    # If the radii is input as a Quantity, that means the user wants the same radii for all
     # telescopes and all sources
     if isinstance(radii, Quantity):
         for telescope in telescopes:
             output_dict[telescope] = radii
-    
+
     # If the radii is input as a List, that means the user wants the same radii for each telescope,
     # but different radii for different sources.
     elif isinstance(radii, List):
@@ -364,13 +367,13 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
                 raise ValueError("If 'radii' is input as a List, then every element of the List " 
                                  "must be an astropy Quantity.")
             else:
-                output_dict[telescope] = radii    
-    
+                output_dict[telescope] = radii
+
     elif isinstance(radii, dict):
         if not all(tel in radii.keys() for tel in telescopes):
             raise KeyError("If 'radii' is input as a dictionary, this dictionary must contain a key"
                            " for each telescope associated to the source.")
-        # If the radii is input as a Dictionary of lists, the user wants different radii for each 
+        # If the radii is input as a Dictionary of lists, the user wants different radii for each
         # source and each telescope
         if all(isinstance(value, List) for value in radii.values()):
             for list_ in radii.values():
@@ -378,7 +381,7 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
                 if not all(isinstance(elem, Quantity) for elem in list_):
                     raise ValueError("If 'radii' is input as a Dictionary of Lists, then every "
                                      "element of each List must be an astropy Quantity.")
-    
+
             output_dict = radii
 
         # If the radii is input as a Dictionary of lists, the user wants the different radii for
@@ -413,13 +416,15 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
 
 
 def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, abund_table: str, fit_method: str,
-                        specs: str, lo_en: Quantity, hi_en: Quantity, par_names: str, par_values: str,
-                        linking: str, freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str,
-                        lum_conf: float, redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
-                        check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool,
-                        which_par_nh: str = 'None', telescope: str = 'xmm') -> Tuple[str, str]:
+                        specs: str, lo_en: Quantity, hi_en: Quantity, par_names: str, par_values: str, linking: str,
+                        freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str, lum_conf: float,
+                        redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
+                        check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool, telescope: str, fit_conf: str,
+                        which_par_nh: str = 'None', rand_ident: str = None, cross_arf_paths: str = None,
+                        cross_arf_rmf_paths: str = None) -> Tuple[str, str, list]:
     """
-    This writes out a configured XSPEC script, and is common to all fit functions.
+    This writes out a configured XSPEC script, for global fits, annular fits, and annular fits with cross-arf
+    support depending on the input parameters.
 
     :param BaseSource source: The source for which an XSPEC script is being created
     :param str spec_storage_key: The storage key that the spectra that have been included in the current fit
@@ -450,40 +455,117 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     :param str check_par_err_lims: A string representing a TCL list of allowed upper limits for the parameter
         uncertainties.
     :param bool norm_scale: Is there an extra constant designed to account for the differences in normalisation
-        you can get from different observations of a cluster.
+        you can get from different observations of a source.
+    :param str telescope: The name of the telescope for which the fitting script is being generated.
+    :param str fit_conf: The fit configuration key for this model fit run. This is incorporated into script and
+        output file names in order to uniquely identify model fits with different configurations.
     :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
         of unabsorbed luminosities.
-    :param str telescope: The name of the telescope for which the fitting script is being generated. The default
-        is 'xmm' to support the original behaviour of XGA as an XMM focused tool.
-    :return: The paths to the output file and the script file.
-    :rtype: Tuple[str, str]
+    :param str rand_ident: A random identifier to identify the fit, and fit results file. Default is None, in which
+        case this function will generate an identifier, but we also allow it to be passed in for annular spectrum
+        fit methods, so we can easily identify annulus fits from the same run (the format will be the same random
+        identifier with _{annulus id} appended).
+    :param str cross_arf_paths: The TCL list of paths to the cross-arf files used for all the annuli
+        and annuli combinations in this script.
+    :param str cross_arf_rmf_paths: The TCL list of paths to the RMFs used to generate the cross-arfs.
+    :param str which_par_nh: The parameter IDs of the nH parameters values which should be zeroed for the calculation
+        of unabsorbed luminosities.
+    :return: The paths to the output file and the script file, plus the presumptive entry for the fit inventory in the
+        case that the fit is successful.
+    :rtype: Tuple[str, str, list]
     """
-    # Read in the template file for the XSPEC script.
-    with open(BASE_XSPEC_SCRIPT, 'r') as x_script:
-        script = x_script.read()
-
     # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
     #  to be stored - single telescope fits are stored in a specific XSPEC directory for that telescope
-    dest_dir = OUTPUT + telescope + "/XSPEC/" + source.name + "/"
-    if not os.path.exists(dest_dir):
-        os.makedirs(dest_dir)
-    # Defining where the output summary file of the fit is written - we also include the telescope in the filename,
-    #  just so they can't be confused for the same fit on a different telescope data if downloaded
-    out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + telescope
-    script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + telescope + ".xcm"
+    dest_dir = os.path.join(OUTPUT, telescope, 'XSPEC', source.name, "")
+    os.makedirs(dest_dir, exist_ok=True)
 
-    # The template is filled out here, taking everything we have generated and everything the user
-    #  passed in. The result is an XSPEC script that can be run as is.
-    script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
-                           q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
-                           hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
-                           lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                           of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
-                           cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
-                           nhmtz=which_par_nh)
+
+    # We're keeping an inventory of XSPEC fits for each source, and if it doesn't already exist we set up the file
+    if not os.path.exists(dest_dir + 'inventory.csv'):
+        # These are the columns we want to have in our inventory file
+        inv_cols = ['results_file', 'spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name', 'type',
+                    'set_ident']
+        with open(dest_dir + 'inventory.csv', 'w') as writo:
+            # Writing out the inventory column names to the new file
+            inv_hdr = ",".join(inv_cols) + "\n"
+            writo.write(inv_hdr)
+
+    if rand_ident is None:
+        # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit
+        #  configuration key will be too long to be allowed, so we're going to keep an inventory and assign them
+        #  random identifiers.
+        rand_ident = randint(0, int(1e+8))
+
+    # We create the eventual final output results file from the fit - it won't necessarily get made because the fit
+    #  might fail, but we're making life easier on ourselves by creating the inventory entry here so it can be put
+    #  in the file by xspec_call if the fit succeeds
+    # We are making it a relative path to make it more resilient to the output directory being moved
+    final_res_file = source.name + '_' + str(rand_ident) + ".fits"
+
+    # Create strings of the ObsID-instruments that represent the data currently associated with the source
+    i_str = "/".join([i for o in source.instruments for i in source.instruments[o]])
+    o_str = "/".join([o for o in source.instruments for i in source.instruments[o]])
+
+    # This way we can identify if the fit is to an annular spectrum or a regular set of spectra
+    if 'ident' in spec_storage_key:
+        # These only occur in the annular spectra
+        set_ident = spec_storage_key.split('ident')[-1].split('_')[0]
+    else:
+        set_ident = ''
+
+    # Now we can define the 'type' of fit it is - this will help out when reading things in
+    if set_ident == '':
+        fit_type = 'global'
+    elif set_ident != '' and cross_arf_paths is None:
+        fit_type = 'ann'
+    elif set_ident != '' and cross_arf_paths is not None:
+        fit_type = 'ann_carf'
+
+    # TODO WILL NEED TO ADD A TELESCOPE COLUMN TO WHEREEVER I DEFINED THE FORMAT OF THE INVENTORY FILE
+    # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
+    inv_ent = [final_res_file, spec_storage_key, fit_conf, o_str, i_str, telescope, source.name, fit_type, str(set_ident)]
+
+    # Defining where the output summary file of the fit is written - these file names used to contain all the
+    #  information about the fit, but we're using an inventory file and randomly generated identifiers now
+    # out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf
+    # script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf + ".xcm"
+    out_file = dest_dir + source.name + "_" + str(rand_ident)
+    script_file = dest_dir + source.name + "_" + str(rand_ident) + '.xcm'
+
+    # We can tell if the 'standard' script template or the cross-arf template is needed by checking whether the
+    #  cross arf paths variable has been set
+    if cross_arf_paths is None:
+        # Read in the template file for the usual XSPEC script.
+        with open(BASE_XSPEC_SCRIPT, 'r') as x_script:
+            script = x_script.read()
+
+        # The template is filled out here, taking everything we have generated and everything the user
+        #  passed in. The result is an XSPEC script that can be run as is.
+        script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
+                               q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
+                               hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
+                               lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
+                               of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
+                               cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
+                               nhmtz=which_par_nh)
+
+    else:
+        # Read in the template file for the cross-arf XSPEC script - quite different fundamentally
+        with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
+            script = x_script.read()
+
+        # The template is filled out here, taking everything we have generated and everything the user
+        #  passed in. The result is an XSPEC script that can be run as is.
+        script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value, q0=0.,
+                               lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
+                               hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values, lk=linking,
+                               fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims, of=out_file,
+                               redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
+                               cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
+                               nhmtz=which_par_nh, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
 
     # Write out the filled-in template to its destination
     with open(script_file, 'w') as xcm:
         xcm.write(script)
 
-    return out_file, script_file
+    return out_file, script_file, inv_ent

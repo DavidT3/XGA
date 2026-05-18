@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 11:22 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -198,7 +198,7 @@ def _in_region(ra: Union[float, List[float], np.ndarray], dec: Union[float, List
         #               "search.".format(obs_id))
 
         # Reading in the region file using the Regions module
-        og_ds9_regs = Regions.read(reg_path, format='ds9').regions
+        og_ds9_regs = np.array(Regions.read(reg_path, format='ds9').regions)
 
         # There's nothing for us to do if there are no regions in the region file, so we continue onto the next
         #  possible ObsID match (if there is one) - same deal if there is no WCS information in the image
@@ -829,6 +829,18 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
     for st in src_type:
         allowed_colours += SRC_REGION_COLOURS[st]
 
+    # We ensure that the RA and Decs are in arrays, even if there is only one coordinate - also in the case of a
+    #  single coordinate we set the number of cores to one
+    if type(src_ra) != type(src_dec):
+        raise TypeError("'src_ra' and 'src_dec' arguments must be the same type; either floats or arrays.")
+    elif isinstance(src_ra, float):
+        src_ra = np.array([src_ra])
+        src_dec = np.array([src_dec])
+        num_cores = 1
+    elif isinstance(src_ra, list):
+        src_ra = np.array(src_ra)
+        src_dec = np.array(src_dec)
+
     # This runs the simple xmm match and gathers the results.
     s_match, s_match_bl = separation_match(src_ra, src_dec, distance, telescope, num_cores=num_cores)
     # The initial results are then processed into some more useful formats.
@@ -957,8 +969,8 @@ def region_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndar
 
             # If any errors occurred during the matching process, they are all raised here as a grouped exception
             if len(search_errors) != 0:
-                ExceptionGroup("The following exceptions were raised in the multi-threaded region finder",
-                               search_errors)
+                raise ExceptionGroup("The following exceptions were raised in the multi-threaded region finder",
+                                     search_errors)
 
     # This formats the match and no-match information so that the output is the same length and order as the input
     #  source lists
