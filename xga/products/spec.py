@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 2:19 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:06 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -3217,8 +3217,7 @@ class AnnularSpectra(BaseAggregateProduct):
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
-    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], upper_limit: Quantity = None,
-                         fit_conf: Union[str, dict] = None) \
+    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], fit_conf: Union[str, dict] = None) \
             -> Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]:
         """
         This generates a radial profile of the requested fit parameter using the stored results from
@@ -3229,7 +3228,6 @@ class AnnularSpectra(BaseAggregateProduct):
         :param str par: The name of the free model parameter that you wish to generate a profile for.
         :param Unit/str par_unit: The unit of the free model parameter as an astropy unit object, or a string
             representation (e.g. keV).
-        :param Quantity upper_limit: Allows an allowed upper limit for the y values in the profile to be passed.
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
             representation of the fit configuration that is being requested.
@@ -3296,17 +3294,12 @@ class AnnularSpectra(BaseAggregateProduct):
                 obs_id, inst = obs_key.split('-')
 
             try:
-                if par == 'kT' and upper_limit is None:
+                if par == 'kT':
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, associated_set_id=self.set_ident,
                                                          set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
                                                          auto_save=True, telescope=self.telescope, spec_model=model,
                                                          fit_conf=fit_conf)
-                elif par == 'kT' and upper_limit is not None:
-                    new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                         inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True,
-                                                         telescope=self.telescope, spec_model=model, fit_conf=fit_conf)
                 elif par == 'Abundanc':
                     new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, self.set_ident, self.storage_key,

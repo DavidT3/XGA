@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 1:03 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:06 PM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -563,11 +563,13 @@ def xspec_call(xspec_func):
                         #  so we check whether constant*tbabs*apec (single_temp_apec function)has been run and if so
                         #  generate a Tx profile automatically
                         if model == "constant*tbabs*apec":
-                            temp_prof = ann_spec.generate_profile(model, 'kT', 'keV', fit_conf=fit_conf_lookup[o_file_lu])
+                            temp_prof = ann_spec.generate_profile(model, 'kT', 'keV',
+                                                                  fit_conf=fit_conf_lookup[o_file_lu])
                             s.update_products(temp_prof)
 
                             # Normalisation profiles can be useful for many things, so we generate them too
-                            norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5', fit_conf=fit_conf_lookup[o_file_lu])
+                            norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5',
+                                                                  fit_conf=fit_conf_lookup[o_file_lu])
                             s.update_products(norm_prof)
 
                             if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec',
