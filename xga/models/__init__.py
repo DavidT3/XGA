@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:11 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:38 PM. Copyright (c) The Contributors.
 
 import inspect
 from types import FunctionType
@@ -152,7 +152,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
 
     def _central_diff_weights(Np, ndiv=1):
         """
-        Return weights for an Np-point central derivative.
+        Return weights for a Np-point central derivative.
 
         Assumes equally-spaced function points.
 

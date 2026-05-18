@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 9:31 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:48 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -8,6 +8,7 @@ from warnings import warn
 
 from astropy.units import Quantity, UnitConversionError
 
+from generate.sas import cross_arf
 from ... import (OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD,
                  ABUND_TABLES, CROSS_ARF_XSPEC_SCRIPT)
 from ...exceptions import NoProductAvailableError
@@ -196,6 +197,7 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
                             radii: Union[Quantity, List[Quantity], Dict[str, Quantity], Dict[str, List[Quantity]]],
                             group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None,
                             over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
+                            gen_cross_arf: bool = False, cross_arf_detmap_bin: int = 200,
                             stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
         -> Tuple[Union[List[BaseSource], BaseSample], Union[Dict[str, Quantity], Dict[str, List[Quantity]]], List[str]]:
     """
@@ -218,6 +220,11 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
         ObsID-instrument combination - this is much faster in some circumstances, however the RMF does depend
         slightly on position on the detector.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
+    :param bool gen_cross_arf: Controls whether we generate cross-arfs in preparation for an XSPEC fit function
+        to use them during the fit.
+    :param int cross_arf_detmap_bin: The spatial binning applied to XMM event lists to create the detector maps used in the
+        calculations of cross-arf effective areas. The default is 200, smaller values will increase the resolution
+        but will cause dramatically slower calculations.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be generated. If a
         stacking procedure for a particular telescope is not supported, this function will instead use individual
         spectra for an ObsID. The default is False.
@@ -254,12 +261,27 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
                      "spectra will not be used for these XSPEC fits.", stacklevel=2)
             # We make sure the requested sets of annular spectra have actually been generated (for XMM)
             spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
+
+            # In this case the XSPEC convenience fitting function is going to use cross-arfs, so we
+            #  have to make sure that they have been generated.
+            if gen_cross_arf:
+                # We make sure to run the XGA function that uses SAS to generate XMM cross-arfs
+                cross_arf(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, detmap_bin=cross_arf_detmap_bin,
+                          num_cores=num_cores)
+
         elif tel in ['erosita', 'erass']:
             # The annular spectrum tool specific to eROSITA
             esass_spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, num_cores,
                                combine_tm=stacked_spectra)
+
+            if gen_cross_arf:
+                warn(f"XGA does not currently support the generation of cross-arfs for {tel}, so spectral "
+                     f"profile fits using {tel} data will not use them.", stacklevel=2)
         elif tel == 'chandra':
             ciao_spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, False, num_cores)
+            if gen_cross_arf:
+                warn(f"XGA does not currently support the generation of cross-arfs for {tel}, so spectral "
+                     f"profile fits using {tel} data will not use them.", stacklevel=2)
         else:
             raise NotImplementedError("Spectrum generation functionality is not implemented "
                                       "for {t} yet!".format(t=tel))

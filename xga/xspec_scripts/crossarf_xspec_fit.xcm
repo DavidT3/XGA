@@ -536,7 +536,7 @@ ignore bad
 ##################################################
 ## Setting up the final model and links
 ##################################################
-# Now we must define the model, but without setting any parameters (thats what /* does)
+# Now we must define the model, but without setting any parameters (that's what /* does)
 model $model_name
 /*
 
