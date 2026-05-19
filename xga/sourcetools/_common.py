@@ -1,17 +1,20 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 5:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:33 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple
+from warnings import warn
 
 from astropy.units import Quantity
 
 from .misc import model_check
 from .. import NUM_CORES
+from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
 from ..models import BaseModel1D
 from ..samples import ClusterSample, BaseSample
 from ..sources import BaseSource, GalaxyCluster
+from ..xspec import single_temp_apec
 
 
 def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]) -> List[str]:
@@ -41,7 +44,7 @@ def _get_all_telescopes(sources: Union[BaseSource, BaseSample, List[BaseSource]]
 def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], outer_radius: Union[str, Quantity],
                   global_radius: Union[str, Quantity], abund_table: str, group_spec: bool,
                   min_counts: int, min_sn: Union[int, float], over_sample: float, num_cores: int, psf_bins: int,
-                  stacked_spectra: bool, telescope: Union[str, List[str]]) -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]:
+                  stacked_spectra: bool, telescope: Union[str, List[str]], global_temp_success_check: bool = False) -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]:
     """
     Internal function to see if a source/sources have a measured global temperature, single_temp_apec
     is run before the check is done. It also runs the region_setup() method to fetch the outer radii
@@ -62,8 +65,8 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts
         per channel. To disable minimum counts set this parameter to None.
-    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in
-        each channel. To disable minimum signal to noise set this parameter to None.
+    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in
+        each channel. To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable.
         e.g. if over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at
         that energy.
@@ -76,10 +79,16 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
         supported, this function will instead use individual spectra for an ObsID. The default is
         False.
     :param str/List[str] telescope: The telescope(s) for which we are setting up spectral fits.
+    :param bool global_temp_success_check: If True this function ensures that global spectra are generated
+        and fit with a single temperature apec model, and then determines if those fits were successful
+        by attempting to retrieve global temperature values. A dictionary (telescopes as keys) of lists of
+        True/False values (True representing that a global temperature could be retrieved) is constructed and
+        returned, as a way for XGA functions to assess data quality. Default is False, in which case all values
+        in the returned dictionary of lists will be True.
     :return: A tuple. The first elements are the sources. The second are the Quantity objects
         describing the outer_radii of the regions used for annular bins. The third is a dictionary
         with telescope keys, containing a list of True and False values, depending on if the source
-        has a global temperature or not.
+        has a global temperature or not (all entries will be set to True if global_temp_success_check=False).
     :rtype: Tuple[Union[BaseSource, List[BaseSource], BaseSample], Union[Quantity, List[Quantity]], dict]
     """
 
@@ -105,14 +114,12 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
         # We also want to make sure that everything has a PSF corrected image, using all the default settings
         rl_psf(sources, bins=psf_bins)
 
-    # TODO THIS ASPECT OF GLOBAL SETUP (CHECKING FOR A SUCCESSFUL GLOBAL TEMPERATURE MEASUREMENT)
-    #  IS CURRENTLY DISABLED, AS IT IS OVERLY RESTRICTIVE - IN ISSUE #1508 WE WILL DECIDE WHETHER
-    #  IT SHOULD BE ALLOWED AS A USER-TRIGGERED OPTIONAL BEHAVIOUR
-    # We do this here (even though its also in the density measurement), because if we can't measure a global
-    #  temperature, then its unlikely that we'll be able to measure a temperature profile
-    # single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
-    #                  min_sn=min_sn, over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
-    #                  telescope=telescope)
+    # If the global_temp_success_check argument is True, we need to generate and fit the global spectra, as we will
+    #  need to determine whether there are successful global temperature measurements available.
+    if global_temp_success_check:
+        single_temp_apec(sources, global_radius, abund_table=abund_table, group_spec=group_spec, min_counts=min_counts,
+                         min_sn=min_sn, over_sample=over_sample, num_cores=num_cores, stacked_spectra=stacked_spectra,
+                         telescope=telescope)
 
     # We want to return a dictionary of telescope keys and values that are a list of len(sources) where
     # each element in the list is a boolean indicated whether a glob temp has been measured
@@ -122,29 +129,33 @@ def _setup_global(sources: Union[BaseSource, List[BaseSource], BaseSample], oute
         # We cycle over the telescopes in the Sample and not the Source, so that every list in
         # has_glob_temp is the same length
         for tel in src_telescopes:
-            if tel in src.telescopes:
-                has_glob_temp[tel].append(True)
+            # In the case that no success check on global temperature measurements was requested, we
+            #  will return True for every source that has the current telescope associated.
+            if not global_temp_success_check:
+                if tel in src.telescopes:
+                    has_glob_temp[tel].append(True)
+                else:
+                    has_glob_temp[tel].append(False)
+            # Otherwise, we check whether the fits were successful
             else:
-                has_glob_temp[tel].append(False)
-
-            # try:
-            #     if tel in ['erosita', 'erass'] and len(src.obs_ids[tel]) > 1:
-            #         # A temporary temperature variable
-            #         src.get_temperature(global_out_rads[src_ind], tel, "constant*tbabs*apec",
-            #                             group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-            #                             over_sample=over_sample, stacked_spectra=stacked_spectra)
-            #     else:
-            #         src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec',
-            #                             group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-            #                             over_sample=over_sample)
-            #     has_glob_temp[tel].append(True)
-            # except ModelNotAssociatedError:
-            #     warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
-            #          "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
-            #     has_glob_temp[tel].append(False)
-            # # If the telescope is not associated with this source, a NotAssociatedError will be raised
-            # except NotAssociatedError:
-            #     has_glob_temp[tel].append(False)
+                try:
+                    if tel in ['erosita', 'erass'] and len(src.obs_ids[tel]) > 1:
+                        # A temporary temperature variable
+                        src.get_temperature(global_out_rads[src_ind], tel, "constant*tbabs*apec",
+                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                            over_sample=over_sample, stacked_spectra=stacked_spectra)
+                    else:
+                        src.get_temperature(global_out_rads[src_ind], tel, 'constant*tbabs*apec',
+                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                            over_sample=over_sample)
+                    has_glob_temp[tel].append(True)
+                except ModelNotAssociatedError:
+                    warn("The global temperature fit for {} has failed, which means a temperature profile from annular "
+                         "spectra is unlikely to be possible, and we will not attempt it.".format(src.name), stacklevel=2)
+                    has_glob_temp[tel].append(False)
+                # If the telescope is not associated with this source, a NotAssociatedError will be raised
+                except NotAssociatedError:
+                    has_glob_temp[tel].append(False)
 
     return sources, out_rads, has_glob_temp
 
