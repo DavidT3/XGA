@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:44 PM. Copyright (c) The Contributors.
 
 from inspect import signature, Parameter
 from random import randint
@@ -130,12 +130,6 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
         # radii list to make that easier to deal with for the rest of the function
         if len(sources) != 1 and len(radii[key]) == 1:
             radii[key] *= len(sources)
-
-    # Got to try and make sure the user is passing things properly.
-    if len(radii) != len(sources):
-        raise ValueError("If analysing multiple sources, the radii argument must be a list containing Quantities of "
-                         "annular radii. The number of annular radii sets ({ar}) does not match the number of "
-                         "sources ({ns}).".format(ar=len(radii), ns=len(sources)))
 
     # Unfortunately, a very great deal of this function is going to be copied from the original single_temp_apec
     model = "constant*tbabs*apec"
