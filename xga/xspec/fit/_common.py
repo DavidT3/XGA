@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:54 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -524,8 +524,8 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     final_res_file = source.name + '_' + str(rand_ident) + ".fits"
 
     # Create strings of the ObsID-instruments that represent the data currently associated with the source
-    i_str = "/".join([i for o in source.instruments for i in source.instruments[o]])
-    o_str = "/".join([o for o in source.instruments for i in source.instruments[o]])
+    i_str = "/".join([i for o in source.instruments[telescope] for i in source.instruments[telescope][o]])
+    o_str = "/".join([o for o in source.instruments[telescope] for i in source.instruments[telescope][o]])
 
     # This way we can identify if the fit is to an annular spectrum or a regular set of spectra
     if 'ident' in spec_storage_key:
@@ -542,7 +542,6 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     elif set_ident != '' and cross_arf_paths is not None:
         fit_type = 'ann_carf'
 
-    # TODO WILL NEED TO ADD A TELESCOPE COLUMN TO WHEREEVER I DEFINED THE FORMAT OF THE INVENTORY FILE
     # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
     inv_ent = [final_res_file, spec_storage_key, fit_conf, telescope, o_str, i_str, source.name, fit_type, str(set_ident)]
 

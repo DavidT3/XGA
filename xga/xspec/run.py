@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:53 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:56 PM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -281,7 +281,7 @@ def xspec_call(xspec_func):
                         if "_ident" in first_key:
                             ann_fit = True
 
-                        if inv_ent_lookup[o_file_lu][6] == 'ann_carf':
+                        if inv_ent_lookup[o_file_lu][7] == 'ann_carf':
                             with_cross_arf = True
 
                         inst_lums = {}
@@ -317,7 +317,7 @@ def xspec_call(xspec_func):
                             elif ann_fit:
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
 
-                                ann_spec = cur_src.get_annular_spectra(set_id=inv_ent_lookup[o_file_lu][7], telescope=tel)
+                                ann_spec = cur_src.get_annular_spectra(set_id=inv_ent_lookup[o_file_lu][8], telescope=tel)
 
                                 # comb_spec here refers to whether the obs_id is combined
                                 if not comb_spec:
