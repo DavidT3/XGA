@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:57 AM. Copyright (c) The Contributors.
 
 from copy import deepcopy
 from inspect import signature, Parameter
@@ -754,7 +754,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             else:
                 par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, start_pho_index, 1.)
 
-            # Set up the TCL list that defines which parameters are frozen, dependant on user input
+            # Set up the TCL list that defines which parameters are frozen, dependent on user input
             if redshifted and freeze_nh:
                 freezing = "{F T F T F}"
             elif not redshifted and freeze_nh:
@@ -786,21 +786,21 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             #  zeroing one will zero them all.
             nh_to_zero = "{2}"
 
-        # If the fit has already been performed we do not wish to perform it again
-        try:
-            res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                     min_sn, over_sample, eff_stack_spec[tel], fit_conf)
-        except (ModelNotAssociatedError, FitConfNotAssociatedError):
-            out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
-                                                                 linking, freezing, par_fit_stat, lum_low_lims,
-                                                                 lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
-                                                                 "{}", True, tel, fit_conf, nh_to_zero)
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(src_ind)
-            fit_confs.append(fit_conf)
-            inv_ents.append(inv_ent)
+            # If the fit has already been performed we do not wish to perform it again
+            try:
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec, min_counts,
+                                         min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+            except (ModelNotAssociatedError, FitConfNotAssociatedError):
+                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
+                                                                     fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                     linking, freezing, par_fit_stat, lum_low_lims,
+                                                                     lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
+                                                                     "{}", True, tel, fit_conf, nh_to_zero)
+                script_paths.append(script_file)
+                outfile_paths.append(out_file)
+                src_inds.append(src_ind)
+                fit_confs.append(fit_conf)
+                inv_ents.append(inv_ent)
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
