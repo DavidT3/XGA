@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 3:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 4:02 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -53,6 +53,7 @@ class TestXSPECSingleSource(unittest.TestCase):
                          stacked_spectra=stacked_spectra, start_temp=Quantity(5, 'keV'),
                          start_met=0.5)
 
+        all_tel_res = {}
         for tel in self.no_fits_src.telescopes:
             with self.assertRaises(ValueError):
                 self.no_fits_src.get_temperature(self.out_rad, telescope=tel, stacked_spectra=stacked_spectra)
@@ -72,6 +73,14 @@ class TestXSPECSingleSource(unittest.TestCase):
             self.assertFalse(np.array_equal(default_tx, diff_start_temp_tx))
             self.assertFalse(np.array_equal(diff_start_temp_tx, diff_start_temp_met_tx))
 
+            all_tel_res[tel] = [default_tx, diff_start_temp_tx, diff_start_temp_met_tx]
+
+        for tel_ind, tel in enumerate(list(all_tel_res.keys())[:-1]):
+            next_tel = list(all_tel_res.keys())[tel_ind + 1]
+
+            self.assertFalse(np.array_equal(all_tel_res[tel][0], all_tel_res[next_tel][0]))
+            self.assertFalse(np.array_equal(all_tel_res[tel][1], all_tel_res[next_tel][1]))
+            self.assertFalse(np.array_equal(all_tel_res[tel][2], all_tel_res[next_tel][2]))
 
 
 class TestBaseSample(unittest.TestCase):
