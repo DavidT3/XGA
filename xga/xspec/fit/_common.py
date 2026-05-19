@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 9:20 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:23 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -504,7 +504,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     # We're keeping an inventory of XSPEC fits for each source, and if it doesn't already exist we set up the file
     if not os.path.exists(dest_dir + 'inventory.csv'):
         # These are the columns we want to have in our inventory file
-        inv_cols = ['results_file', 'spec_key', 'fit_conf_key', 'obs_ids', 'insts', 'src_name', 'type',
+        inv_cols = ['results_file', 'spec_key', 'fit_conf_key', 'telescope', 'obs_ids', 'insts', 'src_name', 'type',
                     'set_ident']
         with open(dest_dir + 'inventory.csv', 'w') as writo:
             # Writing out the inventory column names to the new file
@@ -544,7 +544,7 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
 
     # TODO WILL NEED TO ADD A TELESCOPE COLUMN TO WHEREEVER I DEFINED THE FORMAT OF THE INVENTORY FILE
     # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
-    inv_ent = [final_res_file, spec_storage_key, fit_conf, o_str, i_str, telescope, source.name, fit_type, str(set_ident)]
+    inv_ent = [final_res_file, spec_storage_key, fit_conf, telescope, o_str, i_str, source.name, fit_type, str(set_ident)]
 
     # Defining where the output summary file of the fit is written - these file names used to contain all the
     #  information about the fit, but we're using an inventory file and randomly generated identifiers now
