@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 10:51 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:14 PM. Copyright (c) The Contributors.
 
 from inspect import signature, Parameter
 from random import randint
@@ -152,7 +152,9 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
     # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of

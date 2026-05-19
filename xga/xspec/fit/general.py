@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:57 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:14 PM. Copyright (c) The Contributors.
 
 from copy import deepcopy
 from inspect import signature, Parameter
@@ -155,7 +155,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     script_paths = []
     outfile_paths = []
@@ -370,7 +373,9 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     script_paths = []
     outfile_paths = []
@@ -550,7 +555,9 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -723,8 +730,9 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError(
-            "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -906,8 +914,9 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError(
-            "Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -1164,10 +1173,12 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     sig = signature(double_temp_apec)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
 
-    # This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
+    ## This is purely for developers, as a check to make sure that the FIT_FUNC_ARGS dictionary is updated if the
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
-        raise XGADeveloperError("Current keyword arguments of this function do not match the entry in FIT_FUNC_ARGS.")
+        problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
+        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
     script_paths = []
     outfile_paths = []
