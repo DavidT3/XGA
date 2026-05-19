@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:24 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 9:14 AM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -81,12 +81,12 @@ class BaseProduct:
             # Here the user has forced us to treat the path as remote
             self._local_file = False
             self._remote_type = 'unknown'
-        elif path[:5] == "s3://" or path[:5] == "gs://":
+        elif path.startswith("s3://") or path.startswith("gs://"):
             # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
             #  use with resources like the HEASARC open S3 bucket
             self._local_file = False
             self._remote_type = "s3"
-        elif path[:8] == "https://":
+        elif path.startswith("https://"):
             self._local_file = False
             self._remote_type = "https"
         else:
