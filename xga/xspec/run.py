@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:28 PM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -238,10 +238,10 @@ def xspec_call(xspec_func):
                     results[rel_src].append([res_fits, successful, cur_err_list, cur_warn_list, cur_tel])
                     fit.update(1)
 
-                for s_ind, s in enumerate(script_list):
-                    pth = paths[s_ind]
-                    src = rel_src_repr[s_ind]
-                    pool.apply_async(execute_cmd, args=(s, pth, src, run_type, timeout), callback=callback)
+                for script_ind, cur_script in enumerate(script_list):
+                    pth = paths[script_ind]
+                    src = rel_src_repr[script_ind]
+                    pool.apply_async(execute_cmd, args=(cur_script, pth, src, run_type, timeout), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
@@ -254,7 +254,7 @@ def xspec_call(xspec_func):
             # Made this lookup list earlier, using string representations of source objects.
             # Finds the ind of the list of sources that we should add these results to
             ind = src_lookup[src_repr]
-            s = sources[ind]
+            cur_src = sources[ind]
 
             # This flag tells this method if the current set of fits are part of an annular spectra or not
             ann_fit = False
@@ -271,7 +271,7 @@ def xspec_call(xspec_func):
                 #  we compile the error information for later.
                 if not res_set[1]:
                     for err in res_set[2]:
-                        errors_all_sources.append(err + " - {s}".format(s=s.name))
+                        errors_all_sources.append(err + " - {s}".format(s=cur_src.name))
                 # Extract the telescope from the information passed back by the running of the fit
                 tel = res_set[-1]
 
@@ -319,14 +319,14 @@ def xspec_call(xspec_func):
 
                                 if not comb_spec:
                                     # Finds the appropriate matching spectrum object for the current table line
-                                    spec = s.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
+                                    spec = cur_src.get_products("spectrum", sp_info[0], sp_info[1], extra_key=sp_key,
                                                           telescope=tel)[0]
                                 else:
-                                    spec = s.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0]
+                                    spec = cur_src.get_products("combined_spectrum", inst=sp_info[1], extra_key=sp_key)[0]
                             elif ann_fit:
                                 ann_id = int(sp_key.split("_ident")[-1].split("_")[1])
 
-                                ann_spec = s.get_annular_spectra(set_id=inv_ent_lookup[o_file_lu][7], telescope=tel)
+                                ann_spec = cur_src.get_annular_spectra(set_id=inv_ent_lookup[o_file_lu][7], telescope=tel)
 
                                 # comb_spec here refers to whether the obs_id is combined
                                 if not comb_spec:
@@ -387,7 +387,7 @@ def xspec_call(xspec_func):
                             #  There isn't a 'telescope' argument here because as far as XGA is designed currently, the
                             #  'Spectrum' class holds a single spectrum, and we haven't made any frankenstein multi-telescope
                             #  stacks yet (if ever)
-                            s.add_fit_data(model, global_results, chosen_lums, sp_key, fit_conf_lookup[o_file_lu])
+                            cur_src.add_fit_data(model, global_results, chosen_lums, sp_key, tel, fit_conf_lookup[o_file_lu])
 
                         # If this was an annular fit and the cross-arf option was not used, the different annuli
                         #  results are completely separate in terms of their outputs, as each annuli is run separately,
@@ -458,7 +458,7 @@ def xspec_call(xspec_func):
 
                     # We can infer the storage key from the name of the results table, just makes it easier to
                     #  grab the correct spectra
-                    storage_key = res_set[0].split('/')[-1].split(s.name)[-1][1:].split(model)[0][:-1]
+                    storage_key = res_set[0].split('/')[-1].split(cur_src.name)[-1][1:].split(model)[0][:-1]
 
                     # Grabs the ObsID+instrument combinations from the headers of the csv. Makes sure they are unique
                     #  by going to a set (because there will be two columns for each ObsID+Instrument, rate and Lx)
@@ -489,11 +489,11 @@ def xspec_call(xspec_func):
                                 comb_inst = "combined" if np.char.endswith(comb, "combined") else comb[6:]
 
                             # Now onto retrieving spectra
-                            if len(s.obs_ids[tel]) == 1:
-                                spec = s.get_products("spectrum", comb_oi, comb_inst, extra_key=storage_key,
+                            if len(cur_src.obs_ids[tel]) == 1:
+                                spec = cur_src.get_products("spectrum", comb_oi, comb_inst, extra_key=storage_key,
                                                       telescope=tel)[0]
                             else:
-                                spec = s.get_products("combined_spectrum", comb_oi, comb_inst, extra_key=storage_key,
+                                spec = cur_src.get_products("combined_spectrum", comb_oi, comb_inst, extra_key=storage_key,
                                                       telescope=tel)[0]
                         # Now Chandra
                         elif tel == 'chandra':
@@ -508,10 +508,10 @@ def xspec_call(xspec_func):
                                                         "ObsID-inst string ({c}) in a spectrum result row; has HRC "
                                                         "support been added?".format(c=comb))
 
-                            spec = s.get_products("spectrum", search_sp_oi, 'acis', extra_key=storage_key,
+                            spec = cur_src.get_products("spectrum", search_sp_oi, 'acis', extra_key=storage_key,
                                                   telescope=tel)[0]
                         else:
-                            spec = s.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
+                            spec = cur_src.get_products("spectrum", comb[:10], comb[10:], extra_key=storage_key,
                                             telescope=tel)[0]
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
@@ -524,15 +524,15 @@ def xspec_call(xspec_func):
                     if not ann_fit:
                         # This uses the presumptive inventory entry to grab the spectrum storage key
                         storage_key = inv_ent_lookup[o_file_lu][1]
-                        s.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
+                        cur_src.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
 
                     for err in res_set[2]:
-                        errors_all_sources.append(err + " - {s}".format(s=s.name))
+                        errors_all_sources.append(err + " - {s}".format(s=cur_src.name))
 
                 # If the fit succeeded then we'll put it in the inventory!
                 if len(script_list) != 0 and len(res_set) != 1 and run_type == 'fit':
                     inv_ent = inv_ent_lookup[o_file_lu]
-                    inv_path = os.path.join(OUTPUT, tel, "XSPEC", s.name, "inventory.csv")
+                    inv_path = os.path.join(OUTPUT, tel, "XSPEC", cur_src.name, "inventory.csv")
                     with open(inv_path, 'a') as appendo:
                         inv_ent_line = ",".join(inv_ent) + "\n"
                         appendo.write(inv_ent_line)
@@ -553,7 +553,7 @@ def xspec_call(xspec_func):
                 for tel in ann_results:
                     # We fetch the annular spectra object that we just fitted, searching by using the set ID of
                     #  the last spectra that was opened in the loop
-                    ann_spec = s.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
+                    ann_spec = cur_src.get_annular_spectra(set_id=set_ident[tel], telescope=tel)
 
                     try:
                         ann_spec.add_fit_data(model, ann_results[tel], ann_lums[tel],
@@ -565,18 +565,18 @@ def xspec_call(xspec_func):
                         if model == "constant*tbabs*apec":
                             temp_prof = ann_spec.generate_profile(model, 'kT', 'keV',
                                                                   fit_conf=fit_conf_lookup[o_file_lu])
-                            s.update_products(temp_prof)
+                            cur_src.update_products(temp_prof)
 
                             # Normalisation profiles can be useful for many things, so we generate them too
                             norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5',
                                                                   fit_conf=fit_conf_lookup[o_file_lu])
-                            s.update_products(norm_prof)
+                            cur_src.update_products(norm_prof)
 
                             if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec',
                                                                   fit_conf=fit_conf_lookup[o_file_lu]):
                                 met_prof = ann_spec.generate_profile(model, 'Abundanc', '',
                                                                      fit_conf=fit_conf_lookup[o_file_lu])
-                                s.update_products(met_prof)
+                                cur_src.update_products(met_prof)
 
                         else:
                             raise XGADeveloperError(f"Attempted XSPEC result assignment of an un-implemented spectral "
