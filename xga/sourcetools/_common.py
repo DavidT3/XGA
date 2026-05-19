@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:33 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:46 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple
 from warnings import warn
@@ -175,10 +175,10 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None, over_sample: float = None,
                                     one_rmf: bool = True, num_cores: int = NUM_CORES, show_warn: bool = True,
                                     psf_bins: int = 4, stacked_spectra: bool = False,
-                                    telescope: Union[str, List[str]] = None) \
+                                    telescope: Union[str, List[str]] = None, global_temp_success_check: bool = False) \
         -> Tuple[Union[BaseSource, List[BaseSource], BaseSample], dict, dict, dict, dict, List[str]]:
     """
-    Internal function to run the common setup functions that are needed for mass and entropy profile
+    Internal function to run the common setup functions that are needed for mass, entropy, and pressure profile
     measurements.
 
     :param GalaxyCluster/ClusterSample sources: The galaxy cluster, or sample of galaxy clusters,
@@ -235,8 +235,8 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
     :param int spec_min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
-    :param int/float spec_min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
-        To disable minimum signal to noise set this parameter to None.
+    :param int/float spec_min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each channel.
+        To disable minimum signal-to-noise set this parameter to None.
     :param float over_sample: The minimum energy resolution for each group, set to None to disable. e.g. if
         over_sample=3 then the minimum width of a group is 1/3 of the resolution FWHM at that energy.
     :param bool one_rmf: This flag tells the method whether it should only generate one RMF for a particular
@@ -252,13 +252,17 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
         supported, this function will instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) that the user wants to use to produce a profile. Default is
         None, in which case profiles will be produced from all telescopes associated with a source.
+    :param bool global_temp_success_check: If True, global spectra in an aperture of radius 'global_radius' are
+        generated and fit, and the success (or failure) of the fits are used to decide whether to attempt
+        to measure the profiles this function is setting up for - the logic being that if there are no successful
+        global fits then the data may be poor quality. Default is False.
     :return: A tuple. The first elements are the sources. The second is a dens_prof_dict with source
-    strings as keys, and values of dictionaries with telescope keys and values of the density
-    profile objects (ie. {src_string: {tel : dens_prof}}). The third is a temp_prof_dict with source
-    strings as keys, and values of dictionaries with telescope keys and values of the temperature
-    profile objects (ie. {src_string: {tel : temp_prof}}). The fourth is a dens_model_dict, with
-    source strings as keys and density models as values. The fifth is a temp_model_dict, with
-    source strings as keys and temperature models as values. The sixth is the list of telescopes we're working on.
+        strings as keys, and values of dictionaries with telescope keys and values of the density
+        profile objects (i.e. {src_string: {tel : dens_prof}}). The third is a temp_prof_dict with source
+        strings as keys, and values of dictionaries with telescope keys and values of the temperature
+        profile objects (i.e. {src_string: {tel : temp_prof}}). The fourth is a dens_model_dict, with
+        source strings as keys and density models as values. The fifth is a temp_model_dict, with
+        source strings as keys and temperature models as values. The sixth is the list of telescopes we're working on.
     :rtype: Tuple[Union[BaseSource, List[BaseSource], BaseSample], dict, dict, dict, dict, List[str]]
     """
 
@@ -273,7 +277,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
 
     sources, outer_rads, has_glob_temp = _setup_global(sources, outer_radius, global_radius, abund_table, group_spec,
                                                        spec_min_counts, spec_min_sn, over_sample, num_cores, psf_bins,
-                                                       stacked_spectra, src_telescopes)
+                                                       stacked_spectra, src_telescopes, global_temp_success_check)
 
     rads_dict = {str(sources[r_ind]): r for r_ind, r in enumerate(outer_rads)}
 
