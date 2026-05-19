@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 12:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:15 PM. Copyright (c) The Contributors.
 
 from inspect import signature, Parameter
 from types import FunctionType
@@ -17,7 +17,7 @@ FIT_FUNC_ARGS = {
                          'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
-                         'stacked_spectra': False, 'telescope': False},
+                         'stacked_spectra': False, 'telescope': False, 'force_gen': False},
 
     'double_temp_apec': {'inner_radius': False, 'start_temp_one': True, 'start_temp_two': True,
                          'start_met_one': True, 'start_met_two': True, 'lum_en': False, 'freeze_nh': True,
