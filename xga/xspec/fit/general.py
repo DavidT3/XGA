@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:00 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:49 AM. Copyright (c) The Contributors.
 
 from copy import deepcopy
 from inspect import signature, Parameter
@@ -14,8 +14,7 @@ from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _spec_
 from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
 from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import NoProductAvailableError, ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
-from ...products import Spectrum
+from ...exceptions import ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
 
@@ -997,15 +996,16 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 @xspec_call
 def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                     start_temp_one: Quantity = Quantity(3.0, "keV"), start_temp_two: Quantity = Quantity(5.0, "keV"),
-                     start_met_one: float = 0.3, start_met_two: float = 0.3,
-                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
+                     start_temp_one: Quantity = Quantity(3.0, "keV"),
+                     start_temp_two: Quantity = Quantity(5.0, "keV"), start_met_one: float = 0.3,
+                     start_met_two: float = 0.3, lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
                      freeze_met_one: bool = True, freeze_met_two: bool = True, freeze_temp_one: bool = False,
                      freeze_temp_two: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
                      abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                     spectrum_checking: bool = False, timeout: Quantity = Quantity(1, 'hr')):
+                     spectrum_checking: bool = False, timeout: Quantity = Quantity(1, 'hr'),
+                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) -> Union[BaseSource, BaseSample, List[BaseSource]]:
     """
     This is a convenience function for fitting an absorbed double-temperature apec model (constant*tbabs*(apec+apec))
     to an object's spectrum. If there are no existing spectra with the passed settings, then they will be
@@ -1052,7 +1052,7 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
     :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.
-    :param float min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
+    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per channel.
         To disable minimum counts set this parameter to None.
     :param float min_sn: If generating a grouped spectrum, this is the minimum signal to noise in each channel.
         To disable minimum signal-to-noise set this parameter to None.
@@ -1067,8 +1067,15 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :param Quantity timeout: The amount of time each individual fit is allowed to run for, the default is one hour.
         Please note that this is not a timeout for the entire fitting process, but a timeout to individual source
         fits.
+    :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
+        XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
+        instead use individual spectra for an ObsID. The default is False.
+    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
+        case the XSPEC fit will be performed individually for all telescopes associated with a source.
+    :return: The source object(s) passed in.
+    :rtype: Union[BaseSource, BaseSample, List[BaseSource]]
     """
-    raise NotImplementedError("The double_temp_apec function must be reimplemented to support multi-mission XGA - this will happen after the big merge.")
+    # TODO ONE WAY OR ANOTHER THIS HAS TO BE RESOLVED - COULD JUST PUT THIS ERROR MESSAGE BUT AS A WARNING?
     # This is a little cheesy as we haven't decided what exactly to do yet, but the spectrum checking behaviour
     #  is super inconsistent with double_temp_apec - presumably just because the greater number of parameters
     #  makes estimating errors much less stable for individual spectral fits
@@ -1076,8 +1083,14 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         raise NotImplementedError("The double_temp_apec function does not currently support "
                                   "'spectrum_checking=True', as it exhibits very unstable behaviour.")
 
-    sources, inn_rad_vals, out_rad_vals = _pregen_spectra(sources, outer_radius, inner_radius, group_spec, min_counts,
-                                                          min_sn, over_sample, one_rmf, num_cores)
+    # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
+                                                                                     inner_radius, group_spec,
+                                                                                     min_counts, min_sn,
+                                                                                     over_sample,
+                                                                                     one_rmf,
+                                                                                     num_cores, stacked_spectra,
+                                                                                     telescope)
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Have to check that every source has start temperature entries, if the user decided to pass a set of them - this
@@ -1088,6 +1101,7 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                          "one entry for each source. They currently have {n1} and {n2} respectively, for {s} "
                          "sources.".format(n1=len(start_temp_one), n2=len(start_temp_two), s=len(sources)))
 
+    # TODO REPLACE THESE REPEATED CHECKS/PREPARATION OF START TEMP/MET WITH A FUNCTION - SEE ISSUE #1509
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     if start_temp_one.isscalar:
@@ -1104,6 +1118,36 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         all_start_temp_twos = Quantity([start_temp_two.value.copy()]*len(sources), start_temp_two.unit)
     else:
         all_start_temp_twos = start_temp_two.copy()
+
+    # TODO MAKE THIS CHECK SUPPORT QUANTITY AS WELL - issue #1509 is semi-relevant
+    # We repeat the above, but for the starting metallicity value(s)
+    if isinstance(start_met_one, (list, np.ndarray)) and len(start_met_one) != len(sources):
+        raise ValueError(f"If a list or array is passed to 'start_met_one', it must have one entry for each "
+                         f"source. It currently has {len(start_met_one)} for {len(sources)} sources.")
+    elif isinstance(start_met_one, (list, np.ndarray)):
+        all_start_met_ones = deepcopy(start_met_one)
+    # Want to make sure that the start_met variable is always a list with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif isinstance(start_met_one, (float, int)):
+        all_start_met_ones = [start_met_one] * len(sources)
+    else:
+        raise ValueError(
+            "'start_met_one' must be either a list/array with an entry for each source, or a float/integer.")
+
+    # TODO MAKE THIS CHECK SUPPORT QUANTITY AS WELL - issue #1509 is semi-relevant
+    # We repeat the above, but for the starting metallicity value(s)
+    if isinstance(start_met_two, (list, np.ndarray)) and len(start_met_two) != len(sources):
+        raise ValueError(f"If a list or array is passed to 'start_met_two', it must have one entry for each "
+                         f"source. It currently has {len(start_met_two)} for {len(sources)} sources.")
+    elif isinstance(start_met_two, (list, np.ndarray)):
+        all_start_met_twos = deepcopy(start_met_two)
+    # Want to make sure that the start_met variable is always a list with an entry for every source
+    #  after this point, it means we normalise how we deal with it.
+    elif isinstance(start_met_two, (float, int)):
+        all_start_met_twos = [start_met_two] * len(sources)
+    else:
+        raise ValueError(
+            "'start_met_two' must be either a list/array with an entry for each source, or a float/integer.")
 
     # This function is for a set model, absorbed double apec, so I can hard code all of this stuff.
     model = "constant*tbabs*(apec+apec)"
@@ -1132,91 +1176,88 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     inv_ents = []
     # This function supports passing multiple sources, so we have to setup a script for all of them.
     for src_ind, source in enumerate(sources):
-        # Find matching spectrum objects associated with the current source
-        spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                       group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                       over_sample=over_sample)
-        # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
-        #  a cluster with only a single valid instrument for a single valid observation this may not be the case
-        if isinstance(spec_objs, Spectrum):
-            spec_objs = [spec_objs]
+        # We do not do simultaneous fits with spectra from different telescopes, they are all fit separately - at
+        #  least in this current setup
+        for tel in source.telescopes:
+            if tel not in telescope:
+                continue
 
-        # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
-        if len(spec_objs) == 0:
-            raise NoProductAvailableError("There are no matching spectra for {s} object, you "
-                                          "need to generate them first!".format(s=source.name))
+            # retrieving the spectrum objects needed for each source/ tel combo
+            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind, inn_rad_vals,
+                                                 group_spec, min_counts, min_sn, over_sample)
 
-        # Turn spectra paths into TCL style list for substitution into template
-        specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
-        # For this model, we have to know the redshift of the source.
-        if source.redshift is None:
-            raise ValueError("You cannot supply a source without a redshift to this model.")
+            # For this model, we have to know the redshift of the source.
+            if source.redshift is None:
+                raise ValueError("You cannot supply a source without a redshift to this model.")
 
-        # Whatever start temperatures are passed get converted to keV - then will be put in the template
-        start_temp_one = all_start_temp_ones[src_ind].to("keV", equivalencies=u.temperature_energy())
-        start_temp_two = all_start_temp_twos[src_ind].to("keV", equivalencies=u.temperature_energy())
+            # Whatever start temperatures are passed get converted to keV - then will be put in the template
+            start_temp_one = all_start_temp_ones[src_ind].to("keV", equivalencies=u.temperature_energy())
+            start_temp_two = all_start_temp_twos[src_ind].to("keV", equivalencies=u.temperature_energy())
+            # Also fetch out the relevant starting metallicity values
+            start_met_one = all_start_met_ones[src_ind]
+            start_met_two = all_start_met_twos[src_ind]
 
-        # Another TCL list, this time of the parameter start values for this model.
-        par_values = ("{{{0} {1} {2} {3} {4} {5} {6} {7} {8} "
-                      "{9}}}").format(1., source.nH.to("10^22 cm^-2").value, start_temp_one.value, start_met_one,
-                                      source.redshift, 1., start_temp_two.value, start_met_two, source.redshift, 1.)
+            # Another TCL list, this time of the parameter start values for this model.
+            par_values = ("{{{0} {1} {2} {3} {4} {5} {6} {7} {8} "
+                          "{9}}}").format(1., source.nH.to("10^22 cm^-2").value, start_temp_one.value, start_met_one,
+                                          source.redshift, 1., start_temp_two.value, start_met_two, source.redshift, 1.)
 
-        # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
-        #  include the temperature, if the user wants it fixed at the start value
-        freezing = "{{F {n} {t1} {a2} T F {t2} {a2} T F}}".format(n="T" if freeze_nh else "F",
-                                                                  t1="T" if freeze_temp_one else "F",
-                                                                  a1="T" if freeze_met_one else "F",
-                                                                  t2="T" if freeze_temp_two else "F",
-                                                                  a2="T" if freeze_met_two else "F")
+            # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
+            #  include the temperature, if the user wants it fixed at the start value
+            freezing = "{{F {n} {t1} {a2} T F {t2} {a2} T F}}".format(n="T" if freeze_nh else "F",
+                                                                      t1="T" if freeze_temp_one else "F",
+                                                                      a1="T" if freeze_met_one else "F",
+                                                                      t2="T" if freeze_temp_two else "F",
+                                                                      a2="T" if freeze_met_two else "F")
 
-        # Set up the TCL list that defines which parameters are linked across different spectra, only the
-        #  multiplicative constant that accounts for variation in normalisation over different observations is not
-        #  linked
-        linking = "{F T T T T T T T T T}"
+            # Set up the TCL list that defines which parameters are linked across different spectra, only the
+            #  multiplicative constant that accounts for variation in normalisation over different observations is not
+            #  linked
+            linking = "{F T T T T T T T T T}"
 
-        # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
-        #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
-        #  check the temperature, as its the main thing we're fitting for with constant*tbabs*apec
-        if spectrum_checking:
-            check_list = "{kT}"
-            check_lo_lims = "{0.01}"
-            check_hi_lims = "{20}"
-            check_err_lims = "{15}"
-        else:
-            check_list = "{}"
-            check_lo_lims = "{}"
-            check_hi_lims = "{}"
-            check_err_lims = "{}"
+            # If the user wants the spectrum cleaning step to be run, then we have to setup some acceptable
+            #  limits. For this function they will be hardcoded, for simplicities sake, and we're only going to
+            #  check the temperature, as its the main thing we're fitting for with constant*tbabs*apec
+            if spectrum_checking:
+                check_list = "{kT}"
+                check_lo_lims = "{0.01}"
+                check_hi_lims = "{20}"
+                check_err_lims = "{15}"
+            else:
+                check_list = "{}"
+                check_lo_lims = "{}"
+                check_hi_lims = "{}"
+                check_err_lims = "{}"
 
-        # We generate the fit configuration key here, on a source by source basis, as the start temperature is allowed
-        #  to be different for every source
-        in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
-        fit_conf = _gen_fit_conf(in_fit_conf)
+            # We generate the fit configuration key here, on a source by source basis, as the start temperature is allowed
+            #  to be different for every source
+            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            fit_conf = _gen_fit_conf(in_fit_conf)
 
-        # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
-        #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
-        #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
-        #  them all.
-        nh_to_zero = "{2}"
+            # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
+            #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
+            #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
+            #  them all.
+            nh_to_zero = "{2}"
 
-        # If the fit has already been performed we do not wish to perform it again
-        try:
-            # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-            res = source.get_results(out_rad_vals[src_ind], model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                     min_counts, min_sn, over_sample, fit_conf)
-        except (ModelNotAssociatedError, FitConfNotAssociatedError):
-            out_file, script_file, inv_ent = _write_xspec_script(source, spec_objs[0].storage_key, model, abund_table,
-                                                                 fit_method, specs, lo_en, hi_en, par_names, par_values,
-                                                                 linking, freezing, par_fit_stat, lum_low_lims,
-                                                                 lum_upp_lims, lum_conf, source.redshift,
-                                                                 spectrum_checking, check_list, check_lo_lims,
-                                                                 check_hi_lims, check_err_lims, True, fit_conf,
-                                                                 nh_to_zero)
-            script_paths.append(script_file)
-            outfile_paths.append(out_file)
-            src_inds.append(src_ind)
-            fit_confs.append(fit_conf)
-            inv_ents.append(inv_ent)
+            # If the fit has already been performed we do not wish to perform it again
+            try:
+                # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
+                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
+                                         min_counts, min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+            except (ModelNotAssociatedError, FitConfNotAssociatedError):
+                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
+                                                                     fit_method, specs, lo_en, hi_en, par_names, par_values,
+                                                                     linking, freezing, par_fit_stat, lum_low_lims,
+                                                                     lum_upp_lims, lum_conf, source.redshift,
+                                                                     spectrum_checking, check_list, check_lo_lims,
+                                                                     check_hi_lims, check_err_lims, True, tel, fit_conf,
+                                                                     nh_to_zero)
+                script_paths.append(script_file)
+                outfile_paths.append(out_file)
+                src_inds.append(src_ind)
+                fit_confs.append(fit_conf)
+                inv_ents.append(inv_ent)
 
     run_type = "fit"
     return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
