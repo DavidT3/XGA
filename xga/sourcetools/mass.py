@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 10:37 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 11:55 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Dict
 from warnings import warn
@@ -30,7 +30,8 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                              group_spec: bool = True, spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None,
                              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                              show_warn: bool = True, psf_bins: int = 4, stacked_spectra: bool = False,
-                             telescope: Union[str, List[str]] = None) -> Union[Dict[str, List[HydrostaticMass]],
+                             telescope: Union[str, List[str]] = None,
+                             global_temp_success_check: bool = False) -> Union[Dict[str, List[HydrostaticMass]],
                                                                                List[HydrostaticMass]]:
     """
     A convenience function that should allow the user to easily measure hydrostatic masses of a sample of galaxy
@@ -114,6 +115,12 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
         supported, this function will instead use individual spectra for an ObsID. The default is False.
     :param str/List[str] telescope: Telescope(s) to produce hydrostatic mass profiles from. Default is None, in
         which case hydrostatic mass profiles will be produced from all telescopes associated with a source.
+    :param bool global_temp_success_check: If True then this function will only attempt to measure a mass profile
+        from a particular telescope if a single temperature apec fit to a global spectrum within an aperture of
+        radius 'global_radius' produced a successfully measured temperature - in many cases the failure of a
+        global temperature fit indicates that annular spectral fits will also fail. HOWEVER, if you have very
+        high signal-to-noise spectra then global fits can also fail because there are too many resolvable temperature
+        components to get a good fit from a single temperature apec model, so be cautious. Default is False.
     :return: A dictionary of hydrostatic mass profile lists measured by this function - the keys are telescope
         names. The values are lists with one entry per source, even if the source in question doesn't have
         that telescope associated or the profile construction process failed.
@@ -129,7 +136,7 @@ def inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample], outer
                                                 temp_use_worst, freeze_met, abund_table, temp_lo_en,
                                                 temp_hi_en, group_spec, spec_min_counts, spec_min_sn,
                                                 over_sample, one_rmf, num_cores, show_warn, psf_bins,
-                                                stacked_spectra, telescope)
+                                                stacked_spectra, telescope, global_temp_success_check)
     sources, dens_prof_dict, temp_prof_dict, dens_model_dict, temp_model_dict, telescope = setup_res
 
     # So I can a dict of profiles with telescope keys, a tad more elegant than fetching them
