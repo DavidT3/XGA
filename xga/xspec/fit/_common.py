@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:48 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 9:20 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -8,7 +8,6 @@ from warnings import warn
 
 from astropy.units import Quantity, UnitConversionError
 
-from generate.sas import cross_arf
 from ... import (OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD,
                  ABUND_TABLES, CROSS_ARF_XSPEC_SCRIPT)
 from ...exceptions import NoProductAvailableError
@@ -16,7 +15,7 @@ from ...generate.ciao.spec import specextract_spectrum, ciao_spectrum_set
 from ...generate.esass import srctool_spectrum
 from ...generate.esass.spec import esass_spectrum_set
 from ...generate.sas import evselect_spectrum, region_setup
-from ...generate.sas import spectrum_set
+from ...generate.sas import spectrum_set, cross_arf
 from ...products import Spectrum
 from ...samples.base import BaseSample
 from ...sources import ExtendedSource, PointSource, BaseSource
