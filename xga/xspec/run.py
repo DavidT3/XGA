@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:53 PM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -27,7 +27,7 @@ XGA_XSPEC_ERRS = ["No acceptable spectra are left after the minimum channel step
                   "No acceptable spectra are left after the cleaning step"]
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
-        -> Tuple[Union[str, None], str, bool, list, list, str]:
+        -> Tuple[Union[str, None], str, bool, list, list]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then
     parse the output for errors and check that the expected output file has been created.
@@ -39,9 +39,9 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     :param float timeout: The length of time (in seconds) which the XSPEC script is allowed to run for before being
         killed.
     :return: The path to the results file (or None if unsuccessful), string repr of the source associated with
-        this fit, a boolean flag indicating if the fit is considered usable, list of any errors found, list of any
-        warnings found, and the telescope that this script is related to.
-    :rtype: Tuple[Union[str, None], str, bool, list, list, str]
+        this fit, a boolean flag indicating if the fit is considered usable, list of any errors found, and list
+        of any warnings found.
+    :rtype: Tuple[Union[str, None], str, bool, list, list]
     """
 
     # We assume the output will be usable to start with
@@ -153,17 +153,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         res_tables = out_file
         usable = False
 
-    # This uses outfile name (has structure set by XGA, so this is reliable) to
-    #  figure out which telescope this script was run for. This isn't necessarily
-    #  how I would have designed it from the beginning, but is a good solution to get
-    #  the telescope which doesn't require adding stuff to all the user-facing
-    #  XSPEC functions
-    if run_type ==  "conv_factors":
-        tel = out_file.split('_')[-3]
-    else:
-        tel = out_file.split('_')[-1].split('.')[0]
-
-    return res_tables, src, usable, cur_error, cur_warn, tel
+    return res_tables, src, usable, cur_error, cur_warn
 
 
 def xspec_call(xspec_func):
@@ -234,14 +224,14 @@ def xspec_call(xspec_func):
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
 
-                    res_fits, rel_src, successful, cur_err_list, cur_warn_list, cur_tel = results_in
-                    results[rel_src].append([res_fits, successful, cur_err_list, cur_warn_list, cur_tel])
+                    res_fits, rel_src, successful, cur_err_list, cur_warn_list = results_in
+                    results[rel_src].append([res_fits, successful, cur_err_list, cur_warn_list])
                     fit.update(1)
 
                 for script_ind, cur_script in enumerate(script_list):
-                    pth = paths[script_ind]
+                    cur_outfile_pth = paths[script_ind]
                     src = rel_src_repr[script_ind]
-                    pool.apply_async(execute_cmd, args=(cur_script, pth, src, run_type, timeout), callback=callback)
+                    pool.apply_async(execute_cmd, args=(cur_script, cur_outfile_pth, src, run_type, timeout), callback=callback)
                 pool.close()  # No more tasks can be added to the pool
                 pool.join()  # Joins the pool, the code will only move on once the pool is empty.
 
@@ -272,12 +262,13 @@ def xspec_call(xspec_func):
                 if not res_set[1]:
                     for err in res_set[2]:
                         errors_all_sources.append(err + " - {s}".format(s=cur_src.name))
-                # Extract the telescope from the information passed back by the running of the fit
-                tel = res_set[-1]
 
                 # This will be useful even if the fit failed, as it gives a shortcut to the fitconf
                 #  information
                 o_file_lu = res_set[0].replace(".fits", "")
+
+                # Slightly fragile way of getting the telescope out
+                tel = inv_ent_lookup[o_file_lu][3]
 
                 if len(res_set) != 0 and res_set[1] and run_type == "fit":
                     with FITS(res_set[0]) as res_table:
