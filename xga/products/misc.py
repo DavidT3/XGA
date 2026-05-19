@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 11:52 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 9:18 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple
@@ -16,7 +16,6 @@ from astropy.wcs import WCS
 from .base import BaseProduct
 from .phot import Image
 from .. import MISSION_COL_DB
-from ..exceptions import XGADeveloperError
 
 
 class EventList(BaseProduct):
@@ -61,16 +60,9 @@ class EventList(BaseProduct):
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         """
-        # A validity check to help remind me to pass the telescope to the super-class init when this merges with
-        #  multi-mission XGA
-        if hasattr(super(), 'telescope'):
-            raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
-                                    "call to BaseProduct init in EventList needs to be updated.")
-        else:
-            self._tele = telescope
-
         # Call the BaseProduct init, sets up some attributes
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope, force_remote, fsspec_kwargs)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         force_remote=force_remote, fsspec_kwargs=fsspec_kwargs)
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
