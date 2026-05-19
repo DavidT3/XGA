@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 3:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 4:18 PM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -384,9 +384,9 @@ def xspec_call(xspec_func):
                         #  results are completely separate in terms of their outputs, as each annuli is run separately,
                         #  however the cross-arf annular fits have all annuli results output in one file
                         elif ann_fit and not with_cross_arf:
-                            ann_results[tel].setdefault(tel, {})
-                            ann_lums[tel].setdefault(tel, {})
-                            ann_obs_order[tel].setdefault(tel, {})
+                            ann_results.setdefault(tel, {})
+                            ann_lums.setdefault(tel, {})
+                            ann_obs_order.setdefault(tel, {})
 
                             set_ident[tel] = spec.set_ident
                             ann_results[tel][spec.annulus_ident] = global_results
@@ -435,7 +435,7 @@ def xspec_call(xspec_func):
                             #  to the annular spectrum
                             par_for_ann = np.concatenate([not_par_names, par_for_ann], axis=1)
 
-                            # Then we put the results in a dictionary, the way the annulur spectrum wants it
+                            # Then we put the results in a dictionary, the way the annular spectrum wants it
                             ann_results = {ann_id: res_table['RESULTS'][par_for_ann[ann_id]][0]
                                            for ann_id in ann_spec.annulus_ids}
 
