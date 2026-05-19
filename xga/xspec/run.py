@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 4:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 5:18 PM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -442,6 +442,29 @@ def xspec_call(xspec_func):
                             ann_spec.add_fit_data(model, ann_results, chosen_lums, ann_obs_order,
                                                   fit_conf_lookup[o_file_lu])
 
+                            # This is a straight copy of a code block further down the file
+                            #  TODO THIS IS A HORRIBLE AND HOPEFULLY TEMPORARY WAY OF DOING THIS
+                            if model == "constant*tbabs*apec":
+                                temp_prof = ann_spec.generate_profile(model, 'kT', 'keV',
+                                                                      fit_conf=fit_conf_lookup[o_file_lu])
+                                cur_src.update_products(temp_prof)
+
+                                # Normalisation profiles can be useful for many things, so we generate them too
+                                norm_prof = ann_spec.generate_profile(model, 'norm', 'cm^-5',
+                                                                      fit_conf=fit_conf_lookup[o_file_lu])
+                                cur_src.update_products(norm_prof)
+
+                                if 'Abundanc' in ann_spec.get_results(0, 'constant*tbabs*apec',
+                                                                      fit_conf=fit_conf_lookup[o_file_lu]):
+                                    met_prof = ann_spec.generate_profile(model, 'Abundanc', '',
+                                                                         fit_conf=fit_conf_lookup[o_file_lu])
+                                    cur_src.update_products(met_prof)
+
+                            else:
+                                raise XGADeveloperError(
+                                    f"Attempted XSPEC result assignment of an un-implemented spectral "
+                                    f"model ({model}) for AnnularSpectra fits.")
+
                 elif len(res_set) != 0 and res_set[1] and run_type == "conv_factors":
                     res_table = pd.read_csv(res_set[0], dtype={"lo_en": str, "hi_en": str})
                     # Gets the model name from the file name of the output results table
@@ -515,7 +538,7 @@ def xspec_call(xspec_func):
                     if not ann_fit:
                         # This uses the presumptive inventory entry to grab the spectrum storage key
                         storage_key = inv_ent_lookup[o_file_lu][1]
-                        cur_src.add_fit_failure(model_name, storage_key, fit_conf_lookup[o_file_lu])
+                        cur_src.add_fit_failure(model_name, storage_key, tel, fit_conf_lookup[o_file_lu])
 
                     for err in res_set[2]:
                         errors_all_sources.append(err + " - {s}".format(s=cur_src.name))

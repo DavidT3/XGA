@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 5:27 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 4:26 PM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -17,6 +17,11 @@ class TestFitProfileFuncs(unittest.TestCase):
 
     def test_single_temp_apec_profile_stacked_spectra_false(self):
         res = single_temp_apec_profile(self.src, Quantity([0, 150, 1000], 'kpc'))
+
+        assert type(res) == GalaxyCluster
+
+    def test_single_temp_apec_profile_stacked_spectra_false_carf(self):
+        res = single_temp_apec_profile(self.src, Quantity([0, 150, 1000], 'kpc'), use_cross_arf=True)
 
         assert type(res) == GalaxyCluster
 
