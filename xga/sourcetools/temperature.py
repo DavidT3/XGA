@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:00 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 12:06 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -789,7 +789,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
     :param Quantity temp_hi_en: The upper energy limit for the XSPEC fits to annular spectra.
     :param int num_data_real: The number of random realisations to generate when propagating profile
         uncertainties, the default is 3000.
-    :param int conf_level: What sigma uncertainties should newly created profiles have, the default is 1σ.
+    :param int conf_level: What sigma uncertainties should the newly created profiles have, the default is 1σ.
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
@@ -798,7 +798,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
         None, in which case deprojected temperature profiles will be produced from all telescopes associated
         with a source.
     :return: A dictionary of lists of the 3D temperature profiles measured by this function (keys are telescope
-        names), though if the measurement was not successful an entry of None will be added to the list.
+        names), though if the measurement was not successful, an entry of None will be added to the list.
     :rtype: Dict[str, List[GasTemperature3D]]
     """
     if annulus_method not in ALLOWED_ANN_METHODS:
@@ -823,6 +823,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                                           num_cores, stacked_spectra=stacked_spectra, telescope=telescope)
 
     elif annulus_method == "growth":
+        # TODO Need to add a method that grows annuli sizes by some factor as you move outward from center
         raise NotImplementedError("This method isn't implemented yet")
 
     # Reading the relevant telescopes out of the annular radii return
