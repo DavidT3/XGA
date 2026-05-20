@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:24 AM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -225,7 +225,9 @@ def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: 
                 outfile_paths.append(out_file)
                 src_inds.append(s_ind)
                 fit_confs.append('')
-                inv_ents.append('')
+                # This is cheesy, but lets the xspec_call decorator extract the relevant telescope like
+                #  it does from inventory entries of actual fits
+                inv_ents.append(["", "", "", tel])
 
     # Tells the xspec_call decorator what type of output from the script to expect
     run_type = "conv_factors"
