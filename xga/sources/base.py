@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:09 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:55 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -2795,8 +2795,8 @@ class BaseSource:
         #  have the combined_ prefix on their product type key
         if obs_id == 'combined' and not search_key.startswith('combined_'):
             search_key = 'combined_' + search_key
-            warn("A request for a combined ObsID profile was made without the 'combined_' prefix in the product type; "
-                 "this has been corrected, but please contact the developers.", stacklevel=2)
+            # warn("A request for a combined ObsID profile was made without the 'combined_' prefix in the product type; "
+            #      "this has been corrected, but please contact the developers.", stacklevel=2)
 
         # Just making sure it ends with profile before we pass to get_products
         if not search_key.endswith("_profile"):

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 3:16 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:58 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn
@@ -1102,8 +1102,8 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                 try:
                     # The normalisation profile(s) from the fit that produced the projected
                     # temperature profile.
-                    apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts,
-                                                                min_sn, over_sample, telescope=tel)
+                    apec_norm_prof = src.get_apec_norm_profiles(cur_rads, group_spec, min_counts, min_sn, over_sample,
+                                                                telescope=tel)
                     obs_id = 'combined'
                     inst = 'combined'
                     # Seeing as we're here, I might as well make a density profile from the apec
