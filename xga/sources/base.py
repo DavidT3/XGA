@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 8:54 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -1273,7 +1273,7 @@ class BaseSource:
                 if '/' in rel_inst:
                     rel_inst = 'combined'
 
-                # checking for valid obs_ids and insts
+                # checking for valid obs_ids and insts
                 valid = False
                 if (rel_obs_id == 'combined' and rel_inst == 'combined'):
                     valid = True
@@ -1795,12 +1795,13 @@ class BaseSource:
                         # We need to check if this spectrum is a combined_spectrum or not
                         # this can be done by seeing which directory it is stored in
                         directory = line["SPEC_PATH"].strip(" ").split("/")[-2]
-                        if directory == 'combined':
+                        if directory != 'combined':
                             # Finds the appropriate matching spectrum object for the current table line
                             rel_sp = self.get_products("spectrum", sp_oi, sp_inst, extra_key=spec_key,
                                                        telescope=tel)
                         else:
-                            rel_sp = self.get_products("combined_spectrum", extra_key=spec_key, telescope=tel)
+                            rel_sp = self.get_products("combined_spectrum", inst=sp_inst,
+                                                       extra_key=spec_key, telescope=tel)
 
                         if len(rel_sp) != 1:
                             assign_res = False
@@ -1848,7 +1849,7 @@ class BaseSource:
                     fit_data.close()
 
                     # Push global fit results, luminosities etc. into the corresponding source object.
-                    self.add_fit_data(model, global_results, chosen_lums, tel, spec_key, fit_conf)
+                    self.add_fit_data(model, global_results, chosen_lums, spec_key, tel, fit_conf)
 
                 # ------------ ANNULAR FIT READ IN ------------
                 ann_cur_fit_inv = cur_fit_inv[cur_fit_inv['type'] == 'ann'].reset_index(drop=True)
@@ -2133,7 +2134,7 @@ class BaseSource:
                         for comb_ind, comb in enumerate(combos):
                             rel_spec[comb_ind].add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                                                 res_table["rate_{}".format(comb)].values,
-                                                                res_table["Lx_{}".format(comb)].values, model, tel)
+                                                                res_table["Lx_{}".format(comb)].values, model)
 
                     # This triggers in the case of something like issue #738, where a previous fit used data that is
                     #  not loaded into this source (either because it was manually removed, or because the central

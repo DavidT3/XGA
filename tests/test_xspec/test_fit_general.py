@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:35 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:15 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -107,6 +107,92 @@ class TestXSPECSingleSource(unittest.TestCase):
         for cur_sp in specs:
             cur_save_path = os.path.join(test_out_path, os.path.basename(cur_sp.path).replace(".fits", "viz.png"))
             cur_sp.view(show_residuals=True, save_path=cur_save_path)
+
+    def test_reload_global_xspec_fit_results(self):
+        """Fits several single temperature apec models to non-stacked spectra from all available
+        telescopes, declares a new instance of the source, and tests to see if the fit results are
+        correctly reloaded.
+        """
+        single_temp_apec(self.test_src, self.out_rad)
+        single_temp_apec(self.test_src, self.out_rad,
+                         start_temp=Quantity(5, 'keV'))
+        single_temp_apec(self.test_src, self.out_rad,
+                         start_temp=Quantity(5, 'keV'),
+                         start_met=0.5)
+
+        all_tel_res = {}
+        for tel in self.no_fits_src.telescopes:
+            default_tx = self.test_src.get_temperature(self.out_rad, telescope=tel,
+                                                          fit_conf={})
+
+            diff_start_temp_tx = self.test_src.get_temperature(self.out_rad, telescope=tel,
+                                                                  fit_conf={'start_temp': Quantity(5, 'keV')})
+
+            diff_start_temp_met_tx = self.test_src.get_temperature(self.out_rad, telescope=tel,
+                                                                      fit_conf={'start_temp': Quantity(5, 'keV'),
+                                                                                'start_met': 0.5})
+            all_tel_res[tel] = [default_tx, diff_start_temp_tx, diff_start_temp_met_tx]
+
+        redef_src = get_test_source("all", shared=False)
+
+        for tel in all_tel_res:
+            self.assertTrue(np.array_equal(all_tel_res[tel][0],
+                                           redef_src.get_temperature(self.out_rad, telescope=tel, fit_conf={})))
+
+            self.assertTrue(np.array_equal(all_tel_res[tel][1],
+                                           redef_src.get_temperature(self.out_rad, telescope=tel,
+                                                                     fit_conf={'start_temp': Quantity(5, 'keV')})))
+
+            self.assertTrue(np.array_equal(all_tel_res[tel][2],
+                                           redef_src.get_temperature(self.out_rad, telescope=tel,
+                                                                      fit_conf={'start_temp': Quantity(5, 'keV'),
+                                                                                'start_met': 0.5})))
+
+    def test_reload_stacked_global_xspec_fit_results(self):
+        """Fits several single temperature apec models to stacked spectra from all available
+        telescopes, declares a new instance of the source, and tests to see if the fit results are
+        correctly reloaded.
+        """
+        single_temp_apec(self.test_src, self.out_rad, stacked_spectra=True)
+        single_temp_apec(self.test_src, self.out_rad, stacked_spectra=True,
+                         start_temp=Quantity(5, 'keV'))
+        single_temp_apec(self.test_src, self.out_rad, stacked_spectra=True,
+                         start_temp=Quantity(5, 'keV'),
+                         start_met=0.5)
+
+        all_tel_res = {}
+        for tel in self.no_fits_src.telescopes:
+            default_tx = self.test_src.get_temperature(self.out_rad,
+                                                       telescope=tel,
+                                                       stacked_spectra=True,
+                                                       fit_conf={})
+
+            diff_start_temp_tx = self.test_src.get_temperature(self.out_rad,
+                                                               telescope=tel,
+                                                               stacked_spectra=True,
+                                                               fit_conf={'start_temp': Quantity(5, 'keV')})
+
+            diff_start_temp_met_tx = self.test_src.get_temperature(self.out_rad,
+                                                                   telescope=tel,
+                                                                   stacked_spectra=True,
+                                                                   fit_conf={'start_temp': Quantity(5, 'keV'),
+                                                                             'start_met': 0.5})
+            all_tel_res[tel] = [default_tx, diff_start_temp_tx, diff_start_temp_met_tx]
+
+        redef_src = get_test_source("all", shared=False)
+
+        for tel in all_tel_res:
+            self.assertTrue(np.array_equal(all_tel_res[tel][0],
+                                           redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel, fit_conf={})))
+
+            self.assertTrue(np.array_equal(all_tel_res[tel][1],
+                                           redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel,
+                                                                     fit_conf={'start_temp': Quantity(5, 'keV')})))
+
+            self.assertTrue(np.array_equal(all_tel_res[tel][2],
+                                           redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel,
+                                                                      fit_conf={'start_temp': Quantity(5, 'keV'),
+                                                                                'start_met': 0.5})))
 
 
 class TestBaseSample(unittest.TestCase):
