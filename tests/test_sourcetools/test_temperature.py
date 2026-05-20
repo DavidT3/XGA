@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 5:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:20 AM. Copyright (c) The Contributors.
 
 import unittest
 
@@ -133,9 +133,8 @@ class TestTempFuncs(unittest.TestCase):
         res = onion_deproj_temp_prof(self.all_tels, Quantity(600, 'kpc'),
                                      stacked_spectra=True)
 
-        assert type(res['xmm'][0]) == GasTemperature3D
-        assert type(res['erass'][0]) == GasTemperature3D
-
+        self.assertIs(type(res['xmm'][0]), GasTemperature3D)
+        self.assertIs(type(res['erass'][0]), GasTemperature3D)
 
 if __name__ == "__main__":
      unittest.main()
