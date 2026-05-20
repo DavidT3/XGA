@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 5:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:28 AM. Copyright (c) The Contributors.
 
 import os
 from functools import wraps
@@ -529,7 +529,7 @@ def xspec_call(xspec_func):
                                             telescope=tel)[0]
                         spec.add_conv_factors(res_table["lo_en"].values, res_table["hi_en"].values,
                                               res_table["rate_{}".format(comb)].values,
-                                              res_table["Lx_{}".format(comb)].values, model, tel)
+                                              res_table["Lx_{}".format(comb)].values, model)
 
                 # In this case the fit has failed, and we need to arrange for the errors to be raised
                 #  at the end of the loop, as well as adding entries to the Spectrum instances that
