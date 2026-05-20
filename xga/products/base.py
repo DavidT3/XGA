@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:13 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 12:51 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -3481,9 +3481,9 @@ class BaseAggregateProfile1D:
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
             fig.savefig(save_path, bbox_inches='tight')
-
-        # And of course actually showing it
-        plt.show()
+        else:
+            # Showing the figure
+            plt.show()
 
     def __add__(self, other):
         to_combine = self.profiles
