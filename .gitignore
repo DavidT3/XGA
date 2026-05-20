@@ -19,3 +19,4 @@ daxa_output
 *.pyc
 xga/__pycache__/__init__.cpython-39.pyc
 claude_context/
+htmlcov
