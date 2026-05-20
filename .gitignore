@@ -4,6 +4,10 @@ CLAUDE.md
 .coverage
 .pytest_cache
 xga_output
+daxa_output
+*census*
+*blacklist*
+.idea
 .ipynb_checkpoints
 .vscode
 /xga.egg-info/
