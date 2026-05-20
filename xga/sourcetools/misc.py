@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 16/01/2024, 14:56. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 7:42 PM. Copyright (c) The Contributors.
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Union, List, TYPE_CHECKING
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Cosmology
 from astropy.units import Quantity
-from numpy import array, ndarray, pi
+from numpy import array, pi
 
 from .. import DEFAULT_COSMO
 from ..exceptions import HeasoftError
@@ -170,7 +170,7 @@ def model_check(sources: Union[BaseSource, BaseSample, List[BaseSource]],
         -> Union[List[BaseModel1D], List[str]]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources
-    that have been passed. I can't imagine why a user would need this directly, its only here as these checks
+    that have been passed. There is no reason a user would need this directly, it's only here as these checks
     have to be performed in multiple places in sourcetools.
 
     :param BaseSource/BaseSample/List[BaseSource] sources: The source(s) for which we are checking models.

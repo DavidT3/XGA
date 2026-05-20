@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 4:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 7:48 PM. Copyright (c) The Contributors.
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1503,11 +1503,11 @@ class HydrostaticMass(BaseProfile1D):
 
     :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA temperature
         model class. Default is None, in which case this class will use profile data points to calculate
         hydrostatic mass.
-    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
         be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA density model class.
         Default is None, in which case this class will use profile data points to calculate hydrostatic mass.
@@ -1576,11 +1576,11 @@ class HydrostaticMass(BaseProfile1D):
 
         :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA temperature
             model class. Default is None, in which case this class will use profile data points to calculate
             hydrostatic mass.
-        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
             be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA density
             model class. Default is None, in which case this class will use profile data points to calculate
@@ -1752,7 +1752,7 @@ class HydrostaticMass(BaseProfile1D):
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            key_temp_mod_part = "tm{t}".format(t=t_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -1776,7 +1776,7 @@ class HydrostaticMass(BaseProfile1D):
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
 
-            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            key_dens_mod_part = "dm{d}".format(d=d_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -2713,10 +2713,10 @@ class SpecificEntropy(BaseProfile1D):
 
     :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
         Default is None, in which case this class will use profile data points to calculate entropy.
-    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
         be used to calculate the entropy profile), either a name or an instance of an XGA density model class.
         Default is None, in which case this class will use profile data points to calculate entropy.
@@ -2784,10 +2784,10 @@ class SpecificEntropy(BaseProfile1D):
 
         :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
             Default is None, in which case this class will use profile data points to calculate entropy.
-        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA density model class.
             Default is None, in which case this class will use profile data points to calculate entropy.
@@ -2958,7 +2958,7 @@ class SpecificEntropy(BaseProfile1D):
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            key_temp_mod_part = "tm{t}".format(t=t_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -2980,7 +2980,7 @@ class SpecificEntropy(BaseProfile1D):
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
-            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            key_dens_mod_part = "dm{d}".format(d=d_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -3312,10 +3312,10 @@ class ThermalPressure(BaseProfile1D):
 
     :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the thermal pressure profile), either a name or an instance of an XGA temperature model
         class. Default is None, in which case this class will use profile data points to calculate thermal pressure.
-    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
         be used to calculate the thermal pressure profile), either a name or an instance of an XGA density model class.
         Default is None, in which case this class will use profile data points to calculate thermal pressure.
@@ -3382,11 +3382,11 @@ class ThermalPressure(BaseProfile1D):
 
         :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the thermal pressure profile), either a name or an instance of an XGA temperature
             model class. Default is None, in which case this class will use profile data points to calculate
             thermal pressure.
-        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
             be used to calculate the thermal pressure profile), either a name or an instance of an XGA density
             model class. Default is None, in which case this class will use profile data points to calculate thermal
@@ -3559,7 +3559,7 @@ class ThermalPressure(BaseProfile1D):
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            key_temp_mod_part = "tm{t}".format(t=t_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -3582,7 +3582,7 @@ class ThermalPressure(BaseProfile1D):
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
-            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            key_dens_mod_part = "dm{d}".format(d=d_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
