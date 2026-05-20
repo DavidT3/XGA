@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:11 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:13 AM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -3186,6 +3186,11 @@ class BaseAggregateProfile1D:
         :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
             will any uncertainty regions.
         """
+        # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
+        if draw_rads is None:
+            draw_rads = {}
+        if draw_vals is None:
+            draw_vals = {}
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -3407,42 +3412,40 @@ class BaseAggregateProfile1D:
             plt.suptitle(custom_title, y=0.91)
 
         # If the user has passed radii to plot, then we plot them
-        if draw_rads is not None:
-            for r_name in draw_rads:
-                d_rad = (draw_rads[r_name] / x_norms[0]).value
-                main_ax.axvline(d_rad, linestyle='dashed', color='black')
-                main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-                                 color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+        for r_name in draw_rads:
+            d_rad = (draw_rads[r_name] / x_norms[0]).value
+            main_ax.axvline(d_rad, linestyle='dashed', color='black')
+            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # Reads out the axis limits of the plot thus far
         x_axis_lims = main_ax.get_xlim()
         # If the user has passed extra values to plot, then we plot them
-        if draw_vals is not None:
-            for v_name in draw_vals:
-                if isinstance(draw_vals[v_name], Quantity):
-                    d_val = draw_vals[v_name].value
-                    cur_col = None
-                    is_scalar = draw_vals[v_name].isscalar
-                else:
-                    d_val = draw_vals[v_name][0].value
-                    cur_col = draw_vals[v_name][1]
-                    is_scalar = draw_vals[v_name][0].isscalar
+        for v_name in draw_vals:
+            if isinstance(draw_vals[v_name], Quantity):
+                d_val = draw_vals[v_name].value
+                cur_col = None
+                is_scalar = draw_vals[v_name].isscalar
+            else:
+                d_val = draw_vals[v_name][0].value
+                cur_col = draw_vals[v_name][1]
+                is_scalar = draw_vals[v_name][0].isscalar
 
-                if is_scalar:
-                    main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
-                                    label=v_name)
-                elif len(d_val) == 2:
-                    main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
-                                    label=v_name)
-                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
-                                         alpha=0.5)
-                elif len(d_val) == 3:
-                    main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
-                                    label=v_name)
-                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
-                                         alpha=0.5)
+            if is_scalar:
+                main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+            elif len(d_val) == 2:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
+                                     alpha=0.5)
+            elif len(d_val) == 3:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
+                                     alpha=0.5)
 
-                main_ax.set_xlim(x_axis_lims)
+            main_ax.set_xlim(x_axis_lims)
 
         # Adds a legend with source names to the side if the user requested it
         # I let the user decide because there could be quite a few names in it and it could get messy
