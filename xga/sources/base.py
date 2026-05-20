@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:55 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:14 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -1865,9 +1865,23 @@ class BaseSource:
                     ann_lums = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
                     ann_res = {int(an_id): None for an_id in fit_ann_inv_ent['ann_id'].values}
 
-                    # The passing of 'tel' isn't strictly necessary, as the set-idents should be unique identifiers, but
-                    #  it is a useful visual reminder that we are in the telescope loop
-                    rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'], telescope=tel)
+                    # If we trust that XGA has loaded in previously created annular spectra properly, which we
+                    #  must, then it is entirely reasonable to try to retrieve the annular spectra instance with the
+                    #  current fit's spectrum set ID.
+                    # Hopefully the annular spectrum will be retrieved, but if it isn't present we can catch the
+                    #  error, and move on from trying to load this particular fit result. There are several reasons
+                    #  that the annular spectrum may not have been loaded in, files are missing, damaged, or moved, or
+                    #  the way the source was set up this time means that extra observations are associated - whatever
+                    #  the cause, we need to catch it and move on.
+                    try:
+                        # The passing of 'tel' isn't strictly necessary, as the set-idents should be unique identifiers, but
+                        #  it is a useful visual reminder that we are in the telescope loop
+                        rel_ann_sp = self.get_annular_spectra(set_id=fit_ann_inv_ent.iloc[0]['set_ident'], telescope=tel)
+
+                    # If we can't fetch the spectrum, we catch the error, and move on to the next annular spectrum
+                    #  result to be loaded in.
+                    except NoProductAvailableError:
+                        break
 
                     assign_res = True
                     for row_ind, row in fit_ann_inv_ent.iterrows():
