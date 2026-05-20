@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:22 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -14,6 +14,7 @@ from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.mplot3d import Axes3D
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
@@ -1814,9 +1815,14 @@ class Spectrum(BaseProduct):
         if show_residuals and not show_model_fits:
             raise ValueError("Residuals can only be displayed when 'show_model_fits=True' and a model has been fit.")
         elif show_residuals:
-            ax_res = plt.add_axes((0, -0.33, 1, 0.33), sharex="col")
-            # Shrink the vertical gap between the panels to zero
-            # plt.subplots_adjust(hspace=0)
+            # Safely split the spectrum axis
+            divider = make_axes_locatable(ax)
+
+            # Append a residual axis taking up 30% of the original axis height
+            ax_res = divider.append_axes("bottom", size="30%", pad=0.0)
+            # Share the x-axis limits and panning
+            ax_res.sharex(ax)
+            ax.tick_params(labelbottom=False)
 
         # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
         if energy:
@@ -1982,10 +1988,6 @@ class Spectrum(BaseProduct):
         ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
         ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
-        # Removing extraneous whitespace around the plot - we have h_pad=0 in the call to stop
-        #  tight_layout from changing the 0-height vertical spacing we set between spectrum and
-        #  residual axes (if we are plotting residuals that is).
-        plt.tight_layout(h_pad=0)
         return ax
 
     def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
@@ -2049,15 +2051,17 @@ class Spectrum(BaseProduct):
         # Generate the legend for the data and model(s)
         plt.legend(loc="best", fontsize=fontsize - 1)
 
-        # Removing extraneous whitespace around the plot
-        plt.tight_layout()
+        # Removing extraneous whitespace around the plot - we have h_pad=0 in the call to stop
+        #  tight_layout from changing the 0-height vertical spacing we set between spectrum and
+        #  residual axes (if we are plotting residuals that is).
+        plt.tight_layout(h_pad=0)
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
             plt.savefig(save_path)
-
-        # Display the spectrum
-        plt.show()
+        else:
+            # Display the spectrum
+            plt.show()
 
         # Wipe the figure
         plt.close("all")
