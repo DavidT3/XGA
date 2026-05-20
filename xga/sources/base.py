@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:55 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 12:15 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -2845,7 +2845,7 @@ class BaseSource:
             matched_prods = [m_prod for m_prod in matched_prods if len(annuli_bound_radii) == len(m_prod.annulus_bounds)]
 
             matched_prods = [m_prod for m_prod in matched_prods
-                             if np.allclose(radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
+                             if np.allclose(annuli_bound_radii, self.convert_radius(m_prod.annulus_bounds, 'deg'), rtol=0,
                                             atol=RAD_MATCH_PRECISION)]
 
         # Now onto matching to some of the other information that may have been passed to this method
