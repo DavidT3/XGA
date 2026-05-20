@@ -1,6 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 4:02 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:35 PM. Copyright (c) The Contributors.
 
+import os
 import unittest
 
 import numpy as np
@@ -8,7 +9,7 @@ from astropy.units import Quantity
 
 from xga.samples import ClusterSample
 from xga.xspec.fit.general import single_temp_apec
-from .. import CLUSTER_SMP, get_test_source
+from .. import CLUSTER_SMP, get_test_source, MISC_OUTPUT_TESTS
 
 
 class TestXSPECSingleSource(unittest.TestCase):
@@ -81,6 +82,31 @@ class TestXSPECSingleSource(unittest.TestCase):
             self.assertFalse(np.array_equal(all_tel_res[tel][0], all_tel_res[next_tel][0]))
             self.assertFalse(np.array_equal(all_tel_res[tel][1], all_tel_res[next_tel][1]))
             self.assertFalse(np.array_equal(all_tel_res[tel][2], all_tel_res[next_tel][2]))
+
+    def test_global_single_temp_apec_view(self):
+        """Tests the view method of the Spectrum class after fitting several versions of the
+        single temperature apec model to XMM data.
+        """
+
+        single_temp_apec(self.no_fits_src, self.out_rad, telescope='xmm')
+        single_temp_apec(self.no_fits_src, self.out_rad, telescope='xmm',
+                         start_temp=Quantity(5, 'keV'))
+        single_temp_apec(self.no_fits_src, self.out_rad, telescope='xmm',
+                         start_temp=Quantity(5, 'keV'),
+                         start_met=0.5)
+
+        specs = self.no_fits_src.get_spectra(self.out_rad, telescope='xmm')
+
+        # There should definitely be multiple spectra returned for our test
+        #  source, so they should be in a list
+        self.assertIsInstance(specs, list)
+
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+
+        for cur_sp in specs:
+            cur_save_path = os.path.join(test_out_path, os.path.basename(cur_sp.path).replace(".fits", "viz.png"))
+            cur_sp.view(show_residuals=True, save_path=cur_save_path)
 
 
 class TestBaseSample(unittest.TestCase):

@@ -1,11 +1,17 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 3:30 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:31 PM. Copyright (c) The Contributors.
+import os
+
 import numpy as np
 import pandas as pd
 from astropy.units import Quantity
 
+from xga import OUTPUT
 from xga.sources import GalaxyCluster
 from .source_info import SRC_INFO, SUPP_SRC_INFO, EXPECTED_ERO_OBS, EXPECTED_XMM_OBS
+
+MISC_OUTPUT_TESTS = os.path.join(OUTPUT, "test_figures")
+os.makedirs(MISC_OUTPUT_TESTS, exist_ok=True)
 
 # Making a df to make a sample from
 column_names = ['name', 'ra', 'dec', 'z', 'r500']
