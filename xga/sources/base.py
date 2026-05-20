@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:14 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:09 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -2818,14 +2818,14 @@ class BaseSource:
             annuli_bound_radii = self.convert_radius(annuli_bound_radii, 'deg')
 
         # Fetch all the matching profiles for the specified telescope
-        broad_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
-        broad_prods: List[BaseProfile1D]
+        matched_prods = self.get_products(search_key, obs_id, inst, just_obj=True, telescope=telescope)
+        matched_prods: List[BaseProfile1D]
 
         # This part of the code ensures that if inst is None (the default), only products for 'real'
         #  instruments are returned. To retrieve a multi-instrument combined product, the user must
         #  explicitly specify inst='combined'.
         if inst is None:
-            matched_prods = [m_prod for m_prod in broad_prods if m_prod.instrument != 'combined']
+            matched_prods = [m_prod for m_prod in matched_prods if m_prod.instrument != 'combined']
 
         # The radii argument refers specifically to the central radii of annular bins, rather than the
         #  boundaries of those bins
