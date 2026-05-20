@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 9:14 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:11 AM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -1999,6 +1999,11 @@ class BaseProfile1D:
             can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
             keys should be instantiated matplotlib formatters.
         """
+        # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
+        if draw_rads is None:
+            draw_rads = {}
+        if draw_vals is None:
+            draw_vals = {}
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -2235,36 +2240,34 @@ class BaseProfile1D:
         plt.suptitle(title_str, y=0.91)
 
         # If the user has passed radii to plot, then we plot them
-        if draw_rads is not None:
-            for r_name in draw_rads:
-                d_rad = (draw_rads[r_name] / x_norm).value
-                main_ax.axvline(d_rad, linestyle='dashed', color='black')
-                main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-                                 color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+        for r_name in draw_rads:
+            d_rad = (draw_rads[r_name] / x_norm).value
+            main_ax.axvline(d_rad, linestyle='dashed', color='black')
+            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
+                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
 
         # Use the axis limits quite a lot in these next bits, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
         y_axis_lims = main_ax.get_ylim()
 
         # If the user has passed extra values to plot, then we plot them
-        if draw_vals is not None:
-            for v_name in draw_vals:
-                d_val = (draw_vals[v_name] / y_norm).value
-                if draw_vals[v_name].isscalar:
-                    main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
-                                    label=v_name)
-                elif len(d_val) == 2:
-                    main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
-                                    label=v_name)
-                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
-                                         alpha=0.5)
-                elif len(d_val) == 3:
-                    main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
-                                    label=v_name)
-                    main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
-                                         alpha=0.5)
+        for v_name in draw_vals:
+            d_val = (draw_vals[v_name] / y_norm).value
+            if draw_vals[v_name].isscalar:
+                main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+            elif len(d_val) == 2:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
+                                     alpha=0.5)
+            elif len(d_val) == 3:
+                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
+                                label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
+                                     alpha=0.5)
 
-                main_ax.set_xlim(x_axis_lims)
+            main_ax.set_xlim(x_axis_lims)
 
         # If the user wants a legend to be shown, then we create one
         if show_legend:
