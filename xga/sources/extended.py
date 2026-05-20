@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:39 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -475,8 +475,8 @@ class GalaxyCluster(ExtendedSource):
 
     def _get_spec_based_profiles(self, search_key: str, annuli_bound_radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                 set_id: int = None, telescope: str = None, spec_model: str = None,
-                                 spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                                 set_id: int = None, obs_id: str = None, inst: str = None, telescope: str = None,
+                                 spec_model: str = None, spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for profiles which have been based on spectra, the only thing that tends to change
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
@@ -510,7 +510,8 @@ class GalaxyCluster(ExtendedSource):
         #  specified), then we'll work on narrowing them down even more.
         init_matches = self._get_prof_prod(search_key, central_coord=self.default_coord,
                                            annuli_bound_radii=annuli_bound_radii, telescope=telescope,
-                                           spec_model=spec_model, spec_fit_conf=spec_fit_conf)
+                                           spec_model=spec_model, spec_fit_conf=spec_fit_conf, obs_id=obs_id, inst=inst)
+
         # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
         #  associated with them, as that means that they were not generated from an annular spectrum
         init_matches = [p for p in init_matches if p.set_ident is not None]
@@ -700,8 +701,9 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
         matched_prods = self._get_spec_based_profiles("combined_1d_proj_temperature_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, telescope,
-                                                      spec_model, spec_fit_conf)
+                                                      group_spec, min_counts, min_sn, over_sample, set_id,
+                                                      telescope=telescope, spec_model=spec_model,
+                                                      spec_fit_conf=spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -741,8 +743,9 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
         matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, telescope,
-                                                      spec_model, spec_fit_conf)
+                                                      group_spec, min_counts, min_sn, over_sample, set_id,
+                                                      telescope=telescope, spec_model=spec_model,
+                                                      spec_fit_conf=spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -784,8 +787,9 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Union[ProjectedGasMetallicity1D, List[ProjectedGasMetallicity1D]]
         """
         matched_prods = self._get_spec_based_profiles("combined_1d_proj_metallicity_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, telescope,
-                                                      spec_model, spec_fit_conf)
+                                                      group_spec, min_counts, min_sn, over_sample, set_id,
+                                                      telescope=telescope, spec_model=spec_model,
+                                                      spec_fit_conf=spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -825,8 +829,8 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
         matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", annuli_bound_radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id, telescope, spec_model,
-                                                      spec_fit_conf)
+                                                      min_counts, min_sn, over_sample, set_id, telescope=telescope,
+                                                      spec_model=spec_model, spec_fit_conf=spec_fit_conf)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -906,10 +910,12 @@ class GalaxyCluster(ExtendedSource):
             interim_prods = self.get_profiles("gas_density", obs_id, inst, central_coord, radii=radii, telescope=telescope)
         elif (obs_id == "combined" or inst == "combined" or obs_id is None or inst is None) and method == 'spec':
             interim_prods = self._get_spec_based_profiles('combined_gas_density_profile', radii, group_spec, min_counts,
-                                                          min_sn, over_sample, set_id, telescope, spec_model, spec_fit_conf)
+                                                          min_sn, over_sample, set_id, telescope=telescope,
+                                                          spec_model=spec_model, spec_fit_conf=spec_fit_conf)
         else:
             interim_prods = self._get_spec_based_profiles('gas_density_profile', radii, group_spec, min_counts, min_sn,
-                                                          over_sample, set_id, telescope, spec_model, spec_fit_conf)
+                                                          over_sample, set_id, telescope=telescope,
+                                                          spec_model=spec_model, spec_fit_conf=spec_fit_conf)
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object
