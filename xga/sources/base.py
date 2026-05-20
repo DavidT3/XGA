@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 8:54 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:55 AM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -4007,13 +4007,17 @@ class BaseSource:
             if len(matched_products) == 0:
                 # Sort out the message to show
                 if telescope is not None:
-                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
-                            "found.").format(si=set_id, t=telescope)
+                    mess = f"AnnularSpectra object with setID {set_id} for telescope {telescope} cannot be found."
                 else:
-                    mess = ("AnnularSpectra object with setID {si} for telescope {t} cannot be "
-                            "found.").format(si=set_id, t=telescope)
+                    mess = f"AnnularSpectra object with setID {set_id} cannot be found."
                 raise NoProductAvailableError(mess)
-            # But if we get here then there is a match (and there can only be one)
+
+            # If multiple matches are found for a single set ID, then something is badly wrong with some
+            #  aspect of product retrieval, and we want the user to report it to us
+            elif len(matched_products) != 1:
+                raise XGADeveloperError(f"Multiple AnnularSpectra objects with setID {set_id} found - please "
+                                        f"report this to the developers.")
+            # If we get here, then a single match was found for the input set ID, which is as it should be
             else:
                 return matched_products[0]
 
