@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 3:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 3:19 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -335,10 +335,10 @@ class BaseSource:
         #     warn(f"Some observations/instruments were removed as their event lists could not "
         #          f"be read: {"; ".join(all_removed)}", stacklevel=2)
 
-        # Assign the altered dictionaries
-        self._products = new_prods
-        obs = new_obs
-        region_dict = new_regs
+        # # Assign the altered dictionaries
+        # self._products = new_prods
+        # obs = new_obs
+        # region_dict = new_regs
 
         # Now we do ANOTHER check just like the one above, but on the product attribute, as it is possible that
         #  all those files cannot be found
