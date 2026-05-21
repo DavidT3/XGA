@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 9:15 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 9:09 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
 
 import numpy as np
+import numpy.testing as npt
 from astropy.units import Quantity
 
 from xga.samples import ClusterSample
@@ -123,7 +124,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         all_tel_res = {}
         for tel in self.no_fits_src.telescopes:
             default_tx = self.test_src.get_temperature(self.out_rad, telescope=tel,
-                                                          fit_conf={})
+                                                       fit_conf={})
 
             diff_start_temp_tx = self.test_src.get_temperature(self.out_rad, telescope=tel,
                                                                   fit_conf={'start_temp': Quantity(5, 'keV')})
@@ -136,17 +137,21 @@ class TestXSPECSingleSource(unittest.TestCase):
         redef_src = get_test_source("all", shared=False)
 
         for tel in all_tel_res:
-            self.assertTrue(np.array_equal(all_tel_res[tel][0],
-                                           redef_src.get_temperature(self.out_rad, telescope=tel, fit_conf={})))
+            with self.subTest(msg=f"Comparing original and reloaded temperatures [{tel}; default fit]"):
+                npt.assert_array_equal(all_tel_res[tel][0],
+                                       redef_src.get_temperature(self.out_rad, telescope=tel, fit_conf={}))
 
-            self.assertTrue(np.array_equal(all_tel_res[tel][1],
-                                           redef_src.get_temperature(self.out_rad, telescope=tel,
-                                                                     fit_conf={'start_temp': Quantity(5, 'keV')})))
+            with self.subTest(msg=f"Comparing original and reloaded temperatures [{tel}; modified start_temp fit]"):
+                npt.assert_array_equal(all_tel_res[tel][1],
+                                       redef_src.get_temperature(self.out_rad, telescope=tel,
+                                                                 fit_conf={'start_temp': Quantity(5, 'keV')}))
 
-            self.assertTrue(np.array_equal(all_tel_res[tel][2],
-                                           redef_src.get_temperature(self.out_rad, telescope=tel,
-                                                                      fit_conf={'start_temp': Quantity(5, 'keV'),
-                                                                                'start_met': 0.5})))
+            with self.subTest(msg=f"Comparing original and reloaded temperatures [{tel}; modified start_temp/start_met fit]"):
+                npt.assert_array_equal(all_tel_res[tel][2],
+                                       redef_src.get_temperature(self.out_rad,
+                                                                 telescope=tel,
+                                                                 fit_conf={'start_temp': Quantity(5, 'keV'),
+                                                                           'start_met': 0.5}))
 
     def test_reload_stacked_global_xspec_fit_results(self):
         """Fits several single temperature apec models to stacked spectra from all available
@@ -182,17 +187,23 @@ class TestXSPECSingleSource(unittest.TestCase):
         redef_src = get_test_source("all", shared=False)
 
         for tel in all_tel_res:
-            self.assertTrue(np.array_equal(all_tel_res[tel][0],
-                                           redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel, fit_conf={})))
 
-            self.assertTrue(np.array_equal(all_tel_res[tel][1],
-                                           redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel,
-                                                                     fit_conf={'start_temp': Quantity(5, 'keV')})))
+            with self.subTest(msg=f"Comparing original and reloaded temperatures [{tel}; default fit]"):
+                npt.assert_array_equal(all_tel_res[tel][0],
+                                       redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel, fit_conf={}))
 
-            self.assertTrue(np.array_equal(all_tel_res[tel][2],
-                                           redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel,
-                                                                      fit_conf={'start_temp': Quantity(5, 'keV'),
-                                                                                'start_met': 0.5})))
+            with self.subTest(msg=f"Comparing original and reloaded temperatures [{tel}; modified start_temp fit]"):
+                npt.assert_array_equal(all_tel_res[tel][1],
+                                       redef_src.get_temperature(self.out_rad, stacked_spectra=True, telescope=tel,
+                                                                 fit_conf={'start_temp': Quantity(5, 'keV')}))
+
+            with self.subTest(msg=f"Comparing original and reloaded temperatures [{tel}; modified start_temp/start_met fit]"):
+                npt.assert_array_equal(all_tel_res[tel][2],
+                                       redef_src.get_temperature(self.out_rad,
+                                                                 stacked_spectra=True,
+                                                                 telescope=tel,
+                                                                 fit_conf={'start_temp': Quantity(5, 'keV'),
+                                                                           'start_met': 0.5}))
 
 
 class TestBaseSample(unittest.TestCase):
