@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 7:48 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:10 PM. Copyright (c) The Contributors.
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -1749,6 +1749,8 @@ class HydrostaticMass(BaseProfile1D):
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
@@ -1772,6 +1774,8 @@ class HydrostaticMass(BaseProfile1D):
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
@@ -2955,6 +2959,8 @@ class SpecificEntropy(BaseProfile1D):
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
@@ -2977,6 +2983,8 @@ class SpecificEntropy(BaseProfile1D):
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
@@ -3556,6 +3564,8 @@ class ThermalPressure(BaseProfile1D):
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
@@ -3579,6 +3589,8 @@ class ThermalPressure(BaseProfile1D):
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
