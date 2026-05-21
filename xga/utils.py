@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 11:54 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 12:59 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -745,7 +745,11 @@ def build_observation_census(tel: str, num_cores: int) -> Tuple[pd.DataFrame, pd
 
     # Adding in columns for the instruments
     rel_inst_cols = ["USE_{}".format(inst.upper()) for inst in rel_insts]
-    obs_lookup[rel_inst_cols] = obs_lookup[rel_inst_cols].apply(lambda x: x == 'T')
+    obs_lookup[rel_inst_cols] = obs_lookup[rel_inst_cols].apply(lambda x: x.isin(['T', 'True', 't', 'true']))
+
+    # Also convert the blacklist columns to boolean
+    rel_bl_cols = [col for col in blacklist.columns if 'EXCLUDE' in col]
+    blacklist[rel_bl_cols] = blacklist[rel_bl_cols].apply(lambda x: x.isin(['T', 'True', 't', 'true']))
 
     # Finally we return the census and the blacklist
     return obs_lookup, blacklist

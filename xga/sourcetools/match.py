@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:45 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 1:01 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -87,7 +87,7 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
     #  the ObsID shouldn't be returned - firstly we locate the 'exclude_{INST NAME}' columns for this telescope's
     #  blacklist
     excl_col = [col for col in in_bl.columns if 'EXCLUDE' in col]
-    all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == 'T' for excl in excl_col])]
+    all_excl = in_bl[np.logical_and.reduce([in_bl[excl] for excl in excl_col])]
 
     # These are the observations that a) match (within our criteria) to the supplied coordinates, and b) have at
     #  least some usable data.
@@ -410,7 +410,7 @@ def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], d
                                                                                               )]['ObsID'])]
         # Firstly we locate the 'exclude_{INST NAME}' columns for this telescope's blacklist
         excl_col = [col for col in in_bl.columns if 'EXCLUDE' in col]
-        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] == 'T' for excl in excl_col])]
+        all_excl = in_bl[np.logical_and.reduce([in_bl[excl] for excl in excl_col])]
 
         # These are the observations that have at  least some usable data.
         all_incl = rel_census[~rel_census["ObsID"].isin(all_excl["ObsID"])]

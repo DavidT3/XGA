@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 12:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 12:59 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -264,9 +264,9 @@ class BaseSource:
                     # Extract the exact row of the current telescope's blacklist that is relevant to the current
                     #  ObsID
                     bl_row = BLACKLIST[tel][BLACKLIST[tel]['ObsID'] == row['ObsID']].iloc[0]
-                    # Find the instruments that we need to exclude because the 'EXCLUDE_{INST}' column was marked 'T'
+                    # Find the instruments that we need to exclude because the 'EXCLUDE_{INST}' column was marked True
                     excl_inst = [col.split('_')[-1].lower() for col in BLACKLIST[tel].columns
-                                 if 'EXCLUDE' in col and bl_row[col] == 'T']
+                                 if 'EXCLUDE' in col and bl_row[col]]
                     # Add the partially excluded observation to the blacklist, with the excluded instrument
                     blacklisted_obs[tel][row['ObsID']] = excl_inst
 
