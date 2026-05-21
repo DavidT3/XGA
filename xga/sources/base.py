@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 3:03 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 3:18 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -310,30 +310,30 @@ class BaseSource:
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict = self._initial_products(obs, load_regions, null_load_products)
 
-        # We need to make sure that we only keep instruments (and ObsIDs) that actually have an
-        #  event list associated with them - it is possible for initial_products to have not been
-        #  able to load them
-        new_prods = {t: {o: {i: self._products[t][o][i] for i in self._products[t][o]
-                             if 'events' in self._products[t][o][i]}
-                         for o in self._products[t]} for t in self._products}
-        # Then we remove any ObsIDs that no longer have any instruments
-        new_prods = {t: {o: new_prods[t][o] for o in new_prods[t]
-                         if len(new_prods[t][o]) != 0}
-                     for t in new_prods}
-        # Replicate the new_prods structure for the 'obs' and 'region_dict' variables
-        new_obs = {t: {o: [i for i in obs[t][o] if i in new_prods[t][o]] for o in new_prods[t]} for t in new_prods}
-        new_regs = {t: {o: region_dict[t][o] for o in new_prods[t]} for t in new_prods}
-
-        # Warn the user about removals
-        # Aggregate all removed combinations for a single warning
-        all_removed = ["{t}: {o}({i})".format(t=t, o=o, i=", ".join([i for i in obs[t][o] if o not in new_obs[t]
-                                                                     or i not in new_obs[t][o]]))
-                       for t in obs for o in obs[t] if o not in new_obs[t]
-                       or any(i not in new_obs[t][o] for i in obs[t][o])]
-
-        if all_removed:
-            warn(f"Some observations/instruments were removed as their event lists could not "
-                 f"be read: {"; ".join(all_removed)}", stacklevel=2)
+        # # We need to make sure that we only keep instruments (and ObsIDs) that actually have an
+        # #  event list associated with them - it is possible for initial_products to have not been
+        # #  able to load them
+        # new_prods = {t: {o: {i: self._products[t][o][i] for i in self._products[t][o]
+        #                      if 'events' in self._products[t][o][i]}
+        #                  for o in self._products[t]} for t in self._products}
+        # # Then we remove any ObsIDs that no longer have any instruments
+        # new_prods = {t: {o: new_prods[t][o] for o in new_prods[t]
+        #                  if len(new_prods[t][o]) != 0}
+        #              for t in new_prods}
+        # # Replicate the new_prods structure for the 'obs' and 'region_dict' variables
+        # new_obs = {t: {o: [i for i in obs[t][o] if i in new_prods[t][o]] for o in new_prods[t]} for t in new_prods}
+        # new_regs = {t: {o: region_dict[t][o] for o in new_prods[t]} for t in new_prods}
+        #
+        # # Warn the user about removals
+        # # Aggregate all removed combinations for a single warning
+        # all_removed = ["{t}: {o}({i})".format(t=t, o=o, i=", ".join([i for i in obs[t][o] if o not in new_obs[t]
+        #                                                              or i not in new_obs[t][o]]))
+        #                for t in obs for o in obs[t] if o not in new_obs[t]
+        #                or any(i not in new_obs[t][o] for i in obs[t][o])]
+        #
+        # if all_removed:
+        #     warn(f"Some observations/instruments were removed as their event lists could not "
+        #          f"be read: {"; ".join(all_removed)}", stacklevel=2)
 
         # Assign the altered dictionaries
         self._products = new_prods
@@ -1133,6 +1133,16 @@ class BaseSource:
                 #  the copy so that any modifications don't harm the original file.
                 reg_file = rel_sec["region_file"].format(obs_id=obs_id)
 
+
+
+
+                evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
+                                     gen_cmd="", telescope=tel)
+                if not evt_list.usable:
+                    continue
+
+
+
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
                 #  doesn't have a product object. It also isn't guaranteed to be a separate thing for all
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
@@ -1177,10 +1187,10 @@ class BaseSource:
                 if (att_prod is not None and att_prod.usable) or att_prod is None:
                     # An instrument subsection of an observation will ONLY be populated if the events file exists
                     # Otherwise nothing can be done with it.
-                    evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
-                                         gen_cmd="",  telescope=tel)
-                    if not evt_list.usable:
-                        continue
+                    # evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
+                    #                      gen_cmd="",  telescope=tel)
+                    # if not evt_list.usable:
+                    #     continue
 
                     # Start off with the events list going in - make sure there is an inst entry first
                     obs_dict[tel][obs_id].setdefault(inst, {})
