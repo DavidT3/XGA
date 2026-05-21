@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 12:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 3:03 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -244,6 +244,7 @@ class BaseSource:
         blacklisted_obs = {}
         # Each telescope will have a key in this dictionary, even if there were no observations that were excluded
         for tel in excluded:
+            tel: str
             # Add empty dictionary entries for the current telescope, both for the observations and the blacklisted
             #  observations dictionaries
             obs[tel] = {}
@@ -309,7 +310,37 @@ class BaseSource:
         #  actual event list/image/expmap/region files - those initial products are loaded into XGA products
         self._products, region_dict = self._initial_products(obs, load_regions, null_load_products)
 
-        # Now we do ANOTHER check just like the one above, but on the products attribute, as it is possible that
+        # We need to make sure that we only keep instruments (and ObsIDs) that actually have an
+        #  event list associated with them - it is possible for initial_products to have not been
+        #  able to load them
+        new_prods = {t: {o: {i: self._products[t][o][i] for i in self._products[t][o]
+                             if 'events' in self._products[t][o][i]}
+                         for o in self._products[t]} for t in self._products}
+        # Then we remove any ObsIDs that no longer have any instruments
+        new_prods = {t: {o: new_prods[t][o] for o in new_prods[t]
+                         if len(new_prods[t][o]) != 0}
+                     for t in new_prods}
+        # Replicate the new_prods structure for the 'obs' and 'region_dict' variables
+        new_obs = {t: {o: [i for i in obs[t][o] if i in new_prods[t][o]] for o in new_prods[t]} for t in new_prods}
+        new_regs = {t: {o: region_dict[t][o] for o in new_prods[t]} for t in new_prods}
+
+        # Warn the user about removals
+        # Aggregate all removed combinations for a single warning
+        all_removed = ["{t}: {o}({i})".format(t=t, o=o, i=", ".join([i for i in obs[t][o] if o not in new_obs[t]
+                                                                     or i not in new_obs[t][o]]))
+                       for t in obs for o in obs[t] if o not in new_obs[t]
+                       or any(i not in new_obs[t][o] for i in obs[t][o])]
+
+        if all_removed:
+            warn(f"Some observations/instruments were removed as their event lists could not "
+                 f"be read: {"; ".join(all_removed)}", stacklevel=2)
+
+        # Assign the altered dictionaries
+        self._products = new_prods
+        obs = new_obs
+        region_dict = new_regs
+
+        # Now we do ANOTHER check just like the one above, but on the product attribute, as it is possible that
         #  all those files cannot be found
         cur_obs_nums = {tel: len(self._products[tel]) for tel in self._products}
         if sum(cur_obs_nums.values()) == 0:
