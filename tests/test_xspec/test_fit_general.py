@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 9:09 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 9:28 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -72,17 +72,17 @@ class TestXSPECSingleSource(unittest.TestCase):
                                                                    fit_conf={'start_temp': Quantity(5, 'keV'),
                                                                              'start_met': 0.5})
 
-            self.assertFalse(np.array_equal(default_tx, diff_start_temp_tx))
-            self.assertFalse(np.array_equal(diff_start_temp_tx, diff_start_temp_met_tx))
+            npt.assert_array_equal(default_tx, diff_start_temp_tx)
+            npt.assert_array_equal(diff_start_temp_tx, diff_start_temp_met_tx)
 
             all_tel_res[tel] = [default_tx, diff_start_temp_tx, diff_start_temp_met_tx]
 
         for tel_ind, tel in enumerate(list(all_tel_res.keys())[:-1]):
             next_tel = list(all_tel_res.keys())[tel_ind + 1]
 
-            self.assertFalse(np.array_equal(all_tel_res[tel][0], all_tel_res[next_tel][0]))
-            self.assertFalse(np.array_equal(all_tel_res[tel][1], all_tel_res[next_tel][1]))
-            self.assertFalse(np.array_equal(all_tel_res[tel][2], all_tel_res[next_tel][2]))
+            npt.assert_array_equal(all_tel_res[tel][0], all_tel_res[next_tel][0])
+            npt.assert_array_equal(all_tel_res[tel][1], all_tel_res[next_tel][1])
+            npt.assert_array_equal(all_tel_res[tel][2], all_tel_res[next_tel][2])
 
     def test_global_single_temp_apec_view(self):
         """Tests the view method of the Spectrum class after fitting several versions of the
