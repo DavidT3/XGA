@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 3:53 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 5:20 PM. Copyright (c) The Contributors.
 
 import contextlib
 import gc
@@ -344,7 +344,10 @@ class BaseSource:
             warn_msg += "; ".join(["{t}: {o}".format(t=t, o=", ".join(["{o}({i})".format(o=o, i=", ".join(i))
                                                                        for o, i in removed_obs[t].items()]))
                                    for t in removed_obs])
-            warn(warn_msg, stacklevel=2)
+            if not self._samp_member:
+                warn(warn_msg, stacklevel=2)
+            else:
+                self._supp_warn.append(warn_msg)
 
         # Assign the new, potentially cut down, dictionaries to their original names - this is separated from the
         #  checking logic above so that we can raise a warning by comparing obs and new_prods before obs
