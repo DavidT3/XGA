@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:22 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 5/22/26, 9:39 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1827,12 +1827,12 @@ class Spectrum(BaseProduct):
         # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
         if energy:
             rel_y_label = "Counts s$^{-1}$ keV$^{-1}$"
-            rel_y_label = "Normalised" + rel_y_label if show_model_fits else rel_y_label
+            rel_y_label = "Normalised " + rel_y_label if show_model_fits else rel_y_label
 
             rel_x_label = "Energy [keV]"
         else:
             rel_y_label = "Counts s$^{-1}$ Channel$^{-1}$"
-            rel_y_label = "Normalised" + rel_y_label if show_model_fits else rel_y_label
+            rel_y_label = "Normalised " + rel_y_label if show_model_fits else rel_y_label
 
             rel_x_label = "Channel"
 
