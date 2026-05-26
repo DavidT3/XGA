@@ -1,5 +1,5 @@
-#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 12:59 PM. Copyright (c) The Contributors.
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 26/05/2026, 14:37. Copyright (c) The Contributors
 
 import importlib.resources
 import json
@@ -257,33 +257,31 @@ def _get_xspec_info() -> Tuple[Union[Version, None], List[str], List[str]]:
     return xspec_version, fit_methods, abund_tables
 
 
-def _initialise_xga():
+def _prep_xga_config_file() -> Tuple[dict, str, str]:
     """
-    The internal function that actually performs the XGA configuration and census loading, as well as
-    checking for the availability of backend software.
-    """
-    global _INITIALISED, CONFIG_PATH, CONFIG_FILE, xga_conf, VALID_CONFIG, USABLE, CENSUS, BLACKLIST, \
-        COMBINED_INSTS, SAS_VERSION, SAS_AVAIL, ESASS_VERSION, ESASS_AVAIL, CIAO_VERSION, CIAO_AVAIL, \
-        CALDB_VERSION, CALDB_AVAIL, XSPEC_VERSION, OUTPUT, NUM_CORES, CENSUS_FILES, BLACKLIST_FILES, \
-        SASERROR_LIST, SASWARNING_LIST, XSPEC_FIT_METHOD, ABUND_TABLES
+    This function prepares the XGA configuration file, either generating it for the first time (in the
+    default location or a user-specified directory), updating it if it already exists and was set up for a
+    previous version of XGA.
 
+    No global constant variables are set in this function, so the current state of the configuration
+    dictionary, the configuration directory path, and the full path to the current configuration file
+    are returned, so that _initialise_xga function can set them up as global constants.
+
+    :return: Local variables containing the current configuration dictionary, the current configuration
+        path, and the current full path to the configuration file.
+    :rtype: Tuple[dict, str, str]
+    """
+    # ------------------ Preparing for config file reading/generation -------------------
     if 'XGA_CONFIG_DIR' in os.environ:
-        CONFIG_PATH = os.path.abspath(os.environ['XGA_CONFIG_DIR'])
+        cur_config_path = os.path.abspath(os.environ['XGA_CONFIG_DIR'])
     else:
-        CONFIG_PATH = os.path.join(os.environ.get('XDG_CONFIG_HOME',
+        cur_config_path = os.path.join(os.environ.get('XDG_CONFIG_HOME',
                                                  os.path.join(os.path.expanduser('~'), '.config')), 'xga')
 
-    if not os.path.exists(CONFIG_PATH):
-        os.makedirs(CONFIG_PATH)
+    os.makedirs(cur_config_path, exist_ok=True)
 
-    CONFIG_FILE = os.path.join(CONFIG_PATH, 'xga.cfg')
+    cur_config_file = os.path.join(cur_config_path, 'xga.cfg')
 
-    # These are used for the observation census files
-    CENSUS_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_census.csv'.format(tel)) for tel in ALLOWED_INST}
-    BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format(tel)) for tel in ALLOWED_INST}
-
-    USABLE = {tele: False for tele in TELESCOPES}
-    VALID_CONFIG = {tel: False for tel in TELESCOPES}
     # ------------- Creating/checking the entries in the configuration file -------------
     # This chunk of utils will be dedicated to making sure that the configuration file has been created (by default with
     #  sections for every telescope that XGA supports), or that if it already exists it contains valid entries.
@@ -293,7 +291,7 @@ def _initialise_xga():
 
     # In this case we find that the configuration file does not exist, and we set it up using the default sections and
     #  configurations that were set up toward the top of this file
-    if not os.path.exists(CONFIG_FILE):
+    if not os.path.exists(cur_config_file):
         # Define a configuration object
         xga_default = ConfigParser()
         # This adds the overall XGA setup section - controls global things like where XGA generated files are stored, and
@@ -310,17 +308,17 @@ def _initialise_xga():
             xga_default[cur_sec_name] = tele_conf_sects[tel]
 
         # The default configuration file is now written to the path that we expect to find the config file at
-        with open(CONFIG_FILE, 'w') as new_cfg:
+        with open(cur_config_file, 'w') as new_cfg:
             xga_default.write(new_cfg)
 
         # First time run triggers this message - it used to be an error, and so XGA wouldn't advance beyond this point
         #  with a new configuration file, but we want people to be able to use the product classes without configuring
-        warn("This is the first time you've used XGA; to use most functionality you will need to configure {} to match "
-             "your setup, though you can use product classes regardless.".format(CONFIG_FILE), stacklevel=2)
+        warn(f"This is the first time you've used XGA; to use most functionality you will need to configure "
+             f"{cur_config_file} to match your setup, though you can use product classes regardless.", stacklevel=2)
 
-    xga_conf = ConfigParser()
+    cur_xga_conf = ConfigParser()
     # It would be nice to do configparser interpolation, but it wouldn't handle the lists of energy values
-    xga_conf.read(CONFIG_FILE)
+    cur_xga_conf.read(cur_config_file)
 
     # If the current section name exists in xga_conf then all is well, there hasn't been an update to XGA which added
     #  a new telescope installed - however if a section is missing then we need to add it. This is slightly inelegant
@@ -331,20 +329,42 @@ def _initialise_xga():
     altered = False
     for tel in TELESCOPES:
         cur_sec_name = "{}_FILES".format(tel.upper())
-        if cur_sec_name not in xga_conf:
+        if cur_sec_name not in cur_xga_conf:
             # If there isn't already a files section for one of the telescopes now supported by XGA, then we add it to
             #  the existing configuration file
-            xga_conf.add_section(cur_sec_name)
-            xga_conf[cur_sec_name] = tele_conf_sects[tel]
+            cur_xga_conf.add_section(cur_sec_name)
+            cur_xga_conf[cur_sec_name] = tele_conf_sects[tel]
             altered = True
     # If we altered the existing configuration file, then we need to save the altered configuration to disk
     if altered:
         with open(CONFIG_FILE, 'w') as update_cfg:
-            xga_conf.write(update_cfg)
+            cur_xga_conf.write(update_cfg)
 
     # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
     # Addressing works just the same
-    xga_conf = {str(sect): dict(xga_conf[str(sect)]) for sect in xga_conf}
+    cur_xga_conf = {str(sect): dict(cur_xga_conf[str(sect)]) for sect in cur_xga_conf}
+
+    return cur_xga_conf, cur_config_path, cur_config_file
+
+
+def _initialise_xga():
+    """
+    The internal function that actually performs the XGA configuration and census loading, as well as
+    checking for the availability of backend software.
+    """
+    global _INITIALISED, CONFIG_PATH, CONFIG_FILE, xga_conf, VALID_CONFIG, USABLE, CENSUS, BLACKLIST, \
+        COMBINED_INSTS, SAS_VERSION, SAS_AVAIL, ESASS_VERSION, ESASS_AVAIL, CIAO_VERSION, CIAO_AVAIL, \
+        CALDB_VERSION, CALDB_AVAIL, XSPEC_VERSION, OUTPUT, NUM_CORES, CENSUS_FILES, BLACKLIST_FILES, \
+        SASERROR_LIST, SASWARNING_LIST, XSPEC_FIT_METHOD, ABUND_TABLES
+
+    xga_conf, CONFIG_PATH, CONFIG_FILE = _prep_xga_config_file()
+
+    # These are used for the observation census files
+    CENSUS_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_census.csv'.format(tel)) for tel in ALLOWED_INST}
+    BLACKLIST_FILES = {tel: os.path.join(CONFIG_PATH, tel, '{}_blacklist.csv'.format(tel)) for tel in ALLOWED_INST}
+
+    USABLE = {tele: False for tele in TELESCOPES}
+    VALID_CONFIG = {tel: False for tel in TELESCOPES}
 
     # ------------- Final setup of important constants from the configuration file -------------
     # We make sure to create the absolute output path from what was specified in the configuration file

@@ -1,7 +1,15 @@
-#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 11:51 AM. Copyright (c) The Contributors.
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 26/05/2026, 14:37. Copyright (c) The Contributors
 from . import _version
 __version__ = _version.get_versions()['version']
+
+# This function is what generates brand new XGA configuration files (and updates old-style existing
+#  files, but that isn't relevant here) - we import and run it here so that the first time someone
+#  runs XGA, the configuration file is set up in the default location.
+# This doesn't undermine the lazy-loading implemented in the __getattr__ function below, as this
+#  function doesn't set any global constants, just makes sure the file exists.
+from .utils import _prep_xga_config_file
+_prep_xga_config_file()
 
 def __getattr__(name):
     """
