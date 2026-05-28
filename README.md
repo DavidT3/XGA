@@ -137,7 +137,7 @@ If you encounter a bug, or would like to make a feature request, please use the 
 [issues](https://github.com/DavidT3/XGA/issues) page, it really helps to keep track of everything.
 
 However, if you have further questions, or just want to make doubly sure I notice the issue, feel free to send
-me an email at turne540@msu.edu
+me an email at djturner@umbc.edu
 
 
 
