@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 26/05/2026, 14:37. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 28/05/2026, 08:55. Copyright (c) The Contributors
 
 import importlib.resources
 import json
@@ -245,7 +245,7 @@ def _get_xspec_info() -> Tuple[Union[Version, None], List[str], List[str]]:
     else:
         try:
             # null_script.xcm does absolutely nothing, it's just a way to get the version out
-            null_path = importlib.resources.files(__name__) / "xspec_scripts/null_script.xcm"
+            null_path = importlib.resources.files(__package__) / "xspec_scripts/null_script.xcm"
             xspec_out, xspec_err = Popen("xspec - {}".format(null_path), stdout=PIPE, stderr=PIPE,
                                          shell=True).communicate()
             # Got to parse the stdout to get the XSPEC version
@@ -337,7 +337,7 @@ def _prep_xga_config_file() -> Tuple[dict, str, str]:
             altered = True
     # If we altered the existing configuration file, then we need to save the altered configuration to disk
     if altered:
-        with open(CONFIG_FILE, 'w') as update_cfg:
+        with open(cur_config_file, 'w') as update_cfg:
             cur_xga_conf.write(update_cfg)
 
     # As it turns out, the ConfigParser class is a pain to work with, so we're converting to a dict here
@@ -900,26 +900,26 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
 #  reading the information in on demand would be overkill for this
 
 # Here we read in files that list the errors and warnings in SAS
-errors = pd.read_csv(importlib.resources.files(__name__) / "files/sas_errors.csv", header="infer")
-warnings = pd.read_csv(importlib.resources.files(__name__) / "files/sas_warnings.csv", header="infer")
+errors = pd.read_csv(importlib.resources.files(__package__) / "files/sas_errors.csv", header="infer")
+warnings = pd.read_csv(importlib.resources.files(__package__) / "files/sas_warnings.csv", header="infer")
 # Just the names of the errors in two handy constants
 SASERROR_LIST = errors["ErrName"].values
 SASWARNING_LIST = warnings["WarnName"].values
 
 # XSPEC file extraction (and base fit) scripts
-XGA_EXTRACT = importlib.resources.files(__name__) / "xspec_scripts/xga_extract.tcl"
-BASE_XSPEC_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/general_xspec_fit.xcm"
-COUNTRATE_CONV_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/cr_conv_calc.xcm"
-CROSS_ARF_XSPEC_SCRIPT = importlib.resources.files(__name__) / "xspec_scripts/crossarf_xspec_fit.xcm"
+XGA_EXTRACT = importlib.resources.files(__package__) / "xspec_scripts/xga_extract.tcl"
+BASE_XSPEC_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/general_xspec_fit.xcm"
+COUNTRATE_CONV_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/cr_conv_calc.xcm"
+CROSS_ARF_XSPEC_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/crossarf_xspec_fit.xcm"
 
 # Useful jsons of all XSPEC models, their required parameters, and those parameter's units
-with open(importlib.resources.files(__name__) / "files/xspec_model_pars.json5", 'r') as filey:
+with open(importlib.resources.files(__package__) / "files/xspec_model_pars.json5", 'r') as filey:
     MODEL_PARS = json.load(filey)
 
-with open(importlib.resources.files(__name__) / "files/xspec_model_units.json5", 'r') as filey:
+with open(importlib.resources.files(__package__) / "files/xspec_model_units.json5", 'r') as filey:
     MODEL_UNITS = json.load(filey)
 
-with open(importlib.resources.files(__name__) / "files/mission_event_column_name_map.json", 'r') as filey:
+with open(importlib.resources.files(__package__) / "files/mission_event_column_name_map.json", 'r') as filey:
     MISSION_COL_DB = json.load(filey)
 # --------------------------------------------------------------------------
 
