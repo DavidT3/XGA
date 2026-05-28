@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 28/05/2026, 08:55. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 28/05/2026, 12:05. Copyright (c) The Contributors
 
 import importlib.resources
 import json
@@ -733,8 +733,14 @@ def build_observation_census(tel: str, num_cores: int) -> Tuple[pd.DataFrame, pd
     new_obs_census = []
     with os.scandir(rel_root_dir) as entries:
         for entry in entries:
-            if entry.is_dir() and obs_id_test(tel, entry.name) and entry.name not in existing_obs:
-                new_obs_census.append(entry.name)
+            try:
+                if entry.is_dir() and obs_id_test(tel, entry.name) and entry.name not in existing_obs:
+                    new_obs_census.append(entry.name)
+            except OSError:
+                # Add an OSError catch as some of these checks can raise errors if there is a
+                #  broken symlink for instance, or a symlink that somehow refers to itself
+                #  (e.g. OSError: [Errno 40] Too many levels of symbolic links)
+                pass
 
     if len(new_obs_census) != 0:
         evt_path_keys = [e_key for e_key in tele_conf if 'evts' in e_key and 'clean' in e_key]
