@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 02/06/2026, 04:29. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 02/06/2026, 04:30. Copyright (c) The Contributors
 
 import contextlib
 import gc
@@ -2040,7 +2040,7 @@ class BaseSource:
                     #  were at the time of the original fit - if they are not, then we are stopping the load process
                     #  here and moving onto the next entry
                     if oi_dict != self.instruments[tel]:
-                        break
+                        continue
 
                     # Load in the results table
                     fit_data = FITS(fit_file)
