@@ -1,5 +1,5 @@
-#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 5:20 PM. Copyright (c) The Contributors.
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 02/06/2026, 04:27. Copyright (c) The Contributors
 
 import contextlib
 import gc
@@ -1914,8 +1914,23 @@ class BaseSource:
                     # If we can't fetch the spectrum, we catch the error, and move on to the next annular spectrum
                     #  result to be loaded in.
                     except NoProductAvailableError:
-                        break
+                        continue
 
+                    uniq_cur_fit_ois = fit_ann_inv_ent['obs_ids'].unique()
+                    uniq_cur_fit_insts = fit_ann_inv_ent['insts'].unique()
+
+                    # Catching an issue that shouldn't ever happen (I don't think) - though if we make
+                    #  XGA more flexible in the future different annuli could (and probably should in some
+                    #  cases) have different ObsIDs/instruments associated.
+                    if not len(uniq_cur_fit_ois) == 1 or not len(uniq_cur_fit_insts) == 1:
+                        raise XGADeveloperError("XSPEC fit results for different annuli of the same annular "
+                                                "spectrum have different initial ObsIDs and/or instruments.")
+
+                    # This could be set to False during the loop, and will determine whether we assign
+                    #  the results we have gathered to the AnnularSpectra - if this becomes False at any
+                    #  point it means that something has gone wrong, and we can't find, or it would be invalid
+                    #  to assign, some results to a particular annulus. We don't currently allow missing
+                    #  fit data, it's all or nothing in terms of the annuli.
                     assign_res = True
                     for row_ind, row in fit_ann_inv_ent.iterrows():
                         if not assign_res:
