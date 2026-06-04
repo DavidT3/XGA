@@ -62,7 +62,7 @@ pip install pyabel==0.9
 ```
 
 > [!IMPORTANT]
-> For Python 3.10 and earlier, the optional dependency [`contextlib-chdir`](https://pypi.org/project/contextlib-chdir/) must be installed.
+> For Python 3.10 and earlier, the optional dependency [contextlib-chdir](https://pypi.org/project/contextlib-chdir/) must be installed.
 
 ## Required Dependencies
 XGA depends on two non-Python pieces of software:
