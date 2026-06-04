@@ -1,13 +1,13 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 04:56. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 05:16. Copyright (c) The Contributors
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
-    from contextlib import chdir as contextlib_chdir
+    from contextlib import chdir as ctxlib_chdir
 except ImportError:
     # Fallback for Python 3.10 and below
     try:
-        from contextlib2 import chdir as contextlib_chdir
+        from contextlib_chdir import chdir as ctxlib_chdir
     except ImportError as err:
         raise ImportError("The optional dependency 'contextlib2' is required to run XGA on this version of Python.") \
             from err
@@ -1505,7 +1505,7 @@ class BaseSource:
 
             for obs in self.obs_ids[tel]:
                 if os.path.exists(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
-                    with contextlib_chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
+                    with ctxlib_chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
                         cur_d = os.getcwd() + '/'
                         # Loads in the inventory file for this ObsID
                         inven = pd.read_csv("inventory.csv", dtype=str)
@@ -1580,7 +1580,7 @@ class BaseSource:
             if load_profiles:
                 # Here we will load in existing xga profile objects
                 if os.path.exists(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name)):
-                    with contextlib_chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name)):
+                    with ctxlib_chdir(OUTPUT + "{t}/profiles/{n}".format(t=tel, n=self.name)):
                         saved_profs = [pf for pf in os.listdir('.') if '.xga' in pf and 'profile' in pf and self.name in pf]
                         for pf in saved_profs:
                             try:
@@ -1602,7 +1602,7 @@ class BaseSource:
 
             # Here we load in any combined images and exposure maps that may have been generated
             if os.path.exists(OUTPUT + '{t}/combined'.format(t=tel)):
-                with contextlib_chdir(OUTPUT + '{t}/combined'.format(t=tel)):
+                with ctxlib_chdir(OUTPUT + '{t}/combined'.format(t=tel)):
                     cur_d = os.getcwd() + '/'
                     # This creates a set of observation-instrument strings that describe the current combinations associated
                     #  with this source, for testing against to make sure we're loading in combined images/expmaps that
