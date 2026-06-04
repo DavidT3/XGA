@@ -61,6 +61,9 @@ conda activate <YOUR ENVIRONMENT NAME GOES HERE>
 pip install pyabel==0.9
 ```
 
+> [!IMPORTANT]
+> For Python 3.10 and earlier, the optional dependency [`contextlib2`](https://pypi.org/project/contextlib2/) must be installed.
+
 ## Required Dependencies
 XGA depends on two non-Python pieces of software:
 * XMM's Science Analysis System (SAS) - Version 17.0.0, but other versions should be largely compatible with the
