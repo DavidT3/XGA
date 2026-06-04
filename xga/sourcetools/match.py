@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 07:08. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 09:27. Copyright (c) The Contributors
 from __future__ import annotations
 
 import gc
@@ -773,7 +773,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
                                                            t='/'.join(telescope)))
     # If all the dataframes in the results list are length zero, then none of the coordinates has a
     #  valid ObsID
-    elif all([sum([len(r[tel]) for tel in r]) == 0 for r in results]):
+    elif all([sum([len(r[tel]) for tel in r if r[tel]] is not None) == 0 for r in results]):
         raise NoMatchFoundError("No coordinate pairs fall on any {t} observations.".format(t='/'.join(telescope)))
 
     return results
