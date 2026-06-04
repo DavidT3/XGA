@@ -51,7 +51,7 @@ We also provide a Conda lock file in the conda_envs directory (see `conda-lock G
     pip install pyabel==0.9
 
 .. important::
-    For Python 3.10 and earlier, the optional dependency [`contextlib2`](https://pypi.org/project/contextlib2/) must be installed.
+    For Python 3.10 and earlier, the optional dependency [`contextlib-chdir`](https://pypi.org/project/contextlib-chdir/) must be installed.
 
 Required Dependencies
 ---------------------
