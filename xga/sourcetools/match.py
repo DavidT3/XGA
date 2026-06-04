@@ -1,5 +1,5 @@
-#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/21/26, 1:13 PM. Copyright (c) The Contributors.
+#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 07:08. Copyright (c) The Contributors
 from __future__ import annotations
 
 import gc
@@ -23,6 +23,7 @@ from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableEr
 
 if TYPE_CHECKING:
     from ..products.phot import ExpMap
+
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
     """
