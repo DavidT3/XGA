@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 12:54. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 11/06/2026, 09:08. Copyright (c) The Contributors
 from __future__ import annotations
 
 import gc
@@ -61,29 +61,24 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
         were relevant but have ALL instruments blacklisted).
     :rtype: Tuple[float, float, DataFrame, DataFrame]
     """
-    # Making a copy of the census because I add a distance-from-coords column - don't want to do that for the
-    #  original census especially when this is being multi-threaded
-    local_census = CENSUS[telescope].copy()
-    local_blacklist = BLACKLIST[telescope].copy()
     # TODO would rather use the _dist_from_source but one of the inputs is a region, which doesn't work here - maybe
     #  I'll generalise that function further at some point
-    hav_sep = 2 * np.arcsin(np.sqrt((np.sin(((local_census["DEC_PNT"]*(np.pi / 180))-(dec*(np.pi / 180))) / 2) ** 2)
-                                    + np.cos((dec * (np.pi / 180))) * np.cos(local_census["DEC_PNT"] * (np.pi / 180))
-                                    * np.sin(((local_census["RA_PNT"]*(np.pi / 180)) - (ra*(np.pi / 180))) / 2) ** 2))
+    hav_sep = 2 * np.arcsin(np.sqrt((np.sin(((CENSUS[telescope]["DEC_PNT"]*(np.pi / 180))-(dec*(np.pi / 180))) / 2) ** 2)
+                                    + np.cos((dec * (np.pi / 180))) * np.cos(CENSUS[telescope]["DEC_PNT"] * (np.pi / 180))
+                                    * np.sin(((CENSUS[telescope]["RA_PNT"]*(np.pi / 180)) - (ra*(np.pi / 180))) / 2) ** 2))
     # Converting back to degrees from radians
     hav_sep /= (np.pi / 180)
-    # Storing the separations in the local copy of the census
-    local_census["dist"] = hav_sep
 
     # Select any ObsIDs within (or at) the search radius input to the function
     try:
-        matches = local_census[local_census["dist"] <= search_rad]
+        matches = CENSUS[telescope][hav_sep <= search_rad]
     except ValueError:
         # Temp handling for samples
-        matches = local_census[local_census["dist"] <= search_rad[0]]
+        matches = CENSUS[telescope][hav_sep <= search_rad[0]]
+
     # Locate any ObsIDs that are in the blacklist, then test to see whether ALL the instruments are to be excluded
-    in_bl = local_blacklist[
-        local_blacklist['ObsID'].isin(matches[matches["ObsID"].isin(local_blacklist["ObsID"])]['ObsID'])]
+    in_bl = BLACKLIST[telescope][
+        BLACKLIST[telescope]['ObsID'].isin(matches[matches["ObsID"].isin(BLACKLIST[telescope]["ObsID"])]['ObsID'])]
     # This will find relevant blacklist entries that have specifically ALL instruments excluded. In that case
     #  the ObsID shouldn't be returned - firstly we locate the 'exclude_{INST NAME}' columns for this telescope's
     #  blacklist
@@ -94,8 +89,6 @@ def _separation_search(ra: float, dec: float, telescope: str, search_rad: float)
     #  least some usable data.
     matches = matches[~matches["ObsID"].isin(all_excl["ObsID"])]
 
-    del local_census
-    del local_blacklist
     return ra, dec, matches, all_excl
 
 
