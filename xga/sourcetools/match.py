@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/11/26, 3:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/11/26, 7:12 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -24,14 +24,18 @@ from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableEr
 # Global variables for worker processes to store pre-calculated census coordinates
 #  This ensures the O(N log N) indexing cost is paid only once per worker, not once per chunk.
 WORKER_TEL_COORDS = {}
+WORKER_ID = None
 
 
-def _worker_init(census_coords: dict):
+def _worker_init(census_coords: dict, worker_id_queue: 'multiprocessing.Queue' = None):
     """
-    Initializer for worker processes to store pre-calculated census coordinates in global scope.
+    Initializer for worker processes to store pre-calculated census coordinates and a worker ID in global scope.
     """
     global WORKER_TEL_COORDS
+    global WORKER_ID
     WORKER_TEL_COORDS = census_coords
+    if worker_id_queue is not None:
+        WORKER_ID = worker_id_queue.get()
 
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
@@ -589,12 +593,19 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
         # Prepare arguments for the map function
         map_args = [(ra_chunks[i], dec_chunks[i], idx_chunks[i], telescope, distance) for i in range(num_chunks)]
 
+        # Queue to hand out worker IDs for progress bar positioning
+        import multiprocessing
+        m = multiprocessing.Manager()
+        id_queue = m.Queue()
+        for i in range(num_cores):
+             id_queue.put(i)
+
         # We set up the pool with an initializer to store the census coordinates in worker global scope
         sparse_results = {tel: {} for tel in telescope}
         sparse_bl = {tel: {} for tel in telescope}
         with tqdm(desc="Searching for telescope observations near source coordinates",
                   total=num_chunks) as onwards, Pool(num_cores, initializer=_worker_init,
-                                                     initargs=(pre_calc_census,)) as pool:
+                                                     initargs=(pre_calc_census, id_queue)) as pool:
             # imap to process chunks and preserve order while supporting a progress bar
             for chunk_res, chunk_bl in pool.imap(_vectorized_separation_match_wrapper, map_args):
                 # Merge the sparse results from each chunk
@@ -656,6 +667,141 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     return results, bl_results
 
 
+def _vectorized_on_detector_match(src_ra: np.ndarray, src_dec: np.ndarray, src_indices: np.ndarray,
+                                 telescope: List[str], init_res: List[dict],
+                                 obs_ids: dict) -> dict:
+    """
+    Internal function that performs vectorized detector matching for a set of sources.
+    Used by both the serial and parallel paths of on_detector_match.
+
+    :param np.ndarray src_ra: RA coordinate(s) of the source(s), in degrees.
+    :param np.ndarray src_dec: Dec coordinate(s) of the source(s), in degrees.
+    :param np.ndarray src_indices: Global indices of the sources being processed.
+    :param List[str] telescope: List of telescopes to search.
+    :param List[dict] init_res: The initial separation match results for these sources.
+    :param dict obs_ids: The ObsIDs for each telescope that need checking.
+    :return: A sparse dictionary of matches. Format: {global_index: {telescope: np.ndarray}}
+    :rtype: dict
+    """
+    # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
+    #  that allows for a list of ObsIDs to be passed rather than coordinates
+    from ..sources import NullSource
+
+    # Declaring the NullSource with all the ObsIDs that we need for this chunk
+    obs_src = NullSource(obs_ids, list(obs_ids.keys()), True)
+
+    # We run exposure map generation for the ObsIDs in this chunk.
+    #  We use a unified multi-telescope function for this.
+    from ..generate.multitelescope.phot import all_telescope_expmaps
+    # Note: This might be redundant if expmaps were already generated, but the function handles that.
+    # We use num_cores=1 inside the worker to avoid nested pools
+    all_telescope_expmaps(obs_src, num_cores=1, telescope=telescope)
+
+    # Sparse results: {global_index: {telescope: matching_obs_array}}
+    matches = {}
+
+    # We need to know which sources in this chunk are near which ObsIDs for each telescope
+    # Format: {telescope: {obs_id: [chunk_indices]}}
+    tel_obs_to_srcs = {t: {} for t in obs_src.telescopes}
+    total_checks = 0
+    for i, s_idx in enumerate(src_indices):
+        for tel in obs_src.telescopes:
+            if tel in init_res[i]:
+                nearby_obs = init_res[i][tel]['ObsID'].values
+                for o in nearby_obs:
+                    if o in obs_src.obs_ids[tel]:
+                        if o not in tel_obs_to_srcs[tel]:
+                            tel_obs_to_srcs[tel][o] = []
+                            total_checks += 1
+                        tel_obs_to_srcs[tel][o].append(i)
+
+    # Sub-progress bar for the worker
+    global WORKER_ID
+    with tqdm(desc='Worker {}: Ensuring coordinates fall on detector'.format(WORKER_ID) if WORKER_ID is not None
+              else 'Ensuring coordinates fall on detector', total=total_checks,
+              position=WORKER_ID + 1 if WORKER_ID is not None else 0, leave=False) as onwards:
+        # We group the work by telescope and then by ObsID to minimize file I/O
+        for tel in obs_src.telescopes:
+            # Now process each ObsID exactly once
+            for o, chunk_indices in tel_obs_to_srcs[tel].items():
+                # Get exposure maps for this ObsID
+                e_maps = obs_src.get_products('expmap', obs_id=o, telescope=tel)
+                if not e_maps:
+                    onwards.update(1)
+                    continue
+
+                # Coordinates to check for this ObsID in this chunk
+                ra_to_check = src_ra[chunk_indices]
+                dec_to_check = src_dec[chunk_indices]
+                coords = Quantity(np.stack([ra_to_check, dec_to_check], axis=1), 'deg')
+
+                # We check if any of the instruments have non-zero exposure for these coordinates
+                # We use a set to keep track of which sources in this chunk fall on the detector
+                detected_indices = set()
+                for ex in e_maps:
+                    # We convert to pixel coordinates, but ignore any that fall outside the image
+                    # This avoids the ValueError mentioned by the user
+                    # We use atleast_2d to ensure that we can index it consistently even for a single source
+                    pix_coords = np.atleast_2d(ex.coord_conv(coords, 'pix', ignore_bad_pix_coord=True).value)
+
+                    # We manually check for valid pixel coordinates
+                    # pix_coords is (N, 2) array where [:, 0] is x and [:, 1] is y
+                    x = pix_coords[:, 0]
+                    y = pix_coords[:, 1]
+                    valid_mask = (x >= 0) & (y >= 0) & (x < ex.shape[1]) & (y < ex.shape[0])
+
+                    # Only check non-zero exposure for valid coordinates
+                    if np.any(valid_mask):
+                        valid_indices = np.where(valid_mask)[0]
+                        valid_x = x[valid_indices].astype(int)
+                        valid_y = y[valid_indices].astype(int)
+
+                        # Query the exposure map data directly
+                        ex_times = ex.data[valid_y, valid_x]
+                        on_det = np.where(ex_times != 0)[0]
+                        for idx in on_det:
+                            detected_indices.add(chunk_indices[valid_indices[idx]])
+                    ex.unload()
+
+                # Record the detections
+                for idx in detected_indices:
+                    global_idx = src_indices[idx]
+                    if global_idx not in matches:
+                        matches[global_idx] = {t: None for t in telescope}
+
+                    # Check if tel key exists for this telescope
+                    if tel not in matches[global_idx]:
+                        matches[global_idx][tel] = None
+
+                    if matches[global_idx][tel] is None:
+                        matches[global_idx][tel] = [o]
+                    else:
+                        matches[global_idx][tel].append(o)
+                onwards.update(1)
+
+    # Convert the match lists to numpy arrays
+    for g_idx in matches:
+        for t in matches[g_idx]:
+            if matches[g_idx][t] is not None:
+                matches[g_idx][t] = np.array(matches[g_idx][t])
+
+    # We also have to handle the case where a source had NO detections for a telescope
+    # but the telescope was requested. This ensures consistency.
+    for g_idx in matches:
+         for t in telescope:
+              if t not in matches[g_idx]:
+                   matches[g_idx][t] = None
+
+    return matches
+
+
+def _vectorized_on_detector_match_wrapper(args):
+    """
+    Wrapper for _vectorized_on_detector_match to be used with multiprocessing.imap.
+    """
+    return _vectorized_on_detector_match(*args)
+
+
 def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
                       distance: Union[Quantity, dict] = None, telescope: Union[str, List[str]] = None,
                       num_cores: int = NUM_CORES) -> Union[dict, np.ndarray]:
@@ -698,119 +844,126 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     else:
         prog_dis = True
 
+    # This function checks the choices of telescopes, raising errors if there are problems, and returning a list of
+    #  validated telescope names (even if there is only one).
+    telescope = check_telescope_choices(telescope)
+
     # This is the initial call to the simple_xmm_match function. This gives us knowledge of which coordinates are
     #  worth checking further, and which ObsIDs should be checked for those coordinates.
     init_res, init_bl = separation_match(src_ra, src_dec, distance, telescope, num_cores=num_cores)
 
-    # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
-    #  that allows for a list of ObsIDs to be passed rather than coordinates
-    from ..sources import NullSource
-
-    # This function constructs a list of unique ObsIDs that we have determined are of interest to us using the simple
-    #  match function, then sets up a NullSource and generate exposure maps that will be used to figure out if the
-    #  sources are actually on a pointing. Also returns cut down lists of RA, Decs etc. that are the sources
-    #  which the separation match found to be near some telescope's data
-    init_res, obs_ids, all_repr, rel_res, rel_ra, rel_dec, obs_id_srcs = _process_init_match(src_ra, src_dec, init_res)
-
-    # Declaring the NullSource with all the ObsIDs that; a) we need to use to check whether coordinates fall on
-    #  a detector, and b) don't already have exposure maps generated
-    obs_src = NullSource(obs_ids, list(obs_ids.keys()), True)
-
-    # We run exposure map generation for the ObsIDs we suspect to be associated with our positions.
-    #  We use a unified multi-telescope function for this.
-    from ..generate.multitelescope.phot import all_telescope_expmaps
-    all_telescope_expmaps(obs_src, num_cores=num_cores, telescope=telescope)
-
-    # # This is all the same deal as in separation_match, but calls the _on_obs_id internal function
-    # The dictionary stores match dataframe information, with the keys comprised of the index
-    e_matches = {}
-
-    # If we only want to use one core, we don't set up a pool as it could be that a pool is open where
-    #  this function is being called from
-    if num_cores == 1:
-        for tel in obs_src.telescopes:
-            # Set up the tqdm instance in a with environment
-            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(PRETTY_TELESCOPE_NAMES[tel]),
-                      total=len(rel_ra[tel]), disable=prog_dis) as onwards:
-                # Simple enough, just iterates through the RAs and Decs calling the search function and stores the
-                #  results in the dictionary
-                for ra_ind, r in enumerate(rel_ra[tel]):
-                    d = rel_dec[tel][ra_ind]
-                    s_idx = all_repr[ra_ind] # all_repr is now a list of indices
-
-                    # The top layer of the e_matches is the index,
-                    #  and then a layer down from that are the telescope names
-                    if s_idx not in e_matches:
-                        e_matches[s_idx] = {}
-
-                    # We get the relevant ObsIDs for the current RA-Dec position
-                    oi = rel_res[tel][ra_ind]['ObsID'].values
-                    # Then we can use the new NullSource class to retrieve the exposure maps relevant to those
-                    #  observations - any that aren't valid observations (i.e. are fully blacklisted) will have
-                    #  already been excluded during the declaration of the source, so we do check if the relevant
-                    #  ObsIDs are present in the source structure first
-                    e_maps = [ex for o in oi if o in obs_src.obs_ids[tel]
-                              for ex in obs_src.get_products('expmap', obs_id=o, telescope=tel)]
-
-                    # Running the search for the position being on the exposure maps (it doesn't matter that we've
-                    #  possibly retrieved exposure maps in multiple energy bands for the same ObsID-Inst, the
-                    #  _on_obs_id method will account for that
-                    search_results = _on_obs_id(r, d, e_maps)
-                    e_matches[s_idx][tel] = search_results[2]
-                    onwards.update(1)
+    # Normalise init_res to always be a list for consistent processing
+    if isinstance(init_res, dict):
+        init_res_list = [init_res]
     else:
-        for tel in obs_src.telescopes:
-            # This is all equivalent to what's above, but with function calls added to the multiprocessing pool
-            with tqdm(desc='Ensuring coordinates fall on a {} detector'.format(PRETTY_TELESCOPE_NAMES[tel]),
-                      total=len(rel_ra[tel])) as onwards, Pool(num_cores) as pool:
-                def match_loop_callback(match_info):
-                    nonlocal onwards  # The progress bar will need updating
-                    nonlocal e_matches
-                    nonlocal tel
+        init_res_list = init_res
 
-                    # match_info[3] is the s_idx
-                    if match_info[3] not in e_matches:
-                         e_matches[match_info[3]] = {}
-                    e_matches[match_info[3]][tel] = match_info[2]
+    # Use the process function to get unique ObsIDs across the entire sample
+    # This identifies what products need to be generated/checked
+    _, full_obs_ids, all_repr, _, _, _, _ = _process_init_match(src_ra, src_dec, init_res)
+
+    if num_cores == 1:
+        with tqdm(desc='Ensuring coordinates fall on detector', total=1, disable=prog_dis) as onwards:
+            # We filter init_res_list to only include sources that actually have matches to check
+            # This avoids initializing NullSource and generating expmaps if not needed
+            relevant_indices = [i for i, r in enumerate(init_res_list) if any(len(r[t]) > 0 for t in telescope)]
+            if not relevant_indices:
+                 sparse_matches = {}
+            else:
+                 # Only pass the coordinates and results for sources that actually have separation matches
+                 sub_ra = src_ra[relevant_indices]
+                 sub_dec = src_dec[relevant_indices]
+                 sub_res = [init_res_list[i] for i in relevant_indices]
+                 sub_obs_ids = {tel: list(set([o for r in sub_res if tel in r for o in r[tel]['ObsID'].values]))
+                                for tel in telescope}
+
+                 sparse_matches = _vectorized_on_detector_match(sub_ra, sub_dec, np.array(relevant_indices),
+                                                                telescope, sub_res, sub_obs_ids)
+            onwards.update(1)
+    else:
+        # Determine chunk size - aiming for ~4 chunks per core
+        chunk_size = max(1, len(src_ra) // (num_cores * 4))
+        num_chunks = int(np.ceil(len(src_ra) / chunk_size))
+
+        # Split inputs, results, and indices into chunks
+        ra_chunks = np.array_split(src_ra, num_chunks)
+        dec_chunks = np.array_split(src_dec, num_chunks)
+        idx_chunks = np.array_split(np.arange(len(src_ra)), num_chunks)
+
+        # For init_res, we have to chunk the list manually
+        res_chunks = []
+        for idx in idx_chunks:
+             res_chunks.append([init_res_list[i] for i in idx])
+
+        # We also need to chunk the ObsIDs required for each chunk
+        # Each worker only needs a subset of ObsIDs relevant to its sources
+        obs_id_chunks = []
+        for i, chunk in enumerate(res_chunks):
+            # Only include ObsIDs for sources that have separation matches
+            chunk_indices = idx_chunks[i]
+            # Verify which sources in this chunk actually had separation results
+            # Note: chunk is a subset of init_res_list corresponding to these indices
+            relevant_chunk_obs = {tel: list(set([o for r in chunk if tel in r for o in r[tel]['ObsID'].values]))
+                                  for tel in telescope}
+            obs_id_chunks.append(relevant_chunk_obs)
+
+        # We pre-calculate the census coordinates for each telescope to avoid redundant indexing in workers
+        pre_calc_census = {}
+        for tel in telescope:
+            rel_census = CENSUS[tel].dropna(subset=['RA_PNT', 'DEC_PNT'])
+            if len(rel_census) > 0:
+                pre_calc_census[tel] = SkyCoord(ra=rel_census['RA_PNT'].values, dec=rel_census['DEC_PNT'].values,
+                                                unit='deg')
+
+        # Queue to hand out worker IDs for progress bar positioning
+        import multiprocessing
+        m = multiprocessing.Manager()
+        id_queue = m.Queue()
+        for i in range(num_cores):
+             id_queue.put(i)
+
+        map_args = []
+        for i in range(num_chunks):
+             # Only create a task if there are ObsIDs to check in this chunk
+             if any(len(obs_id_chunks[i][t]) > 0 for t in telescope):
+                  map_args.append((ra_chunks[i], dec_chunks[i], idx_chunks[i], telescope, res_chunks[i], obs_id_chunks[i]))
+
+        sparse_matches = {}
+        if map_args:
+            with tqdm(desc="Ensuring coordinates fall on detector",
+                      total=len(map_args), disable=prog_dis) as onwards, Pool(num_cores, initializer=_worker_init,
+                                                                             initargs=(pre_calc_census, id_queue)) as pool:
+                for chunk_matches in pool.imap(_vectorized_on_detector_match_wrapper, map_args):
+                    sparse_matches.update(chunk_matches)
                     onwards.update(1)
 
-                for ra_ind, r in enumerate(rel_ra[tel]):
-                    d = rel_dec[tel][ra_ind]
-                    s_idx = all_repr[ra_ind] # all_repr is now a list of indices
+    # --- Assembly Pass ---
+    # We assemble the final results list from the sparse dictionary
+    none_dict = {t: None for t in telescope}
+    results = []
+    for i in range(len(src_ra)):
+         if i in sparse_matches:
+              # We need to make sure ALL telescopes are present in the dictionary, even if they are None
+              # This ensures consistency with the expected output format
+              src_match = sparse_matches[i]
+              for t in telescope:
+                   if t not in src_match:
+                        src_match[t] = None
+              results.append(src_match)
+         else:
+              results.append(none_dict)
 
-                    # We need to make sure that there is an empty dictionary for the telescope key names to be
-                    #  written into
-                    if s_idx not in e_matches:
-                        e_matches[s_idx] = {}
-
-                    # We get the relevant ObsIDs for the current RA-Dec position
-                    oi = rel_res[tel][ra_ind]['ObsID'].values
-                    # Then we can use the new NullSource class to retrieve the exposure maps relevant to those
-                    #  observations - any that aren't valid observations (i.e. are fully blacklisted) will have
-                    #  already been excluded during the declaration of the source, so we do check if the relevant
-                    #  ObsIDs are present in the source structure first
-                    e_maps = [ex for o in oi if o in obs_src.obs_ids[tel]
-                              for ex in obs_src.get_products('expmap', obs_id=o, telescope=tel)]
-
-                    # We pass the s_idx so the callback knows where to store the result
-                    pool.apply_async(_on_obs_id, args=(r, d, e_maps, s_idx),
-                                     callback=match_loop_callback)
-
-                pool.close()  # No more tasks can be added to the pool
-                pool.join()  # Joins the pool, the code will only move on once the pool is empty.
-
-    # Changes the order of the results to the original pass in order and stores them in a list
-    # all_repr is now a list of indices (range(len(src_ra)))
-    results = [e_matches.get(i, {t: None for t in obs_src.telescopes}) for i in range(len(src_ra))]
-    del e_matches
-
-    # Result length of one means one coordinate was passed in, so we should pass back out a single dataframe
-    #  rather than a single dataframe in a list
-    if len(results) == 1:
+    # Result length of one means one coordinate was passed in, so we should pass back out a single dictionary
+    #  rather than a single dictionary in a list
+    if len(src_ra) == 1:
         results = results[0]
 
         # This calculates the total number of results across all requested telescopes
-        tot_res = sum([len(results[tel]) for tel in results])
+        # We need to make sure we check if results[tel] is not None
+        tot_res = 0
+        for tel in results:
+             if results[tel] is not None:
+                  tot_res += len(results[tel])
 
         # As in this case there is only one source, we can include more information in our error message telling
         #  the user that there are no matches
@@ -818,10 +971,24 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
             raise NoMatchFoundError("The coordinates ra={r} dec={d} do not fall on any {t} "
                                     "observations.".format(r=round(src_ra[0], 4), d=round(src_dec[0], 4),
                                                            t='/'.join(telescope)))
-    # If all the dataframes in the results list are length zero, then none of the coordinates has a
-    #  valid ObsID
-    elif all([sum([len(r[tel]) for tel in r if r[tel] is not None]) == 0 for r in results]):
-        raise NoMatchFoundError("No coordinate pairs fall on any {t} observations.".format(t='/'.join(telescope)))
+    # If all the entries in the results list are None for all telescopes
+    else:
+        # Check if any source has any detections
+        any_detections = False
+        for r in results:
+            for tel in telescope:
+                if r[tel] is not None and len(r[tel]) > 0:
+                    any_detections = True
+                    break
+            if any_detections:
+                break
+
+        if not any_detections:
+            raise NoMatchFoundError("No coordinate pairs fall on any {t} observations.".format(t='/'.join(telescope)))
+
+    # If it was an array input, return as array
+    if not isinstance(results, dict):
+         results = np.array(results)
 
     return results
 
