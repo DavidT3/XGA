@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:44 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -23,8 +23,17 @@ from ...products import BaseProduct
 
 def mifbuild(sources):
     """
+    This function generates a master index file from the SAS_CCFPATH constituents, which
+    will then be used for cifbuild runs. If a MIF already exists, the creation date
+    will be compared to the current date - if they do not match they will be
+    regenerated.
+
+    We use MIFs to avoid slowdowns in cifbuild caused by repeatedly traversing the
+    SAS_CCFPATH constituents on slower file systems.
 
     :param BaseSource/NullSource/BaseSample sources: A single source object, or a sample of sources.
+    :return: Path to the MIF.
+    :rtype: str
     """
 
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
@@ -74,6 +83,8 @@ def mifbuild(sources):
 
         prod = BaseProduct(final_path, "", "", out, err, mif_cmd, telescope='xmm')
         prod.raise_errors()
+
+    return final_path
 
 
 @sas_call
@@ -166,7 +177,8 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 need_mif = True
 
                 os.makedirs(temp_dir, exist_ok=True)
-                cmds.append(cif_cmd.format(d=temp_dir, od=obs_date, n=temp_name))
+                cmds.append(cif_cmd.format(d=temp_dir, od=obs_date, n=temp_name,
+                                           mif=os.path.join(OUTPUT, 'xmm', 'ccf.mif')))
                 final_paths.append(final_path)
                 extra_info.append({})  # This doesn't need any extra information
 
