@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 28/05/2026, 12:05. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 3:18 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -47,7 +47,7 @@ _LAZY_VARS = {
 _KEEP_PRIVATE_LAZY_VARS = set()
 
 
-def reinitialise_xga(config_dir: str = None):
+def reinitialise_xga(config_dir: str = None, override_output_dir: str = None):
     """
     A function to re-initialise XGA, allowing the user to change the configuration directory
     mid-session, or to pick up changes to the configuration file.
@@ -68,6 +68,13 @@ def reinitialise_xga(config_dir: str = None):
 
     # Reset the initialised flag
     _INITIALISED = False
+
+    # If the user wants to override the output directory specified in the config
+    #  file, then we will set that variable here, so that the config-loading stage
+    #  can check for its existence and avoid overwriting it.
+    if override_output_dir is not None:
+        global OUTPUT
+        OUTPUT = os.path.join(os.path.abspath(override_output_dir), "")
 
 
 def __getattr__(name):
@@ -368,7 +375,10 @@ def _initialise_xga():
 
     # ------------- Final setup of important constants from the configuration file -------------
     # We make sure to create the absolute output path from what was specified in the configuration file
-    OUTPUT = os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]) + "/"
+    #  When reinitializing XGA, users can opt to override the output directory, in which case
+    #  this variable will already be set.
+    if 'OUTPUT' not in globals():
+        OUTPUT = os.path.join(os.path.abspath(xga_conf["XGA_SETUP"]["xga_save_path"]), "")
 
     # The default behaviour for the generation of new configuration files is to set the num_cores entry to 'auto',
     #  though that isn't a given with older configuration files - as such we check and don't assume it will be there.
