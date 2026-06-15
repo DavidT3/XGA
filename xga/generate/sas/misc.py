@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 6:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 6:35 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -37,7 +37,6 @@ def mifbuild(sources):
                                           "calibration files cannot be generated.")
 
     dest_dir = os.path.join(OUTPUT, 'xmm', "")
-    os.makedirs(dest_dir, exist_ok=True)
 
     temp_name = "tempdir_{}".format(randint(0, int(100_000_000)))
     temp_dir = os.path.join(dest_dir, temp_name, "")
@@ -56,6 +55,8 @@ def mifbuild(sources):
     mif_cmd = f"cd {temp_dir}; cifbuild masterindex=yes calindexset={os.path.basename(final_path)}; mv * ../; cd ..; rm -r {temp_dir}"
 
     if gen_mif:
+        os.makedirs(temp_dir, exist_ok=True)
+
         # This chunk is a fix for problems with eSASS (eROSITA package) finding the correct libraries on Apple ARM based
         #  systems, and just creates a new environment variable so it can locate them, if necessary
         sys_env = os.environ.copy()
