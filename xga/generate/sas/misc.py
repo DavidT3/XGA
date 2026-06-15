@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:54 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:58 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -10,7 +10,6 @@ from typing import Union
 
 import numpy as np
 from astropy.io import fits
-from fitsio import read_header
 from tqdm import tqdm
 
 from xga import OUTPUT, NUM_CORES
@@ -155,15 +154,12 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
             some_evt_lists = source.get_products("events", obs_id=obs_id, telescope='xmm')
             obs_date = None
             for evt in some_evt_lists:
-                # Reads in the header of the events list file
-                evt_head = read_header(evt.path)
                 # Then extracts the observation date, this is what we need to give cifbuild
-                if "DATE-OBS" in evt_head:
-                    obs_date = evt_head['DATE-OBS']
-                    del evt_head
+                if "DATE-OBS" in evt.header:
+                    obs_date = evt.header['DATE-OBS']
                     break
-                else:
-                    del evt_head
+
+                evt.unload(unload_data=True, unload_header=True)
 
             if obs_date is None:
                 raise InvalidProductError("All event lists for {} are missing the DATE-OBS header, this is required to"
