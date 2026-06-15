@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/11/26, 7:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/14/26, 8:32 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -10,10 +10,10 @@ from typing import Union, Tuple, List
 from warnings import warn
 
 import numpy as np
+import pandas as pd
 from astropy.coordinates import SkyCoord
 from astropy.units.quantity import Quantity
 from exceptiongroup import ExceptionGroup
-import pandas as pd
 from pandas import DataFrame
 from regions import PixelRegion, Regions, SkyRegion
 from tqdm import tqdm
@@ -929,7 +929,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     from ..sources import NullSource
 
     # Declaring the SINGLE NullSource with all the ObsIDs required for the whole sample
-    obs_src = NullSource(full_obs_ids, list(full_obs_ids.keys()), True)
+    obs_src = NullSource(full_obs_ids, list(full_obs_ids.keys()), True, True)
 
     # We run exposure map generation for the ObsIDs - this ensures they are all on disk before workers start
     #  We use a unified multi-telescope function for this.

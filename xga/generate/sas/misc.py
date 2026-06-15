@@ -1,11 +1,15 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 6:25 PM. Copyright (c) The Contributors.
 
 import os
+import sys
+from datetime import datetime
 from random import randint
+from subprocess import Popen, PIPE
 from typing import Union
 
 import numpy as np
+from astropy.io import fits
 from fitsio import read_header
 
 from xga import OUTPUT, NUM_CORES
@@ -14,6 +18,61 @@ from xga.samples.base import BaseSample
 from xga.sources import BaseSource
 from xga.sources.base import NullSource
 from .run import sas_call
+from ...products import BaseProduct
+
+
+def mifbuild(sources):
+    """
+
+    :param BaseSource/NullSource/BaseSample sources: A single source object, or a sample of sources.
+    """
+
+    # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
+    #  that property contains the telescopes associated with that source, and if it is a Sample object then
+    #  'telescopes' contains the list of unique telescopes that are associated with at least one member source.
+    # Clearly if XMM isn't associated at all, then continuing with this function would be pointless
+    if ((not isinstance(sources, list) and 'xmm' not in sources.telescopes) or
+            (isinstance(sources, list) and 'xmm' not in sources[0].telescopes)):
+        raise TelescopeNotAssociatedError("There are no XMM data associated with the source/sample, as such XMM "
+                                          "calibration files cannot be generated.")
+
+    dest_dir = os.path.join(OUTPUT, 'xmm', "")
+    os.makedirs(dest_dir, exist_ok=True)
+
+    temp_name = "tempdir_{}".format(randint(0, int(100_000_000)))
+    temp_dir = os.path.join(dest_dir, temp_name, "")
+
+    final_path = os.path.join(dest_dir, 'ccf.mif')
+
+    if os.path.exists(final_path):
+        with fits.open(final_path) as miffo:
+            mif_gen_date = miffo[0].header['DATE'].split('T')[0]
+
+        gen_mif = mif_gen_date != datetime.today().strftime("%Y-%m-%d")
+    else:
+        gen_mif = True
+
+    # This string contains the bash code to run cifbuild
+    mif_cmd = f"cd {temp_dir}; cifbuild masterindex=yes calindexset={os.path.basename(final_path)}; mv * ../; cd ..; rm -r {temp_dir}"
+
+    if gen_mif:
+        # This chunk is a fix for problems with eSASS (eROSITA package) finding the correct libraries on Apple ARM based
+        #  systems, and just creates a new environment variable so it can locate them, if necessary
+        sys_env = os.environ.copy()
+        if sys.platform == 'darwin':
+            if "LD_LIBRARY_PATH" in sys_env:
+                mif_cmd = f"export LD_LIBRARY_PATH={sys_env['LD_LIBRARY_PATH']} && {mif_cmd}"
+            if "DYLD_LIBRARY_PATH" in sys_env:
+                mif_cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {mif_cmd}"
+
+        # This runs the passed command - it captures the stdout and stderr as well
+        out, err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+        # Captured out/err are byte type, will decode that into str for easier use
+        out = out.decode("UTF-8", errors='ignore')
+        err = err.decode("UTF-8", errors='ignore')
+
+        prod = BaseProduct(final_path, "", "", out, err, mif_cmd, telescope='xmm')
+        prod.raise_errors()
 
 
 @sas_call
