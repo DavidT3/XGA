@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 3:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:18 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -458,7 +458,6 @@ def _initialise_xga():
         # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
         #  the USABLE entry for the current telescope will stay at the default value of False
         if all_req_changed and root_dir_exists:
-
             USABLE[tel] = True
     # -----------------------------------------------------------------------------------
 
@@ -477,7 +476,7 @@ def _initialise_xga():
     old_census_path = os.path.join(CONFIG_PATH, 'census.csv')
     if os.path.exists(old_census_path):
         # Changing the .config/xga directory to the updated structure for the multi-telescope version of xga
-        os.makedirs(CONFIG_PATH + '/xmm/')
+        os.makedirs(os.path.join(CONFIG_PATH, "xmm", ""), exist_ok=True)
         new_xmm_census_path = os.path.join(CONFIG_PATH, 'xmm', 'xmm_census.csv')
         # Moving the xmm census to the correct place and renaming it with the updated naming scheme
         shutil.move(old_census_path, new_xmm_census_path)

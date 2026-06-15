@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 6:35 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:32 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -103,8 +103,13 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
         sources = [sources]
 
     # This string contains the bash code to run cifbuild
-    cif_cmd = "cd {d}; cifbuild calindexset=ccf.cif withobservationdate=yes " \
-              "observationdate={od} ; mv * ../; cd ..; rm -r {n}"
+    cif_cmd = ("cd {d}; cifbuild calindexset=ccf.cif withobservationdate=yes "
+               "observationdate={od} withmasterindexset=yes masterindexset={mif}; "
+               "mv * ../; cd ..; rm -r {n}")
+
+    # This will get flipped to True if ANY cif is going to be generated, and
+    #  then will be used to trigger the mifbuild function
+    need_mif = False
 
     sources_cmds = []
     sources_paths = []
@@ -158,8 +163,9 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
 
             final_path = dest_dir + "ccf.cif"
             if not os.path.exists(final_path):
-                if not os.path.exists(temp_dir):
-                    os.makedirs(temp_dir)
+                need_mif = True
+
+                os.makedirs(temp_dir, exist_ok=True)
                 cmds.append(cif_cmd.format(d=temp_dir, od=obs_date, n=temp_name))
                 final_paths.append(final_path)
                 extra_info.append({})  # This doesn't need any extra information
@@ -171,6 +177,11 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
+
+    # This is triggered if ANY cif is going to be built, and triggers the initial
+    #  generation, or refresh, of the master index file.
+    if need_mif:
+        mifbuild(sources)
 
     return sources_cmds, stack, execute, num_cores, sources_types, sources_paths, sources_extras, disable_progress
 
