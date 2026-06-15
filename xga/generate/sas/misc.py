@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:44 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:54 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -11,6 +11,7 @@ from typing import Union
 import numpy as np
 from astropy.io import fits
 from fitsio import read_header
+from tqdm import tqdm
 
 from xga import OUTPUT, NUM_CORES
 from xga.exceptions import InvalidProductError, TelescopeNotAssociatedError
@@ -75,14 +76,17 @@ def mifbuild(sources):
             if "DYLD_LIBRARY_PATH" in sys_env:
                 mif_cmd = f"export DYLD_LIBRARY_PATH={sys_env['DYLD_LIBRARY_PATH']} && {mif_cmd}"
 
-        # This runs the passed command - it captures the stdout and stderr as well
-        out, err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
-        # Captured out/err are byte type, will decode that into str for easier use
-        out = out.decode("UTF-8", errors='ignore')
-        err = err.decode("UTF-8", errors='ignore')
+        with tqdm(desc="Generating XMM Calibration Master Index File", total=1) as onwards:
+            # This runs the passed command - it captures the stdout and stderr as well
+            out, err = Popen(mif_cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+            # Captured out/err are byte type, will decode that into str for easier use
+            out = out.decode("UTF-8", errors='ignore')
+            err = err.decode("UTF-8", errors='ignore')
 
-        prod = BaseProduct(final_path, "", "", out, err, mif_cmd, telescope='xmm')
-        prod.raise_errors()
+            prod = BaseProduct(final_path, "", "", out, err, mif_cmd, telescope='xmm')
+            prod.raise_errors()
+
+            onwards.update(1)
 
     return final_path
 
@@ -165,8 +169,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 raise InvalidProductError("All event lists for {} are missing the DATE-OBS header, this is required to"
                                           " run the cifbuild function.".format(obs_id))
 
-            if not os.path.exists(OUTPUT + 'xmm/' + obs_id):
-                os.mkdir(OUTPUT + 'xmm/' + obs_id)
+            os.makedirs(os.path.join(OUTPUT, 'xmm', obs_id), exist_ok=True)
 
             dest_dir = "{out}xmm/{obs}/".format(out=OUTPUT, obs=obs_id)
             temp_name = "tempdir_{}".format(randint(0, int(100_000_000)))
