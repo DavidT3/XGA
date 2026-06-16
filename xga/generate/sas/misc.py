@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:58 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 10:59 AM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -124,6 +124,9 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
     # This will get flipped to True if ANY cif is going to be generated, and
     #  then will be used to trigger the mifbuild function
     need_mif = False
+    # To store the ObsIDs of any event lists with missing obs date information, so that
+    #  a single error can be raised at the end of the loop
+    no_obs_date = []
 
     sources_cmds = []
     sources_paths = []
@@ -162,8 +165,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
                 evt.unload(unload_data=True, unload_header=True)
 
             if obs_date is None:
-                raise InvalidProductError("All event lists for {} are missing the DATE-OBS header, this is required to"
-                                          " run the cifbuild function.".format(obs_id))
+                no_obs_date.append(obs_id)
 
             os.makedirs(os.path.join(OUTPUT, 'xmm', obs_id), exist_ok=True)
 
@@ -188,6 +190,12 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
 
     stack = False  # This tells the sas_call routine that this command won't be part of a stack
     execute = True  # This should be executed immediately
+
+    # If any of the event lists have no observation date, we raise an error informing the user
+    if len(no_obs_date) != 0:
+        list(set(no_obs_date))
+        raise InvalidProductError(f"All event lists for {list(set(no_obs_date))} are missing the "
+                                  f"DATE-OBS header, this is required to run the cifbuild function.")
 
     # This is triggered if ANY cif is going to be built, and triggers the initial
     #  generation, or refresh, of the master index file.
