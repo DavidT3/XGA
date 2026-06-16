@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 10:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 5:15 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -26,7 +26,8 @@ from scipy.cluster.hierarchy import fclusterdata
 from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
-from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError
+from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
+    ProductNotUsableError
 from ..sourcetools import ang_to_rad
 from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
@@ -259,16 +260,15 @@ class Image(BaseProduct):
                 raise ValueError("Image shape from the FITS header does not match the data shape.")
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("This product has been marked as unusable, so you cannot access data from it. "
-                                     "The reason(s) given are: {}. Please check the usable attribute "
-                                     "before attempting to access data.".format(reasons))
+            raise FailedProductError(f"This product has been marked as unusable, so you cannot access data from it. "
+                                     f"The reason(s) given are: {reasons}.")
 
     def _read_header_on_demand(self):
         """
         Very specific method to just read the header of the fits file in. This also sets the '_shape' attribute
         from the NAXIS keywords.
         """
-        if self._header is None:
+        if self._header is None and self._usable:
             # Reads only the header information
             with fits.open(self.path) as hdul:
                 self._header = hdul[0].header
@@ -277,6 +277,10 @@ class Image(BaseProduct):
             #  done by loading the data array and using shape on that, but this way avoids
             #  a lot of overheads
             self._shape = (int(self._header["NAXIS2"]), int(self._header["NAXIS1"]))
+        elif not self._usable:
+            raise ProductNotUsableError(f"{self.telescope}-{self.obs_id}-{self.instrument} "
+                                        f"{self._prod_type} is not usable ({self.not_usable_reasons}) "
+                                        f"and the header cannot be read.")
 
     def _read_wcs_on_demand(self):
         """
