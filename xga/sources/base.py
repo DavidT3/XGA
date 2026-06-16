@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 04/06/2026, 05:16. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 5:30 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1219,6 +1219,11 @@ class BaseSource:
                         reg_dict[tel][obs_id] = reg_file
                     else:
                         reg_dict[tel][obs_id] = None
+
+                # Don't want to include the ObsID if there isn't an attitude file when there
+                #  is meant to be one
+                elif att_prod is not None and not att_prod.usable:
+                    del obs_dict[tel][obs_id]
 
             # Cleans any observations that don't have at least one instrument associated with them
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
