@@ -1,9 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 4:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 2:54 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
-from shutil import rmtree
 from typing import Union
 
 import numpy as np
@@ -93,10 +92,6 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             obs_id = pack[1]
             inst = pack[2]
 
-            # TODO Is this actually necessary? I should trust that these have been setup by the source object
-            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
-                os.mkdir(OUTPUT + 'xmm/' + obs_id)
-
             try:
                 # Check if this image already exists and is usable
                 exists = source.get_images(obs_id, inst, lo_en, hi_en, telescope='xmm')
@@ -112,10 +107,6 @@ def evselect_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Qu
             dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
                                                                        n=source.name)
             im = "{o}_{i}_{l}-{u}keVimg.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
-
-            # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
 
             os.makedirs(dest_dir)
             cmds.append("cd {d};evselect table={e} imageset={i} xcolumn=X ycolumn=Y ximagebinsize=87 "
@@ -220,10 +211,6 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             obs_id = pack[1]
             inst = pack[2]
 
-            # TODO Is this actually necessary? I should trust that these have been setup by the source object
-            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
-                os.mkdir(OUTPUT + "xmm/" + obs_id)
-
             try:
                 # Check if this exposure map already exists and is usable
                 exists = source.get_expmaps(obs_id, inst, lo_en, hi_en, telescope='xmm')
@@ -246,10 +233,6 @@ def eexpmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity 
             dest_dir = OUTPUT + "xmm/{o}/{i}_{l}-{u}_{n}_temp/".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value,
                                                                        n=source.name)
             exp_map = "{o}_{i}_{l}-{u}keVexpmap.fits".format(o=obs_id, i=inst, l=lo_en.value, u=hi_en.value)
-
-            # If something got interrupted and the temp directory still exists, this will remove it
-            if os.path.exists(dest_dir):
-                rmtree(dest_dir)
 
             os.makedirs(dest_dir)
             cmds.append("cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; eexpmap eventset={e} "
@@ -395,9 +378,6 @@ def emosaic(sources: Union[BaseSource, BaseSample], to_mosaic: str, lo_en: Quant
             if obs_id not in obs_ids_set:
                 obs_ids_set.append(obs_id)
 
-            if not os.path.exists(OUTPUT + "xmm/" + obs_id):
-                os.mkdir(OUTPUT + "xmm/" + obs_id)
-
         # The files produced by this function will now be stored in the combined directory.
         final_dest_dir = OUTPUT + "xmm/combined/"
         rand_ident = randint(0, int(100_000_000))
@@ -523,9 +503,6 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 obs_id = pack[1]
                 inst = pack[2]
 
-                if not os.path.exists(OUTPUT + 'xmm/' + obs_id):
-                    os.mkdir(OUTPUT + 'xmm/' + obs_id)
-
                 # This looks for any image for this ObsID, instrument combo - it does assume that whatever
                 #  it finds will be the same resolution as any images in other energy bands that XGA will
                 #  create in the future.
@@ -592,10 +569,6 @@ def psfgen(sources: Union[BaseSource, BaseSample], bins: int = 4, psf_model: str
                 # The change directory and SAS setup commands
                 init_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; ".format(d=dest_dir,
                                                                                     ccf=dest_dir + "ccf.cif")
-
-                # If something got interrupted and the temp directory still exists, this will remove it
-                if os.path.exists(dest_dir):
-                    rmtree(dest_dir)
 
                 os.makedirs(dest_dir)
 
