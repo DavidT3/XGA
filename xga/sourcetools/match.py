@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 9:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 12:51 AM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -26,32 +26,18 @@ from ..exceptions import NoMatchFoundError, NoRegionsError, NoProductAvailableEr
 #  This ensures the indexing and serialization costs are paid only once per worker, not once per chunk.
 WORKER_TEL_COORDS = {}
 WORKER_EXP_MAPS = {}
-WORKER_SRC_RA = None
-WORKER_SRC_DEC = None
-WORKER_OBS_TO_SRC = {}
 
 
-def _worker_init(census_coords: dict = None, exp_map_dict: dict = None, src_ra: np.ndarray = None,
-                 src_dec: np.ndarray = None, obs_to_src: dict = None):
+def _worker_init(census_coords: dict = None, exp_map_dict: dict = None):
     """
     Initializer for worker processes to store pre-calculated data in global scope.
     """
     global WORKER_TEL_COORDS
     global WORKER_EXP_MAPS
-    global WORKER_SRC_RA
-    global WORKER_SRC_DEC
-    global WORKER_OBS_TO_SRC
-
     if census_coords is not None:
         WORKER_TEL_COORDS = census_coords
     if exp_map_dict is not None:
         WORKER_EXP_MAPS = exp_map_dict
-    if src_ra is not None:
-        WORKER_SRC_RA = src_ra
-    if src_dec is not None:
-        WORKER_SRC_DEC = src_dec
-    if obs_to_src is not None:
-        WORKER_OBS_TO_SRC = obs_to_src
 
 
 def _dist_from_source(search_ra: float, search_dec: float, cur_reg: SkyRegion):
@@ -790,20 +776,18 @@ def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.
     return results, bl_results
 
 
-def _vectorized_on_detector_match(src_ra: np.ndarray = None, src_dec: np.ndarray = None,
-                                 telescope: List[str] = None,
-                                 obs_id_chunks: dict = None,
-                                 obs_to_src_indices: dict = None,
+def _vectorized_on_detector_match(telescope: List[str],
+                                 obs_id_chunks: dict,
+                                 obs_to_src_indices: dict,
                                  exp_map_dict: dict = None) -> list:
     """
     Internal function that performs vectorized detector matching for a set of ObsIDs.
     Used by both the serial and parallel paths of on_detector_match.
 
-    :param np.ndarray src_ra: FULL RA coordinate array of the entire source sample.
-    :param np.ndarray src_dec: FULL Dec coordinate array of the entire source sample.
     :param List[str] telescope: List of telescopes to search.
     :param dict obs_id_chunks: The ObsIDs to be processed by this worker {tel: [obs_ids]}.
     :param dict obs_to_src_indices: Mapping of {tel: {obs_id: [source_indices]}} for all sources near data.
+        Entries are expected to be arrays where [:, 0] is RA, [:, 1] is Dec, and [:, 2] is global index.
     :param dict exp_map_dict: Dictionary of pre-loaded (but unloaded data) ExpMap objects {tel: {obs_id: [ExpMaps]}}.
         If None, then worker processes will check the global WORKER_EXP_MAPS.
     :return: A list of matches. Format: [(source_index, telescope, obsid), ...]
@@ -812,20 +796,14 @@ def _vectorized_on_detector_match(src_ra: np.ndarray = None, src_dec: np.ndarray
     # Flat results: [(source_index, telescope, obs_id), ...]
     matches = []
 
-    # If variables are None, we use the global variables
-    if src_ra is None:
-        src_ra = WORKER_SRC_RA
-    if src_dec is None:
-        src_dec = WORKER_SRC_DEC
-    if obs_to_src_indices is None:
-        obs_to_src_indices = WORKER_OBS_TO_SRC
+    # If exp_map_dict is None, we use the global variable
     if exp_map_dict is None:
         exp_map_dict = WORKER_EXP_MAPS
 
     # We iterate through the telescopes and ObsIDs assigned to this worker
     for tel in obs_id_chunks:
         for o in obs_id_chunks[tel]:
-            # Get the indices of sources that separation_match said were near this ObsID
+            # Get the indices and coordinates of sources that separation_match said were near this ObsID
             if tel not in obs_to_src_indices or o not in obs_to_src_indices[tel]:
                 continue
 
@@ -841,10 +819,9 @@ def _vectorized_on_detector_match(src_ra: np.ndarray = None, src_dec: np.ndarray
                 continue
             e_maps = exp_map_dict[tel][o]
 
-            # Coordinates to check for this ObsID
-            ra_to_check = src_ra[src_indices]
-            dec_to_check = src_dec[src_indices]
-            coords = Quantity(np.stack([ra_to_check, dec_to_check], axis=1), 'deg')
+            # Coordinates to check for this ObsID - taken directly from the info array
+            #  to avoid passing massive coordinate arrays to workers
+            coords = Quantity(info[:, :2], 'deg')
 
             # We use a set to keep track of which sources in the sample fall on the detector for this ObsID
             detected_indices = set()
@@ -944,6 +921,11 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     # This identifies what products need to be generated/checked
     full_obs_ids, all_repr, obs_to_src_indices = _process_flat_init_match(src_ra, src_dec, init_res)
 
+    # We can clear these now to save memory
+    del init_res
+    del init_bl
+    gc.collect()
+
     # Boohoo local imports very sad very sad, but stops circular import errors. NullSource is a basic Source class
     #  that allows for a list of ObsIDs to be passed rather than coordinates
     from ..sources import NullSource
@@ -977,8 +959,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
             # Serial vectorized matching on all ObsIDs at once
             # We wrap the pairs in a dict format the function expects
             obs_id_chunks = {tel: obs_src.obs_ids[tel] for tel in obs_src.telescopes}
-            all_matches = _vectorized_on_detector_match(src_ra, src_dec, telescope,
-                                                        obs_id_chunks, obs_to_src_indices, exp_map_dict)
+            all_matches = _vectorized_on_detector_match(telescope, obs_id_chunks, obs_to_src_indices, exp_map_dict)
             onwards.update(1)
     else:
         # Determine chunk size - aiming for ~4 chunks per core
@@ -989,17 +970,23 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         pair_chunks = [all_obs_pairs[i:i + chunk_size] for i in range(0, num_obs, chunk_size)]
 
         # Prepare arguments for the map function
-        # We pass None for variables because they are now stored in worker global scope
+        # We slice the dictionaries so each task only carries the metadata it needs
         map_args = []
         for chunk in pair_chunks:
             # Group pairs back into {tel: [obs_ids]} for the worker
             chunk_obs_id_dict = {}
+            chunk_obs_to_src = {}
+            chunk_exp_maps = {}
             for tel, o in chunk:
                 if tel not in chunk_obs_id_dict:
                     chunk_obs_id_dict[tel] = []
+                    chunk_obs_to_src[tel] = {}
+                    chunk_exp_maps[tel] = {}
                 chunk_obs_id_dict[tel].append(o)
+                chunk_obs_to_src[tel][o] = obs_to_src_indices[tel][o]
+                chunk_exp_maps[tel][o] = exp_map_dict[tel][o]
 
-            map_args.append((None, None, telescope, chunk_obs_id_dict, None, None))
+            map_args.append((telescope, chunk_obs_id_dict, chunk_obs_to_src, chunk_exp_maps))
 
         # We pre-calculate the census coordinates for each telescope to avoid redundant indexing in workers
         pre_calc_census = {}
@@ -1012,10 +999,7 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
         all_matches = []
         with tqdm(desc="Ensuring coordinates fall on detector",
                   total=len(map_args), disable=prog_dis) as onwards, Pool(num_cores, initializer=_worker_init,
-                                                                         initargs=(pre_calc_census,
-                                                                                   exp_map_dict, src_ra,
-                                                                                   src_dec,
-                                                                                   obs_to_src_indices)) as pool:
+                                                                         initargs=(pre_calc_census,)) as pool:
             for chunk_matches in pool.imap(_vectorized_on_detector_match_wrapper, map_args):
                 # Merge flat results [(src_idx, tel, obs_id), ...]
                 all_matches.extend(chunk_matches)
@@ -1025,16 +1009,22 @@ def on_detector_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np
     # We assemble the final results list from the flat matches
     results = [{t: None for t in telescope} for _ in range(len(src_ra))]
 
-    # We use a temporary dictionary to store lists of ObsIDs for each source/tel
-    temp_matches = {}
+    # Directly populate results to avoid temp_matches dictionary overhead
     for s_idx, tel, o in all_matches:
-        if (s_idx, tel) not in temp_matches:
-            temp_matches[(s_idx, tel)] = [o]
+        if results[s_idx][tel] is None:
+            results[s_idx][tel] = [o]
         else:
-            temp_matches[(s_idx, tel)].append(o)
+            results[s_idx][tel].append(o)
 
-    for (s_idx, tel), obs_list in temp_matches.items():
-        results[s_idx][tel] = np.array(obs_list)
+    # Convert the lists of matches to numpy arrays
+    for res_idx in range(len(results)):
+        for tel in results[res_idx]:
+            if results[res_idx][tel] is not None:
+                results[res_idx][tel] = np.array(results[res_idx][tel])
+
+    # We clear this big list now to save memory
+    del all_matches
+    gc.collect()
 
     # Result length of one means one coordinate was passed in, so we should pass back out a single dictionary
     #  rather than a single dictionary in a list
