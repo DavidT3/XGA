@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 5:30 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 6:15 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1128,6 +1128,12 @@ class BaseSource:
                     inst = 'combined'
                 else:
                     inst = inst_or_tel
+
+                # ObsIDs can be dropped from the obs_dict variable during this loop, if the attitude
+                #  file (assuming one is meant to be present) is not usable. So here we check
+                #  whether the current ObsID is present in obs_dict, and if not, we skip
+                if obs_id not in obs_dict[tel]:
+                    continue
 
                 # Produces a list of the combinations of upper and lower energy bounds from the config file. If it
                 #  isn't in the loop EVERYTHING breaks
