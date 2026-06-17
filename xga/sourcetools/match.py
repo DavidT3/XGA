@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 12:51 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 1:52 AM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -365,18 +365,28 @@ def _process_flat_init_match(src_ra: np.ndarray, src_dec: np.ndarray, res_df: Da
         final_obs_ids[tel] = tel_group['ObsID'].unique().tolist()
 
         # We need RA, Dec, and global index for each match
-        # We can get RA and Dec from the original input using src_idx
-        # We add them to the group to make the dictionary construction easier
-        # This is vectorized and fast
-        tel_group = tel_group.copy()
-        tel_group['ra'] = src_ra[tel_group['src_idx'].values]
-        tel_group['dec'] = src_dec[tel_group['src_idx'].values]
+        # We use a vectorized approach with sorting and splitting to avoid expensive groupby('ObsID')
+        #  on potentially millions of rows
+        tel_group = tel_group.sort_values('ObsID')
+        obs_ids = tel_group['ObsID'].values
+        src_indices = tel_group['src_idx'].values
+
+        # Identify where the ObsID changes to split the arrays
+        unique_obs, split_indices = np.unique(obs_ids, return_index=True)
+        # split_indices contains the start of each unique block
+        split_points = split_indices[1:]
+
+        # Extract coordinates and indices using the sorted order
+        ras = src_ra[src_indices]
+        decs = src_dec[src_indices]
+        # Prepare the combined data for each ObsID entry: [ra, dec, global_idx]
+        combined_data = np.stack([ras, decs, src_indices.astype(float)], axis=1)
+
+        # Split into a list of arrays, one per unique ObsID
+        split_data = np.split(combined_data, split_points)
 
         # Construct the mapping: {obs_id: [[ra, dec, global_idx], ...]}
-        # We use groupby on ObsID
-        obs_groups = tel_group.groupby('ObsID')
-        final_obs_id_srcs[tel] = {o: group[['ra', 'dec', 'src_idx']].values
-                                  for o, group in obs_groups}
+        final_obs_id_srcs[tel] = dict(zip(unique_obs, split_data))
 
     return final_obs_ids, all_indices, final_obs_id_srcs
 
