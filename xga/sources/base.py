@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:47 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 3:53 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1544,7 +1544,7 @@ class BaseSource:
                 #  against this list, rather than doing a bunch of os.path.exists calls; 2) This
                 #  will throw an error if cur_prod_dir doesn't exist, and we can skip on by
                 try:
-                    cur_prod_dir_list = os.listdir(cur_prod_dir)
+                    cur_prod_dir_list = set(os.listdir(cur_prod_dir))
                 except FileNotFoundError:
                     cur_prod_dir_list = []
 
@@ -1653,7 +1653,7 @@ class BaseSource:
             #  against this list, rather than doing a bunch of os.path.exists calls; 2) This
             #  will throw an error if cur_prod_dir doesn't exist, and we can skip on by
             try:
-                cur_prod_dir_list = os.listdir(cur_prod_dir)
+                cur_prod_dir_list = set(os.listdir(cur_prod_dir))
             except FileNotFoundError:
                 cur_prod_dir_list = []
 

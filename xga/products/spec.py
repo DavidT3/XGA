@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 3:06 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -2427,7 +2427,7 @@ class AnnularSpectra(BaseAggregateProduct):
             raise IndexError("{i} is not an annulus ID associated with this AnnularSpectra object. "
                              "Allowed annulus IDs are; {a}".format(i=annulus_ident, a=ann_str))
         elif obs_id not in self._component_products and obs_id is not None:
-            raise NotAssociatedError("{0} is not associated with this AnnularSpectra.".format(obs_id))
+            raise NotAssociatedError("ObsID {0} is not associated with this AnnularSpectra.".format(obs_id))
         elif (obs_id is not None and obs_id in self._component_products) and \
                 (inst is not None and inst not in self._component_products[obs_id]):
             raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
