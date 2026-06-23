@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:09 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:47 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1085,6 +1085,7 @@ class BaseSource:
             # This looks up the class which corresponds to the key (which is the product ID in this case
             #  e.g. image), then instantiates an object of that class
 
+            # TODO REPLACE THE os.path.exists CALL HERE, I THINK IT IS CAUSING SLOWDOWNS
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
                          for key, file in files.items() if os.path.exists(file)}
@@ -1264,7 +1265,7 @@ class BaseSource:
             :rtype: Union[Image, ExpMap]
             """
             # Get rid of the absolute part of the path, then split by _ to get the information from the file name
-            im_info = file_path.split("/")[-1].split("_")
+            im_info = os.path.basename(file_path).split("_")
 
             if not merged:
                 # I know its hard coded but this will always be the case, these are files I generate with XGA.
@@ -1281,22 +1282,31 @@ class BaseSource:
             lo_en = Quantity(float(lo_en), "keV")
             hi_en = Quantity(float(hi_en), "keV")
 
-            # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
-            #  or original commands for these objects.
-            if exact_type == "image" and "psfcorr" not in file_path:
-                final_obj = Image(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
-            elif exact_type == "image" and "psfcorr" in file_path:
-                final_obj = Image(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
-                final_obj.psf_corrected = True
-                final_obj.psf_bins = int([entry for entry in im_info if "bin" in entry][0].split('bin')[0])
-                final_obj.psf_iterations = int([entry for entry in im_info if "iter" in
-                                                entry][0].split('iter')[0])
-                final_obj.psf_model = [entry for entry in im_info if "mod" in entry][0].split("mod")[0]
-                final_obj.psf_algorithm = [entry for entry in im_info if "algo" in entry][0].split("algo")[0]
-            elif exact_type == "expmap":
-                final_obj = ExpMap(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en, telescope=telescope)
+            # We check the file name extracted from the inventory against the list of
+            #  all files in the current directory (cur_prod_dir_list) from the outer scope.
+            if os.path.basename(file_path) in cur_prod_dir_list:
+                # Different types of Product objects, the empty strings are because I don't have the stdout, stderr,
+                #  or original commands for these objects.
+                if exact_type == "image" and "psfcorr" not in file_path:
+                    final_obj = Image(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en,
+                                      telescope=telescope, check_exists=False)
+                elif exact_type == "image" and "psfcorr" in file_path:
+                    final_obj = Image(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en,
+                                      telescope=telescope, check_exists=False)
+                    final_obj.psf_corrected = True
+                    final_obj.psf_bins = int([entry for entry in im_info if "bin" in entry][0].split('bin')[0])
+                    final_obj.psf_iterations = int([entry for entry in im_info if "iter" in
+                                                    entry][0].split('iter')[0])
+                    final_obj.psf_model = [entry for entry in im_info if "mod" in entry][0].split("mod")[0]
+                    final_obj.psf_algorithm = [entry for entry in im_info if "algo" in entry][0].split("algo")[0]
+                elif exact_type == "expmap":
+                    final_obj = ExpMap(file_path, cur_obs_id, ins, "", "", "", lo_en, hi_en,
+                                       telescope=telescope, check_exists=False)
+                else:
+                    raise TypeError("Only image and expmap are allowed.")
+
             else:
-                raise TypeError("Only image and expmap are allowed.")
+                final_obj = None
 
             return final_obj
 
@@ -1348,8 +1358,10 @@ class BaseSource:
                         rel_inst in self.instruments[telescope].get(rel_obs_id, [])):
                         valid = True
 
-                # Make sure that the current ObsID and instrument are actually associated with the source
-                if valid:
+                # We only proceed to set up the LightCurve if all the previous checks have been passed, and
+                #  the file name we extracted from the inventory is in the outer scope cur_prod_dir_list
+                #  variable.
+                if valid and os.path.basename(rel_path) in cur_prod_dir_list:
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
                     lc_info = inven_entry.info_key.split("_")
@@ -1374,9 +1386,10 @@ class BaseSource:
                     rel_patt = lc_info[7].replace('pattern', '')
 
                     # Setting up the lightcurve to be passed back out and stored in the source
-                    final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "", rel_central_coord, rel_inn_rad,
-                                           rel_out_rad, rel_lo_en, rel_hi_en, rel_time_bin, rel_patt, is_back_sub=True,
-                                           telescope=telescope)
+                    final_obj = LightCurve(rel_path, rel_obs_id, rel_inst, "", "", "",
+                                           rel_central_coord, rel_inn_rad, rel_out_rad, rel_lo_en, rel_hi_en,
+                                           rel_time_bin, rel_patt, is_back_sub=True, telescope=telescope,
+                                           check_exists=False)
                 else:
                     final_obj = None
 
@@ -1416,7 +1429,7 @@ class BaseSource:
             #  symbol in the same can be misinterpreted by some XMM-SAS tools
             no_plus_src_name = src_name.replace('+', 'x')
 
-            # we will take the info key from the filename, instead of the actual info key in the
+            # We will take the info key from the filename, instead of the actual info key in the
             # inventory. This is because annular spectrum need to be read in, and their info key
             # follows a different format to regular spectrum, so this is more general
             file_name = str(row.file_name)
@@ -1481,16 +1494,22 @@ class BaseSource:
                 rmf = prod_gen_path + '.rmf'
 
             else:
-                if os.path.exists(prod_gen_path + '.rmf'):
+                if os.path.basename(prod_gen_path + '.rmf') in cur_prod_dir_list:
                     rmf = prod_gen_path + '.rmf'
                 else:
                     rmf = cur_d + obs_id + '_' + inst + '_' +  str(no_plus_src_name) + '_universal.rmf'
                 back_rmf = ''
                 back_arf = ''
 
-            # Defining our XGA spectrum instance
-            obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst, grouped, min_counts,
-                           min_sn, over_sample, "", "", "", region, back_rmf, back_arf, telescope=tel)
+            # We check that all the files that need to go into a Spectrum exist, by looking to see whether
+            #  the file names are all in the outer scope 'cur_prod_dir_list' variable.
+            if all([os.path.basename(cur_cf) in cur_prod_dir_list for cur_cf in [spec, arf, back, rmf, back_arf, back_rmf] if cur_cf != ""]):
+                # Defining our XGA spectrum instance
+                obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst, grouped,
+                               min_counts, min_sn, over_sample, "", "", "", region,
+                               back_rmf, back_arf, telescope=tel, check_exists=False)
+            else:
+                obj = None
 
             if "ident" in info_key:
                 set_id = int(info_key.split('ident')[-1].split('_')[0])
@@ -1518,8 +1537,19 @@ class BaseSource:
             ann_spec_carfs = {}
 
             for obs in self.obs_ids[tel]:
-                if os.path.exists(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
-                    with ctxlib_chdir(OUTPUT + "{t}/{o}".format(t=tel, o=obs)):
+                # Defines the full path of the product directory we're about to look at
+                cur_prod_dir = os.path.join(OUTPUT, tel, obs)
+                # We now attempt to construct a list of all the files in said directory - this is for
+                #  two reasons. 1) We will be able to check expected file names from the inventory
+                #  against this list, rather than doing a bunch of os.path.exists calls; 2) This
+                #  will throw an error if cur_prod_dir doesn't exist, and we can skip on by
+                try:
+                    cur_prod_dir_list = os.listdir(cur_prod_dir)
+                except FileNotFoundError:
+                    cur_prod_dir_list = []
+
+                if len(cur_prod_dir_list) > 0:
+                    with ctxlib_chdir(cur_prod_dir):
                         cur_d = os.getcwd() + '/'
                         # Loads in the inventory file for this ObsID
                         inven = pd.read_csv("inventory.csv", dtype=str)
@@ -1616,8 +1646,19 @@ class BaseSource:
                                 else:
                                     self._supp_warn.append(warn_text)
 
+            # Defines the full path of the product directory we're about to look at
+            cur_prod_dir = os.path.join(OUTPUT, tel, 'combined')
+            # We now attempt to construct a list of all the files in said directory - this is for
+            #  two reasons. 1) We will be able to check expected file names from the inventory
+            #  against this list, rather than doing a bunch of os.path.exists calls; 2) This
+            #  will throw an error if cur_prod_dir doesn't exist, and we can skip on by
+            try:
+                cur_prod_dir_list = os.listdir(cur_prod_dir)
+            except FileNotFoundError:
+                cur_prod_dir_list = []
+
             # Here we load in any combined images and exposure maps that may have been generated
-            if os.path.exists(OUTPUT + '{t}/combined'.format(t=tel)):
+            if len(cur_prod_dir_list) > 0:
                 with ctxlib_chdir(OUTPUT + '{t}/combined'.format(t=tel)):
                     cur_d = os.getcwd() + '/'
                     # This creates a set of observation-instrument strings that describe the current combinations associated
