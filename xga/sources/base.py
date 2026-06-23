@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 11:27 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 12:17 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -18,7 +18,7 @@ import pickle
 from copy import deepcopy
 from glob import glob
 from shutil import move, copyfile
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, NamedTuple
 from warnings import warn, simplefilter
 
 import numpy as np
@@ -1297,7 +1297,7 @@ class BaseSource:
 
             return final_obj
 
-        def parse_lightcurve(inven_entry: pd.Series, telescope: str, combined_obs: bool) -> LightCurve:
+        def parse_lightcurve(inven_entry: NamedTuple, telescope: str, combined_obs: bool) -> LightCurve:
             """
             Very simple little function that takes information on an XGA-generated lightcurve (including a path to
             the file), and sets up a LightCurve product that can be added to the product storage structure
@@ -1308,7 +1308,7 @@ class BaseSource:
             :return: An XGA LightCurve object
             :rtype: LightCurve
             """
-            if inven_entry['src_name'] == self.name:
+            if inven_entry.src_name == self.name:
                 # The path, ObsID, and instrument can be read directly from inventory entries - we also use the
                 #  'cur_d' parameter from the upper scope to provide an absolute path, as the object will need it
                 #  later to read in the data
@@ -1316,12 +1316,13 @@ class BaseSource:
                     rel_obs_id = 'combined'
                     # The inventory column names change depending on if it is combined or not
                     inst_lookup = 'insts'
+                    rel_inst = inven_entry.insts
                 else:
                     inst_lookup = 'inst'
-                    rel_obs_id = inven_entry['obs_id']
+                    rel_obs_id = inven_entry.obs_id
+                    rel_inst = inven_entry.inst
 
-                rel_path = cur_d + inven_entry['file_name']
-                rel_inst = inven_entry[inst_lookup]
+                rel_path = cur_d + inven_entry.file_name
 
                 if '/' in rel_inst:
                     rel_inst = 'combined'
@@ -1348,7 +1349,7 @@ class BaseSource:
                 if valid:
                     # We split up the information contained in the info key - this is going to tell us what
                     #  settings were used to generate the lightcurve
-                    lc_info = inven_entry['info_key'].split("_")
+                    lc_info = inven_entry.info_key.split("_")
 
                     # Pull out the energy bounds of the lightcurve, then make them Astropy Quantity
                     rel_lo_en, rel_hi_en = lc_info[1].split("-")
@@ -1381,7 +1382,7 @@ class BaseSource:
 
             return final_obj
 
-        def parse_spectrum(row: pd.Series, combined_obs: bool):
+        def parse_spectrum(row: NamedTuple, combined_obs: bool):
             """
             Takes information from a row of the inventory csv and sets up a Spectrum product that can be added
             to the product storage structure of the source. If the row represents an annular spectrum
@@ -1394,20 +1395,20 @@ class BaseSource:
                 obs_id = 'combined'
                 # The inventory column names change depending on if it is combined or not
                 inst_lookup = 'insts'
+                inst = row.insts
             else:
-                obs_id = row['obs_id']
+                obs_id = row.obs_id
                 # The inventory column names change depending on if it is combined or not
                 inst_lookup = 'inst'
+                inst = row.inst
 
             if tel in ['erosita', 'erass'] and not combined_obs:
                 obs_id = str(obs_id).zfill(6)
 
-            inst = row[inst_lookup]
-
             if '/' in inst:
                 inst = 'combined'
 
-            src_name = row['src_name']
+            src_name = row.src_name
             # Spectral files are named with '+' replaced with 'x', as having the plus
             #  symbol in the same can be misinterpreted by some XMM-SAS tools
             no_plus_src_name = src_name.replace('+', 'x')
@@ -1415,7 +1416,7 @@ class BaseSource:
             # we will take the info key from the filename, instead of the actual info key in the
             # inventory. This is because annular spectrum need to be read in, and their info key
             # follows a different format to regular spectrum, so this is more general
-            file_name = str(row['file_name'])
+            file_name = str(row.file_name)
 
             info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
 
@@ -1461,7 +1462,7 @@ class BaseSource:
 
             # defining a standard product path that I can just suffixes to
             if combined_obs:
-                indent_no = row['file_name'].split('_')[0]
+                indent_no = row.file_name.split('_')[0]
                 # The info key actually needs to be used here
                 prod_gen_path = cur_d + indent_no + f'_{inst}_' + str(no_plus_src_name) + '_' + info_key
             else:
@@ -1531,14 +1532,14 @@ class BaseSource:
                         for i in self.instruments[tel][obs] + ['combined']:
                             # Fetches lines of the inventory which match the current ObsID and instrument
                             rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
-                            for r_ind, r in rel_ims.iterrows():
-                                self.update_products(parse_image_like(cur_d+r['file_name'], r['type'], tel),
+                            for r_ind, r in rel_ims.itertuples(index=False):
+                                self.update_products(parse_image_like(cur_d+r.file_name, r.prod_type, tel),
                                                      update_inv=False)
 
                         # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
                         # This finds the lines of the inventory that are lightCurve entries
                         lc_lines = inven[inven['type'] == 'lightcurve']
-                        for row_ind, row in lc_lines.iterrows():
+                        for row_ind, row in lc_lines.itertuples(index=False):
                             # The parse lightcurve function does check to see if an inventory entry is relevant to this
                             #  source (using the source name), and if the ObsID and instrument are still associated.
                             self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
@@ -1549,7 +1550,7 @@ class BaseSource:
                         if load_spectra:
                             # Find only the lines of the inventory file that are to do with spectra
                             spec_lines = inven[inven['type'] == 'spectrum']
-                            for row_ind, row in spec_lines.iterrows():
+                            for row_ind, row in spec_lines.itertuples(index=False):
                                 obj, set_id, ann_id = parse_spectrum(row, False)
                                 if set_id is not None:
                                     obj.annulus_ident = ann_id
@@ -1622,10 +1623,16 @@ class BaseSource:
 
                     # Loads in the inventory file for this ObsID
                     inven = pd.read_csv("inventory.csv", dtype=str)
+
+                    # RENAME 'type' to something safe for when we access 'columns' from
+                    #  NamedTuples (which are output by df.itertuples). This is a part of the
+                    #  move away from iterrows, which is terribly slow.
+                    inven.rename(columns={'type': 'prod_type'}, inplace=True)
+
                     rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
-                    for row_ind, row in rel_inven.iterrows():
-                        o_split = row['obs_ids'].split('/')
-                        i_split = row['insts'].split('/')
+                    for row in rel_inven.itertuples(index=False):
+                        o_split = row.obs_ids.split('/')
+                        i_split = row.insts.split('/')
                         # Assemble a set of observations-instrument strings for the current row, to test against the
                         #  src_oi_set we assembled earlier
                         test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
@@ -1634,14 +1641,14 @@ class BaseSource:
                         #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
                         #  match exactly and the product can be loaded
                         if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                            self.update_products(parse_image_like(cur_d+row['file_name'], row['type'], tel, merged=True),
+                            self.update_products(parse_image_like(cur_d + row.file_name, row.prod_type, tel, merged=True),
                                                  update_inv=False)
 
                     # now assigning combined event lists
                     rel_inven = inven[inven['type'] == 'events']
-                    for row_ind, row in rel_inven.iterrows():
-                        o_split = row['obs_ids'].split('/')
-                        i_split = row['insts'].split('/')
+                    for row in rel_inven.itertuples(index=False):
+                        o_split = row.obs_ids.split('/')
+                        i_split = row.insts.split('/')
                         # Assemble a set of observations-instrument strings for the current row, to test against the
                         #  src_oi_set we assembled earlier
                         test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
@@ -1652,12 +1659,12 @@ class BaseSource:
                         #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
                         #  match exactly and the product can be loaded
                         if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                            evt_list = EventList(cur_d+row['file_name'], 'combined', 'combined', '', '', '', tel, obs_list)
+                            evt_list = EventList(cur_d+row.file_name, 'combined', 'combined', '', '', '', tel, obs_list)
                             self.update_products(evt_list, update_inv=False)
 
                     # now assigning combined lightcurves
                     rel_inven = inven[inven['type'] == 'lightcurve']
-                    for row_ind, row in rel_inven.iterrows():
+                    for row in rel_inven.itertuples(index=False):
                         self.update_products(parse_lightcurve(row, tel, True), update_inv=False)
 
                     # TODO THIS IS PRETTY BAD, A LOT OF IT IS A REPEAT OF THE CODE FROM LOADING SPECIFIC OBSID
@@ -1665,7 +1672,7 @@ class BaseSource:
                     #  NECESSITATE A REWRITE OF THIS WHOLE METHOD ANYWAY I THINK.
                     if load_spectra:
                         rel_inven = inven[inven['type'] == 'spectrum']
-                        for row_ind, row in rel_inven.iterrows():
+                        for row in rel_inven.itertuples(index=False):
                             # Spectra can have combined observations but individual instruments.
                             # Checking that a spectrum is associated to the source is different depending
                             # on if the instrument is combined or not
