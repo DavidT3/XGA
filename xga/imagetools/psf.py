@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 09/07/2025, 13:30. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:50 PM. Copyright (c) The Contributors.
 
 import os
 from multiprocessing.dummy import Pool
@@ -264,7 +264,8 @@ def rl_psf(sources: Union[BaseSource, BaseSample], iterations: int = 15, psf_mod
                       header=new_header(im.header))
 
                 # Makes an XGA product of our brand new image
-                fin_im = Image(os.path.join(OUTPUT, 'xmm', obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en, telescope='xmm')
+                fin_im = Image(os.path.join(OUTPUT, 'xmm', obs_id, im_name), obs_id, inst, '', '', '', lo_en, hi_en,
+                               telescope='xmm')
                 # Adds PSF correction information for XGA's internal use
                 fin_im.psf_corrected = True
                 fin_im.psf_algorithm = "rl"

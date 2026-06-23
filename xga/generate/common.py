@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/11/26, 1:05 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -13,8 +13,8 @@ import numpy as np
 from astropy.units import Quantity, UnitBase, deg
 from regions import EllipseSkyRegion
 from tqdm import tqdm
-from xga.exceptions import XGADeveloperError, InvalidTelescopeError, ProductGenerationError
 
+from xga.exceptions import XGADeveloperError, InvalidTelescopeError, ProductGenerationError
 from ..products import BaseProduct, Image, ExpMap, Spectrum, PSFGrid, EventList, AnnularSpectra
 from ..products.lightcurve import LightCurve
 from ..samples.base import BaseSample
@@ -330,8 +330,8 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         #  pre-existing image
         if cur_p_type == "image":
             # Maybe let the user decide not to raise errors detected in stderr
-            prod = Image(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
-                         extra_info["lo_en"], extra_info["hi_en"], telescope=extra_info["telescope"])
+            prod = Image(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd, extra_info["lo_en"],
+                         extra_info["hi_en"], telescope=extra_info["telescope"])
             if "psf_corr" in extra_info and extra_info["psf_corr"]:
                 prod.psf_corrected = True
                 prod.psf_bins = extra_info["psf_bins"]
@@ -348,15 +348,16 @@ def execute_cmd(cmd: str, p_type: Union[str, List[str]], p_path: list, extra_inf
         elif (cur_p_type == "spectrum" or cur_p_type == "annular spectrum set components") and "NullSource" not in src:
             prod = Spectrum(cur_p_path, extra_info["rmf_path"], extra_info["arf_path"], extra_info["b_spec_path"],
                             extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
-                            extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"], extra_info["min_counts"],
-                            extra_info["min_sn"], extra_info["over_sample"], out, err, cmd, extra_info["from_region"],
-                            extra_info["b_rmf_path"], extra_info["b_arf_path"], telescope=extra_info["telescope"])
+                            extra_info["obs_id"], extra_info["instrument"], extra_info["grouped"],
+                            extra_info["min_counts"], extra_info["min_sn"], extra_info["over_sample"], out, err, cmd,
+                            extra_info["from_region"], extra_info["b_rmf_path"], extra_info["b_arf_path"],
+                            telescope=extra_info["telescope"])
         elif cur_p_type == "psf" and "NullSource" not in src:
             prod = PSFGrid(extra_info["files"], extra_info["chunks_per_side"], extra_info["model"],
                            extra_info["x_bounds"], extra_info["y_bounds"], extra_info["obs_id"],
                            extra_info["instrument"], out, err, cmd, telescope=extra_info['telescope'])
         elif cur_p_type == 'light curve' and "NullSource" not in src:
-            prod = LightCurve(cur_p_path,  extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
+            prod = LightCurve(cur_p_path, extra_info["obs_id"], extra_info["instrument"], out, err, cmd,
                               extra_info['central_coord'], extra_info["inner_radius"], extra_info["outer_radius"],
                               extra_info["lo_en"], extra_info["hi_en"], extra_info['time_bin'], extra_info['pattern'],
                               extra_info["from_region"], telescope=extra_info['telescope'])

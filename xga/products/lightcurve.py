@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 3:43 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
 import re
 from datetime import datetime
 from typing import Union, List, Tuple, Dict
@@ -42,11 +42,15 @@ class LightCurve(BaseProduct):
     :param bool region: Whether this was generated from a region in a region file
     :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
                  time_bin_size: Quantity, pattern_expr: str = "", region: bool = False, is_back_sub: bool = True,
-                 telescope: str = None):
+                 telescope: str = None, check_exists: bool = True):
         """
         This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
         for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
@@ -68,11 +72,16 @@ class LightCurve(BaseProduct):
         :param bool region: Whether this was generated from a region in a region file
         :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
         :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
 
         # Call the BaseProduct init, sets up some attributes
         # TODO Support streaming of remote data
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         check_exists=check_exists)
 
         # Set the product type
         self._prod_type = "lightcurve"

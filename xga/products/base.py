@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 12:51 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:57 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -49,10 +49,15 @@ class BaseProduct:
     :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
         datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
         argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
 
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None, telescope: str = None, force_remote: bool = False, fsspec_kwargs: dict = None):
+                 extra_info: dict = None, telescope: str = None, force_remote: bool = False, fsspec_kwargs: dict = None,
+                 check_exists: bool = True):
         """
         The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
         relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
@@ -73,6 +78,10 @@ class BaseProduct:
         :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
 
         # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
@@ -98,6 +107,9 @@ class BaseProduct:
         #  may be required in some warning/error messages later on
         self._force_remote = force_remote
 
+        # Also keep track of whether we're assuming that the files exist, or checking.
+        self._check_exists = check_exists
+
         # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
         #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
         if fsspec_kwargs is None and self._remote_type == "s3":
@@ -113,8 +125,9 @@ class BaseProduct:
         #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
 
-        # Try to determine if the file exists - this will not currently check remote files
-        if self._local_file and os.path.exists(path):
+        # Try to determine if the file exists (if this init has been told to, at
+        #  least) - this will not currently check remote files.
+        if self._local_file and (not check_exists or os.path.exists(path)):
             self._path = path
         elif self._local_file:
             self._path = None

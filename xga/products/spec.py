@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/22/26, 9:40 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:49 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -42,7 +42,7 @@ class Spectrum(BaseProduct):
     :param str instrument: The instrument which this spectrum was generated.
     :param bool grouped: Was this spectrum grouped?
     :param int min_counts: The minimum counts applied for the grouping.
-    :param float min_sn: The minimum signal to noise applied for the grouping.
+    :param float min_sn: The minimum signal-to-noise applied for the grouping.
     :param int over_sample: Level of oversampling applied to spectrum grouping.
     :param str stdout_str: The stdout from the generation process.
     :param str stderr_str: The stderr for the generation process.
@@ -53,12 +53,15 @@ class Spectrum(BaseProduct):
     :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
         generates these by default, as XSPEC does not make use of them).
     :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks the existence of
+        files or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str,
-                 central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
-                 grouped: bool, min_counts: int, min_sn: float, over_sample: int, stdout_str: str,
-                 stderr_str: str, gen_cmd: str, region: bool = False, b_rmf_path: str = '', b_arf_path: str = '',
-                 telescope: str = None):
+    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, central_coord: Quantity, inn_rad: Quantity,
+                 out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int, min_sn: float,
+                 over_sample: int, stdout_str: str, stderr_str: str, gen_cmd: str, region: bool = False,
+                 b_rmf_path: str = '', b_arf_path: str = '', telescope: str = None, check_exists: bool = True):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
@@ -74,7 +77,7 @@ class Spectrum(BaseProduct):
         :param str instrument: The instrument which this spectrum was generated.
         :param bool grouped: Was this spectrum grouped?
         :param int min_counts: The minimum counts applied for the grouping.
-        :param float min_sn: The minimum signal to noise applied for the grouping.
+        :param float min_sn: The minimum signal-to-noise applied for the grouping.
         :param int over_sample: Level of oversampling applied to spectrum grouping.
         :param str stdout_str: The stdout from the generation process.
         :param str stderr_str: The stderr for the generation process.
@@ -85,25 +88,30 @@ class Spectrum(BaseProduct):
         :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
             generates these by default, as XSPEC does not make use of them).
         :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks the existence of
+            files or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         check_exists=check_exists)
         self._prod_type = "spectrum"
 
-        if os.path.exists(rmf_path):
+        if not check_exists or os.path.exists(rmf_path):
             self._rmf = rmf_path
         else:
             self._rmf = ''
             self._usable = False
             self._why_unusable.append("RMFPathDoesNotExist")
 
-        if os.path.exists(arf_path):
+        if not check_exists or os.path.exists(arf_path):
             self._arf = arf_path
         else:
             self._arf = ''
             self._usable = False
             self._why_unusable.append("ARFPathDoesNotExist")
 
-        if os.path.exists(b_path):
+        if not check_exists or os.path.exists(b_path):
             self._back_spec = b_path
         else:
             self._back_spec = ''
@@ -119,7 +127,7 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackRMFPathDoesNotExist")
 
-        if b_arf_path != '' and os.path.exists(b_arf_path):
+        if b_arf_path != '' and (not check_exists or os.path.exists(b_arf_path)):
             self._back_arf = b_arf_path
         elif b_arf_path == '':
             self._back_arf = None

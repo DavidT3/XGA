@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/16/26, 5:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
 
 import gc
 import os
@@ -70,12 +70,16 @@ class Image(BaseProduct):
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
         left as they are, if False (the default) then they are set to zero.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None,
-                 allow_negative_vals: bool = False):
+                 allow_negative_vals: bool = False, check_exists: bool = True):
         """
         The initialisation method for the Image class. This class stores image data from X-ray observations. It also
         allows easy, direct, access to that data, and implements many helpful methods with extra
@@ -107,8 +111,13 @@ class Image(BaseProduct):
         :param str telescope: The telescope that this product is derived from. Default is None.
         :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
             left as they are, if False (the default) then they are set to zero.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         check_exists=check_exists)
         self._shape = None
         self._wcs_radec = None
         self._wcs_skyXY = None
@@ -2639,10 +2648,14 @@ class ExpMap(Image):
         is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None,
-                 telescope: str = None):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None, telescope: str = None,
+                 check_exists: bool = True):
         """
         Init of the ExpMap class.
 
@@ -2658,9 +2671,13 @@ class ExpMap(Image):
             is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
             ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
         :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
-                         obs_inst_combs=obs_inst_combs, telescope=telescope)
+                         obs_inst_combs=obs_inst_combs, telescope=telescope, check_exists=check_exists)
         self._prod_type = "expmap"
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
@@ -2754,7 +2771,7 @@ class RateMap(Image):
 
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
-                         telescope=xga_image.telescope)
+                         telescope=xga_image.telescope, check_exists=False)
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
@@ -3505,9 +3522,13 @@ class PSF(Image):
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the product.
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, telescope: str = None):
+                 gen_cmd: str, telescope: str = None, check_exists: bool = True):
         """
         The init method for PSF class.
 
@@ -3519,10 +3540,15 @@ class PSF(Image):
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the product.
         :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en, telescope=telescope)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
+                         telescope=telescope, check_exists=check_exists)
         self._prod_type = "psf"
         self._data_unit = Unit('')
         self._psf_centre = None

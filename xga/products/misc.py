@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 9:18 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:00 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple
@@ -36,11 +36,15 @@ class EventList(BaseProduct):
     :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
         datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
         argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
 
     def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
                  stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None,
-                 force_remote: bool = False, fsspec_kwargs: dict = None):
+                 force_remote: bool = False, fsspec_kwargs: dict = None, check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -59,10 +63,14 @@ class EventList(BaseProduct):
         :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         # Call the BaseProduct init, sets up some attributes
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
-                         force_remote=force_remote, fsspec_kwargs=fsspec_kwargs)
+                         force_remote=force_remote, fsspec_kwargs=fsspec_kwargs, check_exists=check_exists)
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
