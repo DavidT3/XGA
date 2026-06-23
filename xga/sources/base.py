@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 4:29 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 4:44 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1079,12 +1079,10 @@ class BaseSource:
                          for k, v in xga_conf["{}_FILES".format(tel.upper())].items() if k not in not_these and
                          'badpix' not in k and 'mask' not in k}
 
-            # It is not necessary to check that the files exist, as this happens when the product classes
-            # are instantiated. So whether the file exists or not, an object WILL exist, and you can check if
-            # you should use it for analysis using the .usable attribute
-            # This looks up the class which corresponds to the key (which is the product ID in this case
-            #  e.g. image), then instantiates an object of that class
-
+            # This iterates through all of the directories that seem to hold (per the config file)
+            #  initial products that we want to load in, and constructs a set containing all of
+            #  the file names. This makes it a lot faster to check that files exist, versus
+            #  doing a bunch of 'os.path.exists' calls.
             cur_init_file_names = []
             for cur_dir in set([os.path.dirname(file) for file in files.values()]):
                 try:
@@ -1094,8 +1092,10 @@ class BaseSource:
                     pass
             cur_init_file_names = set(cur_init_file_names)
 
+            # This looks up the class which corresponds to the key (which is the product ID in this case
+            #  e.g. image), then instantiates an object of that class
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
-                                            gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
+                                            gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel, check_exists=False)
                          for key, file in files.items() if os.path.basename(file) in cur_init_file_names}
 
             # If both an image and an exposure map are present for this energy band, a RateMap object is generated
