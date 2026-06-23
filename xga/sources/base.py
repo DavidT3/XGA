@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 3:53 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 4:01 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1086,9 +1086,12 @@ class BaseSource:
             #  e.g. image), then instantiates an object of that class
 
             # TODO REPLACE THE os.path.exists CALL HERE, I THINK IT IS CAUSING SLOWDOWNS
+            prod_dir_sets = set([cur_cont_f for cur_dir in
+                                 set([os.path.dirname(file) for file in files.values()])
+                                 for cur_cont_f in os.listdir(cur_dir)])
             prod_objs = {key: PROD_MAP[key](file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
                                             gen_cmd="", lo_en=lo, hi_en=hi, telescope=tel)
-                         for key, file in files.items() if os.path.exists(file)}
+                         for key, file in files.items() if os.path.basename(file) in prod_dir_sets}
 
             # If both an image and an exposure map are present for this energy band, a RateMap object is generated
             if "image" in prod_objs and "expmap" in prod_objs:
