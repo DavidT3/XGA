@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 12:31 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 12:33 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1625,11 +1625,6 @@ class BaseSource:
 
                     # Loads in the inventory file for this ObsID
                     inven = pd.read_csv("inventory.csv", dtype=str)
-
-                    # RENAME 'type' to something safe for when we access 'columns' from
-                    #  NamedTuples (which are output by df.itertuples). This is a part of the
-                    #  move away from iterrows, which is terribly slow.
-                    inven.rename(columns={'type': 'prod_type'}, inplace=True)
 
                     rel_inven = inven[(inven['type'] == 'image') | (inven['type'] == 'expmap')]
                     for row in rel_inven.itertuples(index=False):
