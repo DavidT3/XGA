@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:19 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:09 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1155,8 +1155,8 @@ class BaseSource:
 
                 # Load the event list - if this doesn't work then there isn't any point continuing to the
                 #  rest of the initial product loading process for the current telescope-ObsID-instrument
-                evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="",
-                                     gen_cmd="", telescope=tel)
+                evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="", gen_cmd="",
+                                     telescope=tel)
                 if not evt_list.usable:
                     continue
 
@@ -1165,8 +1165,8 @@ class BaseSource:
                 #  telescopes, so we do check that the configuration file actually has an entry for it.
                 if 'attitude_file' in rel_sec and ('combined' not in obs_dict[tel][obs_id] or
                                                    'attitude' not in obs_dict[tel][obs_id]['combined']):
-                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, 'combined', '',
-                                           '', '', telescope=tel)
+                    att_prod = BaseProduct(rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, 'combined', '', '',
+                                           '', telescope=tel)
                     # Makes sure there is a combined entry if there wasn't already
                     obs_dict[tel][obs_id].setdefault('combined', {})
                     obs_dict[tel][obs_id]['combined']['attitude'] = att_prod
@@ -1176,8 +1176,7 @@ class BaseSource:
                     obs_dict[tel][obs_id].setdefault(inst, {})
 
                     temp_pth = rel_sec['{i}_attitude_file'.format(i=inst)]
-                    att_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '',
-                                           '', '', telescope=tel)
+                    att_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '', telescope=tel)
                     obs_dict[tel][obs_id][inst]['attitude'] = att_prod
                 else:
                     att_prod = None
@@ -1187,8 +1186,7 @@ class BaseSource:
                 #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
                 if '{i}_badpix_file'.format(i=inst) in rel_sec:
                     temp_pth = rel_sec['{i}_badpix_file'.format(i=inst)]
-                    badpix_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '',
-                                              telescope=tel)
+                    badpix_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '', telescope=tel)
                 else:
                     badpix_prod = None
 
@@ -1196,8 +1194,7 @@ class BaseSource:
                 #  'mask file' to be accessible
                 if '{i}_mask_file'.format(i=inst) in rel_sec:
                     temp_pth = rel_sec['{i}_mask_file'.format(i=inst)]
-                    mask_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '',
-                                            telescope=tel)
+                    mask_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, '', '', '', telescope=tel)
                 else:
                     mask_prod = None
 
@@ -1492,9 +1489,8 @@ class BaseSource:
                 back_arf = ''
 
             # Defining our XGA spectrum instance
-            obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst,
-                                grouped, min_counts, min_sn, over_sample, "", "", "", region, back_rmf,
-                                back_arf, telescope=tel)
+            obj = Spectrum(spec, rmf, arf, back, central_coord, r_inner, r_outer, obs_id, inst, grouped, min_counts,
+                           min_sn, over_sample, "", "", "", region, back_rmf, back_arf, telescope=tel)
 
             if "ident" in info_key:
                 set_id = int(info_key.split('ident')[-1].split('_')[0])
@@ -1663,7 +1659,8 @@ class BaseSource:
                         #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
                         #  match exactly and the product can be loaded
                         if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                            evt_list = EventList(cur_d+row.file_name, 'combined', 'combined', '', '', '', tel, obs_list)
+                            evt_list = EventList(cur_d + row.file_name, 'combined', 'combined', '', '', '', tel,
+                                                 obs_list)
                             self.update_products(evt_list, update_inv=False)
 
                     # now assigning combined lightcurves
@@ -6180,7 +6177,7 @@ class BaseSource:
                         #  eROSITA with their memory-hogging images/exposure maps
                         del ex_data
                         # Trying to make sure it is gone from memory
-                        gc.collect()
+                        # gc.collect()
                         ex.unload(unload_data=True, unload_header=False)
 
                 if max(list(full_area[tel].values())) == 0:

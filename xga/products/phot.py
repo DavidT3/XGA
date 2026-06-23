@@ -1,7 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:10 PM. Copyright (c) The Contributors.
 
-import gc
 import os
 from copy import deepcopy
 from typing import Tuple, List, Union, Dict
@@ -1140,7 +1139,7 @@ class Image(BaseProduct):
             del self.header
 
         # Force garbage collection just to make sure the data are gone from memory
-        gc.collect()
+        # gc.collect()
 
     def get_count(self, at_coord: Quantity) -> float:
         """
