@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 11:27 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1832,7 +1832,7 @@ class BaseSource:
                     #  were at the time of the original fit - if they are not then we are stopping the load process
                     #  here and moving onto the next entry
                     if oi_dict != self.instruments[tel]:
-                        break
+                        continue
 
                     # We try-except the actual reading of the fit output file, because it is possible
                     #  that it doesn't exist, or has been moved/damaged in some way
@@ -1842,7 +1842,7 @@ class BaseSource:
                         global_results = fit_data["RESULTS"][0]
                         model = global_results["MODEL"].strip(" ")
                     except (OSError, FileNotFoundError):
-                        break
+                        continue
 
                     inst_lums = {}
 
@@ -1872,7 +1872,7 @@ class BaseSource:
                     #  to check for spectra that match our description but weren't included in the fit output, but
                     #  I realise that would break cases where spectrum_checking has excluded some spectra
                     if not assign_res:
-                        break
+                        continue
 
                     for line_ind, line in enumerate(fit_data["SPEC_INFO"]):
                         rel_sp = rel_sps[line_ind]
