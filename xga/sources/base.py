@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 6:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:49 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1834,10 +1834,15 @@ class BaseSource:
                     if oi_dict != self.instruments[tel]:
                         break
 
-                    # Load in the results table
-                    fit_data = FITS(fit_file)
-                    global_results = fit_data["RESULTS"][0]
-                    model = global_results["MODEL"].strip(" ")
+                    # We try-except the actual reading of the fit output file, because it is possible
+                    #  that it doesn't exist, or has been moved/damaged in some way
+                    try:
+                        # Load in the results table
+                        fit_data = FITS(fit_file)
+                        global_results = fit_data["RESULTS"][0]
+                        model = global_results["MODEL"].strip(" ")
+                    except (OSError, FileNotFoundError):
+                        break
 
                     inst_lums = {}
 
