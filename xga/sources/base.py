@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 12:33 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:19 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -588,7 +588,13 @@ class BaseSource:
         # The user does have control over whether this happens or not though.
         # This goes at the end of init to make sure everything necessary has been declared
         if os.path.exists(OUTPUT) and load_products:
+            # This is meant to help with performance, rather than LOTS of repeated garbage
+            #  collection calls during product loading, there will just be one at the end
+            gc.disable()
             self._existing_xga_products(load_fits, load_spectra, load_profiles)
+            # We turn GC back on, and then call it
+            gc.enable()
+            gc.collect()
 
         # Now going to save load_fits in an attribute, just because if the observation is cleaned we need to
         #  run _existing_xga_products again, same for load_products
