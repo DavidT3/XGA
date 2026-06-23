@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 12:17 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 12:31 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1532,14 +1532,16 @@ class BaseSource:
                         for i in self.instruments[tel][obs] + ['combined']:
                             # Fetches lines of the inventory which match the current ObsID and instrument
                             rel_ims = im_lines[(im_lines['obs_id'] == obs) & (im_lines['inst'] == i)]
-                            for r_ind, r in rel_ims.itertuples(index=False):
-                                self.update_products(parse_image_like(cur_d+r.file_name, r.prod_type, tel),
+                            for r in rel_ims.itertuples(index=False):
+                                # TODO
+                                cur_prod_type = r[5]
+                                self.update_products(parse_image_like(cur_d+r.file_name, cur_prod_type, tel),
                                                      update_inv=False)
 
                         # TODO THIS NEEDS TO BE UPDATED TO SUPPORT MULTI-MISSION XGA
                         # This finds the lines of the inventory that are lightCurve entries
                         lc_lines = inven[inven['type'] == 'lightcurve']
-                        for row_ind, row in lc_lines.itertuples(index=False):
+                        for row in lc_lines.itertuples(index=False):
                             # The parse lightcurve function does check to see if an inventory entry is relevant to this
                             #  source (using the source name), and if the ObsID and instrument are still associated.
                             self.update_products(parse_lightcurve(row, tel, False), update_inv=False)
@@ -1550,7 +1552,7 @@ class BaseSource:
                         if load_spectra:
                             # Find only the lines of the inventory file that are to do with spectra
                             spec_lines = inven[inven['type'] == 'spectrum']
-                            for row_ind, row in spec_lines.itertuples(index=False):
+                            for row in spec_lines.itertuples(index=False):
                                 obj, set_id, ann_id = parse_spectrum(row, False)
                                 if set_id is not None:
                                     obj.annulus_ident = ann_id
@@ -1641,7 +1643,8 @@ class BaseSource:
                         #  the src_oi_set, and if that is the same length as the original src_oi_set then we know that they
                         #  match exactly and the product can be loaded
                         if len(src_oi_set) == len(test_oi_set) and len(src_oi_set | test_oi_set) == len(src_oi_set):
-                            self.update_products(parse_image_like(cur_d + row.file_name, row.prod_type, tel, merged=True),
+                            cur_prod_type = row[5]
+                            self.update_products(parse_image_like(cur_d + row.file_name, cur_prod_type, tel, merged=True),
                                                  update_inv=False)
 
                     # now assigning combined event lists
