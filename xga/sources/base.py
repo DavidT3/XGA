@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 10:07 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1726,10 +1726,10 @@ class BaseSource:
                             # Spectra can have combined observations but individual instruments.
                             # Checking that a spectrum is associated to the source is different depending
                             # on if the instrument is combined or not
-                            o_split = row['obs_ids'].split('/')
+                            o_split = row.obs_ids.split('/')
                             # if there is a '/' in the %%% insts entry, that means it should be all the instruments combined
-                            if '/' in row['insts']:
-                                i_split = row['insts'].split('/')
+                            if '/' in row.insts:
+                                i_split = row.insts.split('/')
                                 # Assemble a set of observations-instrument strings for the current row, to test against the
                                 #  src_oi_set we assembled earlier
                                 test_oi_set = set([o+i_split[o_ind] for o_ind, o in enumerate(o_split)])
@@ -1773,7 +1773,7 @@ class BaseSource:
                                         except NotAssociatedError:
                                             pass
                             # This condition deals with checking combined obs, individual instrument
-                            elif set(o_split) == set(self.obs_ids[tel]) and all(row['insts'] in self.instruments[tel][o] for o in self.instruments[tel]):
+                            elif set(o_split) == set(self.obs_ids[tel]) and all(row.insts in self.instruments[tel][o] for o in self.instruments[tel]):
                                 obj, set_id, ann_id = parse_spectrum(row, True)
                                 if set_id is not None:
                                     obj.annulus_ident = ann_id
