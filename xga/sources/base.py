@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 4:44 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:57 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -2045,6 +2045,12 @@ class BaseSource:
                             spec_info = line["SPEC_PATH"].strip(" ").split("/")[-1].split("_")
                             sp_oi, sp_inst = spec_info[:2]
                             sp_ann_id = int(spec_info[-2])
+
+                            # TODO This is a bit of a sticking plaster, but will do until the inventory back end
+                            #  changes to SQLite - the ObsID extracted from the file name will not be real
+                            #  for combined ObsID spectra
+                            if os.path.dirname(line["SPEC_PATH"].strip(" ")).split('/')[-1] == "combined":
+                                sp_oi = "combined"
 
                             try:
                                 rel_sp = rel_ann_sp.get_spectra(sp_ann_id, sp_oi, sp_inst)
