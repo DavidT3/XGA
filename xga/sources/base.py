@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 10:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/24/26, 10:15 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -2375,7 +2375,8 @@ class BaseSource:
                     #  where they were generated with different resolutions).
                     #  TODO see issue #908, figure out how to support different resolutions of image
                     try:
-                        ims = self.get_images(obs_id, telescope=tel)
+                        ims = self.get_images(obs_id, telescope=tel) if not COMBINED_INSTS[tel] \
+                            else self.get_images(obs_id, telescope=tel, inst='combined')
                     except NoProductAvailableError:
                         raise NoProductAvailableError("There is no image available for {t}-{o}, associated "
                                                       "with {n}. An image is currently required to check for sky "
