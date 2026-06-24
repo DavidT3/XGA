@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:10 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:42 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -168,73 +168,23 @@ class Image(BaseProduct):
             self._smoothed_info = None
             self._smoothed_method = None
 
-        # TODO I am not yet dealing with multi-telescope images, because I don't quite know how we're going
-        #  to tackle that yet
-        # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
-        # ALSO - this is the only place where it is possible that the PROPERTY header is None (i.e. the header has
-        #  not been read in from the file) without an error. That will happen specifically when eROSITA software
-        #  fails to generate a tile image properly - the file path will exist but the file itself is garbled. It'll
-        #  be caught and an error will be thrown once the generation processes are complete, and none of this will
-        #  matter
-        if self.header is not None and (obs_id == 'combined' or instrument == 'combined'):
-            # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
-            #  in any file headers
-            if obs_inst_combs is not None:
-                # We check to make sure that each entry in obs_inst_combs is a two element list
-                if any([len(e) != 2 for e in obs_inst_combs]):
-                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
-                # And if it passes that we check that the instrument values are one of the allowed list
-                elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
-                    raise ValueError("The allowed instruments for {t} are: "
-                                     "{al}".format(t=telescope, al=", ".join(ALLOWED_INST[telescope].values())))
+        # We perform validity checks on any input passed to the obs_inst_combs argument.
+        if obs_inst_combs is not None:
+            # We check to make sure that each entry in obs_inst_combs is a two-element list
+            if any([len(e) != 2 for e in obs_inst_combs]):
+                raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+            # And if it passes that we check that the instrument values are one of the allowed list
+            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
+                raise ValueError(f"The allowed instruments for {telescope} are: "
+                                 f"{", ".join(ALLOWED_INST[telescope].values())}")
 
-                self._comb_oi_pairs = obs_inst_combs
-
-            # In the case that the telescope is XMM, we can probably read the information we need from the header
-            elif telescope == 'xmm' and "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
-                # We search for the instrument names of the various components
-                ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
-                # Then use the length of the list to find out how many components there are
-                num_ims = len(ind_inst_hdrs)
-                # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
-                #  headers detailing the different ObsIDs, so we just use the ObsID header
-                if len([h for h in self.header if 'EMSCA' in h]) == 0:
-                    oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI"+str(ind).zfill(3)]]] for
-                                ind in range(1, num_ims+1)]
-                else:
-                    oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
-                                 EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
-                                for ind in range(1, num_ims + 1)]
-
-                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
-                self._comb_oi_pairs = oi_pairs
-
-            # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
-            #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
-            elif (telescope == 'erosita' or telescope == 'erass') and self.header['INSTRUME'] == 'merged':
-
-                # We search for the instrument names of the various components
-                ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
-
-                # Build the list of lists of ObsID instrument combos
-                oi_pairs = [[self.header["OBS_ID"], self.header[hdr_en].lower()] for hdr_en in ind_inst_hdrs]
-
-                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
-                self._comb_oi_pairs = oi_pairs
-
-            # TODO MAY NEED SOME CHANDRA SPECIFIC INTERVENTION HERE, BUT HAVEN'T MADE COMBINED PHOTOMETRIC PRODUCTS
-            #  YET SO UNSURE RIGHT NOW
-
-            # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
-            elif telescope == 'xmm':
-                raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
-                                 " pass ObsID and Instrument combinations using obs_inst_combs")
-            else:
-                raise ValueError("For combined images, obs_inst_combs must be set to a list of lists "
-                                 "of ['ObsID', 'Inst'] combinations.")
-
-        else:
-            self._comb_oi_pairs = None
+        # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
+        #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by
+        #  the obs_inst_combos, obs_ids, and instruments properties.
+        self._comb_oi_pairs = obs_inst_combs
+        # This keeps track of whether we've attempted to populate the _comb_oi_pairs attribute, as it can be
+        #  None even after an attempted loading.
+        self._loaded_comb_oi_pairs = False
 
     def _read_on_demand(self):
         """
@@ -338,6 +288,76 @@ class Image(BaseProduct):
             if self._wcs_radec is None:
                 raise FailedProductError("SAS has generated this image without a WCS capable of "
                                          "going from pixels to RA-DEC.")
+
+    def _oi_inst_pairs_on_demand(self):
+        """
+        Generates and caches combined ObsID and Instrument pairs on demand for specific telescope data.
+
+        This method processes combined telescope image metadata, primarily analyzing the header information to extract
+        necessary details about the observation ID and instrument combinations used to generate the image. The logic
+        also considers variations across telescopes like XMM-Newton and eROSITA while leaving placeholders for potential
+        future support of additional telescopes. The data extracted is then cached for future reference to optimize
+        subsequent access.
+        """
+        # TODO I am not yet dealing with multi-telescope images, because I don't quite know how we're going
+        #  to tackle that yet
+        # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
+        # ALSO - this is the only place where it is possible that the PROPERTY header is None (i.e. the header has
+        #  not been read in from the file) without an error. That will happen specifically when eROSITA software
+        #  fails to generate a tile image properly - the file path will exist but the file itself is garbled. It'll
+        #  be caught and an error will be thrown once the generation processes are complete, and none of this will
+        #  matter
+        if not self._loaded_comb_oi_pairs:
+            if (self.obs_id == 'combined' or self.instrument == 'combined') and self.header is not None:
+                # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
+                #  in any file headers
+                if self._comb_oi_pairs is not None:
+                    pass
+
+                # In the case that the telescope is XMM, we can probably read the information we need from the header
+                elif self.telescope == 'xmm' and "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+                    # We search for the instrument names of the various components
+                    ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
+                    # Then use the length of the list to find out how many components there are
+                    num_ims = len(ind_inst_hdrs)
+                    # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
+                    #  headers detailing the different ObsIDs, so we just use the ObsID header
+                    if len([h for h in self.header if 'EMSCA' in h]) == 0:
+                        oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]] for
+                                    ind in range(1, num_ims + 1)]
+                    else:
+                        oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
+                                     EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
+                                    for ind in range(1, num_ims + 1)]
+
+                    # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                    self._comb_oi_pairs = oi_pairs
+
+                # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
+                #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
+                elif (self.telescope == 'erosita' or self.telescope == 'erass') and self.header['INSTRUME'] == 'merged':
+
+                    # We search for the instrument names of the various components
+                    ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
+
+                    # Build the list of lists of ObsID instrument combos
+                    oi_pairs = [[self.header["OBS_ID"], self.header[hdr_en].lower()] for hdr_en in ind_inst_hdrs]
+
+                    # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                    self._comb_oi_pairs = oi_pairs
+
+                # TODO MAY NEED SOME CHANDRA SPECIFIC INTERVENTION HERE, BUT HAVEN'T MADE COMBINED PHOTOMETRIC PRODUCTS
+                #  YET SO UNSURE RIGHT NOW
+                # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
+                elif self.telescope == 'xmm':
+                    raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
+                                     " pass ObsID and Instrument combinations using obs_inst_combs")
+                else:
+                    raise ValueError("For combined images, obs_inst_combs must be set to a list of lists "
+                                     "of ['ObsID', 'Inst'] combinations.")
+
+        # If we get here, we made the attempt to load the information.
+        self._loaded_comb_oi_pairs = True
 
     def _process_regions(self, path: str = None, reg_objs: Union[List[Union[PixelRegion, SkyRegion]], dict] = None) \
             -> dict:
@@ -554,6 +574,9 @@ class Image(BaseProduct):
         :return: A list of lists of ObsID-Instrument combinations, or a list containing one ObsID and one instrument.
         :rtype: list
         """
+        # This will make sure that the _comb_oi_pairs attribute is populated, if it can be.
+        self._oi_inst_pairs_on_demand()
+
         if self._comb_oi_pairs is not None:
             return self._comb_oi_pairs
         else:
@@ -568,6 +591,9 @@ class Image(BaseProduct):
         :return: List of ObsIDs involved in this image.
         :rtype: list
         """
+        # This will make sure that the _comb_oi_pairs attribute is populated, if it can be.
+        self._oi_inst_pairs_on_demand()
+
         if self._comb_oi_pairs is None:
             ret_list = [self.obs_id]
         else:
@@ -590,6 +616,9 @@ class Image(BaseProduct):
         :return: A dictionary of ObsIDs and their associated instruments
         :rtype: dict
         """
+        # This will make sure that the _comb_oi_pairs attribute is populated, if it can be.
+        self._oi_inst_pairs_on_demand()
+
         # If this attribute is None then this product isn't combined, so we do the fallback for a single
         #  ObsID-Instrument combination
         if self._comb_oi_pairs is None:
@@ -611,12 +640,12 @@ class Image(BaseProduct):
         # The filename, devoid of the rest of the path
         f_name = self.path.split('/')[-1]
 
-        if self._comb_oi_pairs is None:
+        if self.obs_inst_combos is None:
             new_line = pd.Series([f_name, self.obs_id, self.instrument, self.storage_key, "", self.type],
                                  ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
         else:
-            o_str = "/".join(e[0] for e in self._comb_oi_pairs)
-            i_str = "/".join(e[1] for e in self._comb_oi_pairs)
+            o_str = "/".join(e[0] for e in self.obs_inst_combos)
+            i_str = "/".join(e[1] for e in self.obs_inst_combos)
             new_line = pd.Series([f_name, o_str, i_str, self.storage_key, "", self.type],
                                  ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
 
