@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/08/2024, 11:49. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 10/12/2025, 09:39. Copyright (c) The Contributors
 
 # This XSPEC script template requires quite a few parameters to be filled in, using the Python formatting
 #  syntax. This *should* act as a general script for model combinations, so long as the formatted
@@ -82,7 +82,7 @@ if {{($norm_scale == True) && ([lindex $par_names 0] != "factor")}} {{
 
 # The confidence interval for parameter error estimation, I don't quite know what the parameter corresponds to,
 #  but the tutorials say that 2.706 is equivalent to the 90% confidence region, 9.0 is equivalent to the 3 sigma
-#  range, and 1.0 is equivelant to 1sigma
+#  range, and 1.0 is equivalent to 1sigma
 set delta_fit_stat {el}
 
 # Now the parameters that xga_extract needs
@@ -102,9 +102,97 @@ set nh_par_to_zero {nhmtz}
 #################################################
 
 
-# Here we run a pre-check to see which of the spectra are good enough to actually contribute anything to the fit
 #################################################
-# Running the spectral gauntlet
+# TCL constants
+#################################################
+set min_chan_req 10
+#################################################
+
+
+#################################################
+# Excluding spectra with insufficient noticed channels
+#################################################
+#############################################
+# Load spectra and ignore channels
+#############################################
+# For loop here to load in all the spectra, iterating over path list
+set counter 1
+foreach pa $spec_paths {{
+    # Loads each spectrum into its own data and plot group
+    data $counter:$counter $pa
+    incr counter
+    }}
+
+# Now we ignore the energy range that we don't want to use, for all loaded spectra
+ignore **:**-$ignore_lo_en **:$ignore_hi_en-**
+
+# If any channels have been labelled bad, this will discount them from analysis
+ignore bad
+#############################################
+
+#############################################
+# Read the number of noticed channels and check if they meet our minimum requirement
+#############################################
+# This list will contain the paths to spectra which HAVE the minimum number of
+#  channels we require
+set accept_min_chan_spec_paths {{}}
+
+set sp_id 1
+foreach sp $spec_paths {{
+    # Sets a variable containing the lower and upper limits of the noticed channels
+    set range [split [tcloutr noticed $sp_id] -]
+
+    # If there are no noticed channels, then it is possible for the just-set 'range'
+    #  variable to be null. We check, and if range is null, we move to the next
+    #  iteration of the loop (i.e. the next spectrum).
+    if {{[string trim $range] == ""}} {{
+        continue
+    }}
+
+    # Calculates the number of channels in the range
+    set num_chan [expr [lindex $range 1] - [lindex $range 0]]
+    # Performs a check to see if the number of channels is greater than the minimum requirement, and
+    #  if it is, add the spectrum's path to the accepted list
+    if {{$num_chan > $min_chan_req}} {{
+            lappend accept_min_chan_spec_paths $sp
+        }}
+
+    incr sp_id
+}}
+#############################################
+
+#############################################
+# Throw an error if no spectra passed
+#############################################
+# The fit script exits here if none of the input spectra meet the minimum channel requirement
+    if {{[llength $accept_min_chan_spec_paths] == 0}} {{
+        puts stderr "***Error: No acceptable spectra are left after the minimum channel step"
+        exit
+    }}
+#############################################
+
+#############################################
+# Cleaning up after minimum channel check
+#############################################
+# Need to replace the spec_paths variable with our new list of spectra that
+#  meet our minimum channel requirements (which will hopefully be all of the spectra!)
+set spec_paths $accept_min_chan_spec_paths
+# We remove all the spectra that we already loaded into XSPEC
+data none
+
+# And unset some TCL variables to restore our environment
+unset accept_min_chan_spec_paths
+unset num_chan
+unset range
+unset sp_id
+#############################################
+#################################################
+
+
+# Here we optionally run a pre-check to attempt to identify the spectra that can contribute some constraining
+#  power to the final simultaneous model fit.
+#################################################
+# Optional model fit quality check to exclude bad spectra [running the spectral gauntlet]
 #################################################
 if {{$run_pre_check == True}} {{
 
@@ -225,15 +313,11 @@ if {{$run_pre_check == True}} {{
     # This assembles a list of spec paths where each spec name is repeated N times (where N is the number of
     #  parameters in a model - tbabs*apec has 5 for instance), then we move onto the next spec_path
     set par_spec {{}}
-    set par_spec_chan {{}}
 
     set sp_id 1
     foreach sp $spec_paths {{
-        set range [split [tcloutr noticed $sp_id] -]
-        set num_chan [expr [lindex $range 1] - [lindex $range 0]]
         for {{set i 1}} {{$i <= $num_uniq_par}} {{incr i 1}} {{
             lappend par_spec $sp
-            lappend par_spec_chan $num_chan
         }}
         incr sp_id
     }}
@@ -248,7 +332,7 @@ if {{$run_pre_check == True}} {{
 
     # We iterate through all the parameters, and find which ones we are checking so we can calculate errors for them
     for {{set ipar 1}} {{$ipar <= $num_pars}} {{incr ipar}} {{
-        # Find the equivelant parameter name for the current ipar
+        # Find the equivalent parameter name for the current ipar
         scan [tcloutr pinfo $ipar] "%s %s" pname punit
 
         # Check if that parameter name appears in the list of parameters we're meant to be quality checking
@@ -264,13 +348,11 @@ if {{$run_pre_check == True}} {{
             set lo_err [expr $par_val-$lo_conf_lim]
             set hi_err [expr $hi_conf_lim-$par_val]
 
-            # Read out the equivelant spectrum path for this particular parameter
+            # Read out the equivalent spectrum path for this particular parameter
             set cur_sp [lindex $par_spec [expr $ipar-1]]
-            # And the number of noticed channels for this spectrum
-            set cur_chan [lindex $par_spec_chan [expr $ipar-1]]
 
             # If the parameter meets our quality cuts then the spectrum is added to the good_spec_paths list
-            if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname) && $cur_chan > 10}} {{
+            if {{$par_val > $check_lo_lim($pname) && $par_val < $check_hi_lim($pname) && $lo_err < $check_err_lim($pname) && $hi_err < $check_err_lim($pname)}} {{
                 lappend good_spec_paths $cur_sp
             }}
         }}

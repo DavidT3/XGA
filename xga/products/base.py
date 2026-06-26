@@ -1,12 +1,12 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 06/11/2025, 12:14. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:57 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
 import pickle
 from copy import deepcopy
 from random import randint
-from typing import Tuple, List, Dict, Union
+from typing import Tuple, List, Dict, Union, Optional
 from warnings import warn
 
 import corner
@@ -22,7 +22,7 @@ from scipy.optimize import curve_fit, minimize
 from scipy.stats import truncnorm
 from tabulate import tabulate
 
-from ..exceptions import SASGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
+from ..exceptions import ProductGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
@@ -31,8 +31,8 @@ from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT, PRETTY_TELESCOPE_NAM
 
 class BaseProduct:
     """
-    The super class for all X-ray products in XGA. Stores relevant file path information, parses the std_err
-    output of the generation process, and stores the instrument and ObsID that the product was generated for.
+    The super class for all X-ray products in XGA. Stores relevant file path information, ObsID, instrument, and telescope.
+    It can also parse the std_err output of some generation processes into specific errors.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str obs_id: The ObsID related to the product being declared.
@@ -43,18 +43,25 @@ class BaseProduct:
     :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
         object for later use by another processing step. It isn't intended for use by a user and will only be
         accessible when defining a BaseProduct.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
     :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
         datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
         argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = "", stderr_str: str = "",
-                 gen_cmd: str = "", extra_info: dict = None, force_remote: bool = False, fsspec_kwargs: dict = None):
+
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 extra_info: dict = None, telescope: str = None, force_remote: bool = False, fsspec_kwargs: dict = None,
+                 check_exists: bool = True):
         """
-        The initialisation method for the BaseProduct class, the super class for all SAS generated products in XGA.
-        Stores relevant file path information, parses the std_err output of the generation process, and stores the
-        instrument and ObsID that the product was generated for.
+        The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
+        relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
+        of some generation processes into specific errors.
 
         :param str path: The path to where the product file SHOULD be located.
         :param str obs_id: The ObsID related to the product being declared.
@@ -65,11 +72,16 @@ class BaseProduct:
         :param dict extra_info: This allows the XGA processing steps to store some temporary extra information in this
             object for later use by another processing step. It isn't intended for use by a user and will only be
             accessible when defining a BaseProduct.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
         :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
 
         # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
@@ -78,12 +90,12 @@ class BaseProduct:
             # Here the user has forced us to treat the path as remote
             self._local_file = False
             self._remote_type = 'unknown'
-        elif path[:5] == "s3://" or path[:5] == "gs://":
+        elif path.startswith("s3://") or path.startswith("gs://"):
             # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
             #  use with resources like the HEASARC open S3 bucket
             self._local_file = False
             self._remote_type = "s3"
-        elif path[:8] == "https://":
+        elif path.startswith("https://"):
             self._local_file = False
             self._remote_type = "https"
         else:
@@ -94,6 +106,9 @@ class BaseProduct:
         # Keep track of whether the user forced the path to be considered as a remote url or not, that information
         #  may be required in some warning/error messages later on
         self._force_remote = force_remote
+
+        # Also keep track of whether we're assuming that the files exist, or checking.
+        self._check_exists = check_exists
 
         # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
         #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
@@ -110,8 +125,9 @@ class BaseProduct:
         #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
 
-        # Try to determine if the file exists - this will not currently check remote files
-        if self._local_file and os.path.exists(path):
+        # Try to determine if the file exists (if this init has been told to, at
+        #  least) - this will not currently check remote files.
+        if self._local_file and (not check_exists or os.path.exists(path)):
             self._path = path
         elif self._local_file:
             self._path = None
@@ -129,12 +145,12 @@ class BaseProduct:
         # Keeping them in class attributes
         self.unprocessed_stdout = stdout_str
         self.unprocessed_stderr = stderr_str
-        # Running checks on the stdout/err strings, looking for any obvious errors
-        self._sas_error, self._sas_warn, self._other_error = self.parse_stderr()
 
-        # Storing more of the input information in attributes
+        # The base attributes for products - they let it know which telescope it came from, which instrument, and
+        #  which specific observation - amongst other things
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
 
         # Replacing a null input for the generation command with an empty string
         if gen_cmd is None:
@@ -144,6 +160,11 @@ class BaseProduct:
         self._energy_bounds = (None, None)
         self._prod_type = None
         self._src_name = None
+
+        # This is now telescope aware, and will look for errors formatted in the way expected for a particular
+        #  backend software for the telescope - to help with legacy support I am going to have it check for XMM
+        #  formatted errors if telescope was set to None on declaration
+        self._gen_error, self._gen_warn, self._other_error = self.parse_stderr()
 
         # Any extra information which a processing step might want to store in this base product - generally only
         #  used when a product has been generated that doesn't need its only product class, but is being put in
@@ -224,18 +245,20 @@ class BaseProduct:
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
-        come from SAS, and other unidentifiable errors. The SAS errors are returned with the actual error
-        name, the error message, and the SAS routine that caused the error.
+        come from a telescope-specific software package (e.g. SAS, or eSASS), and other unidentifiable errors. The
+        telescope-specific errors are returned with the error name, the error message, and the routine that
+        caused the error.
 
-        :return: A list of dictionaries containing parsed, confirmed SAS errors, another containing SAS warnings,
-            and another list of unidentifiable errors that occured in the stderr.
+        :return: A list of dictionaries containing parsed, confirmed telescope-specific errors, another containing
+            telescope-specific warnings, and another list of unidentifiable errors that occurred in the stderr.
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
+
         def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
             """
-            Function to search for and parse SAS errors and warnings.
+            Function to search for and parse SAS (XMM software) errors and warnings.
 
-            :param list split_stderr: The stderr string split on line endings.
+            :param list split_stderr: The stderr string splits on line breaks.
             :param str err_type: Should this look for errors or warnings?
             :return: Returns the dictionary of parsed errors/warnings, as well as all lines
                 with SAS errors/warnings in.
@@ -274,66 +297,245 @@ class BaseProduct:
                 parsed_sas.append({"originator": originator, "name": err_ident, "message": err_body})
             return parsed_sas, sas_lines
 
+        def find_esass(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+            """
+            Function to search for and parse eSASS (eROSITA software) errors and warnings.
+
+            :param list split_stderr: The stderr string split on line endings.
+            :param str err_type: Should this look for errors or warnings?
+            :return: Returns the dictionary of parsed errors/warnings, as well as all lines
+                with eSASS errors/warnings in.
+            :rtype: Tuple[List[dict], List[str]]
+            """
+            # The substrings we're looking for are different depending on if we're searching for
+            #  errors or warnings
+            if err_type == "error":
+                indicators = np.array(["**ERROR", '**STOP', "Fortran runtime error", "NoSuchFile", 'syntax error'])
+            else:
+                indicators = np.array(["**WARN"])
+
+            parsed_esass = []
+            rel_esass_lines = []
+            # Iterating through the lines
+            for line in split_stderr:
+                # Checking to see if any of the error/warning indicators are in the current line
+                pres_indic = np.array([cur_indic in line for cur_indic in indicators])
+                # If no indicators are present, we can stop looking at the current line
+                if not np.any(pres_indic):
+                    continue
+
+                # Make a note of the line, as it contains something relevant
+                rel_esass_lines.append(line)
+
+                # The relevant error or warning indicator(s) for the current line - I suspect that the vast majority
+                #  of the time this is going to be a one element array.
+                rel_indic = indicators[pres_indic]
+                # Just in case it isn't a one element array though, we add this to select a single indicator to
+                #  focus on
+                if len(rel_indic) != 1:
+                    rel_indic = rel_indic[0]
+
+                try:
+                    # More almost hard coding that makes me very uncomfortable
+                    if '**' in rel_indic:
+                        # This tries to split out the eSASS task that produced the error
+                        originator = line.split(" **")[0].split(":")[0].replace(" ", "")
+                        # The eROSITA errors don't seem to have specific names, so this will be the same for all
+                        err_ident = "eROSITAError"
+                        # Actual error message
+                        err_body = line.split(" **")[-1].split("** ")[-1]
+
+                    elif 'Fortran' in rel_indic:
+                        originator = 'fortran'
+                        err_ident = "eROSITAError"
+                        err_body = line
+
+                    else:
+                        originator = ""
+                        err_ident = "eROSITAError"
+                        err_body = line
+
+                except IndexError:
+                    originator = ""
+                    err_ident = "eROSITAError"
+                    err_body = line
+
+                parsed_esass.append({"originator": originator, "name": err_ident, "message": err_body})
+
+            return parsed_esass, rel_esass_lines
+
+        def find_ciao(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+            """
+            Function to search for and parse CIAO (Chandra software) errors and warnings.
+
+            :param list split_stderr: The stderr string split on line endings.
+            :param str err_type: Should this look for errors or warnings?
+            :return: Returns the dictionary of parsed errors/warnings, as well as all lines
+                with CIAO errors/warnings in.
+            :rtype: Tuple[List[dict], List[str]]
+            """
+            parsed_ciao = []
+            # This is a crude way of looking for CIAO error/warning strings ONLY
+            if err_type == 'error':
+                ciao_lines = [line for line in split_stderr if "ERROR" in line]
+            elif err_type == 'warning':
+                ciao_lines = [line for line in split_stderr if "WARNING" in line]
+
+            for err in ciao_lines:
+                try:
+                    # This tries to split out the CIAO task that produced the error
+                    originator = err.split(" **")[0].split(":")[0].replace(" ", "")
+                    # The CIAO errors don't seem to have specific names, so this will be the same for all
+                    err_ident = "ChandraError"
+                    # Actual error message
+                    err_body = err.split(" **")[-1].split("** ")[-1]
+
+                except IndexError:
+                    originator = ""
+                    err_ident = ""
+                    err_body = ""
+
+                parsed_ciao.append({"originator": originator, "name": err_ident, "message": err_body})
+            return parsed_ciao, ciao_lines
+
+        # TODO honestly this method could be a little more sophisticated/elegant, but it'll do for now
         # Defined as empty as they are returned by this method
-        sas_errs_msgs = []
-        parsed_sas_warns = []
+        tel_errs_msgs = []
+        parsed_tel_warns = []
         other_err_lines = []
-        # err_str being "" is ideal, hopefully means that nothing has gone wrong
-        if self.unprocessed_stderr != "":
-            # Errors will be added to the error summary, then raised later
-            # That way if people try except the error away the object will have been constructed properly
-            err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
-            # Fingers crossed each line is a separate error
-            parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
-            parsed_sas_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-            sas_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                             for e in parsed_sas_errs]
+        if self.telescope is None or self.telescope == 'xmm':
+            # err_str being "" is ideal, hopefully means that nothing has gone wrong
+            if self.unprocessed_stderr != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
+                parsed_tel_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-            # These are impossible to predict the form of, so they won't be parsed
-            other_err_lines = [line for line in err_lines if line not in sas_err_lines
-                               and line not in sas_warn_lines and line != "" and "warn" not in line]
-            # Adding some advice
-            for e_ind, e in enumerate(other_err_lines):
-                if 'seg' in e.lower() and 'fault' in e.lower():
-                    other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
-                                              'and have a look at where your coordinate lies.'
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_sas_errs]
 
-        if len(sas_errs_msgs) > 0:
-            self._usable = False
-            self._why_unusable.append("SASErrorPresent")
-        if len(other_err_lines) > 0:
-            self._usable = False
-            self._why_unusable.append("OtherErrorPresent")
+                # These are impossible to predict the form of, so they won't be parsed
+                other_err_lines = [line for line in err_lines if line not in sas_err_lines
+                                   and line not in sas_warn_lines and line != "" and "warn" not in line]
+                # Adding some advice
+                for e_ind, e in enumerate(other_err_lines):
+                    if 'seg' in e.lower() and 'fault' in e.lower():
+                        other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
+                                                  'and have a look at where your coordinate lies.'
 
-        return sas_errs_msgs, parsed_sas_warns, other_err_lines
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("SASErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.telescope in ['erosita', 'erass']:
+            # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
+            #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
+            #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
+            #  so that has to be checked as well
+            if self.unprocessed_stdout != "" or self.unprocessed_stderr != "":
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in (self.unprocessed_stdout + '\n' + self.unprocessed_stderr).split('\n') if
+                             e != '']
+                # Fingers crossed each line is a separate error
+                parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
+                parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
+
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_esass_errs]
+
+                # There is a particular warning that should be raised as an error, and
+                #  so we have to double back on ourselves here slightly
+                tel_warns_arr = np.array([en['message'] for en in parsed_tel_warns], dtype=str)
+
+                # The warning that should be an error
+                no_evt_warn_str = "Zero length source GTIs"
+                # Searches for the first index of the substring within each entry
+                #  of the telescope warning array. A -1 value means it wasn't found
+                #  thus it becomes a boolean array where True means the warning
+                #  contains the substring. Then we get the warning array indices of
+                #  those that did contain the warning string.
+                cont_no_evt_warn = np.argwhere(np.char.find(tel_warns_arr, no_evt_warn_str) != -1).flatten()
+                # Add those warnings to the error list
+                for warn_ind in cont_no_evt_warn:
+                    tel_errs_msgs.append("{e} raised by {t} - {b}".format(e="NoEventsError", t="eSASS",
+                                                                          b=tel_warns_arr[warn_ind]))
+
+                # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
+                #  they should), it is incredibly difficult to search for non-eSASS errors - thus I do not right now
+                other_err_lines = []
+
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("eSASSErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        # Now for Chandra error identification
+        elif self.telescope == 'chandra':
+
+            if self.unprocessed_stderr != "":
+
+                # Errors will be added to the error summary, then raised later
+                # That way if people try except the error away the object will have been constructed properly
+                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                # Fingers crossed each line is a separate error
+                parsed_ciao_errs, ciao_err_lines = find_ciao(err_lines, "error")
+                parsed_tel_warns, ciao_warn_lines = find_ciao(err_lines, "warning")
+
+                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                                 for e in parsed_ciao_errs]
+
+                other_err_lines = []
+
+            if len(tel_errs_msgs) > 0:
+                self._usable = False
+                self._why_unusable.append("CIAOErrorPresent")
+            if len(other_err_lines) > 0:
+                self._usable = False
+                self._why_unusable.append("OtherErrorPresent")
+
+        elif self.unprocessed_stderr != "":
+            # This should only trigger if the telescope is not XMM/eROSITa/Chandra AND there was a non-empty
+            #  string passed for the stderr
+            warn("We do not currently support checking {t}-specific backend software stderr for issues - feel free to "
+                 "contact the developer team and request this feature.".format(t=self.telescope), stacklevel=2)
+
+        return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
     @property
-    def sas_errors(self) -> List[str]:
+    def gen_errors(self) -> List[str]:
         """
-        Property getter for the confirmed SAS errors associated with a product.
+        Property getter for the confirmed generation errors associated with a product.
 
-        :return: The list of confirmed SAS errors.
-        :rtype: List[Dict]
+        :return: The list of confirmed generation errors.
+        :rtype: List[str]
         """
-        return self._sas_error
+        return self._gen_error
 
     @property
-    def sas_warnings(self) -> List[Dict]:
+    def gen_warnings(self) -> List[Dict]:
         """
-        Property getter for the confirmed SAS warnings associated with a product.
+        Property getter for the confirmed generation warnings associated with a product.
 
-        :return: The list of confirmed SAS warnings.
+        :return: The list of confirmed generation warnings.
         :rtype: List[Dict]
         """
-        return self._sas_warn
+        return self._gen_warn
 
     def raise_errors(self):
         """
         Method to raise the errors parsed from std_err string.
         """
-        for error in self._sas_error:
-            raise SASGenerationError(error)
+        for error in self._gen_error:
+            raise ProductGenerationError(error)
 
         # This is for any unresolved errors.
         for error in self._other_error:
@@ -373,10 +575,9 @@ class BaseProduct:
     @property
     def obs_id(self) -> str:
         """
-        Property getter for the ObsID of this image. Admittedly this information is implicit in the location
-        this object is stored in a source object, but I think it worth storing directly as a property as well.
+        Property getter for the ObsID of the observation that this product was derived from.
 
-        :return: The XMM ObsID of this image.
+        :return: The ObsID of this product.
         :rtype: str
         """
         return self._obs_id
@@ -384,11 +585,9 @@ class BaseProduct:
     @property
     def instrument(self) -> str:
         """
-        Property getter for the instrument used to take this image. Admittedly this information is implicit
-        in the location this object is stored in a source object, but I think it worth storing
-        directly as a property as well.
+        Property getter for the name of the instrument that this product was derived from.
 
-        :return: The XMM instrument used to take this image.
+        :return: The instrument name of this product.
         :rtype: str
         """
         return self._inst
@@ -407,9 +606,10 @@ class BaseProduct:
     @property
     def errors(self) -> List[str]:
         """
-        Property getter for non-SAS errors detected during the generation of a product.
+        Property getter for non-parsed errors detected during the generation of a product.
 
-        :return: A list of errors that aren't related to SAS.
+        :return: A list of errors that haven't been successfully linked to a generation process specific to a
+            telescope.
         :rtype: List[str]
         """
         return self._other_error
@@ -472,22 +672,31 @@ class BaseProduct:
 
 class BaseAggregateProduct:
     """
-    A base class for any XGA products that are an aggregate of an XGA SAS product, for instance this is sub-classed
+    A base class for any XGA products that are an aggregate of a set of XGA products, for instance this is sub-classed
     to make the AnnularSpectra class. Users really shouldn't be instantiating these for themselves.
 
     :param list file_paths: The file paths of the main files for a given aggregate product.
     :param str prod_type: The product type of the individual elements.
     :param str obs_id: The ObsID related to the product.
     :param str instrument: The instrument related to the product.
+    :param str telescope: The telescope that this product is derived from. Default is None.
     """
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str):
+
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
         """
         The init method for the BaseAggregateProduct class
+
+        :param list file_paths: A list of file paths to the constituent products of this aggregate product.
+        :param str prod_type: The type of product this aggregate represents (e.g. 'image').
+        :param str obs_id: The ObsID associated with this aggregate product.
+        :param str instrument: The combined instrument name associated with this product.
+        :param str telescope: The telescope that this product is derived from. Default is None.
         """
         self._all_paths = file_paths
         self._all_usable = True
         self._obs_id = obs_id
         self._inst = instrument
+        self._tele = telescope
         self._prod_type = prod_type
         self._src_name = None
 
@@ -540,10 +749,20 @@ class BaseAggregateProduct:
         in the location this object is stored in a source object, but I think it worth storing
         directly as a property as well.
 
-        :return: The ObsID of this AggregateProduct.
+        :return: The instrument of this AggregateProduct.
         :rtype: str
         """
         return self._inst
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
 
     @property
     def type(self) -> str:
@@ -579,26 +798,26 @@ class BaseAggregateProduct:
         return self._energy_bounds
 
     @property
-    def sas_errors(self) -> List:
+    def gen_errors(self) -> List[List[str]]:
         """
-        Equivelant to the BaseProduct sas_errors property, but reports any SAS errors stored in the component products.
+        Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the component products.
 
-        :return: A list of SAS errors related to component products.
+        :return: A list of telescope software errors related to component products.
         :rtype: List
         """
-        sas_err_list = []
+        tel_soft_err_list = []
         for p in self._component_products:
             prod = self._component_products[p]
-            sas_err_list += prod.sas_errors
-        return sas_err_list
+            tel_soft_err_list += prod.gen_errors
+        return tel_soft_err_list
 
     @property
-    def errors(self) -> List:
+    def errors(self) -> List[List[str]]:
         """
-        Equivelant to the BaseProduct errors property, but reports any non-SAS errors stored in the
+        Equivelant to the BaseProduct errors property, but reports any non-telescope software errors stored in the
         component products.
 
-        :return: A list of non-SAS errors related to component products.
+        :return: A list of non-telescope software errors related to component products.
         :rtype: List
         """
         err_list = []
@@ -610,7 +829,7 @@ class BaseAggregateProduct:
     @property
     def unprocessed_stderr(self) -> List:
         """
-        Equivelant to the BaseProduct sas_errors unprocessed_stderr, but returns a list of all the unprocessed
+        Equivelant to the BaseProduct gen_errors unprocessed_stderr, but returns a list of all the unprocessed
         standard error outputs.
 
         :return: List of stderr outputs.
@@ -679,6 +898,7 @@ class BaseProfile1D:
         plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -686,10 +906,11 @@ class BaseProfile1D:
         spectra to measure the results that were then used to create this profile. Only relevant to profiles that
         are generated from annular spectra, default is None.
     """
+
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, spec_model: str = None,
+                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, telescope: str = None, spec_model: str = None,
                  fit_conf: str = None):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
@@ -716,6 +937,7 @@ class BaseProfile1D:
             plotting if the user tells the view method that they wish for the plot to use normalised y-axis data.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
             is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -808,7 +1030,7 @@ class BaseProfile1D:
         # This generates an array containing (hopefully) the original annular boundaries of the profile
         if self._radii_err is not None:
             upper_bounds = self._radii + self._radii_err
-            bounds = np.insert(upper_bounds, 0, self._radii[0]-self._radii_err[0])
+            bounds = np.insert(upper_bounds, 0, self._radii[0] - self._radii_err[0])
 
             if self._radii[0].value == 0:
                 bounds[0] = self._radii[0]
@@ -817,14 +1039,11 @@ class BaseProfile1D:
         else:
             self._rad_ann_bounds = None
 
-        # Just checking that if one of these values is combined, then both are. Doesn't make sense otherwise.
-        if (obs_id == "combined" and inst != "combined") or (inst == "combined" and obs_id != "combined"):
-            raise ValueError("If ObsID or inst is set to combined, then both must be set to combined.")
-
         # Storing the passed source name in an attribute, as well as the ObsID and instrument
         self._src_name = source_name
         self._obs_id = obs_id
         self._inst = inst
+        self._tele = telescope
 
         # Going to have this convenient attribute for profile classes, I could just use the type() command
         #  when I wanted to know but this is easier.
@@ -964,6 +1183,7 @@ class BaseProfile1D:
         :return: The model instance, and a boolean flag as to whether this was a successful fit or not.
         :rtype: Tuple[BaseModel1D, bool]
         """
+
         def find_to_replace(start_pos: np.ndarray, par_lims: np.ndarray) -> np.ndarray:
             """
             Tiny function to generate an array of which start positions are currently invalid and should
@@ -1007,7 +1227,7 @@ class BaseProfile1D:
 
         for prior in model.par_priors:
             if prior['type'] != 'uniform':
-                raise NotImplementedError("Sorry but we don't yet support non-uniform priors for profile fitting!")
+                raise NotImplementedError("Non-uniform priors for profile fitting are not currently supported - please contact the developers if you need this feature.")
 
         prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
@@ -1112,7 +1332,7 @@ class BaseProfile1D:
                 auto_corr = np.mean(sampler.get_autocorr_time())
                 # Find the nearest hundred above the mean auto-correlation time, then multiply by two for
                 #  burn-in region
-                cut_off = int(np.ceil(auto_corr / 100) * 100)*2
+                cut_off = int(np.ceil(auto_corr / 100) * 100) * 2
                 success = True
             except ValueError as bugger:
                 model.fit_warning = str(bugger)
@@ -1151,7 +1371,7 @@ class BaseProfile1D:
                     upper = np.nanpercentile(p_dist, 84.1).value
                     lower = np.nanpercentile(p_dist, 15.9).value
                     # Store the upper and lower uncertainties with the correct units
-                    model_par_errs.append(Quantity([fiftieth-lower, upper-fiftieth], u))
+                    model_par_errs.append(Quantity([fiftieth - lower, upper - fiftieth], u))
 
                 # Store the model parameter and uncertainties in the model instance
                 model.model_pars = [p_dist.mean() for p_dist in par_dists]
@@ -1209,7 +1429,7 @@ class BaseProfile1D:
         rads = self.fit_radii.copy().value
         success = True
         warning_str = ""
-        
+
         lower_bounds = []
         upper_bounds = []
         for prior_ind, prior in enumerate(model.par_priors):
@@ -1606,7 +1826,7 @@ class BaseProfile1D:
         model_obj = self.get_model_fit(model, 'mcmc')
 
         if figsize is None:
-            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2*model_obj.num_pars), sharex='col')
+            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2 * model_obj.num_pars), sharex='col')
         else:
             fig, axes = plt.subplots(model_obj.num_pars, figsize=figsize, sharex='col')
 
@@ -1638,7 +1858,7 @@ class BaseProfile1D:
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
 
-        frac_conf_lev = [(50 - 34.1)/100, 0.5, (50 + 34.1)/100]
+        frac_conf_lev = [(50 - 34.1) / 100, 0.5, (50 + 34.1) / 100]
 
         # If any of the median parameter values are above 1e+4 we get corner to format them in scientific
         #  notation, to avoid super long numbers spilling over the edge of the corner plot. I will say that
@@ -1655,15 +1875,21 @@ class BaseProfile1D:
                      fontsize=14, y=1.02)
         plt.show()
 
-    def view_getdist_corner(self, model: str, settings: dict = {}, figsize: tuple = (10, 10)):
+    def view_getdist_corner(self, model: str, settings: Optional[dict] = None, figsize: tuple = (10, 10)):
         """
         A view method to see a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
 
         :param str model: The name of the model for which to view the corner plot.
-        :param dict settings: The settings dictionary for a getdist MCSample.
+        :param dict settings: The settings dictionary for a getdist MCSample, default is None, which
+            corresponds to an empty dictionary.
         :param tuple figsize: A tuple to set the size of the figure.
         """
+        # Replace a null value for settings with an empty dictionary (avoids having a mutable default value
+        #  in the function signature, which can cause serious problems).
+        if settings is None:
+            settings = {}
+
         # Grab the flattened chains
         flat_chains = self.get_chains(model, flatten=True)
         model_obj = self.get_model_fit(model, 'mcmc')
@@ -1685,7 +1911,7 @@ class BaseProfile1D:
         g.triangle_plot([gd_samp], filled=True)
         plt.show()
 
-    def generate_data_realisations(self, num_real: int, truncate_zero: bool = False):
+    def generate_data_realisations(self, num_real: int, truncate_zero: bool = False) -> Quantity:
         """
         A method to generate random realisations of the data points in this profile, using their y-axis values
         and uncertainties. This can be useful for error propagation for instance, and does not require a model fit
@@ -1726,11 +1952,11 @@ class BaseProfile1D:
         return realisations
 
     def get_view(self, fig: Figure, main_ax: Axes, xscale: str = "log", yscale: str = "log", xlim: tuple = None,
-                 ylim: tuple = None, models: bool = True,  back_sub: bool = True, just_models: bool = False,
-                 custom_title: str = None, draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False,
+                 ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
+                 custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False,
                  y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
                  data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
-                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: Optional[dict] = None,
                  auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
@@ -1786,6 +2012,11 @@ class BaseProfile1D:
             can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
             keys should be instantiated matplotlib formatters.
         """
+        # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
+        if draw_rads is None:
+            draw_rads = {}
+        if draw_vals is None:
+            draw_vals = {}
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -1875,7 +2106,7 @@ class BaseProfile1D:
             if self.values_err is not None:
                 y_errs = (self.values_err.copy() / y_norm).value
                 main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
-                                     color=data_colour,  linestyle='dashdot', alpha=0.7)
+                                     color=data_colour, linestyle='dashdot', alpha=0.7)
         else:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
 
@@ -1891,7 +2122,6 @@ class BaseProfile1D:
                             color=line[0].get_color())
 
         if models:
-
             # Runs through the model fit methods, and the models fit with each method, and counts them - makes
             #  it a little neater to check how many colours we need for our colour cycles down below
             num_to_plot = len([1 for method in self._good_model_fits for model in self._good_model_fits[method]])
@@ -1914,8 +2144,8 @@ class BaseProfile1D:
             #  no radii values are zero, then fit_radii will just be the radii. Then we subtract the errors and add
             #  the errors, if they are available - to find the minimum and maximum radii we should plot the model to
             if self.radii_err is not None:
-                lo_rad = (self.fit_radii-self.radii_err).min()
-                hi_rad = (self.fit_radii+self.radii_err).max()
+                lo_rad = (self.fit_radii - self.radii_err).min()
+                hi_rad = (self.fit_radii + self.radii_err).max()
             else:
                 lo_rad = self.fit_radii.min()
                 hi_rad = self.fit_radii.max()
@@ -2042,11 +2272,13 @@ class BaseProfile1D:
             elif len(d_val) == 2:
                 main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
                                 label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[1], color=data_colour, alpha=0.5)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
+                                     alpha=0.5)
             elif len(d_val) == 3:
                 main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
                                 label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0]-d_val[1], d_val[0]+d_val[2], color=data_colour, alpha=0.5)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
+                                     alpha=0.5)
 
             main_ax.set_xlim(x_axis_lims)
 
@@ -2106,10 +2338,10 @@ class BaseProfile1D:
 
     def view(self, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None, ylim: tuple = None,
              models: bool = True, back_sub: bool = True, just_models: bool = False, custom_title: str = None,
-             draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False,
+             draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False,
              x_label: str = None, y_label: str = None, data_colour: str = 'black',
              model_colour: Union[str, List[str]] = 'seagreen', show_legend: bool = True, show_residual_ax: bool = True,
-             draw_vals: dict = {}, auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
+             draw_vals: Optional[dict] = None, auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -2181,10 +2413,10 @@ class BaseProfile1D:
 
     def save_view(self, save_path: str, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None,
                   ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
-                  custom_title: str = None, draw_rads: dict = {}, x_norm: Union[bool, Quantity] = False,
+                  custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False,
                   y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
                   data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
-                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: dict = {},
+                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: Optional[dict] = None,
                   auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
@@ -2285,12 +2517,15 @@ class BaseProfile1D:
         :return: The default XGA save path for this profile.
         :rtype: str
         """
-        if self._save_path is None and self._prof_type != "base":
-            temp_path = OUTPUT + "profiles/{sn}/{pt}_{sn}_{id}.xga"
-            rand_prof_id = randint(0, int(1e+8))
-            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)):
-                rand_prof_id = randint(0, int(1e+8))
-            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id)
+        if self._save_path is None and self._prof_type != "base" and self._tele is not None:
+            temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
+            rand_prof_id = randint(0, int(100_000_000))
+            while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
+                rand_prof_id = randint(0, int(100_000_000))
+            self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
+        elif self._tele is None:
+            raise ValueError("Cannot create an XGA save path for this profile when it does not have "
+                             "telescope information.")
 
         return self._save_path
 
@@ -2508,6 +2743,16 @@ class BaseProfile1D:
         return self._inst
 
     @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this profile was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
+
+    @property
     def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
@@ -2715,12 +2960,13 @@ class BaseProfile1D:
         else:
             raise TypeError("'custom_aggregate_label' must be a string, or None.")
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         The length of a BaseProfile1D object is equal to the length of the radii and values arrays
         passed in on init.
 
         :return: The number of bins in this radial profile.
+        :rtype: int
         """
         return len(self._radii)
 
@@ -2745,9 +2991,12 @@ class BaseAggregateProfile1D:
 
     :param list profiles: A list of profile objects (of the same type) to include in this aggregate profile.
     """
+
     def __init__(self, profiles: List[BaseProfile1D]):
         """
         The init for the BaseAggregateProfile1D class.
+
+        :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this aggregate profile.
         """
 
         # This checks that all profiles have the same x units - we used to explicitly check for Python instance
@@ -2756,7 +3005,7 @@ class BaseAggregateProfile1D:
         if len(set(x_units)) != 1:
             raise TypeError("All component profiles must have the same radii units.")
 
-        # THis checks that they all have the same y units.
+        # This checks that they all have the same y units.
         y_units = [p.values_unit.to_string() for p in profiles]
         if len(set(y_units)) != 1:
             raise TypeError("All component profiles must have the same value units.")
@@ -2898,9 +3147,9 @@ class BaseAggregateProfile1D:
 
     def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
              ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: dict = {}, x_norm: bool = False,
+             just_model: bool = False, custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: bool = False,
              y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
-             draw_vals: dict = {}, auto_legend: bool = True, axis_formatters: dict = None,
+             draw_vals: Optional[dict] = None, auto_legend: bool = True, axis_formatters: dict = None,
              show_residual_ax: bool = True, joined_points: bool = False):
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
@@ -2950,6 +3199,11 @@ class BaseAggregateProfile1D:
         :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
             will any uncertainty regions.
         """
+        # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
+        if draw_rads is None:
+            draw_rads = {}
+        if draw_vals is None:
+            draw_vals = {}
 
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
@@ -3011,9 +3265,10 @@ class BaseAggregateProfile1D:
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
             if p.obs_id != 'combined':
-                p_name = p.src_name + " {o}-{i}".format(o=p.obs_id, i=p.instrument.upper())
+                p_name = p.src_name + " {t}-{o}-{i}".format(t=p.telescope, o=p.obs_id,
+                                                            i=p.instrument.upper())
             else:
-                p_name = p.src_name
+                p_name = p.src_name + " {t}".format(t=p.telescope)
 
             if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
                 leg_label = p_name + " PSF Corrected"
@@ -3096,7 +3351,7 @@ class BaseAggregateProfile1D:
 
                         mod_lab = model_obj.publication_name + " - {}".format(p.nice_fit_names[method])
                         mod_line = main_ax.plot(mod_rads.value / x_norms[p_ind].value,
-                                                median_model.value/y_norms[p_ind], color=colour)
+                                                median_model.value / y_norms[p_ind], color=colour)
 
                         main_ax.fill_between(mod_rads.value / x_norms[p_ind].value,
                                              lower_model.value / y_norms[p_ind].value,
@@ -3155,7 +3410,7 @@ class BaseAggregateProfile1D:
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
             # That way its symmetrical
-            outer_ylim = 1.1*max([abs(lim) for lim in res_ax.get_ylim()])
+            outer_ylim = 1.1 * max([abs(lim) for lim in res_ax.get_ylim()])
             res_ax.set_ylim(-outer_ylim, outer_ylim)
             res_ax.set_ylabel("Model - Data")
 
@@ -3239,9 +3494,9 @@ class BaseAggregateProfile1D:
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
             fig.savefig(save_path, bbox_inches='tight')
-
-        # And of course actually showing it
-        plt.show()
+        else:
+            # Showing the figure
+            plt.show()
 
     def __add__(self, other):
         to_combine = self.profiles

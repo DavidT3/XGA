@@ -144,10 +144,10 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
         # If the file didn't already exist, we need to actually save the smoothed array, otherwise we'll just read
         #  the file in later
         if not existing:
-            rand_ident = str(randint(0, int(1e+8)))
+            rand_ident = str(randint(0, int(100_000_000)))
             # Makes absolutely sure that the random integer hasn't already been used
             while any([str(rand_ident) in f for f in os.listdir(final_dest)]):
-                rand_ident = str(randint(0, int(1e+8)))
+                rand_ident = str(randint(0, int(100_000_000)))
 
             # The final name of the new image file
             final_name = final_name.format(ri=rand_ident)

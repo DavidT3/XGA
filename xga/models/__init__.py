@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:58. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:38 PM. Copyright (c) The Contributors.
 
 import inspect
 from types import FunctionType
@@ -94,6 +94,42 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
     return new_model_func
 
 
+# ==============================================================================
+# The `derivative` function below is adapted from SciPy's `scipy.misc.derivative`.
+# SciPy is licensed under the BSD 3-Clause License:
+#
+# Copyright (c) 2001-2002 Enthought, Inc. 2003-2024, SciPy Developers.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above
+#    copyright notice, this list of conditions and the following
+#    disclaimer in the documentation and/or other materials provided
+#    with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# ==============================================================================
+
 def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args: tuple= (), order: int = 3):
     """
     Find the nth derivative of a function at a point.
@@ -102,19 +138,21 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     compute the nth derivative at `x0`.
 
     This is intended as a drop-in replacement for Scipy's misc.derivative function, which was deprecated in
-    Scipy v1.10.0 and removed after Scipy v1.14.1. It has been directly copied/reconstructed from Scipy  code.
+    Scipy v1.10.0 and removed after Scipy v1.14.1. It has been directly copied/reconstructed from Scipy code.
 
-    :param FunctionType func: Input function
-    :param x0: The point at which the nth derivative is found.
-    :param dx: Spacing.
-    :param n: Order of the derivative. Default is 1.
-    :param args: Arguments
-    :param order: Number of points to use, must be odd.
+    :param FunctionType func: Input function.
+    :param float x0: The point at which the nth derivative is found.
+    :param float dx: Spacing.
+    :param int n: Order of the derivative. Default is 1.
+    :param tuple args: Arguments to pass to the input function.
+    :param int order: Number of points to use, must be odd.
+    :return: The nth derivative of the function at x0.
+    :rtype: float
     """
 
     def _central_diff_weights(Np, ndiv=1):
         """
-        Return weights for an Np-point central derivative.
+        Return weights for a Np-point central derivative.
 
         Assumes equally-spaced function points.
 
@@ -181,5 +219,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     for k in range(order):
         val += weights[k] * func(x0 + (k - ho) * dx, *args)
     return val / np.prod((dx,) * n, axis=0)
+
+
 
 

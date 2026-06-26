@@ -47,7 +47,7 @@ def shell_ann_vol_intersect(shell_radii: Union[np.ndarray, Quantity], ann_radii:
     return (4 / 3) * np.pi * main_term
 
 
-def shell_volume(inn_radius: Quantity, out_radius: Quantity) -> Union[Quantity, np.ndarray]:
+def shell_volume(inn_radius: Union[Quantity, np.ndarray], out_radius: Union[Quantity, np.ndarray]) -> Union[Quantity, np.ndarray]:
     """
     Silly little function that calculates the volume of a spherical shell with inner radius inn_radius and outer
     radius out_radius.

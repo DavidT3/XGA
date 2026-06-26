@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -247,14 +247,14 @@ class VikhlininTemperature1D(BaseModel1D):
         The model function for the full Vikhlinin temperature profile.
 
         :param Quantity x: The radii to calculate y values for.
-        :param float r_cool: Parameter describing the radius of the cooling region (I THINK - NOT CERTAIN YET).
-        :param float a_cool: Power law parameter for the cooling region (I THINK - NOT CERTAIN YET).
-        :param float t_min: A minimum temperature parameter for the model (I THINK - NOT CERTAIN YET).
-        :param float t_zero: A normalising temperature parameter for the model (I THINK - NOT CERTAIN YET).
-        :param float r_tran: The radius of the transition region of this broken power law model.
-        :param float a_power: The first power law index.
-        :param float b_power: The second power law index.
-        :param float c_power: the third power law index.
+        :param Quantity r_cool: Parameter describing the radius of the cooling region (I THINK - NOT CERTAIN YET).
+        :param Quantity a_cool: Power law parameter for the cooling region (I THINK - NOT CERTAIN YET).
+        :param Quantity t_min: A minimum temperature parameter for the model (I THINK - NOT CERTAIN YET).
+        :param Quantity t_zero: A normalising temperature parameter for the model (I THINK - NOT CERTAIN YET).
+        :param Quantity r_tran: The radius of the transition region of this broken power law model.
+        :param Quantity a_power: The first power law index.
+        :param Quantity b_power: The second power law index.
+        :param Quantity c_power: the third power law index.
         :return: The y values corresponding to the input x values.
         :rtype: Quantity
         """

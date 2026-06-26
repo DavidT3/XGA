@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 15:22. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:33 PM. Copyright (c) The Contributors.
 
 from .base import BaseProduct, BaseAggregateProduct, BaseProfile1D, BaseAggregateProfile1D
 from .lightcurve import LightCurve, AggregateLightCurve
@@ -10,7 +10,7 @@ from .spec import Spectrum, AnnularSpectra
 
 # Defining a dictionary to map from string product names to their associated classes
 PROD_MAP = {"image": Image, "expmap": ExpMap, "events": EventList, "spectrum": Spectrum, "psf": PSF,
-            "psfgrid": PSFGrid, "lightcurve": LightCurve}
+            "psfgrid": PSFGrid, "lightcurve": LightCurve, 'badpix': BaseProduct, 'attitude': BaseProduct}
 
 
 

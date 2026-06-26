@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 11:58 AM. Copyright (c) The Contributors.
 
 from typing import Union, List, Tuple, Dict
 from warnings import warn, simplefilter
@@ -10,13 +10,14 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError, kpc
 
 from .general import ExtendedSource
-from .. import DEFAULT_COSMO
+from .. import DEFAULT_COSMO, COMBINED_INSTS
 from ..exceptions import NoRegionsError, NoProductAvailableError
 from ..imagetools import radial_brightness
 from ..products import Spectrum, BaseProfile1D
 from ..products.profile import ProjectedGasTemperature1D, APECNormalisation1D, GasDensity3D, GasTemperature3D, \
-    HydrostaticMass, ProjectedGasMetallicity1D
+    HydrostaticMass, SpecificEntropy, ProjectedGasMetallicity1D
 from ..sourcetools import ang_to_rad, rad_to_ang
+from ..sourcetools.match import _dist_from_source
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
 # Don't know if I should do this really
@@ -62,14 +63,23 @@ class GalaxyCluster(ExtendedSource):
     :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
     :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
-    :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-        is hierarchical, simple may also be passed.
     :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
         to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
         is False. User should only set to True to remove warnings.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
     :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
         (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
         sources will NOT be included in masks, in case they are a bright cool core.
+    :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
     def __init__(self, ra, dec, redshift, name=None, r200: Quantity = None, r500: Quantity = None,
                  r2500: Quantity = None, richness: float = None, richness_err: float = None,
@@ -77,7 +87,9 @@ class GalaxyCluster(ExtendedSource):
                  peak_lo_en=Quantity(0.5, "keV"), peak_hi_en=Quantity(2.0, "keV"), back_inn_rad_factor=1.05,
                  back_out_rad_factor=1.5, cosmology: Cosmology = DEFAULT_COSMO, load_products=True, load_fits=False,
                  clean_obs=True, clean_obs_reg="r200", clean_obs_threshold=0.3, regen_merged: bool = True,
-                 peak_find_method: str = "hierarchical", in_sample: bool = False, include_core_pnt_srcs: bool = True):
+                 peak_find_method: str = "hierarchical", in_sample: bool = False,
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
+                 include_core_pnt_srcs: bool = True, load_profiles: bool = True):
         """
         The init of the GalaxyCluster specific XGA class, takes information on the cluster to enable analyses.
 
@@ -88,8 +100,8 @@ class GalaxyCluster(ExtendedSource):
         :param Quantity r200: A value for the R200 of the source. At least one overdensity radius must be passed.
         :param Quantity r500: A value for the R500 of the source. At least one overdensity radius must be passed.
         :param Quantity r2500: A value for the R2500 of the source. At least one overdensity radius must be passed.
-        :param richness: An optical richness of the cluster, optional.
-        :param richness_err: An uncertainty on the optical richness of the cluster, optional.
+        :param float richness: An optical richness of the cluster, optional.
+        :param float richness_err: An uncertainty on the optical richness of the cluster, optional.
         :param Quantity wl_mass: A weak lensing mass of the cluster, optional.
         :param Quantity wl_mass_err: An uncertainty on the weak lensing mass of the cluster, optional.
         :param Quantity custom_region_radius: A custom analysis region radius for this cluster, optional.
@@ -102,7 +114,7 @@ class GalaxyCluster(ExtendedSource):
             radius for the background region. Default is 1.05.
         :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
             radius for the background region. Default is 1.5.
-        :param cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
         :param bool load_products: Whether existing products should be loaded from disk.
         :param bool load_fits: Whether existing fits should be loaded from disk.
         :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
@@ -112,15 +124,23 @@ class GalaxyCluster(ExtendedSource):
         :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
         :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
         :param bool regen_merged: Should merged images/exposure maps be regenerated after cleaning. Default is True.
-        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
-            is hierarchical, simple may also be passed.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
-            to True suppresses some warnings so that they can be displayed at the end of the sample progress
-            bar. Default is False. User should only set to True to remove warnings.
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
+            is False. User should only set to True to remove warnings.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
+                is None in which case standard search distances for different telescopes are used. The user may pass a
+                single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+                telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+                specified in a distance dictionary, the default XGA values will be used for any that are missing.
         :param bool include_core_pnt_srcs: Controls whether bright point sources near the user-defined coordinate
             (hopefully the core) are allowed to contribute to analyses. Default is True, in which case such point
             sources will NOT be included in masks, in case they are a bright cool core.
-
+        :param bool load_profiles: Whether existing profiles should be loaded from disk.
         """
         # Store the passed value of 'include_core_pnt_srcs' in an attribute now, before we run the super-class init,
         #  as we want the GalaxyCluster _source_type_match method to be able to use it to determine if point
@@ -167,7 +187,8 @@ class GalaxyCluster(ExtendedSource):
 
         super().__init__(ra, dec, redshift, name, custom_region_radius, use_peak, peak_lo_en, peak_hi_en,
                          back_inn_rad_factor, back_out_rad_factor, cosmology, load_products, load_fits,
-                         peak_find_method, in_sample)
+                         peak_find_method, in_sample, telescope, search_distance, clean_obs, clean_obs_reg,
+                         clean_obs_threshold, regen_merged, load_profiles=load_profiles)
 
         # Reading observables into their attributes, if the user doesn't pass a value for a particular observable
         #  it will be None.
@@ -184,30 +205,6 @@ class GalaxyCluster(ExtendedSource):
             self._wl_mass_err = wl_mass_err.to("Msun")
         elif wl_mass_err is not None and not wl_mass_err.unit.is_equivalent("Msun"):
             raise UnitConversionError("The weak lensing mass error value cannot be converted to MSun.")
-
-        if clean_obs and clean_obs_reg in self._radii:
-            # Use this method to figure out what data to throw away
-            reject_dict = self.obs_check(clean_obs_reg, clean_obs_threshold)
-            if len(reject_dict) != 0:
-                # Use the source method to remove data we've decided isn't worth keeping
-                self.disassociate_obs(reject_dict)
-                # I used to run these just so there is an up to date combined ratemap, but its quite
-                #  inefficient to do it on an individual basis if dealing with a sample, so the user will have
-                #  to run those commands themselves later
-                # Now I will run them only if the regen_merged flag is True
-                if regen_merged:
-                    from ..sas import emosaic
-                    emosaic(self, "image", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    emosaic(self, "expmap", self._peak_lo_en, self._peak_hi_en, disable_progress=True)
-                    self._all_peaks(peak_find_method)
-
-                    # And finally this sets the default coordinate to the peak if use peak is True
-                    if self._use_peak:
-                        self._default_coord = self.peak
-
-        # Throws an error if a poor choice of region has been made
-        elif clean_obs and clean_obs_reg not in self._radii:
-            raise NoRegionsError("{c} is not associated with {s}".format(c=clean_obs_reg, s=self.name))
 
     def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
         """
@@ -233,17 +230,6 @@ class GalaxyCluster(ExtendedSource):
             and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
         :rtype: Tuple[Dict, Dict, Dict]
         """
-        def dist_from_source(reg):
-            """
-            Calculates the euclidean distance between the centre of a supplied region, and the
-            position of the source.
-
-            :param reg: A region object.
-            :return: Distance between region centre and source position.
-            """
-            ra = reg.center.ra.value
-            dec = reg.center.dec.value
-            return Quantity(np.sqrt(abs(ra - self._ra_dec[0]) ** 2 + abs(dec - self._ra_dec[1]) ** 2), 'deg')
 
         results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('ext')
 
@@ -262,75 +248,80 @@ class GalaxyCluster(ExtendedSource):
         #  should be left in (the default behaviour) or still removed. This is a tiny little refinement I've been
         #  meaning to add for literally years...
         new_anti_results = {}
-        for obs in self._obs:
-            # This is where the cleaned interlopers will be stored
-            new_anti_results[obs] = []
-            # Cycling through the current interloper regions for the current ObsID
-            for reg_obj in anti_results_dict[obs]:
-                # Calculating the distance (in degrees) of the centre of the current interloper region from
-                #  the user supplied coordinates of the cluster
-                dist = dist_from_source(reg_obj)
+        for tel in self.telescopes:
+            new_anti_results[tel] = {}
+            for obs in self._obs[tel]:
+                # This is where the cleaned interlopers will be stored
+                new_anti_results[tel][obs] = []
+                # Cycling through the current interloper regions for the current ObsID
+                for reg_obj in anti_results_dict[tel][obs]:
+                    # Calculating the distance (in degrees) of the centre of the current interloper region from
+                    #  the user supplied coordinates of the cluster
+                    dist = Quantity(_dist_from_source(self.ra_dec[0].value, self.ra_dec[1].value, reg_obj), 'deg')
 
-                # If the current interloper source is a point source/a PSF sized extended source and is within the
-                #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
-                #  cool core and allow it to stay in the analysis - OR THE USER CAN JUST HAVE TURNED THIS BEHAVIOUR
-                #  OFF WITH include_core_pnt
-                if self._include_core_pnt and reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
-                    warn_text = "A point source has been detected in {o} and is very close to the user supplied " \
-                                "coordinates of {s}. It will not be excluded from analysis due to the possibility " \
-                                "of a mis-identified cool core".format(s=self.name, o=obs)
-                    if not self._samp_member:
-                        # We do print a warning though
-                        warn(warn_text, stacklevel=2)
+                    # If the current interloper source is a point source/a PSF sized extended source and is within the
+                    #  fraction of the chosen characteristic radius of the cluster then we assume it is a poorly handled
+                    #  cool core and allow it to stay in the analysis - OR THE USER CAN JUST HAVE TURNED THIS BEHAVIOUR
+                    #  OFF WITH include_core_pnt
+                    # TODO this will need to be change when I allow for user-defined region colour meanings
+                    if self._include_core_pnt and reg_obj.visual["edgecolor"] == 'red' and dist < check_rad:
+                        warn_text = "A point source has been detected in {o} and is very close to the user " \
+                                    "supplied coordinates of {s}. It will not be excluded from analysis due to the " \
+                                    "possibility of a mis-identified cool core".format(s=self.name, o=obs)
+                        if not self._samp_member:
+                            # We do print a warning though
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
+
+                    elif self._include_core_pnt and reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
+                        warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
+                                    "user supplied coordinates of {s}. It will not be excluded from analysis due " \
+                                    "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
+                        if not self._samp_member:
+                            warn(warn_text, stacklevel=2)
+                        else:
+                            self._supp_warn.append(warn_text)
                     else:
-                        self._supp_warn.append(warn_text)
+                        new_anti_results[tel][obs].append(reg_obj)
 
-                elif self._include_core_pnt and reg_obj.visual["edgecolor"] == "magenta" and dist < check_rad:
-                    warn_text = "A PSF sized extended source has been detected in {o} and is very close to the " \
-                                "user supplied coordinates of {s}. It will not be excluded from analysis due " \
-                                "to the possibility of a mis-identified cool core".format(s=self.name, o=obs)
-                    if not self._samp_member:
-                        warn(warn_text, stacklevel=2)
-                    else:
-                        self._supp_warn.append(warn_text)
-                else:
-                    new_anti_results[obs].append(reg_obj)
+                # Here we run through the 'chosen' region for each observation (so the region that we think is the
+                #  cluster) and check if any of the current set of interloper regions intersects with it. If they do
+                #  then they are allowed to stay in the analysis under assumption that they're actually part of the
+                #  cluster
+                for res_obs in results_dict[tel]:
+                    if results_dict[tel][res_obs] is not None:
+                        # Reads out the chosen region for res_obs
+                        src_reg_obj = results_dict[tel][res_obs]
+                        # Stores its central coordinates in an astropy quantity
+                        centre = Quantity([src_reg_obj.center.ra.value, src_reg_obj.center.dec.value], 'deg')
 
-            # Here we run through the 'chosen' region for each observation (so the region that we think is the
-            #  cluster) and check if any of the current set of interloper regions intersects with it. If they do
-            #  then they are allowed to stay in the analysis under assumption that they're actually part of the
-            #  cluster
-            for res_obs in results_dict:
-                if results_dict[res_obs] is not None:
-                    # Reads out the chosen region for res_obs
-                    src_reg_obj = results_dict[res_obs]
-                    # Stores its central coordinates in an astropy quantity
-                    centre = Quantity([src_reg_obj.center.ra.value, src_reg_obj.center.dec.value], 'deg')
+                        # At first I set the checking radius to the semimajor axis
+                        rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
+                        # And use my handy method to find which regions intersect with a circle with the semimajor length
+                        #  as radius, centred on the centre of the current chosen region
+                        within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, tel, centre,
+                                                                 new_anti_results[tel][obs])
+                        # Make sure to only select extended (green) sources
+                        within_width = [reg for reg in within_width if reg.visual['edgecolor'] == 'green']
 
-                    # At first I set the checking radius to the semimajor axis
-                    rad = Quantity(src_reg_obj.width.to('deg').value/2, 'deg')
-                    # And use my handy method to find which regions intersect with a circle with the semimajor length
-                    #  as radius, centred on the centre of the current chosen region
-                    within_width = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
-                    # Make sure to only select extended (green) sources
-                    within_width = [reg for reg in within_width if reg.visual['edgecolor'] == 'green']
+                        # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
+                        #  then it would intersect with the ellipse of the current chosen region.
+                        rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
+                        within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, tel, centre,
+                                                                  new_anti_results[tel][obs])
+                        within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
 
-                    # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
-                    #  then it would intersect with the ellipse of the current chosen region.
-                    rad = Quantity(src_reg_obj.height.to('deg').value/2, 'deg')
-                    within_height = self.regions_within_radii(Quantity(0, 'deg'), rad, centre, new_anti_results[obs])
-                    within_height = [reg for reg in within_height if reg.visual['edgecolor'] == 'green']
+                        # This finds which regions are present in both lists and makes sure if they are in both
+                        #  then they are NOT removed from the analysis- AS OF regions v0.9 THIS NO LONGER WORKS AS
+                        #  REGIONS ARE NOT HASHABLE - THE LIST COMPREHENSION BELOW IS A QUICK FIX BUT LESS EFFICIENT
+                        # intersect_regions = list(set(within_width) & set(within_height))
 
-                    # This finds which regions are present in both lists and makes sure if they are in both
-                    #  then they are NOT removed from the analysis - AS OF regions v0.9 THIS NO LONGER WORKS AS
-                    #  REGIONS ARE NOT HASHABLE - THE LIST COMPREHENSION BELOW IS A QUICK FIX BUT LESS EFFICIENT
-                    # intersect_regions = list(set(within_width) & set(within_height))
-
-                    # This should do what the above set intersection did, but slower
-                    intersect_regions = [r for r in within_height if r in within_width]
-                    for inter_reg in intersect_regions:
-                        inter_reg_ind = new_anti_results[obs].index(inter_reg)
-                        new_anti_results[obs].pop(inter_reg_ind)
+                        # This should do what the above set intersection did, but slower
+                        intersect_regions = [r for r in within_height if r in within_width]
+                        for inter_reg in intersect_regions:
+                            inter_reg_ind = new_anti_results[tel][obs].index(inter_reg)
+                            new_anti_results[tel][obs].pop(inter_reg_ind)
 
         return results_dict, alt_match_dict, new_anti_results
 
@@ -437,8 +428,8 @@ class GalaxyCluster(ExtendedSource):
         """
         Gets the weak lensing mass passed in at initialisation of the source.
 
-        :return: Two quantities, the weak lensing mass, and the weak lensing mass error in Msun. If the
-            values were not passed in at initialisation, the returned values will be None.
+        :return: A quantity containing the weak lensing mass, and the weak lensing mass error in Msun. If the
+            values were not passed in at initialisation, the returned values will be NaN.
         :rtype: Quantity
         """
         if self._wl_mass is not None:
@@ -462,8 +453,8 @@ class GalaxyCluster(ExtendedSource):
         """
         Gets the richness passed in at initialisation of the source.
 
-        :return: Two floats, the richness, and the richness error. If the values were not passed in at
-            initialisation, the returned values will be None.
+        :return: A quantity containing the richness, and the richness error. If the values were not passed in at
+            initialisation, the returned values will be NaN.
         :rtype: Quantity
         """
         if self._richness is not None:
@@ -482,91 +473,10 @@ class GalaxyCluster(ExtendedSource):
 
         return Quantity(r_list)
 
-    # This does duplicate some of the functionality of get_results, but in a more specific way. I think its
-    #  justified considering how often the cluster temperature is used in X-ray cluster studies.
-    def get_temperature(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
-                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                        min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                        fit_conf: Union[str, dict] = None) -> Quantity:
-        """
-        Convenience method that calls get_results to retrieve temperature measurements. All matching values
-        from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+).
-
-        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
-        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
-        a model was only fit with one fit configuration then that will be automatically selected.
-
-        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
-            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
-            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
-            region files), then any inner radius will be ignored.
-        :param str model: The name of the fitted model that you're requesting the results
-            from (e.g. constant*tbabs*apec).
-        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
-            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
-            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
-            circular spectrum.
-        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal-to-noise.
-        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
-        :return: The temperature value, and uncertainties.
-        :rtype: Quantity
-        """
-        res = self.get_results(outer_radius, model, inner_radius, "kT", group_spec, min_counts, min_sn, over_sample,
-                               fit_conf)
-
-        return Quantity(res, 'keV')
-
-    def get_luminosities(self, outer_radius: Union[str, Quantity], model: str = 'constant*tbabs*apec',
-                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
-                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None, fit_conf: Union[str, dict] = None):
-        """
-        Get method for luminosities calculated from model fits to spectra associated with this source.
-        Either for given energy limits (that must have been specified when the fit was first performed), or
-        for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
-        the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
-
-        This overrides the BaseSource method, but the only difference is that this has a default model, which
-        is what single_temp_apec fits (constant*tbabs*apec).
-
-        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
-            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
-            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
-            region files), then any inner radius will be ignored.
-        :param str model: The name of the fitted model that you're requesting the luminosities
-            from (e.g. constant*tbabs*apec).
-        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
-            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
-            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
-            circular spectrum.
-        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
-        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
-        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
-        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum counts.
-        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
-            desired result were grouped by minimum signal-to-noise.
-        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
-        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
-            and values being the changed values (only values changed-from-default need be included) or a full string
-            representation of the fit configuration that is being requested.
-        :return: The requested luminosity value, and uncertainties.
-        """
-        return super().get_luminosities(outer_radius, model, inner_radius, lo_en, hi_en, group_spec,
-                                        min_counts, min_sn, over_sample, fit_conf)
-
     def _get_spec_based_profiles(self, search_key: str, annuli_bound_radii: Quantity = None, group_spec: bool = True,
                                  min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                                 set_id: int = None, spec_model: str = None,
-                                 spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                                 set_id: int = None, obs_id: str = None, inst: str = None, telescope: str = None,
+                                 spec_model: str = None, spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The generic get method for profiles which have been based on spectra, the only thing that tends to change
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
@@ -583,6 +493,12 @@ class GalaxyCluster(ExtendedSource):
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str obs_id: The ObsID associated with the profile to be retrieved - default is None, in which case
+            all non-combined profiles matching the other criteria will be retrieved.
+        :param str inst: The instrument associated with the profile to be retrieved - default is None, in which case
+            all non-combined-instrument profiles matching the other criteria will be retrieved.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :param str spec_model: The name of the spectral model from which the profile originates.
         :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
             uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
@@ -597,8 +513,9 @@ class GalaxyCluster(ExtendedSource):
         #  profiles that meet some of the general criteria (including the spectral model fit configuration, if
         #  specified), then we'll work on narrowing them down even more.
         init_matches = self._get_prof_prod(search_key, central_coord=self.default_coord,
-                                           annuli_bound_radii=annuli_bound_radii,
-                                           spec_model=spec_model, spec_fit_conf=spec_fit_conf)
+                                           annuli_bound_radii=annuli_bound_radii, telescope=telescope,
+                                           spec_model=spec_model, spec_fit_conf=spec_fit_conf, obs_id=obs_id, inst=inst)
+
         # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
         #  associated with them, as that means that they were not generated from an annular spectrum
         init_matches = [p for p in init_matches if p.set_ident is not None]
@@ -611,7 +528,7 @@ class GalaxyCluster(ExtendedSource):
                 continue
 
             # Now we will grab the annular spectrum from which the current profile was generated
-            rel_asp = self.get_annular_spectra(set_id=p.set_ident)
+            rel_asp = self.get_annular_spectra(set_id=p.set_ident, telescope=telescope)
             # If the user specified grouped spectra and the generating annular spectra for the current
             #  profile was not grouped (or vice versa), then we aren't interested
             if group_spec != rel_asp.grouped:
@@ -628,8 +545,136 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
+    def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                    stacked_spectra: bool = False, fit_conf: Union[str, dict] = None):
+        """
+        Important method that will retrieve fit results from the source object. Either for a specific
+        parameter of a given region-model combination, or for all of them. If a specific parameter is requested,
+        all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
+        of such numpy arrays, with the keys corresponding to parameter names.
+
+        If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
+        will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
+        a model was only fit with one fit configuration then that will be automatically selected.
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param str par: The name of the parameter you want a result for.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            simultaneously fitted spectra. By default this method will retrieve the result from
+            the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested result value, and uncertainties.
+        """
+        return super().get_results(outer_radius, telescope, model, inner_radius, par, group_spec, min_counts, min_sn,
+                                   over_sample, stacked_spectra, fit_conf)
+
+    def get_luminosities(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
+                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                         over_sample: float = None, stacked_spectra: bool = False, fit_conf: Union[str, dict] = None):
+        """
+        Get method for luminosities calculated from model fits to spectra associated with this source.
+        Either for given energy limits (that must have been specified when the fit was first performed), or
+        for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
+        the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
+
+        This overrides the BaseSource method, but the only difference is that this has a default model, which
+        is what single_temp_apec fits (constant*tbabs*apec).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str model: The name of the fitted model that you're requesting the luminosities
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param Quantity lo_en: The lower energy limit for the desired luminosity measurement.
+        :param Quantity hi_en: The upper energy limit for the desired luminosity measurement.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param int min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            simultaneously fitted spectra. By default, this method will retrieve the result from
+            the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The requested luminosity value, and uncertainties.
+        :rtype: Quantity
+        """
+        return super().get_luminosities(outer_radius, telescope, model, inner_radius, lo_en, hi_en, group_spec,
+                                        min_counts, min_sn, over_sample, stacked_spectra, fit_conf)
+
+    def get_temperature(self, outer_radius: Union[str, Quantity], telescope: str, model: str = 'constant*tbabs*apec',
+                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
+                        min_counts: int = 5, min_sn: float = None, over_sample: float = None,
+                        stacked_spectra: bool = False, fit_conf: Union[str, dict] = None):
+        """
+        Convenience method that calls get_results to retrieve temperature measurements. All matching values
+        from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
+        column 1 is err-, and column 2 is err+).
+
+        :param str/Quantity outer_radius: The name or value of the outer radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r200' would be acceptable
+            for a GalaxyCluster, or Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in
+            region files), then any inner radius will be ignored.
+        :param str telescope: The telescope for which to retrieve spectral fit results.
+        :param str model: The name of the fitted model that you're requesting the results
+            from (e.g. constant*tbabs*apec).
+        :param str/Quantity inner_radius: The name or value of the inner radius that was used for the generation of
+            the spectra which were fitted to produce the desired result (for instance 'r500' would be acceptable
+            for a GalaxyCluster, or Quantity(300, 'kpc')). By default, this is zero arcseconds, resulting in a
+            circular spectrum.
+        :param bool group_spec: Whether the spectra that were fitted for the desired result were grouped.
+        :param float min_counts: The minimum counts per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum counts.
+        :param float min_sn: The minimum signal-to-noise per channel, if the spectra that were fitted for the
+            desired result were grouped by minimum signal-to-noise.
+        :param float over_sample: The level of oversampling applied on the spectra that were fitted.
+        :param bool stacked_spectra: Specify whether to retrieve the result from a stacked spectrum or from
+            simultaneously fitted spectra. By default, this method will retrieve the result from
+            the simultaneous fit.
+        :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
+            and values being the changed values (only values changed-from-default need be included) or a full string
+            representation of the fit configuration that is being requested.
+        :return: The temperature value, and uncertainties.
+        """
+        res = self.get_results(outer_radius, telescope, model, inner_radius, "kT", group_spec, min_counts, min_sn,
+                               over_sample, stacked_spectra, fit_conf)
+
+        return Quantity(res, 'keV')
+
     def get_proj_temp_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
                                min_sn: float = None, over_sample: float = None, set_id: int = None,
+                               obs_id: str = "combined", inst: str = "combined", telescope: str = None,
                                spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
             -> Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]:
         """
@@ -639,8 +684,8 @@ class GalaxyCluster(ExtendedSource):
 
         :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the
             annular spectra set from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal-to-noise.
@@ -648,6 +693,12 @@ class GalaxyCluster(ExtendedSource):
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
+        :param str obs_id: The ObsID associated with the projected temperature profile to be retrieved - default
+            is 'combined'.
+        :param str inst: The instrument associated with the projected temperature profile to be retrieved - default
+            is 'combined'.
         :param str spec_model: The name of the spectral model from which the profile originates.
         :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
             uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
@@ -658,9 +709,12 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_proj_temperature_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
-                                                      spec_fit_conf)
+        # TODO THE DEFAULT VALUES OF THE OBSID AND INST ARGUMENTS MAY NEED TO CHANGE FROM COMBINED WHEN NOT ALL
+        #  ANNULAR SPECTRA (AND THUS ANN-SPEC DERIVED PROFILES) ARE MARKED AS COMBINED-COMBINED
+        matched_prods = self._get_spec_based_profiles("1d_proj_temperature_profile", annuli_bound_radii,
+                                                      group_spec, min_counts, min_sn, over_sample, set_id,
+                                                      telescope=telescope, spec_model=spec_model,
+                                                      spec_fit_conf=spec_fit_conf, obs_id=obs_id, inst=inst)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -670,16 +724,16 @@ class GalaxyCluster(ExtendedSource):
         return matched_prods
 
     def get_3d_temp_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                             min_sn: float = None, over_sample: float = None, set_id: int = None,
-                             spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
-            -> Union[GasTemperature3D, List[GasTemperature3D]]:
+                             min_sn: float = None, over_sample: float = None, set_id: int = None, obs_id: str = "combined",
+                             inst: str = "combined", telescope: str = None, spec_model: str = None,
+                             spec_fit_conf: Union[str, dict] = None) -> Union[GasTemperature3D, List[GasTemperature3D]]:
         """
         A get method for 3D temperature profiles generated by XGA's de-projection routines.
 
         :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the annular
             spectra set from which the projected temperature profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal-to-noise.
@@ -687,6 +741,11 @@ class GalaxyCluster(ExtendedSource):
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str obs_id: The ObsID associated with the 3D temperature profile to be retrieved - default is 'combined'.
+        :param str inst: The instrument associated with the 3D temperature profile to be retrieved - default
+            is 'combined'.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :param str spec_model: The name of the spectral model from which the profile originates.
         :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
             uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
@@ -697,9 +756,10 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_gas_temperature_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
-                                                      spec_fit_conf)
+        matched_prods = self._get_spec_based_profiles("gas_temperature_profile", annuli_bound_radii,
+                                                      group_spec, min_counts, min_sn, over_sample, set_id,
+                                                      telescope=telescope, spec_model=spec_model,
+                                                      spec_fit_conf=spec_fit_conf, obs_id=obs_id, inst=inst)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -709,8 +769,9 @@ class GalaxyCluster(ExtendedSource):
         return matched_prods
 
     def get_proj_met_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                              min_sn: float = None, over_sample: float = None, set_id: int = None,
-                              spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
+                              min_sn: float = None, over_sample: float = None, set_id: int = None, obs_id: str = "combined",
+                              inst: str = "combined", telescope: str = None, spec_model: str = None,
+                              spec_fit_conf: Union[str, dict] = None) \
             -> Union[ProjectedGasMetallicity1D, List[ProjectedGasMetallicity1D]]:
         """
         A get method for projected metallicity profiles generated by XGA's XSPEC interface (if abundance was allowed
@@ -721,14 +782,20 @@ class GalaxyCluster(ExtendedSource):
         :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the
             annular spectra set from which the projected metallicity profile was measured.
         :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
-        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal-to-noise.
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum
+            signal-to-noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str obs_id: The ObsID associated with the projected metallicity profile to be retrieved - default
+            is 'combined'.
+        :param str inst: The instrument associated with the projected metallicity profile to be retrieved - default
+            is 'combined'.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :param str spec_model: The name of the spectral model from which the profile originates.
         :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
             uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
@@ -739,9 +806,10 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasMetallicity1D, List[ProjectedGasMetallicity1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_proj_metallicity_profile", annuli_bound_radii,
-                                                      group_spec, min_counts, min_sn, over_sample, set_id, spec_model,
-                                                      spec_fit_conf)
+        matched_prods = self._get_spec_based_profiles("1d_proj_metallicity_profile", annuli_bound_radii,
+                                                      group_spec, min_counts, min_sn, over_sample, set_id,
+                                                      telescope=telescope, spec_model=spec_model,
+                                                      spec_fit_conf=spec_fit_conf, obs_id=obs_id, inst=inst)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -751,16 +819,16 @@ class GalaxyCluster(ExtendedSource):
         return matched_prods
 
     def get_apec_norm_profiles(self, annuli_bound_radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                               min_sn: float = None, over_sample: float = None, set_id: int = None,
-                               spec_model: str = None, spec_fit_conf: Union[str, dict] = None) \
-            -> Union[APECNormalisation1D, List[APECNormalisation1D]]:
+                               min_sn: float = None, over_sample: float = None, set_id: int = None, obs_id: str = "combined",
+                               inst: str = "combined", telescope: str = None, spec_model: str = None,
+                               spec_fit_conf: Union[str, dict] = None) -> Union[APECNormalisation1D, List[APECNormalisation1D]]:
         """
         A get method for APEC normalisation profiles generated by XGA's XSPEC interface.
 
         :param Quantity annuli_bound_radii: The annulus boundary radii that were used to generate the annular
             spectra set from which the normalisation profile was measured.
-        :param bool group_spec: Was the spectrum set used to generate the profile grouped
-        :param float min_counts: If the spectrum set used to generate the profile was grouped on minimum
+        :param bool group_spec: Was the spectrum set used to generate the profile grouped?
+        :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
         :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
             noise, what was the minimum signal to noise.
@@ -768,6 +836,12 @@ class GalaxyCluster(ExtendedSource):
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str obs_id: The ObsID associated with the APEC normalisation profile to be retrieved - default
+            is 'combined'.
+        :param str inst: The instrument associated with the APEC normalisation profile to be retrieved - default
+            is 'combined'.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :param str spec_model: The name of the spectral model from which the profile originates.
         :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
             uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
@@ -778,9 +852,9 @@ class GalaxyCluster(ExtendedSource):
             if there are multiple matches.
         :rtype: Union[ProjectedGasTemperature1D, List[ProjectedGasTemperature1D]]
         """
-        matched_prods = self._get_spec_based_profiles("combined_1d_apec_norm_profile", annuli_bound_radii, group_spec,
-                                                      min_counts, min_sn, over_sample, set_id, spec_model,
-                                                      spec_fit_conf)
+        matched_prods = self._get_spec_based_profiles("1d_apec_norm_profile", annuli_bound_radii, group_spec,
+                                                      min_counts, min_sn, over_sample, set_id, telescope=telescope,
+                                                      spec_model=spec_model, spec_fit_conf=spec_fit_conf, obs_id=obs_id, inst=inst)
 
         if len(matched_prods) == 1:
             matched_prods = matched_prods[0]
@@ -794,8 +868,8 @@ class GalaxyCluster(ExtendedSource):
                              pix_step: int = 1, min_snr: Union[float, int] = 0.0, psf_corr: bool = True,
                              psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
                              group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                             over_sample: float = None, set_id: int = None, spec_model: str = None,
-                             spec_fit_conf: Union[str, dict] = None) -> Union[GasDensity3D, List[GasDensity3D]]:
+                             over_sample: float = None, set_id: int = None, telescope: str = None,
+                             spec_model: str = None, spec_fit_conf: Union[str, dict] = None) -> Union[GasDensity3D, List[GasDensity3D]]:
         """
         This is a get method for density profiles generated by XGA, both using surface brightness profiles and spectra.
         Having to account for two different methods is why this get method has so many arguments that can be passed. If
@@ -836,13 +910,15 @@ class GalaxyCluster(ExtendedSource):
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
             Passing a value for this parameter will override any other information that you have given this method.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :param str spec_model: The name of the spectral model from which the profile originates.
         :param str/dict spec_fit_conf: Only relevant to profiles that were generated from annular spectra, this
             uniquely identifies the configuration (start parameters, abundance tables, settings, etc.) of the
             spectral model fit to measure the properties used in this profile. Either a dictionary with keys being
             the names of parameters passed to the spectrum fitting function and values being the changed values (only
             values changed-from-default need be included) or a full string representation of the fit configuration.
-        :return:
+        :return: A 3D density profile (or a set of them) that matches the input search parameters.
         :rtype: Union[GasDensity3D, List[GasDensity3D]]
         """
         if outer_rad is not None and isinstance(outer_rad, str):
@@ -853,17 +929,17 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
         if (obs_id == "combined" or inst == "combined" or obs_id is None or inst is None) and method != 'spec':
-            interim_prods = self.get_combined_profiles("gas_density", central_coord, radii)
+            interim_prods = self.get_combined_profiles("gas_density", central_coord=central_coord, radii=radii, telescope=telescope)
         elif method != 'spec':
-            interim_prods = self.get_profiles("gas_density", obs_id, inst, central_coord, radii)
+            interim_prods = self.get_profiles("gas_density", obs_id, inst, central_coord, radii=radii, telescope=telescope)
         elif (obs_id == "combined" or inst == "combined" or obs_id is None or inst is None) and method == 'spec':
-            interim_prods = self._get_spec_based_profiles('combined_gas_density_profile', radii,
-                                                          group_spec, min_counts, min_sn, over_sample, set_id,
-                                                          spec_model, spec_fit_conf)
+            interim_prods = self._get_spec_based_profiles('combined_gas_density_profile', radii, group_spec, min_counts,
+                                                          min_sn, over_sample, set_id, telescope=telescope,
+                                                          spec_model=spec_model, spec_fit_conf=spec_fit_conf)
         else:
-            interim_prods = self._get_spec_based_profiles('gas_density_profile', radii, group_spec,
-                                                          min_counts, min_sn, over_sample, set_id, spec_model,
-                                                          spec_fit_conf)
+            interim_prods = self._get_spec_based_profiles('gas_density_profile', radii, group_spec, min_counts, min_sn,
+                                                          over_sample, set_id, telescope=telescope,
+                                                          spec_model=spec_model, spec_fit_conf=spec_fit_conf)
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object
@@ -897,9 +973,63 @@ class GalaxyCluster(ExtendedSource):
 
         return matched_prods
 
+    def get_entropy_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
+                             dens_prof: GasDensity3D = None, dens_model_name: str = None,
+                             radii: Quantity = None, telescope: str = None) -> Union[SpecificEntropy, List[SpecificEntropy]]:
+        """
+        A get method for entropy profiles associated with this galaxy cluster. This works in a slightly
+        different way to the temperature and density profile get methods, as you can pass the gas temperature and
+        density profiles used to generate an entropy profile to find it. If none of the optional
+        arguments are passed then all entropy profiles associated with this source will be returned, if
+        only some are passed then entropy profiles which match the limited information will be found.
+
+        :param GasTemperature3D temp_prof: The temperature profile used to generate the required entropy
+            profile, default is None.
+        :param str temp_model_name: The name of the model used to fit the temperature profile used to generate the
+            required entropy profile, default is None.
+        :param GasDensity3D dens_prof: The density profile used to generate the required entropy
+            profile, default is None.
+        :param str dens_model_name: The name of the model used to fit the density profile used to generate the
+            required entropy profile, default is None.
+        :param Quantity radii: The radii at which the entropy profile was measured, default is None.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
+        :return: Either a single entropy profile, when there is a unique match, or a list of hydrostatic
+            mass profiles if there is not.
+        :rtype: Union[SpecificEntropy, List[SpecificEntropy]]
+        """
+
+        # Get all the hydrostatic mass profiles associated with this source
+        matched_prods = self.get_profiles('combined_specific_entropy', telescope=telescope)
+
+        # Convert the radii to degrees for comparison with deg radii later
+        if radii is not None:
+            radii = self.convert_radius(radii, 'deg')
+
+        # Checking steps, looking for matches with the information passed by the user.
+        if temp_prof is not None:
+            matched_prods = [p for p in matched_prods if p.temperature_profile != temp_prof]
+
+        if dens_prof is not None:
+            matched_prods = [p for p in matched_prods if p.density_profile != dens_prof]
+
+        if temp_model_name is not None:
+            matched_prods = [p for p in matched_prods if p.temperature_model.name != temp_model_name]
+
+        if dens_model_name is not None:
+            matched_prods = [p for p in matched_prods if p.density_model.name != dens_model_name]
+
+        if radii is not None:
+            matched_prods = [p for p in matched_prods if p.deg_radii != radii]
+
+        if isinstance(matched_prods, list) and len(matched_prods) == 0:
+            raise NoProductAvailableError("No matching entropy profiles can be found.")
+        return matched_prods
+
     def get_hydrostatic_mass_profiles(self, temp_prof: GasTemperature3D = None, temp_model_name: str = None,
                                       dens_prof: GasDensity3D = None, dens_model_name: str = None,
-                                      radii: Quantity = None) -> Union[HydrostaticMass, List[HydrostaticMass]]:
+                                      radii: Quantity = None, telescope: str = None) \
+            -> Union[HydrostaticMass, List[HydrostaticMass]]:
         """
         A get method for hydrostatic mass profiles associated with this galaxy cluster. This works in a slightly
         different way to the temperature and density profile get methods, as you can pass the gas temperature and
@@ -916,12 +1046,14 @@ class GalaxyCluster(ExtendedSource):
         :param str dens_model_name: The name of the model used to fit the density profile used to generate the
             required hydrostatic mass profile, default is None.
         :param Quantity radii: The radii at which the hydrostatic mass profile was measured, default is None.
+        :param str telescope: The telescope that was used to generate the profiles. Default is None, in which case
+            all telescopes associated with this source will be searched for.
         :return: Either a single hydrostatic mass profile, when there is a unique match, or a list of hydrostatic
             mass profiles if there is not.
         :rtype: Union[HydrostaticMass, List[HydrostaticMass]]
         """
         # Get all the hydrostatic mass profiles associated with this source
-        matched_prods = self.get_profiles('combined_hydrostatic_mass')
+        matched_prods = self.get_profiles('combined_hydrostatic_mass', telescope=telescope)
 
         # Convert the radii to degrees for comparison with deg radii later
         if radii is not None:
@@ -947,24 +1079,25 @@ class GalaxyCluster(ExtendedSource):
             raise NoProductAvailableError("No matching hydrostatic mass profiles can be found.")
         return matched_prods
 
-    def view_brightness_profile(self, reg_type: str, central_coord: Quantity = None, pix_step: int = 1,
+    def generate_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
                                 min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
                                 yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
                                 hi_en: Quantity = Quantity(2.0, 'keV')):
         """
-        A method that generates and displays brightness profile objects for this galaxy cluster. Interloper
+        A method that generates brightness profile objects for this galaxy cluster. Interloper
         sources are excluded, and any fits performed to pre-existing brightness profiles which are being
         viewed will also be displayed. The profile will be generated using a RateMap between the energy bounds
         specified by lo_en and hi_en.
 
         :param str reg_type: The region in which to view the radial brightness profile.
+        :param str telescope: Name of the telescope to view the brightness profile for.
         :param Quantity central_coord: The central coordinate of the brightness profile.
         :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-        :param float/int min_snr: The minimum signal to noise allowed for each radial bin. This is 0 by
+        :param float/int min_snr: The minimum signal-to-noise allowed for each radial bin. This is 0 by
             default, which disables any automatic re-binning.
         :param tuple figsize: The desired size of the figure, the default is (10, 7)
-        :param str xscale: The scaling to be applied to the x axis, default is log.
-        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param str xscale: The scaling to be applied to the x-axis, default is log.
+        :param str yscale: The scaling to be applied to the y-axis, default is log.
         :param bool back_sub: Should the plotted data be background subtracted, default is True.
         :param Quantity lo_en: The lower energy bound of the RateMap to generate the profile from.
         :param Quantity hi_en: The upper energy bound of the RateMap to generate the profile from.
@@ -983,15 +1116,29 @@ class GalaxyCluster(ExtendedSource):
         elif reg_type == "r2500" and self._r2500 is None:
             raise NoRegionsError("No R2500 region has been setup for this cluster")
 
-        comb_rt = self.get_combined_ratemaps(lo_en, hi_en)
+        # This measures the number of observation instrument combinations available for the current telescope
+        tel_obs_inst_num = len([o+inst for o in self.instruments[telescope]
+                                for inst in self.instruments[telescope][o]])
+        # We have to make the distinction here of whether the telescope ships the data combined (i.e. eROSITA), as if
+        #  so then there may only be a single ratemap, but we'll still have the list of instruments that went into it
+        #  in the instruments property.
+        if (tel_obs_inst_num > 1 and not COMBINED_INSTS[telescope]) or \
+                (len(self.obs_ids[telescope]) > 1 and COMBINED_INSTS[telescope]):
+            comb_rt = self.get_combined_ratemaps(lo_en, hi_en, telescope=telescope)
+            # Fetch the mask that will remove all interloper sources from the combined ratemap
+            int_mask = self.get_interloper_mask(telescope)
+        # This situation means there is only one ObsID-instrument combo
+        elif (tel_obs_inst_num == 1 and not COMBINED_INSTS[telescope]) or COMBINED_INSTS[telescope]:
+            # There should in theory only ever be one ratemap that matches these criteria in this circumstance.
+            comb_rt = self.get_ratemaps(lo_en=lo_en, hi_en=hi_en, telescope=telescope)
+            # Fetch the mask that will remove all interloper sources from the combined ratemap
+            int_mask = self.get_interloper_mask(telescope, comb_rt.obs_id)
+
         # If there have been PSF deconvolutions of the above data, then we can grab them too
         # I still do it this way rather than with get_combined_ratemaps because I want ALL PSF corrected ratemaps
         en_key = "bound_{l}-{u}".format(l=lo_en.value, u=hi_en.value)
-        psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", just_obj=False)
+        psf_comb_rts = [rt for rt in self.get_products("combined_ratemap", telescope=telescope, just_obj=False)
                         if en_key + "_" in rt[-2]]
-
-        # Fetch the mask that will remove all interloper sources from the combined ratemap
-        int_mask = self.get_interloper_mask()
 
         if central_coord is None:
             central_coord = self.default_coord
@@ -1002,7 +1149,7 @@ class GalaxyCluster(ExtendedSource):
         # This fetches any profiles that might have already been generated to our required specifications
         try:
             sb_profile = self.get_1d_brightness_profile(rad, pix_step=pix_step, min_snr=min_snr, lo_en=lo_en,
-                                                        hi_en=hi_en)
+                                                        hi_en=hi_en, telescope=telescope)
             if isinstance(sb_profile, list):
                 raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                  "fault not yours.")
@@ -1019,7 +1166,8 @@ class GalaxyCluster(ExtendedSource):
                 psf_sb_profile = self.get_1d_brightness_profile(rad, pix_step=pix_step, min_snr=min_snr,
                                                                 psf_corr=True, psf_model=p_rt.psf_model,
                                                                 psf_bins=p_rt.psf_bins, psf_algo=p_rt.psf_algorithm,
-                                                                psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en)
+                                                                psf_iter=p_rt.psf_iterations, lo_en=lo_en, hi_en=hi_en,
+                                                                telescope=telescope)
                 if isinstance(psf_sb_profile, list):
                     raise ValueError("There are multiple matches for this brightness profile, and its the developers "
                                      "fault not yours.")
@@ -1039,11 +1187,39 @@ class GalaxyCluster(ExtendedSource):
             elif r_name == "custom":
                 draw_rads["Custom"] = self.get_radius(r_name, sb_profile.radii_unit)
 
+        return sb_profile, draw_rads
+
+    def view_brightness_profile(self, reg_type: str, telescope: str, central_coord: Quantity = None, pix_step: int = 1,
+                                min_snr: Union[float, int] = 0.0, figsize: tuple = (10, 7), xscale: str = 'log',
+                                yscale: str = 'log', back_sub: bool = True, lo_en: Quantity = Quantity(0.5, 'keV'),
+                                hi_en: Quantity = Quantity(2.0, 'keV')):
+        """
+        A wrapper for generate_brightness profile that the plots the result.
+
+        :param str reg_type: The region in which to view the radial brightness profile.
+        :param str telescope: Name of the telescope to view the brightness profile for.
+        :param Quantity central_coord: The central coordinate of the brightness profile.
+        :param int pix_step: The width (in pixels) of each annular bin, default is 1.
+        :param float/int min_snr: The minimum signal-to-noise allowed for each radial bin. This is 0 by
+            default, which disables any automatic re-binning.
+        :param tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param str xscale: The scaling to be applied to the x-axis, default is log.
+        :param str yscale: The scaling to be applied to the y-axis, default is log.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param Quantity lo_en: The lower energy bound of the RateMap to generate the profile from.
+        :param Quantity hi_en: The upper energy bound of the RateMap to generate the profile from.
+        """
+
+        sb_profile, draw_rads = self.generate_brightness_profile(reg_type, telescope, central_coord, pix_step,
+                                min_snr, figsize, xscale,
+                                yscale, back_sub, lo_en,
+                                hi_en)
         sb_profile.view(xscale=xscale, yscale=yscale, figsize=figsize, draw_rads=draw_rads, back_sub=back_sub)
 
-    def combined_lum_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
-                                 inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                                 min_counts: int = 5, min_sn: float = None, over_sample: float = None) -> Quantity:
+    def combined_lum_conv_factor(self, outer_radius: Union[str, Quantity], telescope: str, lo_en: Quantity,
+                                 hi_en: Quantity, inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
+                                 group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
+                                 over_sample: float = None) -> Quantity:
         """
         Combines conversion factors calculated for this source with individual instrument-observation
         spectra, into one overall conversion factor.
@@ -1052,6 +1228,7 @@ class GalaxyCluster(ExtendedSource):
             to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
             Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
             inner radius will be ignored.
+        :param str telescope: The telescope to calculate conversion factors for.
         :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
             to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
             Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
@@ -1066,9 +1243,19 @@ class GalaxyCluster(ExtendedSource):
         :return: A combined conversion factor that can be applied to a combined ratemap to calculate luminosity.
         :rtype: Quantity
         """
+        # For multi-obs eROSITA, we want to use the combined-obs + combined-instrument spectra
+        #  to avoid duplicate events and ensure we are using the product that matches the combined ratemaps
+        if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
+            use_obs_id = 'combined'
+            use_inst = 'combined'
+        else:
+            use_obs_id = None
+            use_inst = None
+
         # Grabbing the relevant spectra
-        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                min_sn=min_sn, over_sample=over_sample)
+        spec = self.get_spectra(outer_radius, obs_id=use_obs_id, inst=use_inst, inner_radius=inner_radius,
+                                group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
+                                over_sample=over_sample, telescope=telescope)
         # Setting up variables to be added into
         av_lum = Quantity(0, "erg/s")
         total_phot = 0
@@ -1094,7 +1281,7 @@ class GalaxyCluster(ExtendedSource):
         # Calculating and returning the combined factor.
         return av_lum / total_rate
 
-    def norm_conv_factor(self, outer_radius: Union[str, Quantity], lo_en: Quantity, hi_en: Quantity,
+    def norm_conv_factor(self, outer_radius: Union[str, Quantity], telescope: str, lo_en: Quantity, hi_en: Quantity,
                          inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                          min_counts: int = 5, min_sn: float = None, over_sample: float = None, obs_id: str = None,
                          inst: str = None) -> Quantity:
@@ -1105,6 +1292,7 @@ class GalaxyCluster(ExtendedSource):
             to calculate conversion factors (for instance 'r200' would be acceptable for a GalaxyCluster, or
             Quantity(1000, 'kpc')). If 'region' is chosen (to use the regions in region files), then any
             inner radius will be ignored.
+        :param str telescope: The telescope to calculate conversion factors for.
         :param str/Quantity inner_radius: The name or value of the inner radius of the spectra that should be used
             to calculate conversion factors (for instance 'r500' would be acceptable for a GalaxyCluster, or
             Quantity(300, 'kpc')). By default this is zero arcseconds, resulting in a circular spectrum.
@@ -1132,11 +1320,21 @@ class GalaxyCluster(ExtendedSource):
             raise ValueError("If a value is supplied for obs_id, then a value must be supplied for inst as well, and "
                              "vice versa.")
 
-        # Grabbing the relevant spectra
-        spec = self.get_spectra(outer_radius, inner_radius=inner_radius, group_spec=group_spec, min_counts=min_counts,
-                                min_sn=min_sn, over_sample=over_sample, obs_id=obs_id, inst=inst)
+        # For multi-obs eROSITA, use combined-observation and combined-instrument spectra to avoid duplicate events
+        #  and ensure we are using the product that matches the combined ratemaps
+        if telescope in ['erosita', 'erass'] and len(self.obs_ids[telescope]) > 1:
+            use_obs_id = 'combined'
+            use_inst = 'combined'
+        else:
+            use_obs_id = obs_id
+            use_inst = inst
 
-        # Its just easier if we know that the spectra are in a list
+        # Retrieve the relevant spectra using unified get_spectra method
+        spec = self.get_spectra(outer_radius, obs_id=use_obs_id, inner_radius=inner_radius, group_spec=group_spec,
+                               min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
+                               inst=use_inst, telescope=telescope)
+
+        # It's just easier if we know that the spectra are in a list
         if isinstance(spec, Spectrum):
             spec = [spec]
 

@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 18/07/2025, 10:21. Copyright (c) The Contributors
 
 from typing import Union, List
 
@@ -143,7 +143,7 @@ class DoubleKingProfile1D(BaseModel1D):
                  cust_start_pars: List[Quantity] = None):
         """
         The init of a subclass of the XGA BaseModel1D class, describing a basic model for galaxy cluster gas
-        density, the king profile.
+        density, the double King profile.
         """
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -489,7 +489,7 @@ class VikhlininDensity1D(BaseModel1D):
 
     @staticmethod
     def model(x: Quantity, beta_one: Quantity, r_core_one: Quantity, alpha: Quantity, r_s: Quantity, epsilon: Quantity,
-              gamma: Quantity, norm_one: Quantity, beta_two: Quantity, r_core_two: Quantity, norm_two: Quantity):
+              gamma: Quantity, norm_one: Quantity, beta_two: Quantity, r_core_two: Quantity, norm_two: Quantity) -> Quantity:
         """
         The model function for the full Vikhlinin density profile.
 

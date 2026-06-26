@@ -6,7 +6,7 @@ xga package
 
    xga.sources
    xga.samples
-   xga.sas
+   xga.generate
    xga.xspec
    xga.products
    xga.imagetools

@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 11:20. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:10 PM. Copyright (c) The Contributors.
 
 from copy import copy
 from typing import Tuple, Union, List
@@ -46,13 +46,14 @@ class SurfaceBrightness1D(BaseProfile1D):
     :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     """
 
     def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int, min_snr: float,
                  outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
                  background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
                  ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True,
-                 auto_save: bool = False):
+                 auto_save: bool = False, telescope: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -77,14 +78,16 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param bool min_snr_succeeded: A boolean flag describing whether re-binning was successful or not.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this profile is derived from. Default is None.
         """
         super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
-                         deg_radii=deg_radii, auto_save=auto_save)
+                         deg_radii=deg_radii, auto_save=auto_save, telescope=telescope)
 
         if type(background) != Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
 
-        # Saves the reference to the RateMap this profile was generated from
+        # Saves the reference to the RateMap this profile was generated from - we make sure to unload the data
+        #  arrays from the ratemap first, otherwise pickling can save those data
         self._ratemap = rt
 
         # Set the internal type attribute to brightness profile
@@ -296,13 +299,29 @@ class SurfaceBrightness1D(BaseProfile1D):
             match = False
         return match
 
+    def save(self, save_path: str = None):
+        """
+        This method pickles and saves the surface brightness profile object. This will be called automatically
+        when the profile is initialised, and when changes are made to the profile (such as when a model is
+        fitted). The save file is a pickled version of this object. This method overwrites the implementation in
+        BaseProfile1D, so that we can ensure the originating RateMap's data arrays are unloaded prior to saving.
+
+        :param str save_path: The path where this surface brightness profile should be saved. By default this
+        is None, which means this method will use the save_path attribute of the profile.
+        """
+        # This will unload the RateMap data arrays from memory - should ensure that the save process (pickling)
+        #  will write out a smaller file to disk. This method will also unload the component image/expmap data
+        #  arrays if they are in memory
+        self._ratemap.unload(unload_data=True)
+        super().save(save_path=save_path)
+
 
 class GasMass1D(BaseProfile1D):
     """
     This class provides an interface to a cumulative gas mass profile of a Galaxy Cluster.
 
-    :param Quantity radii: The radii at which gas mass has been measured.
-    :param Quantity values: The gas mass that have been measured.
+    :param Quantity radii: The radii at which gas masses have been measured.
+    :param Quantity values: The measured gas masses.
     :param Quantity centre: The central coordinate the profile was generated from.
     :param str source_name: The name of the source this profile is associated with.
     :param str obs_id: The observation which this profile was generated from.
@@ -318,6 +337,7 @@ class GasMass1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this gas mass profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -328,13 +348,13 @@ class GasMass1D(BaseProfile1D):
 
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 deg_radii: Quantity = None, auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
+                 deg_radii: Quantity = None, auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
 
-        :param Quantity radii: The radii at which gas mass has been measured.
-        :param Quantity values: The gas mass that have been measured.
+        :param Quantity radii: The radii at which gas masses have been measured.
+        :param Quantity values: The measured gas masses.
         :param Quantity centre: The central coordinate the profile was generated from.
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
@@ -350,6 +370,7 @@ class GasMass1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+            :param str telescope: The telescope that this gas mass profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -358,7 +379,7 @@ class GasMass1D(BaseProfile1D):
             are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii,
-                         auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
         self._prof_type = "gas_mass"
 
         # This is what the y-axis is labelled as during plotting
@@ -427,6 +448,7 @@ class GasDensity3D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this gas density profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -438,7 +460,7 @@ class GasDensity3D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
                  associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
-                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
+                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -465,6 +487,7 @@ class GasDensity3D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this gas density profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -497,7 +520,7 @@ class GasDensity3D(BaseProfile1D):
             values_err = values_err.to(chosen_unit)
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         # Setting the type
         self._prof_type = "gas_density"
@@ -782,7 +805,7 @@ class GasDensity3D(BaseProfile1D):
         :param str model: The name of the model from which to derive the gas mass.
         :param Quantity radii: The radii at which to measure gas masses. The default is None, in which
             case the radii at which this density profile has data points will be used.
-        :param Quantity deg_radii: The equivelant radii to `radii` but in degrees, required for defining
+        :param Quantity deg_radii: The equivalent radii to `radii` but in degrees, required for defining
             a profile. The default is None, but if custom radii are passed then this variable must be passed too.
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
         :return: A cumulative gas mass distribution.
@@ -840,6 +863,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this projected temperature profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -851,7 +875,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, fit_conf: str = None):
+                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile. This profile
         will be considered unusable if a temperature value of greater than 30keV is present in the profile, or if a
@@ -874,6 +898,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this projected temperature profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -882,7 +907,7 @@ class ProjectedGasTemperature1D(BaseProfile1D):
             are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -930,6 +955,7 @@ class APECNormalisation1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this APEC normalisation profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -941,7 +967,7 @@ class APECNormalisation1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, fit_conf: str = None):
+                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D APEC normalisation profile.
 
@@ -962,6 +988,7 @@ class APECNormalisation1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this APEC normalisation profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -970,7 +997,7 @@ class APECNormalisation1D(BaseProfile1D):
             are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1092,7 +1119,8 @@ class APECNormalisation1D(BaseProfile1D):
         # Set up the actual profile object and return it
         dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
                                  'spec', self, self.radii_err, dens_sigma, self.set_ident,
-                                 self.associated_set_storage_key, self.deg_radii, auto_save=self.auto_save)
+                                 self.associated_set_storage_key, self.deg_radii, auto_save=self.auto_save,
+                                 telescope=self.telescope)
         return dens_prof
 
     def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',
@@ -1127,7 +1155,7 @@ class APECNormalisation1D(BaseProfile1D):
         # Set up the actual profile object and return it
         em_meas_prof = EmissionMeasure1D(self.radii, em_meas, self.centre, self.src_name, self.obs_id, self.instrument,
                                          self.radii_err, em_meas_sigma, self.set_ident, self.associated_set_storage_key,
-                                         self.deg_radii, auto_save=True)
+                                         self.deg_radii, auto_save=True, telescope=self.telescope)
         return em_meas_prof
 
 
@@ -1152,6 +1180,7 @@ class EmissionMeasure1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this emission measure profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1163,7 +1192,7 @@ class EmissionMeasure1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, fit_conf: str = None):
+                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
 
@@ -1184,6 +1213,7 @@ class EmissionMeasure1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this emission measure profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1191,9 +1221,8 @@ class EmissionMeasure1D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
@@ -1229,6 +1258,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this emission measure profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1240,7 +1270,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, fit_conf: str = None):
+                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -1261,6 +1291,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this spectrum is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1270,7 +1301,7 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         """
         #
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -1309,7 +1340,8 @@ class GasTemperature3D(BaseProfile1D):
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
-            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this 3D temperature profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1321,7 +1353,7 @@ class GasTemperature3D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, fit_conf: str = None):
+                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
 
@@ -1340,8 +1372,9 @@ class GasTemperature3D(BaseProfile1D):
         :param Quantity deg_radii: A slightly unfortunate variable that is required only if radii is not in
             units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
             values converted to degrees, and allows this object to construct a predictable storage key.
-        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The
-            default is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
+            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this 3D temperature profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1350,7 +1383,7 @@ class GasTemperature3D(BaseProfile1D):
             are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1387,7 +1420,8 @@ class BaryonFraction(BaseProfile1D):
         units of degrees, or if no set_storage_key is passed. It should be a quantity containing the radii
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
-            False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this baryon fraction profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1399,7 +1433,7 @@ class BaryonFraction(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
                  set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 spec_model: str = None, fit_conf: str = None):
+                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
 
@@ -1420,6 +1454,7 @@ class BaryonFraction(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this baryon fraction profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1428,7 +1463,7 @@ class BaryonFraction(BaseProfile1D):
             are generated from annular spectra, default is None.
         """
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1441,6 +1476,7 @@ class BaryonFraction(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Baryon Fraction"
+
 
 class HydrostaticMass(BaseProfile1D):
     """
@@ -1467,11 +1503,11 @@ class HydrostaticMass(BaseProfile1D):
 
     :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA temperature
         model class. Default is None, in which case this class will use profile data points to calculate
         hydrostatic mass.
-    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
         be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA density model class.
         Default is None, in which case this class will use profile data points to calculate hydrostatic mass.
@@ -1499,6 +1535,7 @@ class HydrostaticMass(BaseProfile1D):
             exception being raised (e.g. if a calculated mass value is negative). Default is False.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this hydrostatic mass profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -1511,9 +1548,9 @@ class HydrostaticMass(BaseProfile1D):
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
+                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a cumulative hydrostatic mass
         profile - used in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2024arXiv240307982T/abstract
@@ -1539,11 +1576,11 @@ class HydrostaticMass(BaseProfile1D):
 
         :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA temperature
             model class. Default is None, in which case this class will use profile data points to calculate
             hydrostatic mass.
-        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
             be used to calculate the hydrostatic mass profile), either a name or an instance of an XGA density
             model class. Default is None, in which case this class will use profile data points to calculate
@@ -1572,6 +1609,7 @@ class HydrostaticMass(BaseProfile1D):
             exception being raised (e.g. if a calculated mass value is negative). Default is False.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The
             default is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this hydrostatic mass profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -1711,10 +1749,12 @@ class HydrostaticMass(BaseProfile1D):
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            key_temp_mod_part = "tm{t}".format(t=t_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -1734,11 +1774,13 @@ class HydrostaticMass(BaseProfile1D):
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
 
-            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            key_dens_mod_part = "dm{d}".format(d=d_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -1766,7 +1808,7 @@ class HydrostaticMass(BaseProfile1D):
 
         super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
@@ -2290,7 +2332,7 @@ class HydrostaticMass(BaseProfile1D):
 
         return BaryonFraction(radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
                               radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
-                              deg_radii, auto_save=self.auto_save)
+                              deg_radii, auto_save=self.auto_save, telescope=self.telescope)
 
     def overdensity_radius(self, delta: int, redshift: float, cosmo, init_lo_rad: Quantity = Quantity(100, 'kpc'),
                            init_hi_rad: Quantity = Quantity(3500, 'kpc'), init_step: Quantity = Quantity(100, 'kpc'),
@@ -2675,10 +2717,10 @@ class SpecificEntropy(BaseProfile1D):
 
     :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
         Default is None, in which case this class will use profile data points to calculate entropy.
-    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
         be used to calculate the entropy profile), either a name or an instance of an XGA density model class.
         Default is None, in which case this class will use profile data points to calculate entropy.
@@ -2706,6 +2748,7 @@ class SpecificEntropy(BaseProfile1D):
         exception being raised (e.g. if a calculated entropy value is negative). Default is False.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this specific entropy profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -2718,9 +2761,9 @@ class SpecificEntropy(BaseProfile1D):
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
+                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2743,12 +2786,12 @@ class SpecificEntropy(BaseProfile1D):
           and density profiles, then the data points on the profile with wider bins can either be interpolated, or
           matched to the data points of the other profile that they cover.
 
-        :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
+        :param GasTemperature3D/ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA temperature model class.
             Default is None, in which case this class will use profile data points to calculate entropy.
-        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
             be used to calculate the entropy profile), either a name or an instance of an XGA density model class.
             Default is None, in which case this class will use profile data points to calculate entropy.
@@ -2776,6 +2819,7 @@ class SpecificEntropy(BaseProfile1D):
             exception being raised (e.g. if a calculated entropy value is negative). Default is False.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this specific entropy profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -2915,10 +2959,12 @@ class SpecificEntropy(BaseProfile1D):
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            key_temp_mod_part = "tm{t}".format(t=t_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -2937,10 +2983,12 @@ class SpecificEntropy(BaseProfile1D):
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
-            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            key_dens_mod_part = "dm{d}".format(d=d_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -2968,7 +3016,7 @@ class SpecificEntropy(BaseProfile1D):
 
         super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
@@ -2996,10 +3044,10 @@ class SpecificEntropy(BaseProfile1D):
         radius/radii.
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
-            mass within.
+            entropy at.
         :param float conf_level: The confidence level for the entropy uncertainties, the default is 68.2% (~1σ).
         :return: An astropy quantity containing the entropy/entropies, lower and upper uncertainties, and another
-            containing the entropy realization distribution.
+            containing the entropy realisation distribution.
         :rtype: Union[Quantity, Quantity]
         """
         # Setting the upper and lower confidence limits
@@ -3091,6 +3139,7 @@ class SpecificEntropy(BaseProfile1D):
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
                                    fill_value='extrapolate', bounds_error=False)
+
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
@@ -3229,8 +3278,8 @@ class SpecificEntropy(BaseProfile1D):
         :param Quantity rad: The radius to check.
         """
         if not rad.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("You can only check radii in units convertible to the radius units of "
-                                      "the profile ({}).".format(self.radii_unit.to_string()))
+            raise UnitConversionError(f"You can only check radii in units convertible to the radius units of "
+                                      f"the profile ({self.radii_unit.to_string()}).")
 
         if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
                 or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
@@ -3271,10 +3320,10 @@ class ThermalPressure(BaseProfile1D):
 
     :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
         temperature profile to take temperature information from.
+    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
         be used to calculate the thermal pressure profile), either a name or an instance of an XGA temperature model
         class. Default is None, in which case this class will use profile data points to calculate thermal pressure.
-    :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
     :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
         be used to calculate the thermal pressure profile), either a name or an instance of an XGA density model class.
         Default is None, in which case this class will use profile data points to calculate thermal pressure.
@@ -3302,15 +3351,22 @@ class ThermalPressure(BaseProfile1D):
         exception being raised (e.g. if a calculated thermal pressure value is negative). Default is False.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this thermal pressure profile is derived from. Default is None.
+    :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+        used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+        is None.
+    :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+        spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+        are generated from annular spectra, default is None.
     """
 
     def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
                  density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
                  density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
                  deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: [int, List[int]] = 20000, num_samples: int = 1000, show_warn: bool = True,
+                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
                  progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False):
+                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         A profile product which uses input temperature and density profiles to calculate a thermal pressure profile of
         the kind often used in galaxy cluster analyses. Very similar in function to the SpecificEntropy profile
@@ -3334,11 +3390,11 @@ class ThermalPressure(BaseProfile1D):
 
         :param GasTemperature3D / ProjectedGasTemperature1D temperature_profile: The XGA 3D or projected
             temperature profile to take temperature information from.
+        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D temperature_model: The model to fit to the temperature profile (if smooth models are to
             be used to calculate the thermal pressure profile), either a name or an instance of an XGA temperature
             model class. Default is None, in which case this class will use profile data points to calculate
             thermal pressure.
-        :param GasDensity3D density_profile: The XGA 3D density profile to take density information from.
         :param str/BaseModel1D density_model: The model to fit to the density profile (if smooth models are to
             be used to calculate the thermal pressure profile), either a name or an instance of an XGA density
             model class. Default is None, in which case this class will use profile data points to calculate thermal
@@ -3367,6 +3423,13 @@ class ThermalPressure(BaseProfile1D):
             an exception being raised (e.g. if a calculated thermal pressure value is negative). Default is False.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default
             is False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this thermal pressure profile is derived from. Default is None.
+        :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
+            used to create this profile. Only relevant to profiles that are generated from annular spectra, default
+            is None.
+        :param str fit_conf: The key that describes the fit-configuration used when fitting models to annular
+            spectra to measure the results that were then used to create this profile. Only relevant to profiles that
+            are generated from annular spectra, default is None.
         """
         # This init is unfortunately almost identical to HydrostaticMass, there is a lot of duplicated code.
 
@@ -3501,10 +3564,12 @@ class ThermalPressure(BaseProfile1D):
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
                 temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
                                                             num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=temperature_model.name)
+            key_temp_mod_part = "tm{t}".format(t=t_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -3524,10 +3589,12 @@ class ThermalPressure(BaseProfile1D):
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=True)
+            elif in_mod_names:
+                density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
                 density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
                                                     num_walkers, progress, show_warn, force_refit=False)
-            key_dens_mod_part = "dm{d}".format(d=density_model.name)
+            key_dens_mod_part = "dm{d}".format(d=d_mn)
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -3555,7 +3622,7 @@ class ThermalPressure(BaseProfile1D):
 
         super().__init__(radii, press_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
                          self._temp_prof.instrument, radii_err, press_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save)
+                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
 
         # Need a custom storage key for this pressure profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models
@@ -3858,6 +3925,7 @@ class Generic1D(BaseProfile1D):
         values converted to degrees, and allows this object to construct a predictable storage key.
     :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
         False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+    :param str telescope: The telescope that this profile is derived from. Default is None.
     :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
         used to create this profile. Only relevant to profiles that are generated from annular spectra, default
         is None.
@@ -3869,11 +3937,13 @@ class Generic1D(BaseProfile1D):
     def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
                  y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
                  associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
-                 auto_save: bool = False, spec_model: str = None, fit_conf: str = None):
+                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
 
+        :param Quantity radii: The radii at which the y values of this profile have been measured.
+        :param Quantity values: The y values of this profile.
         :param Quantity centre: The central coordinate the profile was generated from.
         :param str source_name: The name of the source this profile is associated with.
         :param str obs_id: The observation which this profile was generated from.
@@ -3892,6 +3962,7 @@ class Generic1D(BaseProfile1D):
             values converted to degrees, and allows this object to construct a predictable storage key.
         :param bool auto_save: Whether the profile should automatically save itself to disk at any point. The default is
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
+        :param str telescope: The telescope that this profile is derived from. Default is None.
         :param str spec_model: The spectral model that was fit to annular spectra to measure the results that were
             used to create this profile. Only relevant to profiles that are generated from annular spectra, default
             is None.
@@ -3901,6 +3972,8 @@ class Generic1D(BaseProfile1D):
         """
 
         super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, spec_model=spec_model, fit_conf=fit_conf)
+                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
+
+

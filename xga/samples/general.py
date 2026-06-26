@@ -1,6 +1,7 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 04/06/2025, 13:31. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/6/26, 9:03 AM. Copyright (c) The Contributors.
 
+from typing import Union, List
 from warnings import warn
 
 import numpy as np
@@ -9,7 +10,7 @@ from astropy.units import Quantity, Unit
 from tqdm import tqdm
 
 from .base import BaseSample
-from .. import DEFAULT_COSMO
+from .. import DEFAULT_COSMO, PRETTY_TELESCOPE_NAMES
 from ..exceptions import NoValidObservationsError, PeakConvergenceFailedError
 from ..sources.general import PointSource, ExtendedSource
 
@@ -24,7 +25,7 @@ class ExtendedSample(BaseSample):
     :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
     :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
         then they will be constructed from the supplied coordinates.
-    :param Quantity custom_region_radius: Custom analysis region radius(ii) for these sources, optional. Either
+    :param Quantity custom_region_radius: Custom analysis region radius/radii for these sources, optional. Either
         pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
     :param bool use_peak: Whether peak positions should be found and used.
     :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
@@ -41,15 +42,70 @@ class ExtendedSample(BaseSample):
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
     :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
         is hierarchical, simple may also be passed.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        Default is 0.3.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  custom_region_radius: Quantity = None, use_peak: bool = True,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
-                 psf_corr: bool = False, peak_find_method: str = "hierarchical"):
+                 psf_corr: bool = False, peak_find_method: str = "hierarchical",
+                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None,
+                 clean_obs: bool = True, clean_obs_reg: str = "custom", clean_obs_threshold: float = 0.3):
         """
         The init method of the ExtendedSample class.
+
+        :param np.ndarray ra: The right-ascensions of the extended sources, in degrees.
+        :param np.ndarray dec: The declinations of the extended sources, in degrees.
+        :param np.ndarray redshift: The redshifts of the extended sources, optional. Default is None.
+        :param np.ndarray name: The names of the extended sources, optional. If no names are supplied
+            then they will be constructed from the supplied coordinates.
+        :param Quantity custom_region_radius: Custom analysis region radius(ii) for these sources, optional. Either
+            pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
+        :param bool use_peak: Whether peak positions should be found and used.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+            position from. Default is 0.5keV.
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+            position from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
+        :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
+        :param str peak_find_method: Which peak finding method should be used (if use_peak is True). Default
+            is hierarchical, simple may also be passed.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param str clean_obs_reg: The region to use for the cleaning step, default is R200.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+            Default is 0.3.
         """
         if custom_region_radius is not None and not isinstance(custom_region_radius, Quantity):
             raise TypeError("Please pass None or a quantity object for custom_region_radius, rather than an "
@@ -66,17 +122,16 @@ class ExtendedSample(BaseSample):
                              " then there must be one entry per object passed to this sample object.")
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.sas import evselect_image, eexpmap, emosaic
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
-                         no_prog_bar=no_prog_bar)
+                         no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        evselect_image(self, peak_lo_en, peak_hi_en)
-        eexpmap(self, peak_lo_en, peak_hi_en)
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
+        # Remove the initial BaseSources that were declared
         del self._sources
         self._sources = {}
 
@@ -100,7 +155,8 @@ class ExtendedSample(BaseSample):
                     # Declare a generic extended source, telling it is that it is part of a sample with in_sample=True
                     self._sources[n] = ExtendedSource(r, d, z, n, cr, use_peak, peak_lo_en, peak_hi_en,
                                                       back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                      load_fits, peak_find_method, True)
+                                                      load_fits, peak_find_method, True, telescope, search_distance,
+                                                      clean_obs, clean_obs_reg, clean_obs_threshold)
                     if isinstance(cr, Quantity):
                         self._custom_radii.append(cr.value)
                         # I know this will write to this over and over, but it seems a bit silly to check
@@ -110,45 +166,54 @@ class ExtendedSample(BaseSample):
                         self._custom_radii.append(np.nan)
                         self._cr_unit = Unit('')
                     final_names.append(n)
+
                 except PeakConvergenceFailedError:
-                    warn("The peak finding algorithm has not converged for {}, using user "
-                         "supplied coordinates".format(n))
-                    # Have to re-declare the source if peak finding failed
-                    self._sources[n] = ExtendedSource(r, d, z, n, cr, False, peak_lo_en, peak_hi_en,
-                                                      back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                      load_fits, peak_find_method, True)
-                    final_names.append(n)
-                except NoValidObservationsError:
-                    self._failed_sources[n] = "CleanedNoMatch"
+                    try:
+                        failed_peak_find.append(n)
+                        # Have to re-declare the source if peak finding failed
+                        self._sources[n] = ExtendedSource(r, d, z, n, cr, False, peak_lo_en, peak_hi_en,
+                                                          back_inn_rad_factor, back_out_rad_factor, cosmology, True,
+                                                          load_fits, peak_find_method, True, telescope, search_distance,
+                                                          clean_obs, clean_obs_reg, clean_obs_threshold)
+                        final_names.append(n)
+                    except NoValidObservationsError as err:
+                        self._failed_sources[n] = str(err)
+
+                except NoValidObservationsError as err:
+                    self._failed_sources[n] = str(err)
 
                 dec_lb.update(1)
         self._names = final_names
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
-        #  so I should regenerate the mosaic images/expmaps
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        #  so I should regenerate the individual-telescope combined images/expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
-        if psf_corr:
+        # TODO this won't currently work for non-XMM telescopes
+        if psf_corr and 'xmm' in self.telescopes:
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
-        #  XMM data) that no sources will have been declared by this point, in which case it should fail now
+        #  data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
             raise NoValidObservationsError(
                 "No Extended Sources have been declared, none of the sample passed the cleaning steps.")
 
-        # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
+        # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
         no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
         if len(failed_peak_find) != 0:
@@ -215,17 +280,67 @@ class PointSample(BaseSample):
         radius for the background region. Default is 1.5.
     :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
     :param bool load_fits: Whether existing fits should be loaded from disk.
+    :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+        certain fraction of a certain region is covered by an ObsID. Default is True.
+    :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
     :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
     :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
+    :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+        set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+        default is None, in which case all available telescopes will be used. The user can pass a single name
+        (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+        telescopes), or a list of telescope names.
+    :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
+        is None in which case standard search distances for different telescopes are used. The user may pass a
+        single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+        telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+        specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
     def __init__(self, ra: np.ndarray, dec: np.ndarray, redshift: np.ndarray = None, name: np.ndarray = None,
                  point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, no_prog_bar: bool = False,
-                 psf_corr: bool = False):
+                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, clean_obs: bool = True,
+                 clean_obs_threshold: float = 0.9, no_prog_bar: bool = False,
+                 psf_corr: bool = False, telescope: Union[str, List[str]] = None,
+                 search_distance: Union[Quantity, dict] = None):
         """
         The init method of the PointSample class.
+
+        :param np.ndarray ra: The right-ascensions of the point sources, in degrees.
+        :param np.ndarray dec: The declinations of the point sources, in degrees.
+        :param np.ndarray redshift: The redshifts of the point sources, optional. Default is None.
+        :param np.ndarray name: The names of the point sources, optional. If no names are supplied
+            then they will be constructed from the supplied coordinates.
+        :param Quantity point_radius: The point source analysis region radius(ii) for this sample. Either
+            pass a scalar astropy quantity, or a non-scalar astropy quantity with length equal to the number of sources.
+        :param bool use_peak: Whether peak positions should be found and used. For PointSample the 'simple' peak
+            finding method is the only one available.
+        :param Quantity peak_lo_en: The lower energy bound for the RateMap to calculate peak
+            position from. Default is 0.5keV.
+        :param Quantity peak_hi_en: The upper energy bound for the RateMap to calculate peak
+            position from. Default is 2.0keV.
+        :param float back_inn_rad_factor: This factor is multiplied by an analysis region radius, and gives the inner
+            radius for the background region. Default is 1.05.
+        :param float back_out_rad_factor: This factor is multiplied by an analysis region radius, and gives the outer
+            radius for the background region. Default is 1.5.
+        :param Cosmology cosmology: An astropy cosmology object for use throughout analysis of the source.
+        :param bool load_fits: Whether existing fits should be loaded from disk.
+        :param bool clean_obs: Should the observations be subjected to a minimum coverage check, i.e. whether a
+            certain fraction of a certain region is covered by an ObsID. Default is True.
+        :param float clean_obs_threshold: The minimum coverage fraction for an observation to be kept for analysis.
+        :param bool no_prog_bar: Should a source declaration progress bar be shown during setup.
+        :param bool psf_corr: Should images be PSF corrected with default settings during sample setup.
+        :param str/List[str] telescope: The telescope(s) to be used in analyses of the sources. If specified here, and
+            set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
+            default is None, in which case all available telescopes will be used. The user can pass a single name
+            (see xga.TELESCOPES for a list of supported telescopes, and xga.USABLE for a list of currently usable
+            telescopes), or a list of telescope names.
+        :param Union[Quantity, dict] search_distance: The radius to search for observations within, the default
+            is None in which case standard search distances for different telescopes are used. The user may pass a
+            single Quantity to use for all telescopes, a dictionary with keys corresponding to ALL or SOME of the
+            telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
+            specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
 
         # Strongly enforce that its a quantity, this also means that it should be guaranteed that all radii have
@@ -240,16 +355,22 @@ class PointSample(BaseSample):
                              " must be one entry per object passed to this sample object.")
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.sas import evselect_image, eexpmap, emosaic
+        from xga.generate.sas import evselect_image, eexpmap, emosaic
+        from ..generate.esass import evtool_image, expmap
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
         super().__init__(ra, dec, redshift, name, cosmology, load_products=True, load_fits=False,
-                         no_prog_bar=no_prog_bar)
+                         no_prog_bar=no_prog_bar, telescope=telescope, search_distance=search_distance)
 
-        evselect_image(self, peak_lo_en, peak_hi_en)
-        eexpmap(self, peak_lo_en, peak_hi_en)
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        if 'xmm' in self.telescopes:
+            evselect_image(self, peak_lo_en, peak_hi_en)
+            eexpmap(self, peak_lo_en, peak_hi_en)
+            emosaic(self, "image", peak_lo_en, peak_hi_en)
+            emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+
+        if 'erosita' in self.telescopes or 'erass' in self.telescopes:
+            evtool_image(self, peak_lo_en, peak_hi_en)
+            expmap(self, peak_lo_en, peak_hi_en)
 
         del self._sources
         self._sources = {}
@@ -274,33 +395,46 @@ class PointSample(BaseSample):
                 #  thrown I have to catch it and not add that source to this sample.
                 try:
                     self._sources[n] = PointSource(r, d, z, n, pr, use_peak, peak_lo_en, peak_hi_en,
-                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                   load_fits, False, True)
+                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
+                                                   regen_merged=False, in_sample=True, telescope=telescope,
+                                                   search_distance=search_distance, clean_obs=clean_obs,
+                                                   clean_obs_threshold=clean_obs_threshold)
                     self._point_radii.append(pr.value)
                     # I know this will write to this over and over, but it seems a bit silly to check whether this has
                     #  been set yet when all radii should be forced to be the same unit
                     self._pr_unit = pr.unit
                     final_names.append(n)
                 except PeakConvergenceFailedError:
-                    warn("The peak finding algorithm has not converged for {}, using user "
-                         "supplied coordinates".format(n))
-                    self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en,
-                                                   back_inn_rad_factor, back_out_rad_factor, cosmology, True,
-                                                   load_fits, False, True)
-                    final_names.append(n)
-                except NoValidObservationsError:
-                    self._failed_sources[n] = "CleanedNoMatch"
+                    try:
+                        failed_peak_find.append(n)
+                        # If the peak finding failed, we need to re-declare the source, telling it is a part of a
+                        #  sample with in_sample=True
+                        self._sources[n] = PointSource(r, d, z, n, pr, False, peak_lo_en, peak_hi_en,
+                                                       back_inn_rad_factor,
+                                                       back_out_rad_factor, cosmology, True, load_fits,
+                                                       regen_merged=False,
+                                                       in_sample=True, telescope=telescope,
+                                                       search_distance=search_distance,
+                                                       clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold)
+                        final_names.append(n)
+                    except NoValidObservationsError as err:
+                        self._failed_sources[n] = str(err)
+
+                except NoValidObservationsError as err:
+                    self._failed_sources[n] = str(err)
 
                 dec_lb.update(1)
         self._names = final_names
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
-        #  so I should regenerate the mosaic images/expmaps
-        emosaic(self, "image", peak_lo_en, peak_hi_en)
-        emosaic(self, "expmap", peak_lo_en, peak_hi_en)
+        #  so I should regenerate the individual-telescope combined images/expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
+        all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
-        if psf_corr:
+        # TODO this currently won't work for non-XMM telescopes
+        if psf_corr and 'xmm' in self.telescopes:
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
@@ -317,7 +451,7 @@ class PointSample(BaseSample):
                    self._failed_sources[name] == 'Failed ObsClean']
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any XMM data, and will not be included in the "
+            warn("The following do not appear to have any data, and will not be included in the "
                  "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any

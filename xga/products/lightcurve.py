@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 18/11/2025, 22:52. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
 import re
 from datetime import datetime
 from typing import Union, List, Tuple, Dict
@@ -14,8 +14,8 @@ from fitsio import FITS, FITSHDR, read_header
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from xga.exceptions import FailedProductError, IncompatibleProductError, NotAssociatedError, XGADeveloperError, \
-    TelescopeNotAssociatedError
+from xga.exceptions import (FailedProductError, IncompatibleProductError, NotAssociatedError,
+                            TelescopeNotAssociatedError)
 from xga.products import BaseProduct, BaseAggregateProduct
 from xga.utils import dict_search
 
@@ -28,7 +28,7 @@ class LightCurve(BaseProduct):
 
     :param str path: The path to the lightcurve.
     :param str obs_id: The ObsID from which this lightcurve was generated.
-    :param str instrument: The instrument from which this lightcurve.
+    :param str instrument: The instrument from which this lightcurve was generated.
     :param str stdout_str: The stdout from the generation process.
     :param str stderr_str: The stderr for the generation process.
     :param str gen_cmd: The generation command for the lightcurve.
@@ -42,11 +42,15 @@ class LightCurve(BaseProduct):
     :param bool region: Whether this was generated from a region in a region file
     :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
                  central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, lo_en: Quantity, hi_en: Quantity,
                  time_bin_size: Quantity, pattern_expr: str = "", region: bool = False, is_back_sub: bool = True,
-                 telescope: str = None):
+                 telescope: str = None, check_exists: bool = True):
         """
         This is the XGA LightCurve product class, which is used to interface with X-ray lightcurves generated
         for a variety of sources. It provides simple access to data and information about the lightcurve, fitting
@@ -68,18 +72,16 @@ class LightCurve(BaseProduct):
         :param bool region: Whether this was generated from a region in a region file
         :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
         :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        # A validity check to help remind me to pass the telescope to the super-class init when this merges with
-        #  multi-mission XGA
-        if hasattr(super(), 'telescope'):
-            raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
-                                    "call to BaseProduct init in EventList needs to be updated.")
-        else:
-            self._tele = telescope
 
         # Call the BaseProduct init, sets up some attributes
         # TODO Support streaming of remote data
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         check_exists=check_exists)
 
         # Set the product type
         self._prod_type = "lightcurve"
@@ -87,14 +89,9 @@ class LightCurve(BaseProduct):
         # Store the size of the time binning used to generate the lightcurve as an attribute
         self._time_bin = time_bin_size.to('s')
 
-        # Checking the passed event selection pattern
-        if self.telescope == 'xmm':
-            # Unfortunate local import to avoid circular import errors
-            from ..sas import check_pattern
-            self._pattern_expr, self._pattern_name = check_pattern(pattern_expr)
-        else:
-            self._pattern_expr = ""
-            self._pattern_name = ""
+        # Unfortunate local import to avoid circular import errors
+        from xga.generate.common import check_pattern
+        self._pattern_expr, self._pattern_name = check_pattern(pattern_expr, telescope)
 
         # Put the energy bounds into an attribute
         self._energy_bounds = (lo_en, hi_en)
@@ -807,13 +804,13 @@ class LightCurve(BaseProduct):
         if custom_title is not None:
             ax.set_title(custom_title, fontsize=title_font_size)
         elif self.src_name is not None:
-            ax.set_title("{s} {t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
+            ax.set_title("{s} {t} {o}{i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
                                                                         i=self.instrument.upper(),
                                                                         l=self.energy_bounds[0].to('keV').value,
                                                                         u=self.energy_bounds[1].to('keV').value),
                          fontsize=title_font_size)
         else:
-            ax.set_title("{t} {o} {i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
+            ax.set_title("{t} {o}{i} {l}-{u}keV Lightcurve".format(s=self.src_name, t=self.telescope, o=self.obs_id,
                                                                     i=self.instrument.upper(),
                                                                     l=self.energy_bounds[0].to('keV').value,
                                                                     u=self.energy_bounds[1].to('keV').value),
@@ -1080,8 +1077,7 @@ class AggregateLightCurve(BaseAggregateProduct):
                     "Lightcurves for the same instrument ({t}-{i}) must have the same event "
                     "selection pattern.".format(t=lc.telescope, i=rel_inst.upper()))
 
-        patts = [str(tel) + "_".join([pk + 'pattern' + pv for pk, pv in pd.items()])
-                 for tel, pd in self._patterns.items()]
+        patts = [tel + "_".join([pk + 'pattern' + pv for pk, pv in pd.items()]) for tel, pd in self._patterns.items()]
         # This is what the AggregateLightCurve will be stored under in an XGA source product storage structure.
         self._storage_key = lightcurves[0].storage_key.split('_pattern')[0] + '_' + '_'.join(patts)
 

@@ -1,11 +1,31 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 05/11/2025, 14:48. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:20 PM. Copyright (c) The Contributors.
+
+
+class eSASSInputInvalid(Exception):
+    def __init__(self, *args):
+        """
+        This error is raised when a user provides an invalid input to an eSASS function.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSInputInvalid has been raised'
 
 
 class HeasoftError(Exception):
     def __init__(self, *args):
         """
-        Exception raised for unexpected output from HEASOFT calls, currently all encompassing.
+        Exception raised for unexpected output from HEASoft calls, currently all encompassing.
 
         :param expression:
         :param message:
@@ -42,6 +62,67 @@ class SASNotFoundError(Exception):
             return 'SASNotFoundError has been raised'
 
 
+class eSASSNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the eROSITA Science Analysis Software
+        System can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'eSASSNotFoundError has been raised'
+
+
+class CIAONotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the Chandra CIAO can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'CIAONotFoundError has been raised'
+
+
+class CALDBNotFoundError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the Calibration files CALDB can not be found on the system.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'CALDBNotFoundError has been raised'
+
+
 class XSPECNotFoundError(Exception):
     def __init__(self, *args):
         """
@@ -62,13 +143,11 @@ class XSPECNotFoundError(Exception):
             return 'XSPECNotFoundError has been raised'
 
 
-# I do not know if I will keep this as is or expand out into different errors
-# The trouble is there are many hundreds of possible SAS errors, and I don't know if I
-# want a class for all of them
-class SASGenerationError(Exception):
+class ProductGenerationError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if an error is found to have occured during a run of a part of the SAS software.
+        Exception raised if an error is found to have occurred during a run of backend software that generates
+        products for a telescope supported by XGA - equivalent to the now-removed SASGenerationError, but more general.
 
         :param expression:
         :param message:
@@ -82,13 +161,13 @@ class SASGenerationError(Exception):
         if self.message:
             return '{0} '.format(self.message)
         else:
-            return 'A generic SASNotFoundError has been raised'
+            return 'ProductGenerationError has been raised'
 
 
 class UnknownCommandlineError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if an error is found to have occured during a run of a part
+        Exception raised if an error is found to have occurred during a run of a part
         of the SAS software, but it cannot be linked to a SAS function.
 
         :param expression:
@@ -104,6 +183,27 @@ class UnknownCommandlineError(Exception):
             return '{0} '.format(self.message)
         else:
             return 'A generic UnknownCommandlineError has been raised'
+
+
+class TelescopeNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Exception raised if the user tries to run a telescope specific function (e.g. a SAS function for XMM, or an
+        eSASS function for eROSITA) and the source or sample has no data for that telescope associated with it.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'TelescopeNotAssociatedError has been raised'
 
 
 class FailedProductError(Exception):
@@ -170,7 +270,7 @@ class NoMatchFoundError(Exception):
 class NotAssociatedError(Exception):
     def __init__(self, *args):
         """
-        Error raised when a given ObsID is not associated with a source object.
+        Error raised when a given telescope or ObsID is not associated with a source object.
 
         :param expression:
         :param message:
@@ -614,42 +714,6 @@ class NotSampleMemberError(Exception):
             return 'NotSampleMemberError has been raised'
 
 
-class XGADeveloperError(Exception):
-    def __init__(self, *args):
-        """
-        Raised when an error has occurred that needs the attention of developers.
-        :param expression:
-        :param message:
-        """
-        if args:
-            self.message = args[0]
-        else:
-            self.message = None
-
-    def __str__(self):
-        if self.message:
-            return '{}'.format(self.message)
-        else:
-            return 'XGADeveloperError has been raised'
-
-class FitConfNotAssociatedError(Exception):
-    def __init__(self, *args):
-        """
-        Raised when a supplied fit configuration isn't associated with the source, model, or spectrum.
-        :param expression:
-        :param message:
-        """
-        if args:
-            self.message = args[0]
-        else:
-            self.message = None
-
-    def __str__(self):
-        if self.message:
-            return '{}'.format(self.message)
-        else:
-            return 'FitConfNotAssociatedError has been raised'
-
 class NoTelescopeDataError(Exception):
     def __init__(self, *args):
         """
@@ -689,11 +753,10 @@ class InvalidTelescopeError(Exception):
             return 'InvalidTelescopeError has been raised'
 
 
-class TelescopeNotAssociatedError(Exception):
+class XGADeveloperError(Exception):
     def __init__(self, *args):
         """
-        Exception raised if the user tries to run a telescope specific function (e.g. a SAS function for XMM, or an
-        eSASS function for eROSITA) and the source or sample has no data for that telescope associated with it.
+        Raised when an error has occurred that needs the attention of developers.
 
         :param expression:
         :param message:
@@ -707,4 +770,44 @@ class TelescopeNotAssociatedError(Exception):
         if self.message:
             return '{0} '.format(self.message)
         else:
-            return 'TelescopeNotAssociatedError has been raised'
+            return 'XGADeveloperError has been raised'
+
+
+class ProductNotUsableError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a product instance is unusable, for reasons specified in the
+        not_usable_reasons property.
+
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{0} '.format(self.message)
+        else:
+            return 'ProductNotUsableError has been raised'
+
+
+class FitConfNotAssociatedError(Exception):
+    def __init__(self, *args):
+        """
+        Raised when a supplied fit configuration isn't associated with the source, model, or spectrum.
+        :param expression:
+        :param message:
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        if self.message:
+            return '{}'.format(self.message)
+        else:
+            return 'FitConfNotAssociatedError has been raised'

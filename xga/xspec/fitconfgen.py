@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 27/03/2025, 22:31. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:15 PM. Copyright (c) The Contributors.
 
 from inspect import signature, Parameter
 from types import FunctionType
@@ -16,7 +16,8 @@ FIT_FUNC_ARGS = {
                          'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
                          'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
+                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                         'stacked_spectra': False, 'telescope': False, 'force_gen': False},
 
     'double_temp_apec': {'inner_radius': False, 'start_temp_one': True, 'start_temp_two': True,
                          'start_met_one': True, 'start_met_two': True, 'lum_en': False, 'freeze_nh': True,
@@ -24,37 +25,42 @@ FIT_FUNC_ARGS = {
                          'freeze_temp_two': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True,
                          'lum_conf': False, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
+                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                         'stacked_spectra': False, 'telescope': False},
 
     'single_temp_mekal': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
                           'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
                           'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                           'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False},
+                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                          'stacked_spectra': False, 'telescope': False},
 
     'multi_temp_dem_apec': {'inner_radius': False, 'start_max_temp': True, 'start_met': True, 'start_t_rat': True,
                             'start_inv_em_slope': True, 'lum_en': False, 'freeze_nh': True, 'freeze_met': True,
                             'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
                             'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False,
                             'min_sn': False, 'over_sample': False, 'one_rmf': False, 'num_cores': False,
-                            'spectrum_checking': False, 'timeout': False},
+                            'spectrum_checking': False, 'timeout': False, 'stacked_spectra': False, 'telescope': False},
 
     'power_law': {'inner_radius': False, 'redshifted': False, 'lum_en': False, 'start_pho_index': True,
                   'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
                   'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
-                  'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False},
+                  'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False,
+                  'stacked_spectra': False, 'telescope': False},
 
     'blackbody': {'inner_radius': False, 'redshifted': False, 'lum_en': False, 'start_temp': True,
                   'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
                   'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
-                  'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False},
+                  'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False,
+                  'stacked_spectra': False, 'telescope': False},
 
     'single_temp_apec_profile': {'start_temp': True, 'start_met': True, 'lum_en': False,
                                  'freeze_nh': True, 'freeze_met': True, 'lo_en': True, 'hi_en': True,
                                  'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
                                  'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
                                  'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
-                                 'use_cross_arf': True, 'first_fit_start_pars': True, 'detmap_bin': True}
+                                 'use_cross_arf': True, 'first_fit_start_pars': True, 'detmap_bin': True,
+                                 'stacked_spectra': False, 'telescope': False}
 }
 
 

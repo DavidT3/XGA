@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 11/03/2025, 22:44. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 3:06 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -14,11 +14,12 @@ from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.ticker import ScalarFormatter, FuncFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.mplot3d import Axes3D
 
 from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
 from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError, \
-    FailedProductError
+    FailedProductError, ProductNotUsableError
 from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
 from ..utils import dict_search
 
@@ -41,7 +42,7 @@ class Spectrum(BaseProduct):
     :param str instrument: The instrument which this spectrum was generated.
     :param bool grouped: Was this spectrum grouped?
     :param int min_counts: The minimum counts applied for the grouping.
-    :param float min_sn: The minimum signal to noise applied for the grouping.
+    :param float min_sn: The minimum signal-to-noise applied for the grouping.
     :param int over_sample: Level of oversampling applied to spectrum grouping.
     :param str stdout_str: The stdout from the generation process.
     :param str stderr_str: The stderr for the generation process.
@@ -51,33 +52,66 @@ class Spectrum(BaseProduct):
         generates these by default, as XSPEC does not make use of them).
     :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
         generates these by default, as XSPEC does not make use of them).
+    :param str telescope: The telescope that this spectrum is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks the existence of
+        files or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str,
-                 central_coord: Quantity, inn_rad: Quantity, out_rad: Quantity, obs_id: str, instrument: str,
-                 grouped: bool, min_counts: int, min_sn: float, over_sample: int, stdout_str: str,
-                 stderr_str: str, gen_cmd: str, region: bool = False, b_rmf_path: str = '', b_arf_path: str = ''):
+    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, central_coord: Quantity, inn_rad: Quantity,
+                 out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int, min_sn: float,
+                 over_sample: int, stdout_str: str, stderr_str: str, gen_cmd: str, region: bool = False,
+                 b_rmf_path: str = '', b_arf_path: str = '', telescope: str = None, check_exists: bool = True):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
+
+        :param str path: The path to the spectrum file.
+        :param str rmf_path: The path to the RMF generated for the spectrum file.
+        :param str arf_path: The path to the ARF generated for the spectrum file.
+        :param str b_path: The path to the background spectrum generated for the spectrum file.
+        :param Quantity central_coord: The central coordinate of the spectrum region.
+        :param Quantity inn_rad: The inner radius of the spectrum region.
+        :param Quantity out_rad: The outer radius of the spectrum region.
+        :param str obs_id: The ObsID from which this spectrum was generated.
+        :param str instrument: The instrument which this spectrum was generated.
+        :param bool grouped: Was this spectrum grouped?
+        :param int min_counts: The minimum counts applied for the grouping.
+        :param float min_sn: The minimum signal-to-noise applied for the grouping.
+        :param int over_sample: Level of oversampling applied to spectrum grouping.
+        :param str stdout_str: The stdout from the generation process.
+        :param str stderr_str: The stderr for the generation process.
+        :param str gen_cmd: The generation command for the spectrum stack.
+        :param bool region: Was this spectrum generated from a region in a region file?
+        :param str b_rmf_path: The path to the RMF generated for the background spectrum (if applicable, XGA no longer
+            generates these by default, as XSPEC does not make use of them).
+        :param str b_arf_path: The path to the ARF generated for the background spectrum (if applicable, XGA no longer
+            generates these by default, as XSPEC does not make use of them).
+        :param str telescope: The telescope that this spectrum is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks the existence of
+            files or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         check_exists=check_exists)
         self._prod_type = "spectrum"
 
-        if os.path.exists(rmf_path):
+        if not check_exists or os.path.exists(rmf_path):
             self._rmf = rmf_path
         else:
             self._rmf = ''
             self._usable = False
             self._why_unusable.append("RMFPathDoesNotExist")
 
-        if os.path.exists(arf_path):
+        if not check_exists or os.path.exists(arf_path):
             self._arf = arf_path
         else:
             self._arf = ''
             self._usable = False
             self._why_unusable.append("ARFPathDoesNotExist")
 
-        if os.path.exists(b_path):
+        if not check_exists or os.path.exists(b_path):
             self._back_spec = b_path
         else:
             self._back_spec = ''
@@ -93,7 +127,7 @@ class Spectrum(BaseProduct):
             self._usable = False
             self._why_unusable.append("BackRMFPathDoesNotExist")
 
-        if b_arf_path != '' and os.path.exists(b_arf_path):
+        if b_arf_path != '' and (not check_exists or os.path.exists(b_arf_path)):
             self._back_arf = b_arf_path
         elif b_arf_path == '':
             self._back_arf = None
@@ -106,8 +140,14 @@ class Spectrum(BaseProduct):
         self._central_coord = central_coord
 
         # Storing the region information
-        self._inner_rad = inn_rad
-        self._outer_rad = out_rad
+        # Firstly, we'll ensure that those radii have been passed in the right kind of units, and then convert
+        #  them to degrees - all XGA spectrum filenames have degree radii in them, and more importantly the source
+        #  storage structures all expect the storage keys to have degree radii
+        if not all([inn_rad.unit.is_equivalent('deg'), out_rad.unit.is_equivalent('deg')]):
+            raise UnitConversionError("The 'inn_rad' and 'out_rad' arguments must be in angular distance units.")
+
+        self._inner_rad = inn_rad.to('deg')
+        self._outer_rad = out_rad.to('deg')
         # And also the shape of the region
         if self._inner_rad.isscalar:
             self._shape = 'circular'
@@ -289,18 +329,24 @@ class Spectrum(BaseProduct):
                 if src_spec:
                     # Make this variable so the FileNotFoundError can work
                     rel_path = self.path
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._spec_counts = all_dat['COUNTS']
                     self._spec_channels = all_dat['CHANNEL']
                     # If the spectrum has not been grouped it may not have this column
                     if "GROUPING" in all_dat.dtype.names:
                         self._spec_group = all_dat['GROUPING']
-                    self._spec_quality = all_dat['QUALITY']
+
+                    if "QUALITY" in all_dat.dtype.names:
+                        self._spec_quality = all_dat['QUALITY']
+                    else:
+                        # If there is no quality information then we just have to assume every channel is okay
+                        #  to use - otherwise the get_grouped_data method will fall over
+                        self._spec_quality = np.zeros(len(self._spec_channels))
 
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
                     rel_path = self.background
-                    all_dat = read(rel_path)
+                    all_dat = read(rel_path, 'SPECTRUM')
                     self._back_counts = all_dat['COUNTS']
                     self._back_channels = all_dat['CHANNEL']
 
@@ -311,15 +357,12 @@ class Spectrum(BaseProduct):
                         self._back_quality = all_dat['QUALITY']
 
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
+                                     f"access data from it; the reason given is: {reasons}.")
 
     def _read_header_on_demand(self, src_spec: bool = True, primary_header: bool = True):
         """
@@ -353,15 +396,12 @@ class Spectrum(BaseProduct):
                     self._spec_back_header = read_header(rel_path, 'SPECTRUM')
 
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
+                                     f"access data from it; the reason given is: {reasons}.")
 
     def _read_response_on_demand(self, rmf: bool = True):
         """
@@ -405,15 +445,12 @@ class Spectrum(BaseProduct):
                     arf_read.close()
 
             except OSError:
-                raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
-                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
-                                        "associated with {s}.".format(f=rel_path, s=self.src_name))
+                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
+                                     f"access data from it; the reason given is: {reasons}.")
 
     @property
     def header(self) -> FITSHDR:
@@ -1657,7 +1694,7 @@ class Spectrum(BaseProduct):
     def get_view(self, ax: Axes, lo_lim: Quantity = Quantity(0.3, "keV"), hi_lim: Quantity = Quantity(7.9, "keV"),
                  back_sub: bool = True, energy: bool = True, src_colour: str = 'black', bck_colour: str = 'firebrick',
                  grouped: bool = True, xscale: str = "log", yscale: str = "linear", fontsize: Union[int, float] = 14,
-                 show_model_fits: bool = True, model: str = None, fit_conf: Union[str, dict] = None) -> Axes:
+                 show_model_fits: bool = True, model: str = None, fit_conf: Union[str, dict] = None, show_residuals: bool = False,) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -1694,6 +1731,8 @@ class Spectrum(BaseProduct):
             of parameters passed to the XGA XSPEC fit function that were changed from default, and values being the
             changed values, or a full string representation of the fit configuration that is being requested. Default
             is None, in which case all fit configurations of a model will be plotted.
+        :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
+            the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         """
         from ..xspec.fit import FIT_FUNC_MODEL_NAMES
         from ..xspec.fitconfgen import fit_conf_from_function
@@ -1780,6 +1819,40 @@ class Spectrum(BaseProduct):
             fit_conf = {model: [fit_conf]}
             model = [model]
 
+        # Residuals can only be shown if model fits are being displayed
+        if show_residuals and not show_model_fits:
+            raise ValueError("Residuals can only be displayed when 'show_model_fits=True' and a model has been fit.")
+        elif show_residuals:
+            # Safely split the spectrum axis
+            divider = make_axes_locatable(ax)
+
+            # Append a residual axis taking up 30% of the original axis height
+            ax_res = divider.append_axes("bottom", size="30%", pad=0.0)
+            # Share the x-axis limits and panning
+            ax_res.sharex(ax)
+            ax.tick_params(labelbottom=False)
+
+        # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
+        if energy:
+            rel_y_label = "Counts s$^{-1}$ keV$^{-1}$"
+            rel_y_label = "Normalised " + rel_y_label if show_model_fits else rel_y_label
+
+            rel_x_label = "Energy [keV]"
+        else:
+            rel_y_label = "Counts s$^{-1}$ Channel$^{-1}$"
+            rel_y_label = "Normalised " + rel_y_label if show_model_fits else rel_y_label
+
+            rel_x_label = "Channel"
+
+        # The axis that gets the x-axis labels depends on whether we're plotting residuals or not
+        if not show_residuals:
+            ax.set_xlabel(rel_x_label, fontsize=fontsize)
+        else:
+            ax_res.set_xlabel(rel_x_label, fontsize=fontsize)
+        ax.set_ylabel(rel_y_label, fontsize=fontsize)
+
+        plt.sca(ax)
+
         # Here we grab the count-rates of the channels in this spectrum - either straight from the property
         #  or the get_grouped_data() method
         if not grouped:
@@ -1863,21 +1936,9 @@ class Spectrum(BaseProduct):
                             fmt="x",
                             color=bck_colour, label="Background data", zorder=1)
 
-            # Energy vs channel has already been encoded in the x data, but we still need to plot different axis labels
-            if energy:
-                ax.set_ylabel("Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-                ax.set_xlabel("Energy [keV]", fontsize=fontsize)
-            else:
-                ax.set_ylabel("Counts s$^{-1}$ Channel$^{-1}$", fontsize=fontsize)
-                ax.set_xlabel("Channel", fontsize=fontsize)
-
         # In this case the user wants the fitted spectra, and there ARE fits to plot, so rather than plot our own
         #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
         else:
-            # Set the axis labels
-            ax.set_ylabel("Normalised Counts s$^{-1}$ keV$^{-1}$", fontsize=fontsize)
-            ax.set_xlabel("Energy [keV]", fontsize=fontsize)
-
             plot_cnt = 0
             for mod in model:
                 # We also iterate through the different fit configurations for the current model, and plot them
@@ -1910,7 +1971,23 @@ class Spectrum(BaseProduct):
                     # The model line is put on
                     changed = self.fitted_model_configuration_diffs[mod][fc]
                     fc_str = "; ".join([par + "=" + val for par, val in changed.items()])
-                    ax.plot(plot_x, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
+                    # Plot the model line, capturing the return so we can make the residual data
+                    #  points the same colour as the model line (if the user wants to plot residuals).
+                    mod_line = ax.plot(plot_x, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
+
+                    # Plot residuals if requested
+                    if show_residuals:
+                        residuals = plot_mod - plot_y
+                        ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
+                                        fmt="+", capsize=1.2, zorder=1, color=mod_line[0].get_color())
+                        ax_res.axhline(0, color='black', linewidth=1, linestyle='--')
+                        ax_res.set_ylabel("Residuals", fontsize=fontsize - 2)
+                        ax_res.set_xlabel("Energy [keV]", fontsize=fontsize)
+                        ax_res.minorticks_on()
+                        ax_res.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+                        ax_res.set_xscale(xscale)
+                        ax_res.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                        ax_res.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
 
         # Setting up the scaling aspects of the plot
         ax.set_xscale(xscale)
@@ -1925,7 +2002,7 @@ class Spectrum(BaseProduct):
              hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
              src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
              yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
-             save_path: str = None, model: str = None, fit_conf: Union[str, dict] = None):
+             save_path: str = None, model: str = None, fit_conf: Union[str, dict] = None, show_residuals: bool = False):
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -1963,32 +2040,35 @@ class Spectrum(BaseProduct):
             of parameters passed to the XGA XSPEC fit function that were changed from default, and values being the
             changed values, or a full string representation of the fit configuration that is being requested. Default
             is None, in which case all fit configurations of a model will be plotted.
+        :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
+            the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         """
 
         # Create figure object
         plt.figure(figsize=figsize)
-        fig = plt.figure(figsize=figsize)
         ax = plt.gca()
 
         ax = self.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
-                           fontsize, show_model_fits, model, fit_conf)
+                           fontsize, show_model_fits, model, fit_conf, show_residuals)
 
         # Set the title with all relevant information about the spectrum object in it
-        ax.set_title("{n} - {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper()),
+        ax.set_title("{n} - {t} {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper(), t=self.telescope),
                      fontsize=fontsize + 1)
 
         # Generate the legend for the data and model(s)
         plt.legend(loc="best", fontsize=fontsize - 1)
 
-        # Removing extraneous whitespace around the plot
-        plt.tight_layout()
+        # Removing extraneous whitespace around the plot - we have h_pad=0 in the call to stop
+        #  tight_layout from changing the 0-height vertical spacing we set between spectrum and
+        #  residual axes (if we are plotting residuals that is).
+        plt.tight_layout(h_pad=0)
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
             plt.savefig(save_path)
-
-        # Display the spectrum
-        plt.show()
+        else:
+            # Display the spectrum
+            plt.show()
 
         # Wipe the figure
         plt.close("all")
@@ -2002,16 +2082,44 @@ class AnnularSpectra(BaseAggregateProduct):
     """
     def __init__(self, spectra: List[Spectrum]):
         """
-        The init method for the AnnularSpectrum class, performs checks and organises the spectra which
+        The init method for the AnnularSpectra class, performs checks and organizes the spectra which
         have been passed in, for easy retrieval.
+
+        :param List[Spectrum] spectra: A list of the XGA Spectrum objects which make up this set.
         """
-        super().__init__([s.path for s in spectra], 'spectrum', "combined", "combined")
+        # Get the unique telescope names associated with the passed spectral components
+        all_spec_tels = set([s.telescope for s in spectra])
+
+        # This should happen in the super init I think, but we'll have to do the check here as well for safety
+        if len(all_spec_tels) == 0:
+            raise ValueError("No spectra have been passed to the AnnularSpectra class.")
+
+        # Currently we only support one telescope per AnnularSpectra
+        elif len(all_spec_tels) > 1:
+            raise NotImplementedError(f"AnnularSpectra comprised of spectra from multiple telescopes ({all_spec_tels}) are not "
+                                      "supported yet.")
+        else:
+            # Given the check above, we know that all the spectra are from the same telescope, so we just take
+            #  the telescope name from the first one
+            telescope = spectra[0].telescope
+
+        # We need to check that all the passed spectra are usable - it is particularly important for spectra, as
+        #  they actually need several different files to exist to be usable, so checking the main product
+        #  path exists (for instance) won't cut it. Besides, why do it again when the Spectrum
+        #  instances already did.
+        not_usable_reasons = {s: s.not_usable_reasons for s in spectra if not s.usable}
+        if len(not_usable_reasons) != 0:
+            not_usable_formatted = "\n".join([f"{os.path.basename(s.path)}: \n{nur}"
+                                              for s, nur in not_usable_reasons.items()])
+            raise ProductNotUsableError(f"Not all component spectra are usable:\n {not_usable_formatted}")
+
+        super().__init__([s.path for s in spectra], 'annular_spectrum', "combined", "combined", telescope=telescope)
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
         #  have the same set ID
         set_idents = set([s.set_ident for s in spectra])
         if len(set_idents) != 1:
-            raise XGASetIDError("You have passed spectra that have set IDs that do not match")
+            raise XGASetIDError(f"All annular spectrum components must have matching set IDs, the following are present - ({set_idents}).")
 
         # Just put the set ID into an attribute in case anyone ever wants to know it
         self._set_id = list(set_idents)[0]
@@ -2019,6 +2127,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here I run through all the spectra and access their annulus_ident property, that way we can determine how
         #  many annuli there are and start storing spectra appropriately
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
+
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
             raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
                              "Spectra with IDs {p} have been "
@@ -2123,7 +2232,7 @@ class AnnularSpectra(BaseAggregateProduct):
         #  aggregate product of all the relevant spectra. All fit results are stored on annular basis, then most
         #  will have different entries for different models
 
-        # The total exposure of the combined spectra, will be overwritten if multiple models are fit, but
+        # The total exposure of the combined spectra. Will be overwritten if multiple models are fit, but
         #  as its a property of the spectra and not the fit it should always be the same
         self._total_exp = {ai: None for ai in range(self._num_ann)}
         # These will be stored on a per model basis
@@ -2243,7 +2352,7 @@ class AnnularSpectra(BaseAggregateProduct):
         instrument. It is the RMF of the background associated with the outermost annulus of this object.
 
         :param str obs_id: The ObsID to get the background spectrum's RMF for.
-        :param str inst: The instrument to get the background spectrum' RMF for.
+        :param str inst: The instrument to get the background spectrum's RMF for.
         :return: Path of the background spectrum RMF.
         :rtype: str
         """
@@ -2318,7 +2427,7 @@ class AnnularSpectra(BaseAggregateProduct):
             raise IndexError("{i} is not an annulus ID associated with this AnnularSpectra object. "
                              "Allowed annulus IDs are; {a}".format(i=annulus_ident, a=ann_str))
         elif obs_id not in self._component_products and obs_id is not None:
-            raise NotAssociatedError("{0} is not associated with this AnnularSpectra.".format(obs_id))
+            raise NotAssociatedError("ObsID {0} is not associated with this AnnularSpectra.".format(obs_id))
         elif (obs_id is not None and obs_id in self._component_products) and \
                 (inst is not None and inst not in self._component_products[obs_id]):
             raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
@@ -2826,11 +2935,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
-            raise ValueError("The dictionary passed in with the fit results in it does not have the same"
-                             " number of entries as there are annuli.")
+            raise ValueError(f"Fit results information passed to the 'tab_line' argument has {len(tab_line)} "
+                             f"entries, but this AnnularSpectra has {self._num_ann} annuli."
+                             f"Received 'tab_line': {tab_line}")
+
+        # Same check for luminosity input
         elif len(lums) != self._num_ann:
-            raise ValueError("The dictionary passed in with the luminosities in it does not have the same"
-                             " number of entries as there are annuli.")
+            raise ValueError(f"Fit luminosity information passed to the 'lums' argument has {len(lums)} "
+                             f"entries, but this AnnularSpectra has {self._num_ann} annuli."
+                             f"Received 'lums': {lums}")
 
         for ai in range(0, self._num_ann):
             # Various global values of interest
@@ -3115,8 +3228,7 @@ class AnnularSpectra(BaseAggregateProduct):
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
-    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], upper_limit: Quantity = None,
-                         fit_conf: Union[str, dict] = None) \
+    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], fit_conf: Union[str, dict] = None) \
             -> Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]:
         """
         This generates a radial profile of the requested fit parameter using the stored results from
@@ -3127,7 +3239,6 @@ class AnnularSpectra(BaseAggregateProduct):
         :param str par: The name of the free model parameter that you wish to generate a profile for.
         :param Unit/str par_unit: The unit of the free model parameter as an astropy unit object, or a string
             representation (e.g. keV).
-        :param Quantity upper_limit: Allows an allowed upper limit for the y values in the profile to be passed.
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
             representation of the fit configuration that is being requested.
@@ -3194,30 +3305,26 @@ class AnnularSpectra(BaseAggregateProduct):
                 obs_id, inst = obs_key.split('-')
 
             try:
-                if par == 'kT' and upper_limit is None:
+                if par == 'kT':
                     new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, associated_set_id=self.set_ident,
                                                          set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
-                                                         auto_save=True, spec_model=model, fit_conf=fit_conf)
-                elif par == 'kT' and upper_limit is not None:
-                    new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                         inst, rad_errors, par_errs, upper_limit, self.set_ident,
-                                                         self.storage_key, deg_radii=mid_radii_deg, auto_save=True,
-                                                         spec_model=model, fit_conf=fit_conf)
+                                                         auto_save=True, telescope=self.telescope, spec_model=model,
+                                                         fit_conf=fit_conf)
                 elif par == 'Abundanc':
                     new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
                                                          inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                         mid_radii_deg, auto_save=True, spec_model=model,
+                                                         mid_radii_deg, auto_save=True, telescope=self.telescope, spec_model=model,
                                                          fit_conf=fit_conf)
                 elif par == 'norm':
                     new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
                                                    rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                   mid_radii_deg, auto_save=True, spec_model=model, fit_conf=fit_conf)
+                                                   mid_radii_deg, auto_save=True, telescope=self.telescope, spec_model=model, fit_conf=fit_conf)
                 else:
                     prof_type = "1d_proj_{}"
                     new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
                                          prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                         mid_radii_deg, auto_save=True, spec_model=model, fit_conf=fit_conf)
+                                         mid_radii_deg, auto_save=True, telescope=self.telescope, spec_model=model, fit_conf=fit_conf)
 
                 profs.append(new_prof)
 
@@ -3894,6 +4001,3 @@ class AnnularSpectra(BaseAggregateProduct):
 
     def __getitem__(self, ind):
         return self.all_spectra[ind]
-
-
-

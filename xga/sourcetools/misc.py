@@ -1,27 +1,34 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/04/2023, 09:06. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 7:42 PM. Copyright (c) The Contributors.
+
+from __future__ import annotations
+
 import warnings
 from copy import deepcopy
 from subprocess import Popen, PIPE
-from typing import Union, List
+from typing import Union, List, TYPE_CHECKING
 
 from astropy.coordinates import SkyCoord
 from astropy.cosmology import Cosmology
 from astropy.units import Quantity
-from numpy import array, ndarray, pi
+from numpy import array, pi
 
 from .. import DEFAULT_COSMO
 from ..exceptions import HeasoftError
 from ..models import BaseModel1D
 
+if TYPE_CHECKING:
+    from ..sources.base import BaseSource
+    from ..samples.base import BaseSample
 
-def nh_lookup(coord_pair: Quantity) -> ndarray:
+
+def nh_lookup(coord_pair: Quantity) -> Quantity:
     """
-    Uses HEASOFT to lookup hydrogen column density for given coordinates.
+    Uses HEASoft to lookup hydrogen column density for given coordinates.
 
     :param Quantity coord_pair: An astropy quantity with RA and DEC of interest.
-    :return: Average and weighted average nH values (in units of cm$^{-2}$)
-    :rtype: ndarray
+    :return: Average and weighted average nH values.
+    :rtype: Quantity
     """
     # Apparently minimal type-checking is the Python way, but for some reason this heasoft command fails if
     # integers are passed, so I'll convert them, let them TypeError if people pass weird types.
@@ -45,7 +52,7 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
         average_nh = lines[-3].split(' ')[-1]
         weighed_av_nh = lines[-2].split(' ')[-1]
     except IndexError:
-        raise HeasoftError("HEASOFT nH command output is not as expected")
+        raise HeasoftError("HEASoft nH command output is not as expected.")
 
     try:
         average_nh = float(average_nh)
@@ -60,10 +67,10 @@ def nh_lookup(coord_pair: Quantity) -> ndarray:
                 nh_val = float([e for e in lines[12].split(' ') if e != ''][3])
                 nh_vals = Quantity(array([nh_val, nh_val]) / 10 ** 22, "10^22 cm^-2")
             except ValueError:
-                raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
+                raise HeasoftError("HEASoft nH command scraped output cannot be converted to float")
         else:
-            raise HeasoftError("HEASOFT nH command scraped output cannot be converted to float")
-    # Returns both the average and weighted average nH values, as output by HEASOFT nH tool.
+            raise HeasoftError("HEASoft nH command scraped output cannot be converted to float")
+    # Returns both the average and weighted average nH values, as output by HEASoft nH tool.
     return nh_vals
 
 
@@ -73,7 +80,7 @@ def rad_to_ang(rad: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Qua
 
     :param Quantity rad: Radius for conversion.
     :param Cosmology cosmo: An instance of an astropy cosmology, the default is a flat LambdaCDM concordance model.
-    :param float z: The _redshift of the source.
+    :param float z: The redshift of the source.
     :return: The radius in degrees.
     :rtype: Quantity
     """
@@ -97,13 +104,14 @@ def ang_to_rad(ang: Quantity, z: float, cosmo: Cosmology = DEFAULT_COSMO) -> Qua
     return rad
 
 
-def name_to_coord(name: str):
+def name_to_coord(name: str) -> Quantity:
     """
-    I'd like it to be known that I hate papers and resources that either only give the name of an object
-    or its sexagesimal coordinates - however it happens upsettingly often so here we are. This function will
-    take a standard format name (e.g. XMMXCS J041853.9+555333.7) and return RA and DEC in degrees.
+    Takes a standard format name (e.g. XMMXCS J041853.9+555333.7) and returns RA and DEC in degrees.
+    The sexagesimal coordinates are parsed from the string and converted to decimal degrees.
 
-    :param name:
+    :param str name: Standard format name of an object.
+    :return: An astropy quantity containing RA and DEC in degrees.
+    :rtype: Quantity
     """
     raise NotImplementedError("I started this and will finish it at some point, but I got bored.")
     if " " in name:
@@ -131,9 +139,14 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
     into its own function really. This will take a coordinate pair, and optional survey name, and spit
     out an object name in the standard format.
 
+    :param Quantity coord_pair: The coordinate pair for which we want to generate a name.
+    :param str survey: The name of the survey to prefix the name with, default is None.
     :return: Source name based on coordinates.
     :rtype: str
     """
+    raise NotImplementedError("This feature is still under construction, please contact the developers if "
+                              "you wish for it to be given priority.")
+    
     s = SkyCoord(ra=coord_pair[0], dec=coord_pair[1])
     crd_str = s.to_string("hmsdms").replace("h", "").replace("m", "").replace("s", "").replace("d", "")
     ra_str, dec_str = crd_str.split(" ")
@@ -152,14 +165,15 @@ def coord_to_name(coord_pair: Quantity, survey: str = None) -> str:
     return name
 
 
-def model_check(sources, model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) \
+def model_check(sources: Union[BaseSource, BaseSample, List[BaseSource]],
+                model: Union[str, List[str], BaseModel1D, List[BaseModel1D]]) \
         -> Union[List[BaseModel1D], List[str]]:
     """
     Very simple function that checks if a passed set of models is appropriately structured for the number of sources
-    that have been passed. I can't imagine why a user would need this directly, its only here as these checks
+    that have been passed. There is no reason a user would need this directly, it's only here as these checks
     have to be performed in multiple places in sourcetools.
 
-    :param List[BaseSource]/BaseSample/BaseSource sources: The source(s).
+    :param BaseSource/BaseSample/List[BaseSource] sources: The source(s) for which we are checking models.
     :param str/List[str]/BaseModel1D/List[BaseModel1D] model: The model(s).
     :return: A list of model instances, or names of models.
     :rtype: Union[List[BaseModel1D], List[str]]

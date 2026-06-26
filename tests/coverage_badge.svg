@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  - This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-  - Last modified by David J Turner (turne540@msu.edu) 20/02/2023, 14:04. Copyright (c) The Contributors
+  - This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+  - Last modified by David J Turner (djturner@umbc.edu) 6/24/26, 10:53 AM. Copyright (c) The Contributors.
   -->
 
 <svg xmlns="http://www.w3.org/2000/svg" width="99" height="20">
@@ -20,7 +20,7 @@
     <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
         <text x="31.5" y="15" fill="#010101" fill-opacity=".3">coverage</text>
         <text x="31.5" y="14">coverage</text>
-        <text x="80" y="15" fill="#010101" fill-opacity=".3">31%</text>
-        <text x="80" y="14">31%</text>
+        <text x="80" y="15" fill="#010101" fill-opacity=".3">49%</text>
+        <text x="80" y="14">49%</text>
     </g>
 </svg>

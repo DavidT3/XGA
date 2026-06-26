@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 02/08/2024, 14:32. Copyright (c) The Contributors
+#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:05. Copyright (c) The Contributors
 
 
 from typing import Tuple
@@ -18,24 +18,27 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
                  start_ang: Quantity = Quantity(0, 'deg'), stop_ang: Quantity = Quantity(360, 'deg')) -> np.ndarray:
     """
     A handy little function to generate annular (or circular) masks in the form of numpy arrays.
-    It produces the src_mask for a given shape of image, centered at supplied coordinates, and with inner and
-    outer radii supplied by the user also. Angular limits can also be supplied to give the src_mask an annular
+    It produces an annular mask for a given shape of image, centered at supplied coordinates, and with inner and
+    outer radii supplied by the user also. Angular limits can also be supplied to give the mask an annular
     dependence. This function should be properly vectorised, and accepts inner and outer radii in
     the form of arrays. The result will be an len_y, len_x, N dimensional array, where N is equal to
     the length of inn_rad.
 
     :param Quantity centre: Astropy pix quantity of the form Quantity([x, y], pix).
-    :param np.ndarray inn_rad: Pixel radius for the inner part of the annular src_mask.
-    :param np.ndarray out_rad: Pixel radius for the outer part of the annular src_mask.
-    :param Quantity start_ang: Lower angular limit for the src_mask.
-    :param Quantity stop_ang: Upper angular limit for the src_mask.
+    :param np.ndarray inn_rad: Pixel radius for the inner part of the annular mask.
+    :param np.ndarray out_rad: Pixel radius for the outer part of the annular mask.
+    :param Quantity start_ang: Lower angular limit for the mask.
+    :param Quantity stop_ang: Upper angular limit for the mask.
     :param tuple shape: The output from the shape property of the numpy array you are generating masks for.
-    :return: The generated src_mask array.
+    :return: The generated mask array.
     :rtype: np.ndarray
     """
+
+    if not centre.unit.is_equivalent('pix'):
+        raise UnitConversionError("The 'centre' argument must be convertible to pixels.")
     # Split out the centre coordinates
-    cen_x = centre[0].value
-    cen_y = centre[1].value
+    cen_x = centre[0].to('pix').astype(int).value
+    cen_y = centre[1].to('pix').astype(int).value
 
     # Making use of the astropy units module, check that we are being pass actual angle values
     if start_ang.unit not in ['deg', 'rad']:
@@ -63,6 +66,15 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
         # If it is a list, just quickly transform to a numpy array
         inn_rad = np.array(inn_rad)
         out_rad = np.array(out_rad)
+
+    # Now handle if single values for outer and inner radius have been passed - possible if the user
+    #  just wants to make a single annulus mask
+    rad_scal = [isinstance(inn_rad, (int, float)), isinstance(out_rad, (int, float))]
+    if any(rad_scal) and not all(rad_scal):
+        raise TypeError("When either 'inn_rad' or 'out_rad' are scalar, they both must be.")
+    elif all(rad_scal):
+        inn_rad = np.array([inn_rad])
+        out_rad = np.array([out_rad])
 
     # This sets up the cartesian coordinate grid of x and y values
     arr_y, arr_x = np.ogrid[:shape[0], :shape[1]]
@@ -92,7 +104,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     else:
         rad_mask = (arr_r_squared < out_rad ** 2) & (arr_r_squared >= inn_rad ** 2)
 
-    # Finally, puts a cut on the allowed angle, and combined the radius and angular cuts into the final src_mask
+    # Finally, puts a cut on the allowed angle, and combined the radius and angular cuts into the final mask
     ang_mask = arr_theta <= (stop_ang - start_ang)
     ann_mask = rad_mask * ang_mask
 
@@ -105,7 +117,7 @@ def annular_mask(centre: Quantity, inn_rad: np.ndarray, out_rad: np.ndarray, sha
     if ann_mask.shape[-1] == 1:
         ann_mask = np.squeeze(ann_mask)
 
-    # Returns the annular src_mask(s), in the form of a len_y, len_x, N dimension np array
+    # Returns the annular mask(s), in the form of a len_y, len_x, N dimension np array
     return ann_mask
 
 
@@ -196,7 +208,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     :param np.ndarray interloper_mask: A numpy array that masks out any interloper sources.
     :param float z: The redshift of the source of interest.
     :param int pix_step: The width (in pixels) of each annular bin, default is 1.
-    :param BaseUnit rad_units: The desired output units for the central radii of the annuli.
+    :param UnitBase rad_units: The desired output units for the central radii of the annuli.
     :param Cosmology cosmo: An astropy cosmology object for source coordinate conversions.
     :param float min_snr: The minimum signal to noise allowed for each bin in the profile. If any point is
         below this threshold the profile will be rebinned. Default is 0.0
@@ -216,23 +228,25 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         modified (if rebinned) masks and radii arrays are returned to the user. This can be called once, or iteratively
         by a loop.
 
-        :param np.ndarray annulus_masks: 512x512xN numpy array of annular masks, where N is the number of annuli
+        :param np.ndarray annulus_masks: ypix-by-xpix-by-N numpy array of annular masks, where N is the
+            number of annuli.
         :param np.ndarray inner_rads: The inner radii of the annuli.
         :param np.ndarray outer_rads: The outer radii of the annuli.
         :return: Boolean variable that describes whether another re-binning iteration is required, the
-            brightness profile and uncertainties, the modified annular masks, inner radii, outer radii, and annulus areas.
-        :rtype:
+            brightness profile and uncertainties, the modified annular masks, inner radii, outer radii, and
+            annulus areas.
+        :rtype: Tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
         """
         # These are annular masks with interloper sources removed, sensor and edge masks applied
-        corr_ann_masks = (annulus_masks * interloper_mask[..., None] * rt.sensor_mask[..., None]
-                          * rt.edge_mask[..., None])
+        corr_ann_masks = (annulus_masks * sel_inter_mask[..., None] * sel_sensor_mask[..., None]
+                          * sel_edge_mask[..., None])
 
         # This calculates the area of each annulus mask
         num_pix = np.sum(corr_ann_masks, axis=(0, 1))
         ann_areas = num_pix * to_arcmin ** 2
 
         # Applying the annular masks, with interlopers removed, and chip edges
-        masked_countrate_data = corr_ann_masks * rt.data[..., None]
+        masked_countrate_data = corr_ann_masks * rt_sel_data[..., None]
         masked_countrate_error_data = corr_ann_masks * count_rate_err_map[..., None]
 
         # Defining the brightness profile with the current annuli
@@ -241,10 +255,10 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         # And the uncertainties on the profiles. Adding pixels in quadrature
         bright_profile_errors = np.sqrt(np.sum(masked_countrate_error_data**2, axis=(0, 1))) / ann_areas
 
-        # We want to check if all parts of the profile are above the defined minimum signal to noise
+        # We want to check if all parts of the profile are above the defined minimum signal-to-noise
         snr_prof = bright_profile / countrate_bg_per_area
 
-        # Checking if we are below the minimum signal to noise anywhere
+        # Checking if we are below the minimum signal-to-noise anywhere
         below = np.argwhere(snr_prof < min_snr).flatten()
         if below.shape != (0,) and below[0] != (bright_profile.shape[0] - 1):
             annulus_masks[:, :, below[0]] = annulus_masks[:, :, below[0]] + annulus_masks[:, :, below[0] + 1]
@@ -294,13 +308,46 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     back_inn_rad = np.array([np.ceil(out_rads[-1]*back_inn_rad_factor).astype(int)])
     back_out_rad = np.array([np.ceil(out_rads[-1]*back_out_rad_factor).astype(int)])
 
+    # This is not how this function used to work, but we now cut out the count-rate map data that is relevant to
+    #  the current profile - i.e. to just outside the outer background radius. We do this to avoid huge memory
+    #  usage when dealing with data released in sky tiles (e.g. eRASS), as the annular mask array generated
+    #  later is xpix by ypix by number of annuli, and that can get really really big.
+    # Here we construct the slicing limits to select only relevant data - centered on the central pixel, a square of
+    #  side length 2*(outer background radius + buffer)
+    edge_buffer = 2
+    # The lower and upper indexing bounds to select the relevant data - for the x-axis
+    y_sel_lims = [int(np.floor((pix_cen[1].value-back_out_rad[0])-edge_buffer)),
+                  int(np.ceil((pix_cen[1].value+back_out_rad[0])+edge_buffer+1))]
+    # Same but for the y-axis
+    x_sel_lims = [int(np.floor((pix_cen[0].value-back_out_rad[0])-edge_buffer)),
+                  int(np.ceil((pix_cen[0].value+back_out_rad[0])+edge_buffer+1))]
+
+    # Checks the calculated slicing boundaries against the size of the image
+    if x_sel_lims[0] < 0 or y_sel_lims[0] < 0 or x_sel_lims[1] > rt.shape[1] or y_sel_lims[1] > rt.shape[0]:
+        raise ValueError("The outer background radius is outside the bounds of the image.")
+
+    # Selecting the relevant count-rate, count, and exposure information using the indexing bounds we defined - all
+    #  three sets of data are used in this process, though the count/exposure information is the same as the
+    #  rate information. It is just easier this way I think
+    rt_sel_data = rt.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
+    im_sel_data = rt.image.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
+    ex_sel_data = rt.expmap.data[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]].copy()
+
+    # The new central coordinate is really just the x-y middle of the slice we just made of the ratemap data
+    sel_cen = Quantity([rt_sel_data.shape[1]/2, rt_sel_data.shape[0]/2], 'pix').astype(int)
+
     # Using my annular mask function to make a nice background region, which will be corrected for instrumental
     #  stuff and interlopers in a second
-    back_mask = annular_mask(pix_cen, back_inn_rad, back_out_rad, rt.shape)
+    back_mask = annular_mask(sel_cen, back_inn_rad, back_out_rad, rt_sel_data.shape)
 
     # Includes chip gaps, interloper removal, and edge removal (to try and avoid artificially bright pixels)
     #  in the background mask
-    corr_back_mask = back_mask * rt.sensor_mask * rt.edge_mask * interloper_mask
+    # Bit ugly. However, we're applying the same slice that we did to the data arrays - cutting down the
+    #  various masks to just those parts actually relevant to the radial profile being generated
+    sel_sensor_mask = rt.sensor_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    sel_edge_mask = rt.edge_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    sel_inter_mask = interloper_mask[y_sel_lims[0]:y_sel_lims[1], x_sel_lims[0]:x_sel_lims[1]]
+    corr_back_mask = (back_mask * sel_sensor_mask * sel_edge_mask * sel_inter_mask)
 
     # Calculates the area of the background region in arcmin^2
     back_pix = np.sum(corr_back_mask, axis=(0, 1))
@@ -309,23 +356,23 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         raise ValueError("The background mask combined with the sensor mask is is all zeros, this is probably"
                          " because you're looking at a large cluster at a low redshift.")
     # Per pix is the background which has been divided by the number of pixels
-    count_bg_per_pix = np.sum(rt.image.data * corr_back_mask, axis=(0, 1)) / back_pix
+    count_bg_per_pix = np.sum(im_sel_data * corr_back_mask, axis=(0, 1)) / back_pix
     # This is where the pixels have been converted into an actual area measurement in arcmin units
-    countrate_bg_per_area = np.sum(rt.data * corr_back_mask, axis=(0, 1)) / back_area
+    countrate_bg_per_area = np.sum(rt_sel_data * corr_back_mask, axis=(0, 1)) / back_area
 
     # Defined here so we can use the where argument in np.sqrt
-    err_calc = (rt.image.data - count_bg_per_pix) + 2*count_bg_per_pix
+    err_calc = (im_sel_data - count_bg_per_pix) + 2*count_bg_per_pix
     # Errors on the raw photon counts
-    count_err_map = np.zeros(rt.shape)
+    count_err_map = np.zeros(rt_sel_data.shape)
     # Turning those into count rate errors
     np.sqrt(err_calc, where=err_calc > 0, out=count_err_map)
 
     # I divide by a copy of the expmap data array here, otherwise it breaks, and if I'm honest I don't know why...
-    count_rate_err_map = np.divide(count_err_map, rt.expmap.data.copy(), where=rt.expmap.data != 0) * rt.edge_mask
+    count_rate_err_map = np.divide(count_err_map, ex_sel_data.copy(), where=ex_sel_data != 0) * sel_edge_mask
 
     # Using the ellipse adds enough : to get all the dimensions in the array, then the None adds an empty
     #  dimension. Helps with broadcasting the annular masks with the region src_mask that gets rid of interlopers
-    ann_masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape)
+    ann_masks = annular_mask(sel_cen, inn_rads, out_rads, rt_sel_data.shape)
 
     # Make copies of originals in case re-binning fails
     init_inn = inn_rads.copy()
@@ -341,8 +388,8 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
         # This means that rebinning failed, and the profile couldn't be made greater than the minimum signal to noise
         inn_rads = init_inn
         out_rads = init_out
-        ann_masks = annular_mask(pix_cen, inn_rads, out_rads, rt.shape)
-        # Set the min_snr to 0 to get an non-rebinned profile
+        ann_masks = annular_mask(sel_cen, inn_rads, out_rads, rt_sel_data.shape)
+        # Set the min_snr to 0 to get a non-rebinned profile
         min_snr = 0
         prof_results = _iterative_profile(ann_masks, inn_rads, out_rads)
         br_prof, br_errs = prof_results[1:3]
@@ -373,7 +420,7 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
                                   deg_outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
                                   Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
-                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, True)
+                                  Quantity(areas, 'arcmin**2'), deg_cen_rads, succeeded, True, rt.telescope)
 
     return br_prof, succeeded
 

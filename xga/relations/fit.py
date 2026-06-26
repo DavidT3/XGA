@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 13/03/2025, 13:56. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:06 PM. Copyright (c) The Contributors.
 import inspect
 from types import FunctionType
 from typing import Tuple, Union
@@ -36,9 +36,9 @@ def _fit_initialise(y_values: Quantity, y_errs: Quantity, x_values: Quantity, x_
     :param Quantity x_norm: Quantity to normalise the x data by.
     :param bool log_data: This parameter controls whether the data is logged before being returned. The
         default is False as it isn't likely to be used often - its included because LIRA wants logged data.
-    :param np.ndarray/list point_names: A possible set of source names associated with all the data points
+    :param np.ndarray/list point_names: A possible set of source names associated with all the data points.
     :param np.ndarray/Quantity/list third_dim: A possible set of extra data used to colour data points.
-    :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, and the names of non-NaN points.
+    :return: The x data, x errors, y data, and y errors. Also the x_norm, y_norm, the names of non-NaN points, and the third dimension data.
     :rtype: Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, np.ndarray, Quantity]
     """
     # Check the lengths of the value and uncertainty quantities, as well as the extra information that can also
@@ -210,12 +210,12 @@ def scaling_relation_curve_fit(model_func: FunctionType, y_values: Quantity, y_e
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
-    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+    :param Quantity x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
-    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV')). The default is None.
+    :param Quantity y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV')). The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -279,12 +279,12 @@ def scaling_relation_odr(model_func: FunctionType, y_values: Quantity, y_errs: Q
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
-    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+    :param Quantity x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
-    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV')). The default is None.
+    :param Quantity y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV')). The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
@@ -377,12 +377,12 @@ def scaling_relation_lira(y_values: Quantity, y_errs: Quantity, x_values: Quanti
         not have been involved in the fitting process, and the relation should not be in three dimensions, but these
         can be used to colour the data points in a view method.
     :param str third_dim_name: The name of the third dimension data.
-    :param Tuple[Quantity] x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
+    :param Quantity x_en_bounds: If the value on the x-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
-    :param Tuple[Quantity] y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV')). The default is None.
+    :param Quantity y_en_bounds: If the value on the y-axis of this relation is 'energy bound', those bounds
         can be specified here (e.g. if the value is 0.5-2.0 keV luminosity you would pass a non-scalar quantity with
-        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV'). The default is None.
+        the first entry being 0.5 and the second 2.0; Quantity([0.5, 2.0], 'keV')). The default is None.
     :return: An XGA ScalingRelation object with all the information about the data and fit, a view method, and a
         predict method.
     :rtype: ScalingRelation
