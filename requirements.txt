@@ -1,4 +1,4 @@
-versioneer>=0.29
+setuptools-scm>=8.0.0
 setuptools>=80.0.0
 numpy>=1.26.4
 astropy>=6.1.2

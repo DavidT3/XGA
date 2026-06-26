@@ -6,7 +6,7 @@ docutils
 ipympl
 urllib3
 jinja2
-versioneer>=0.29
+setuptools-scm>=8.0.0
 setuptools>=71.0.4
 numpy>=1.26.4
 astropy>=6.1.2
