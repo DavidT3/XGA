@@ -28,14 +28,15 @@ jobs:
     
     # This job has several steps
     steps:
-      # Checks out the master branch (what we want to build and publish - hopefully with the VCS info that versioneer needs), then 
-      #  activates a relatively recent version of Python
+      # Checks out the master branch (what we want to build and publish - including the VCS info
+      #  that setuptools-scm needs to calculate the version), then activates a relatively
+      #  recent version of Python
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         fetch-tags: true
     - name: Setup the Python install
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: 3.12
 

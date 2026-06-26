@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 4/27/26, 11:03 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/26/26, 11:29 AM. Copyright (c) The Contributors.
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -43,7 +43,14 @@ copyright = '2026, The Contributors'
 author = 'David J Turner, XGA Team'
 
 # The full version, including alpha/beta/rc tags
-# release = '0.1'
+try:
+    from importlib.metadata import version as get_version
+    release = get_version("xga")
+    # The short X.Y version
+    version = '.'.join(release.split('.')[:2])
+except Exception:
+    version = '0.0.0'
+    release = '0.0.0'
 
 
 # -- General configuration ---------------------------------------------------

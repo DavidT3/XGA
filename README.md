@@ -37,7 +37,7 @@ XGA is available on the popular Python Package Index (PyPI), and can be installe
 pip install xga
 ```
 
-You can also fetch the current working version from the git repository, and install it (this method has replaced 'python setup.py install'):
+You can also fetch the current working version from the git repository, and install it:
 
 ```shell script
 git clone https://github.com/DavidT3/XGA
@@ -45,7 +45,7 @@ cd XGA
 python -m pip install .
 ```
 
-Alternatively you could use the 'editable' option (this has replaced running setup.py and passing 'develop') so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
+Alternatively you could use the 'editable' option so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
 
 ```shell script
 git clone https://github.com/DavidT3/XGA

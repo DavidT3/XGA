@@ -1,7 +1,14 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 26/05/2026, 14:37. Copyright (c) The Contributors
-from . import _version
-__version__ = _version.get_versions()['version']
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/26/26, 11:28 AM. Copyright (c) The Contributors.
+try:
+    from importlib.metadata import version as _version
+    __version__ = _version("xga")
+except Exception:
+    try:
+        from . import _version
+        __version__ = _version.get_versions()['version']
+    except Exception:
+        __version__ = '0.0.0'
 
 # This function is what generates brand new XGA configuration files (and updates old-style existing
 #  files, but that isn't relevant here) - we import and run it here so that the first time someone
