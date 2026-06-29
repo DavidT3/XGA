@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
-    ProductNotUsableError
+    ProductNotUsableError, XGADeveloperError
 from ..sourcetools import ang_to_rad
 from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
@@ -43,7 +43,9 @@ class Image(BaseProduct):
     implements many helpful methods with extra functionality (including coordinate transforms, peak finders, and
     a powerful view method).
 
-    :param str path: The path to where the product file SHOULD be located.
+    :param str/list/dict path: Nominally, the string path to the product file. If this Image is being declared with
+        in-memory information, we accept a dictionary with keys 'data', 'wcs', and 'header', or a three-element
+        list containing the data, the WCS object, and the header.
     :param str obs_id: The ObsID related to the Image being declared.
     :param str instrument: The instrument related to the Image being declared.
     :param str stdout_str: The stdout from calling the terminal command.
@@ -74,8 +76,9 @@ class Image(BaseProduct):
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 lo_en: Quantity, hi_en: Quantity, regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+    def __init__(self, path: Union[str, dict, list], obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
+                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity,
+                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None,
                  allow_negative_vals: bool = False, check_exists: bool = True):
@@ -115,16 +118,69 @@ class Image(BaseProduct):
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
+        # Calls the init of the BaseProduct class, which does some base level setup
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
                          check_exists=check_exists)
-        self._shape = None
-        self._wcs_radec = None
+
+        # TODO I hope that this will play well with the significant changes made in multi-mission XGA, which
+        #  introduced better memory management, but will have to check carefully when merged.
+        # The super init has set the _path attribute, but as the first input of the Image class can now be
+        #  EITHER a path or a numpy array and a WCS object, we have to account for that.
+        if not isinstance(path, str):
+            # Null the path attribute, as if the input wasn't a string, it will not represent a path
+            self._path = None
+
+            # We set an attribute that lets the Image instance know that we're setting it up with data from
+            #  memory rather than reading in a file
+            self._from_mem = True
+
+            # We accept a couple of different non-string inputs, dict and list, and we perform some helpful
+            #  checks on them and their contents
+            if (isinstance(path, dict) and
+                    not all(['data' in path.keys(), 'wcs' in path.keys(), 'header' in path.keys()])):
+                raise ValueError("If the 'path' argument is a dictionary, it must contain 'data', 'wcs', and "
+                                 "'header' keys.")
+            elif isinstance(path, dict):
+                self._data = path['data']
+                self._wcs_radec = path['wcs']
+                self._header = path['header']
+            elif isinstance(path, list) and len(path) != 3:
+                raise ValueError("If the 'path' argument is a list, it must contain exactly three elements, "
+                                 "the first being a numpy array containing image data, the second being an "
+                                 "Astropy WCS object, and the third being a header dictionary/object.")
+            elif isinstance(path, list):
+                self._data = path[0]
+                self._wcs_radec = path[1]
+                self._header = path[3]
+            else:
+                raise TypeError("The 'path' argument must be a string path, a dictionary with 'data', 'wcs', and "
+                                "'header' keys, or a list containing a numpy array, an Astropy WCS object, and a "
+                                "header dictionary/object.")
+
+            # Some checks that need to be applied to the data regardless of whether it was passed in as a
+            #  dictionary or a list
+            if isinstance(self._header, dict):
+                self._header = FITSHDR(self._header)
+
+            # Set the shape from the data manually
+            self._shape = self._data.shape
+
+        # Otherwise we think that the 'path' argument is actually just a file path, and setup accordingly
+        else:
+            self._from_mem = False
+
+            # Setting up null values for data, wcs, and header
+            self._data = None
+            self._wcs_radec = None
+            self._header = None
+            self._shape = None
+
+
+        # Set up many image-specific attributes
         self._wcs_skyXY = None
         self._wcs_detXY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
-        self._data = None
-        self._header = None
         # Adding an attribute to tell the product what its data units are, as there are subclasses of Image
         self._data_unit = Unit("ct")
 
@@ -547,6 +603,9 @@ class Image(BaseProduct):
         """
         # As for some reason I've allowed certain important info about these products to be updated after init,
         #  this getter actually generates the storage key on demand, rather than returning a stored value
+
+        if any([self._energy_bounds[0] is None, self._energy_bounds[1] is None]):
+            raise ValueError("The product storage key cannot be generated if the energy bounds are None.")
 
         # Start with the simple stuff - these products are energy bound, so that info will be in ALL keys
         key = "bound_{l}-{u}".format(l=float(self._energy_bounds[0].value), u=float(self._energy_bounds[1].value))
@@ -1320,13 +1379,16 @@ class Image(BaseProduct):
         # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
         #  title - otherwise we use the custom title and don't add anything to it
         if custom_title is None:
+            # Being slightly more permissive with not setting energy bounds; this approach makes sure we don't
+            #  get an error when a None-energy-bound is passed and the user wishes to view the image
+            lo_en_str = str(self._energy_bounds[0].to("keV").value) if self._energy_bounds[0] is not None else "??"
+            hi_en_str = str(self._energy_bounds[1].to("keV").value) if self._energy_bounds[1] is not None else "??"
+
             if self.src_name is not None:
-                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident,
-                                                          l=self._energy_bounds[0].to("keV").value,
-                                                          u=self._energy_bounds[1].to("keV").value, t=self.type)
+                title = "{n} - {i} {l}-{u}keV {t}".format(n=self.src_name, i=ident, l=lo_en_str, u=hi_en_str,
+                                                          t=self.type)
             else:
-                title = "{i} {l}-{u}keV {t}".format(i=ident, l=self._energy_bounds[0].to("keV").value,
-                                                    u=self._energy_bounds[1].to("keV").value, t=self.type)
+                title = "{i} {l}-{u}keV {t}".format(i=ident, l=lo_en_str, u=hi_en_str, t=self.type)
 
             # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
             if self.psf_corrected:

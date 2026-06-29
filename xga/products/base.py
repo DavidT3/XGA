@@ -84,24 +84,32 @@ class BaseProduct:
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
 
-        # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
-        #  interact with it in the various product sub-classes
-        if force_remote:
-            # Here the user has forced us to treat the path as remote
-            self._local_file = False
-            self._remote_type = 'unknown'
-        elif path.startswith("s3://") or path.startswith("gs://"):
-            # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
-            #  use with resources like the HEASARC open S3 bucket
-            self._local_file = False
-            self._remote_type = "s3"
-        elif path.startswith("https://"):
-            self._local_file = False
-            self._remote_type = "https"
+        # It is now possible for some 'standard' products (like Image) to be set up using data/information that
+        #  is in memory, rather than stored in a file. So we have to account for the possibility of non-string
+        #  values being passed to 'path'.
+        if isinstance(path, str):
+            # Here we try to identify if the file path that has been passed is local or remote, as it will change how we
+            #  interact with it in the various product sub-classes
+            if force_remote:
+                # Here the user has forced us to treat the path as remote
+                self._local_file = False
+                self._remote_type = 'unknown'
+            elif path.startswith("s3://") or path.startswith("gs://"):
+                # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
+                #  use with resources like the HEASARC open S3 bucket
+                self._local_file = False
+                self._remote_type = "s3"
+            elif path.startswith("https://"):
+                self._local_file = False
+                self._remote_type = "https"
+            else:
+                # Otherwise we decide that the file is local
+                self._local_file = True
+                self._remote_type = None
         else:
-            # Otherwise we decide that the file is local
-            self._local_file = True
-            self._remote_type = None
+            # We will use the existing 'local_file' mechanism in the case of in-memory declarations, so that the
+            #  init does not try to determine if the file exists.
+            self._local_file = False
 
         # Keep track of whether the user forced the path to be considered as a remote url or not, that information
         #  may be required in some warning/error messages later on
