@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/29/26, 12:42 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
-    ProductNotUsableError, XGADeveloperError
+    ProductNotUsableError
 from ..sourcetools import ang_to_rad
 from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 

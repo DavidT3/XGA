@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:00 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/29/26, 12:56 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple
@@ -14,9 +14,8 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
+from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
 from . import BaseProduct, Image
-from .. import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
-from ..exceptions import XGADeveloperError
 
 
 class EventList(BaseProduct):
@@ -49,7 +48,8 @@ class EventList(BaseProduct):
 
     def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
                  stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None,
-                 force_remote: bool = False, fsspec_kwargs: dict = None, energy_per_channel: Quantity = None, check_exists: bool = True):
+                 force_remote: bool = False, fsspec_kwargs: dict = None, energy_per_channel: Quantity = None,
+                 check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.

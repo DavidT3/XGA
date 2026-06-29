@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/24/26, 10:15 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 6/29/26, 12:53 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1165,7 +1165,7 @@ class BaseSource:
                 # Load the event list - if this doesn't work then there isn't any point continuing to the
                 #  rest of the initial product loading process for the current telescope-ObsID-instrument
                 evt_list = EventList(evt_file, obs_id=obs_id, instrument=inst, stdout_str="", stderr_str="", gen_cmd="",
-                                     telescope=tel)
+                                     telescope=tel, check_exists=True)
                 if not evt_list.usable:
                     continue
 
