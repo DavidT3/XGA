@@ -1,20 +1,21 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 29/09/2025, 11:09. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:42 PM. Copyright (c) The Contributors.
 
 import os
-import warnings
 from copy import deepcopy
 from typing import Tuple, List, Union, Dict
+from warnings import warn
 
 import numpy as np
 import pandas as pd
 from astropy import wcs
 from astropy.convolution import Kernel, Gaussian2DKernel, convolve_fft
-from astropy.units import Quantity, UnitBase, UnitsError, deg, pix, UnitConversionError, Unit
+from astropy.io import fits
+from astropy.units import Quantity, UnitBase, deg, pix, UnitConversionError, Unit
 from astropy.visualization import MinMaxInterval, ImageNormalize, BaseStretch, ManualInterval
 from astropy.visualization.stretch import LogStretch, SinhStretch, AsinhStretch, SqrtStretch, SquaredStretch, \
     LinearStretch
-from fitsio import read, read_header, FITSHDR
+from fitsio import read, FITSHDR
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Ellipse
@@ -25,9 +26,9 @@ from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
-    XGADeveloperError
+    ProductNotUsableError, XGADeveloperError
 from ..sourcetools import ang_to_rad
-from ..utils import xmm_sky, xmm_det
+from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
 EMOSAIC_INST = {"EPN": "pn", "EMOS1": "mos1", "EMOS2": "mos2"}
 plt.rcParams['keymap.save'] = ''
@@ -65,28 +66,61 @@ class Image(BaseProduct):
         kernel used or a dictionary of information (required structure detailed in
         parse_smoothing). Default is None
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
+        left as they are, if False (the default) then they are set to zero.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: Union[str, dict, list], obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity,
                  regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
-                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None):
+                 smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None,
+                 allow_negative_vals: bool = False, check_exists: bool = True):
         """
-        The initialisation method for the Image class.
-        """
-        # A validity check to help remind me to pass the telescope to the super-class init when this merges with
-        #  multi-mission XGA
-        if hasattr(super(), 'telescope'):
-            raise XGADeveloperError("Intrinsic image generation has been merged into multi-mission XGA, and the "
-                                    "call to BaseProduct init in Image needs to be updated.")
-        else:
-            self._telescope = telescope
+        The initialisation method for the Image class. This class stores image data from X-ray observations. It also
+        allows easy, direct, access to that data, and implements many helpful methods with extra
+        functionality (including coordinate transforms, peak finders, and a powerful view method).
 
+        :param str path: The path to where the product file SHOULD be located.
+        :param str obs_id: The ObsID related to the Image being declared.
+        :param str instrument: The instrument related to the Image being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param Quantity lo_en: The lower energy bound used to generate this product.
+        :param Quantity hi_en: The upper energy bound used to generate this product.
+        :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
+        :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+            that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+            supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+            if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+            property. Default is None.
+        :param bool smoothed: Has this image been smoothed, default is False. This information can also be
+            set after the instantiation of an image.
+        :param dict/Kernel smoothed_info: Information on how the image was smoothed, given either by the Astropy
+            kernel used or a dictionary of information (required structure detailed in
+            parse_smoothing). Default is None
+        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+        :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
+            left as they are, if False (the default) then they are set to zero.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
+        """
         # Calls the init of the BaseProduct class, which does some base level setup
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         check_exists=check_exists)
 
         # TODO I hope that this will play well with the significant changes made in multi-mission XGA, which
         #  introduced better memory management, but will have to check carefully when merged.
@@ -143,12 +177,15 @@ class Image(BaseProduct):
 
 
         # Set up many image-specific attributes
-        self._wcs_xmmXY = None
-        self._wcs_xmmdetXdetY = None
+        self._wcs_skyXY = None
+        self._wcs_detXY = None
         self._energy_bounds = (lo_en, hi_en)
         self._prod_type = "image"
         # Adding an attribute to tell the product what its data units are, as there are subclasses of Image
         self._data_unit = Unit("ct")
+
+        # Defining an attribute that tells an instance of the Image class how to treat negative values in data
+        self._allow_negative = allow_negative_vals
 
         # This is a flag to let XGA know that the Image object has been PSF corrected
         self._psf_corrected = False
@@ -165,7 +202,7 @@ class Image(BaseProduct):
             self._regions = self._process_regions(regs)
             self._reg_file_path = regs
         elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
-            warnings.warn("That region file path does not exist", stacklevel=2)
+            warn("The region file path does not exist", stacklevel=2)
             self._regions = {}
             self._reg_file_path = regs
         elif isinstance(regs, (list, dict)):
@@ -187,44 +224,23 @@ class Image(BaseProduct):
             self._smoothed_info = None
             self._smoothed_method = None
 
-        # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
-        if obs_id == 'combined' or instrument == 'combined':
-            if "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
-                # We search for the instrument names of the various components
-                ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
-                # Then use the length of the list to find out how many components there are
-                num_ims = len(ind_inst_hdrs)
-                # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
-                #  headers detailing the different ObsIDs, so we just use the ObsID header
-                if len([h for h in self.header if 'EMSCA' in h]) == 0:
-                    oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI"+str(ind).zfill(3)]]] for
-                                ind in range(1, num_ims+1)]
-                else:
-                    oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
-                                 EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
-                                for ind in range(1, num_ims + 1)]
+        # We perform validity checks on any input passed to the obs_inst_combs argument.
+        if obs_inst_combs is not None:
+            # We check to make sure that each entry in obs_inst_combs is a two-element list
+            if any([len(e) != 2 for e in obs_inst_combs]):
+                raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+            # And if it passes that we check that the instrument values are one of the allowed list
+            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
+                raise ValueError(f"The allowed instruments for {telescope} are: "
+                                 f"{", ".join(ALLOWED_INST[telescope].values())}")
 
-                # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
-                self._comb_oi_pairs = oi_pairs
-
-            # In the case of the combined image not being made by emosaic, we need to take the info from
-            #  the obs_inst_combs parameter
-            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is not None:
-                # We check to make sure that each entry in obs_inst_combs is a two element list
-                if any([len(e) != 2 for e in obs_inst_combs]):
-                    raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
-                # And if it passes that we check that the instrument values are one of the allowed list
-                elif any([e[1] not in EMOSAIC_INST.values() for e in obs_inst_combs]):
-                    raise ValueError("Instruments are currently only allowed to be 'pn', 'mos1', or 'mos2'.")
-
-                self._comb_oi_pairs = obs_inst_combs
-
-            # And if the user hasn't passed the obs_inst_combs list then we kick off
-            elif "CREATOR" not in self.header or "emosaic" not in self.header['CREATOR'] and obs_inst_combs is None:
-                raise ValueError("If a combined image has not been made with emosaic, you have to "
-                                 " pass ObsID and Instrument combinations using obs_inst_combs")
-        else:
-            self._comb_oi_pairs = None
+        # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
+        #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by
+        #  the obs_inst_combos, obs_ids, and instruments properties.
+        self._comb_oi_pairs = obs_inst_combs
+        # This keeps track of whether we've attempted to populate the _comb_oi_pairs attribute, as it can be
+        #  None even after an attempted loading.
+        self._loaded_comb_oi_pairs = False
 
     def _read_on_demand(self):
         """
@@ -241,20 +257,44 @@ class Image(BaseProduct):
                 raise FileNotFoundError("FITSIO read cannot open {f}, possibly because there is a problem with "
                                         "the file, it doesn't exist, or maybe an SFTP problem? This product is "
                                         "associated with {s}.".format(f=self.path, s=self.src_name))
-            if self._data.min() < 0:
+            if not self._allow_negative and self._data.min() < 0:
                 # This throws a non-fatal warning to let the user know there are negative pixel values,
                 #  and that they're being 'corrected'
-                warnings.warn("You are loading an {} with elements that are < 0, "
-                              "they will be set to 0.".format(self._prod_type))
+                warn("Negative values in {} data have been set to zero - this behaviour can be controlled using "
+                     "the 'allow_negative_vals' argument at initilisation.".format(self._prod_type), stacklevel=2)
                 self._data[self._data < 0] = 0
 
-            # As the image must be loaded to know the shape, I've waited until here to set the _shape attribute
-            self._shape = self._data.shape
+            # The shape can be set by the _read_header_on_demand method, but if it hasn't been set then we'll
+            #  do the job here
+            if self._shape is None:
+                self._shape = self._data.shape
+            # I'm being paranoid, but we'll check that the array and header derived shapes actually match, if the
+            #  header has already been loaded
+            elif self._shape != self._data.shape:
+                raise ValueError("Image shape from the FITS header does not match the data shape.")
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError("SAS failed to generate this product successfully, so you cannot access "
-                                     "data from it; reason give is {}. Check the usable attribute next "
-                                     "time".format(reasons))
+            raise FailedProductError(f"This product has been marked as unusable, so you cannot access data from it. "
+                                     f"The reason(s) given are: {reasons}.")
+
+    def _read_header_on_demand(self):
+        """
+        Very specific method to just read the header of the fits file in. This also sets the '_shape' attribute
+        from the NAXIS keywords.
+        """
+        if self._header is None and self._usable:
+            # Reads only the header information
+            with fits.open(self.path) as hdul:
+                self._header = hdul[0].header
+
+            # We use the NAXIS entries to set the shape of the Image - this used to be
+            #  done by loading the data array and using shape on that, but this way avoids
+            #  a lot of overheads
+            self._shape = (int(self._header["NAXIS2"]), int(self._header["NAXIS1"]))
+        elif not self._usable:
+            raise ProductNotUsableError(f"{self.telescope}-{self.obs_id}-{self.instrument} "
+                                        f"{self._prod_type} is not usable ({self.not_usable_reasons}) "
+                                        f"and the header cannot be read.")
 
     def _read_wcs_on_demand(self):
         """
@@ -265,36 +305,115 @@ class Image(BaseProduct):
         # Import here to avoid circular import woes
         from ..imagetools.misc import find_all_wcs
 
+        errored = False
+
         try:
-            # Reads only the header information
-            self._header = read_header(self.path)
-        except OSError:
-            raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
-                                    "the file, it doesn't exist, or maybe an SFTP problem? This product is associated "
-                                    "with {s}.".format(f=self.path, s=self.src_name))
+            self._read_header_on_demand()
+        except OSError as err:
 
-        # XMM images typically have two, both useful, so we'll find all available and store them
-        wcses = find_all_wcs(self._header)
-
-        # Just iterating through and assigning to the relevant attributes
-        for w in wcses:
-            axes = [ax.lower() for ax in w.axis_type_names]
-            if "ra" in axes and "dec" in axes:
-                if self._wcs_radec is None:
-                    self._wcs_radec = w
-            elif "x" in axes and "y" in axes:
-                if self._wcs_xmmXY is None:
-                    self._wcs_xmmXY = w
-            elif "detx" in axes and "dety" in axes:
-                if self._wcs_xmmdetXdetY is None:
-                    self._wcs_xmmdetXdetY = w
+            # This is really more specific than I would like, but in cases where eROSITA IKE-MPE border tile images
+            #  fail to generate properly, header opening fails with this error, which stops a more predictable XGA
+            #  formatted error being shown
+            if 'FITSIO status = 224: missing NAXISn keywords' in str(err):
+                errored = True
             else:
-                raise ValueError("This type of WCS is not recognised!")
+                raise FileNotFoundError("FITSIO read_header cannot open {f}, possibly because there is a problem with "
+                                        "the file, it doesn't exist, or maybe an SFTP problem? This product is "
+                                        "associated with {s}.".format(f=self.path, s=self.src_name))
 
-        # I'll only strongly require that the pixel-RADEC WCS is found
-        if self._wcs_radec is None:
-            raise FailedProductError("SAS has generated this image without a WCS capable of "
-                                     "going from pixels to RA-DEC.")
+        if not errored:
+            # XMM images typically have two, both useful, so we'll find all available and store them
+            wcses = find_all_wcs(self._header)
+
+            # Just iterating through and assigning to the relevant attributes
+            for w in wcses:
+                axes = [ax.lower() for ax in w.axis_type_names]
+                if "ra" in axes and "dec" in axes:
+                    if self._wcs_radec is None:
+                        self._wcs_radec = w
+                elif "x" in axes and "y" in axes:
+                    if self._wcs_skyXY is None:
+                        self._wcs_skyXY = w
+                elif "detx" in axes and "dety" in axes:
+                    if self._wcs_detXY is None:
+                        self._wcs_detXY = w
+                else:
+                    raise ValueError("This type of WCS is not recognised!")
+
+            # I'll only strongly require that the pixel-RADEC WCS is found
+            if self._wcs_radec is None:
+                raise FailedProductError("SAS has generated this image without a WCS capable of "
+                                         "going from pixels to RA-DEC.")
+
+    def _oi_inst_pairs_on_demand(self):
+        """
+        Generates and caches combined ObsID and Instrument pairs on demand for specific telescope data.
+
+        This method processes combined telescope image metadata, primarily analyzing the header information to extract
+        necessary details about the observation ID and instrument combinations used to generate the image. The logic
+        also considers variations across telescopes like XMM-Newton and eROSITA while leaving placeholders for potential
+        future support of additional telescopes. The data extracted is then cached for future reference to optimize
+        subsequent access.
+        """
+        # TODO I am not yet dealing with multi-telescope images, because I don't quite know how we're going
+        #  to tackle that yet
+        # I want combined images to be aware of the ObsIDs and Instruments that have gone into them
+        # ALSO - this is the only place where it is possible that the PROPERTY header is None (i.e. the header has
+        #  not been read in from the file) without an error. That will happen specifically when eROSITA software
+        #  fails to generate a tile image properly - the file path will exist but the file itself is garbled. It'll
+        #  be caught and an error will be thrown once the generation processes are complete, and none of this will
+        #  matter
+        if not self._loaded_comb_oi_pairs:
+            if (self.obs_id == 'combined' or self.instrument == 'combined') and self.header is not None:
+                # If the user has supplied the obs_inst_combs information, then we'll use that and won't go looking
+                #  in any file headers
+                if self._comb_oi_pairs is not None:
+                    pass
+
+                # In the case that the telescope is XMM, we can probably read the information we need from the header
+                elif self.telescope == 'xmm' and "CREATOR" in self.header and "emosaic" in self.header['CREATOR']:
+                    # We search for the instrument names of the various components
+                    ind_inst_hdrs = [h for h in self.header if 'EMSCI' in h]
+                    # Then use the length of the list to find out how many components there are
+                    num_ims = len(ind_inst_hdrs)
+                    # If this image is the combined product of only one ObsID's instruments, then there will be no EMSCA
+                    #  headers detailing the different ObsIDs, so we just use the ObsID header
+                    if len([h for h in self.header if 'EMSCA' in h]) == 0:
+                        oi_pairs = [[self.header["OBS_ID"], EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]] for
+                                    ind in range(1, num_ims + 1)]
+                    else:
+                        oi_pairs = [[self.header["EMSCA" + str(ind).zfill(3)],
+                                     EMOSAIC_INST[self.header["EMSCI" + str(ind).zfill(3)]]]
+                                    for ind in range(1, num_ims + 1)]
+
+                    # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                    self._comb_oi_pairs = oi_pairs
+
+                # TODO I am confused, and am not sure whether the eROSITA software toolset can actually merge images
+                #  at the moment - thinking about it, it would make sense if they hadn't bothered with that capability
+                elif (self.telescope == 'erosita' or self.telescope == 'erass') and self.header['INSTRUME'] == 'merged':
+
+                    # We search for the instrument names of the various components
+                    ind_inst_hdrs = [h for h in self.header if 'INSTRUM' in h and h != 'INSTRUME']
+
+                    # Build the list of lists of ObsID instrument combos
+                    oi_pairs = [[self.header["OBS_ID"], self.header[hdr_en].lower()] for hdr_en in ind_inst_hdrs]
+
+                    # So now we have a list of lists of ObsID-Instrument combinations, we shall store them
+                    self._comb_oi_pairs = oi_pairs
+
+                # TODO MAY NEED SOME CHANDRA SPECIFIC INTERVENTION HERE, BUT HAVEN'T MADE COMBINED PHOTOMETRIC PRODUCTS
+                #  YET SO UNSURE RIGHT NOW
+                # And if the user hasn't passed the obs_inst_combs AND we can't pull it from the header than we kick off
+                elif self.telescope == 'xmm':
+                    raise ValueError("If an XMM combined image has not been made with emosaic, you have to "
+                                     " pass ObsID and Instrument combinations using obs_inst_combs")
+                else:
+                    raise ValueError("For combined images, obs_inst_combs must be set to a list of lists "
+                                     "of ['ObsID', 'Inst'] combinations.")
+
+        # If we get here, we made the attempt to load the information.
+        self._loaded_comb_oi_pairs = True
 
     def _process_regions(self, path: str = None, reg_objs: Union[List[Union[PixelRegion, SkyRegion]], dict] = None) \
             -> dict:
@@ -346,7 +465,7 @@ class Image(BaseProduct):
                     final_regs[o].append(reg)
                 else:
                     # Regions in sky coordinates need to be in pixels for overlaying on the image
-                    final_regs[o].append(reg.to_pixel(self._wcs_radec))
+                    final_regs[o].append(reg.to_pixel(self.radec_wcs))
 
         return final_regs
 
@@ -393,7 +512,7 @@ class Image(BaseProduct):
         #  are all in pixel coordinates (it makes it easier for plotting etc. later)
         for obs_id, matched_reg in matched_reg_input.items():
             if matched_reg is not None and not isinstance(matched_reg, PixelRegion):
-                matched_reg_input[obs_id] = matched_reg.to_pixel(self._wcs_radec)
+                matched_reg_input[obs_id] = matched_reg.to_pixel(self.radec_wcs)
 
         return matched_reg_input
 
@@ -514,6 +633,9 @@ class Image(BaseProduct):
         :return: A list of lists of ObsID-Instrument combinations, or a list containing one ObsID and one instrument.
         :rtype: list
         """
+        # This will make sure that the _comb_oi_pairs attribute is populated, if it can be.
+        self._oi_inst_pairs_on_demand()
+
         if self._comb_oi_pairs is not None:
             return self._comb_oi_pairs
         else:
@@ -528,6 +650,9 @@ class Image(BaseProduct):
         :return: List of ObsIDs involved in this image.
         :rtype: list
         """
+        # This will make sure that the _comb_oi_pairs attribute is populated, if it can be.
+        self._oi_inst_pairs_on_demand()
+
         if self._comb_oi_pairs is None:
             ret_list = [self.obs_id]
         else:
@@ -543,13 +668,16 @@ class Image(BaseProduct):
     @property
     def instruments(self) -> dict:
         """
-        Equivelant to the BaseSource instruments property, this will return a dictionary of ObsIDs with lists of
+        Equivalent to the BaseSource instruments property, this will return a dictionary of ObsIDs with lists of
         instruments that are associated with them in a combined image. If the image is not combined then an equivelant
         dictionary with one key (the ObsID), with the associated value being a list with one entry (the instrument).
 
         :return: A dictionary of ObsIDs and their associated instruments
         :rtype: dict
         """
+        # This will make sure that the _comb_oi_pairs attribute is populated, if it can be.
+        self._oi_inst_pairs_on_demand()
+
         # If this attribute is None then this product isn't combined, so we do the fallback for a single
         #  ObsID-Instrument combination
         if self._comb_oi_pairs is None:
@@ -571,12 +699,12 @@ class Image(BaseProduct):
         # The filename, devoid of the rest of the path
         f_name = self.path.split('/')[-1]
 
-        if self._comb_oi_pairs is None:
+        if self.obs_inst_combos is None:
             new_line = pd.Series([f_name, self.obs_id, self.instrument, self.storage_key, "", self.type],
                                  ['file_name', 'obs_id', 'inst', 'info_key', 'src_name', 'type'], dtype=str)
         else:
-            o_str = "/".join(e[0] for e in self._comb_oi_pairs)
-            i_str = "/".join(e[1] for e in self._comb_oi_pairs)
+            o_str = "/".join(e[0] for e in self.obs_inst_combos)
+            i_str = "/".join(e[1] for e in self.obs_inst_combos)
             new_line = pd.Series([f_name, o_str, i_str, self.storage_key, "", self.type],
                                  ['file_name', 'obs_ids', 'insts', 'info_key', 'src_name', 'type'], dtype=str)
 
@@ -616,7 +744,7 @@ class Image(BaseProduct):
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
         # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""
@@ -661,26 +789,26 @@ class Image(BaseProduct):
     @property
     def shape(self) -> Tuple[int, int]:
         """
-        Property getter for the resolution of the image. Standard XGA settings will make this 512x512.
+        Property getter for the shape of the image data array.
 
         :return: The shape of the numpy array describing the image.
         :rtype: Tuple[int, int]
         """
-        # This has to be run first, to check the image is loaded, otherwise how can we know the shape?
-        # This if is here rather than in the method as some other properties of this class don't need the
-        # image object, just some products derived from it.
-        if self._data is None:
-            self._read_on_demand()
+        # This has to be run first, to check the image header is loaded - it sets the shape attribute using the NAXIS
+        #  header values from it. We used to get the shape of the data array, but just using the header means
+        #  that we don't have the overhead of loading a big data array.
+        if self.header is None:
+            self._read_header_on_demand()
+
         # There will not be a setter for this property, no-one is allowed to change the shape of the image.
         return self._shape
 
     @property
     def data(self) -> np.ndarray:
         """
-        Property getter for the actual image data, in the form of a numpy array. Doesn't include
-        any of the other stuff you get in a fits image, thats found in the hdulist property.
+        Property getter for the image data, in the form of a numpy array.
 
-        :return: A numpy array of shape self.shape containing the image data.
+        :return: A numpy array containing the image data.
         :rtype: np.ndarray
         """
         # Calling this ensures the image object is read into memory
@@ -692,19 +820,14 @@ class Image(BaseProduct):
     def data(self, new_im_arr: np.ndarray):
         """
         Property setter for the image data. As the fits image is loaded in read-only mode,
-        this won't alter the actual file (which is what I was going for), but it does allow
-        user alterations to the image data they are analysing.
+        this won't alter the file on disk, but it does allow user alterations to the image.
 
         :param np.ndarray new_im_arr: The new image data.
         """
-        # Calling this ensures the image object is read into memory
-        if self._data is None:
-            self._read_on_demand()
-
         # Have to make sure the input is of the right type, and the right shape
         if not isinstance(new_im_arr, np.ndarray):
             raise TypeError("You may only assign a numpy array to the data attribute.")
-        elif new_im_arr.shape != self._shape:
+        elif new_im_arr.shape != self.shape:
             raise ValueError("You may only assign a numpy array to the data attribute if it "
                              "is the same shape as the original.")
         else:
@@ -751,22 +874,22 @@ class Image(BaseProduct):
     def skyxy_wcs(self):
         """
         Property getter for the WCS that converts back and forth between pixel values
-        and XMM XY Sky coordinates.
+        and SKY XY coordinates.
 
-        :return: The WCS object for XMM X and Y sky coordinates.
+        :return: The WCS object for SKY XY coordinates.
         :rtype: wcs.WCS
         """
         # Deliberately checking the radec WCS, as the skyXY WCS is allowed to be None after the
         # read_on_demand call
         if self._wcs_radec is None:
             self._read_wcs_on_demand()
-        return self._wcs_xmmXY
+        return self._wcs_skyXY
 
     @skyxy_wcs.setter
     def skyxy_wcs(self, input_wcs: wcs.WCS):
         """
         Property setter for the WCS that converts back and forth between pixel values
-        and XMM XY Sky coordinates. This WCS is not guaranteed to be set from the image,
+        and SKY XY coordinates. This WCS is not guaranteed to be set from the image,
         so it is possible to add your own.
 
         :param wcs.WCS input_wcs: The user supplied WCS object to assign to skyxy_wcs property.
@@ -781,28 +904,28 @@ class Image(BaseProduct):
             if "x" not in axes or "y" not in axes:
                 raise ValueError("This WCS does not have the XY axes expected for the skyxy_wcs property.")
             else:
-                self._wcs_xmmXY = input_wcs
+                self._wcs_skyXY = input_wcs
 
     @property
     def detxy_wcs(self):
         """
         Property getter for the WCS that converts back and forth between pixel values
-        and XMM DETXY detector coordinates.
+        and DETXY detector coordinates.
 
-        :return: The WCS object for XMM DETX and DETY detector coordinates.
+        :return: The WCS object for DETX and DETY detector coordinates.
         :rtype: wcs.WCS
         """
         # Deliberately checking the radec WCS, as the DETXY WCS is allowed to be None after the
         # read_on_demand call
         if self._wcs_radec is None:
             self._read_wcs_on_demand()
-        return self._wcs_xmmdetXdetY
+        return self._wcs_detXY
 
     @detxy_wcs.setter
     def detxy_wcs(self, input_wcs: wcs.WCS):
         """
         Property setter for the WCS that converts back and forth between pixel values
-        and XMM DETXY detector coordinates. This WCS is not guaranteed to be set from the image,
+        and DETXY detector coordinates. This WCS is not guaranteed to be set from the image,
         so it is possible to add your own.
 
         :param wcs.WCS input_wcs: The user supplied WCS object to assign to detxy_wcs property.
@@ -817,9 +940,9 @@ class Image(BaseProduct):
             if "detx" not in axes or "dety" not in axes:
                 raise ValueError("This WCS does not have the DETX DETY axes expected for the detxy_wcs property.")
             else:
-                self._wcs_xmmdetXdetY = input_wcs
+                self._wcs_detXY = input_wcs
 
-    # This absolutely doesn't get a setter considering its the header object with all the information
+    # This absolutely doesn't get a setter considering it's the header object with all the information
     #  about the image in.
     @property
     def header(self) -> FITSHDR:
@@ -833,112 +956,123 @@ class Image(BaseProduct):
             self._read_wcs_on_demand()
         return self._header
 
-    def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str]) -> Quantity:
+    @header.deleter
+    def header(self):
+        """
+        Property deleter for the header of this Image instance, or whatever subclass of the Image class you
+        may be using. The self._header attribute is removed from memory, and then self._header is explicitly set
+        to None so that self._read_wcs_on_demand() will be triggered if you ever want the header from this object again.
+        """
+        del self._header
+        self._header = None
+
+    def coord_conv(self, coords: Quantity, output_unit: Union[Unit, str],
+                   ignore_bad_pix_coord: bool = False) -> Quantity:
         """
         This will use the loaded WCSes, and astropy coordinates (including custom ones defined for this module),
         to perform common coordinate conversions for this product object.
 
-        :param Quantity coords: The input coordinates quantity to convert, in units of either deg,
-            pix, xmm_sky, or xmm_det (xmm_sky and xmm_det are defined for this module).
-        :param Unit/str output_unit: The astropy unit to convert to, can be either deg, pix, xmm_sky, or
-            xmm_det (xmm_sky and xmm_det are defined for this module).
-        :return: The converted coordinates.
+        :param Quantity coords: The input coordinates quantity to convert, in units of either deg, pix,
+            skyxy, detxy, or the mission-specific variants (e.g. xmm_sky, xmm_det, erosita_sky, etc.).
+        :param Unit/str output_unit: The desired unit of the output coordinate. Can be either deg, pix, skyxy,
+            detxy, or the mission-specific variants (e.g. xmm_sky, xmm_det, erosita_sky, etc.).
+        :param bool ignore_bad_pix_coord: Means that no error will be raised if an invalid pixel coordinate (i.e.
+            less than 0 or greater than the size of the image) is calculated. Default is False.
+        :return: The transformed coordinates.
         :rtype: Quantity
         """
-        # If a string representation was passed, we make it an astropy unit
-        if isinstance(output_unit, str) and output_unit not in ['xmm_sky', 'xmm_det']:
+        # If a string representation was passed, we make it an Astropy unit. This will also work for the 'xmm_sky',
+        #  'xmm_det', 'erosita_sky', 'erosita_det', etc. that we define specifically for XGA in the utils.py file
+        if isinstance(output_unit, str):
             output_unit = Unit(output_unit)
-        elif isinstance(output_unit, str) and output_unit == 'xmm_sky':
-            output_unit = xmm_sky
-        elif isinstance(output_unit, str) and output_unit == 'xmm_det':
-            output_unit = xmm_det
 
-        allowed_units = ["deg", "xmm_sky", "xmm_det", "pix"]
-        if coords.unit.is_equivalent("deg"):
+        # Check that the specified output unit is allowed.
+        if (output_unit != Unit('deg') and output_unit != Unit('pix')
+                and not output_unit.is_equivalent('skyxy')
+                and not output_unit.is_equivalent('detxy')):
+            raise UnitConversionError("The output unit must be either deg, pix, skyxy, or detxy.")
+
+        if not isinstance(coords, Quantity):
+            raise TypeError("The 'coords' argument must be an Astropy Quantity.")
+        # Make sure the coords are in degrees if they are an angular unit
+        elif coords.unit.is_equivalent("deg"):
             coords = coords.to("deg")
-        input_unit = coords.unit.name
-        out_name = output_unit.name
 
-        if input_unit != out_name:
-            # First off do some type checking
-            if not isinstance(coords, Quantity):
-                raise TypeError("Please pass an astropy Quantity for the coords.")
+        # Extract the unit of the input coordinates
+        input_unit = coords.unit
+
+        if not input_unit.is_equivalent(output_unit):
             # The coordinate pair must have two elements per row, no more no less
-            elif len(coords.shape) == 1 and coords.shape != (2,):
-                raise ValueError("You have supplied an array with {} values, coordinate pairs "
-                                 "should have two.".format(coords.shape[0]))
+            if len(coords.shape) == 1 and coords.shape != (2,):
+                raise ValueError(f"You have supplied an array with {coords.shape[0]} values, coordinate "
+                                 f"pairs should have two.")
             # This changes individual coordinate pairs into the form that this function expects
             elif len(coords.shape) == 1:
                 coords = coords[:, None].T
             # Checks that multiple pairs of coordinates are in the right format
             elif len(coords.shape) != 1 and coords.shape[1] != 2:
-                raise ValueError("You have supplied an array with {} columns, there can only be "
-                                 "two.".format(coords.shape[1]))
-            # I know the proper way with astropy units is to do .to() but its easier with WCS this way
-            elif input_unit not in allowed_units:
-                raise UnitsError("Those coordinate units are not supported by this method, "
-                                 "please use one of these: {}".format(", ".join(allowed_units)))
-            elif out_name not in allowed_units:
-                raise UnitsError("That output unit is not supported by this method, "
-                                 "please use one of these: {}".format(", ".join(allowed_units)))
+                raise ValueError(f"You have supplied an array with {coords.shape[1]} columns, there "
+                                 f"can only be two.")
 
             # Check for presence of the right WCS
-            if (input_unit == "xmm_sky" or out_name == "xmm_sky") and self.skyxy_wcs is None:
-                raise ValueError("There is no XMM Sky XY WCS associated with this product.")
-            elif (input_unit == "xmm_det" or out_name == "xmm_det") and self.detxy_wcs is None:
-                raise ValueError("There is no XMM Detector XY WCS associated with this product.")
+            if (input_unit.is_equivalent("skyxy") or output_unit.is_equivalent("skyxy")) and self.skyxy_wcs is None:
+                raise ValueError(f"There is no SkyXY WCS associated with this {self._prod_type}.")
+            elif (input_unit.is_equivalent("detxy") or output_unit.is_equivalent("detxy")) and self.detxy_wcs is None:
+                raise ValueError(f"There is no DETXY WCS associated with this {self._prod_type}.")
 
             # Now to do the actual conversion, which will include checking that the correct WCS is loaded
             # These go between degrees and pixels
-            if input_unit == "deg" and out_name == "pix":
+            if input_unit == Unit('deg') and output_unit == Unit('pix'):
                 # The second argument all_world2pix defines the origin, for numpy coords it should be 0
                 # We define an interim variable, in case the result is NaN - this now causes a warning that we
                 #  wish to avoid, so we replace NaN with a negative number that will cause a failure further down
                 inter_coord = Quantity(self.radec_wcs.all_world2pix(coords, 0), output_unit).round(0)
                 out_coord = np.nan_to_num(inter_coord, nan=Quantity(-100, 'pix')).astype(int)
-            elif input_unit == "pix" and out_name == "deg":
+            elif input_unit == Unit("pix") and output_unit == Unit("deg"):
                 out_coord = Quantity(self.radec_wcs.all_pix2world(coords, 0), output_unit)
 
-            # These go between degrees and XMM sky XY coordinates
-            elif input_unit == "deg" and out_name == "xmm_sky":
+            # These go between degrees and sky XY coordinates
+            elif input_unit == Unit("deg") and output_unit.is_equivalent('skyxy'):
                 interim = self.radec_wcs.all_world2pix(coords, 0)
-                out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), xmm_sky)
-            elif input_unit == "xmm_sky" and out_name == "deg":
+                out_coord = Quantity(self.skyxy_wcs.all_pix2world(interim, 0), output_unit)
+            elif input_unit.is_equivalent('skyxy') and output_unit == Unit("deg"):
                 interim = self.skyxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
-            # These go between XMM sky XY and pixel coordinates
-            elif input_unit == "xmm_sky" and out_name == "pix":
+            # These go between sky XY and pixel coordinates
+            elif input_unit.is_equivalent('skyxy') and output_unit == Unit("pix"):
                 out_coord = Quantity(self.skyxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == "pix" and out_name == "xmm_sky":
+            elif input_unit == Unit("pix") and output_unit.is_equivalent('skyxy'):
                 out_coord = Quantity(self.skyxy_wcs.all_pix2world(coords, 0), output_unit)
 
-            # These go between degrees and XMM Det XY coordinates
-            elif input_unit == "deg" and out_name == "xmm_det":
+            # These go between degrees and Det XY coordinates
+            elif input_unit == Unit("deg") and output_unit.is_equivalent("detxy"):
                 interim = self.radec_wcs.all_world2pix(coords, 0)
-                out_coord = Quantity(self.detxy_wcs.all_pix2world(interim, 0), xmm_sky)
-            elif input_unit == "xmm_det" and out_name == "deg":
+                out_coord = Quantity(self.detxy_wcs.all_pix2world(interim, 0), output_unit)
+            elif input_unit.is_equivalent("detxy") and output_unit == Unit("deg"):
                 interim = self.detxy_wcs.all_world2pix(coords, 0)
                 out_coord = Quantity(self.radec_wcs.all_pix2world(interim, 0), deg)
 
-            # These go between XMM det XY and pixel coordinates
-            elif input_unit == "xmm_det" and out_name == "pix":
+            # These go between det XY and pixel coordinates
+            elif input_unit.is_equivalent("detxy") and output_unit == Unit("pix"):
                 out_coord = Quantity(self.detxy_wcs.all_world2pix(coords, 0), output_unit).round(0).astype(int)
-            elif input_unit == "pix" and out_name == "xmm_det":
+            elif input_unit == Unit("pix") and output_unit.is_equivalent("detxy"):
                 out_coord = Quantity(self.detxy_wcs.all_pix2world(coords, 0), output_unit)
 
             # It is possible to convert between XMM coordinates and pixel and supply coordinates
             # outside the range covered by an image, but we can at least catch the error
-            if out_name == "pix" and np.any(out_coord < 0) and self._prod_type != "psf":
+            if output_unit == Unit("pix") and np.any(out_coord < 0) and self._prod_type != "psf" and not ignore_bad_pix_coord:
                 raise ValueError("You've converted to pixel coordinates, and some elements are less than zero.")
             # Have to compare to the [1] element of shape because numpy arrays are flipped, and we want
             #  to compare x to x
-            elif out_name == "pix" and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf":
+            elif (output_unit == Unit("pix") and np.any(out_coord[:, 0].value >= self.shape[1]) and self._prod_type != "psf"
+                  and not ignore_bad_pix_coord):
                 raise ValueError("You've converted to pixel coordinates, and some x coordinates are larger than the "
                                  "image x-shape.")
             # Have to compare to the [0] element of shape because numpy arrays are flipped, and we want
             #  to compare y to y
-            elif out_name == "pix" and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf":
+            elif (output_unit == Unit("pix") and np.any(out_coord[:, 1].value >= self.shape[0]) and self._prod_type != "psf"
+                  and not ignore_bad_pix_coord):
                 raise ValueError("You've converted to pixel coordinates, and some y coordinates are larger than the "
                                  "image y-shape.")
 
@@ -946,9 +1080,8 @@ class Image(BaseProduct):
             if out_coord.shape == (1, 2):
                 out_coord = out_coord[0, :]
 
-            # if out_coord.shape ==
-        elif input_unit == out_name and out_name == 'pix':
-            out_coord = coords.round(0).astype(int)
+        elif input_unit.is_equivalent(output_unit) and output_unit == Unit('pix'):
+            out_coord = coords.to('pix').round(0).astype(int)
         else:
             out_coord = coords
 
@@ -1066,6 +1199,35 @@ class Image(BaseProduct):
         else:
             raise NotPSFCorrectedError("You are trying to set the PSF model for an Image that hasn't "
                                        "been PSF corrected.")
+
+    def unload(self, unload_data: bool = True, unload_header: bool = False):
+        """
+        This method allows you to safely remove the data and/or header information contained in this
+        Image/ExpMap/RateMap from memory, while guaranteeing that it will be read back in if required. We use
+        the delete methods implemented for the data and header properties, which can also be used directly by
+        the user.
+
+        :param bool unload_data: Specifies whether the data should be unloaded from memory. Default is True, as the
+            image data is liable to take up far more memory than the header, meaning it is more likely to need to
+            be removed.
+        :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
+        """
+
+        # Doesn't make sense in this case, as the method wouldn't do anything - as it was probably a mistake to call
+        #  the method like this I throw an error so the user knows
+        if not unload_data and not unload_header:
+            raise ValueError("At least one of the 'unload_data' and 'unload_header' arguments must be True.")
+
+        # Pretty simple, if the user wants the data gone then we use the existing property delete method for data
+        if unload_data:
+            del self.data
+
+        # And if they want the header gone then we use the property delete method for header
+        if unload_header:
+            del self.header
+
+        # Force garbage collection just to make sure the data are gone from memory
+        # gc.collect()
 
     def get_count(self, at_coord: Quantity) -> float:
         """
@@ -1211,6 +1373,9 @@ class Image(BaseProduct):
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
+        if self.telescope is not None:
+            ident = PRETTY_TELESCOPE_NAMES[self.telescope] + ' ' + ident
+
         # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
         #  title - otherwise we use the custom title and don't add anything to it
         if custom_title is None:
@@ -1282,8 +1447,8 @@ class Image(BaseProduct):
             else:
                 # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                 #  it isn't essential, so I'll just display a warning
-                warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
-                              "pairs in it, or is otherwise the wrong shape.")
+                warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                     "the wrong shape.", stacklevel=2)
                 # Just in case annuli were also passed, I set the coordinate to None so that it knows something is wrong
                 pix_coord = None
 
@@ -1396,6 +1561,7 @@ class Image(BaseProduct):
         cbar = plt.colorbar(ax.images[0])
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
+
         # Display the image
         plt.show()
 
@@ -1815,8 +1981,8 @@ class Image(BaseProduct):
                 else:
                     # I don't want to bring someone's code grinding to a halt just because they passed crosshair wrong,
                     #  it isn't essential, so I'll just display a warning
-                    warnings.warn("You have passed a cross_hair quantity that has more than two coordinate "
-                                  "pairs in it, or is otherwise the wrong shape.")
+                    warn("The 'cross_hair' quantity has more than two coordinate pairs in it, or is otherwise "
+                         "the wrong shape.", stacklevel=2)
                     # Just in case annuli were also passed, I set the coordinate to None so that it knows something is
                     # wrong
                     pix_coord = None
@@ -2569,16 +2735,39 @@ class ExpMap(Image):
     :param Quantity lo_en: The lower energy bound used to generate this product.
     :param Quantity hi_en: The upper energy bound used to generate this product.
     :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
-        is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+        is combined and wasn't made by a mosaic tool like XMM-SAS emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+    :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str, lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None):
+    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
+                 lo_en: Quantity, hi_en: Quantity, obs_inst_combs: List[List] = None, telescope: str = None,
+                 check_exists: bool = True):
         """
         Init of the ExpMap class.
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str obs_id: The ObsID related to the ExpMap being declared.
+        :param str instrument: The instrument related to the ExpMap being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param Quantity lo_en: The lower energy bound used to generate this product.
+        :param Quantity hi_en: The upper energy bound used to generate this product.
+        :param List[List] obs_inst_combs: Supply a list of lists of ObsID-Instrument combinations if the image
+            is combined and wasn't made by emosaic (e.g. [['0404910601', 'pn'], ['0404910601', 'mos1'],
+            ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
+        :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
-                         obs_inst_combs=obs_inst_combs)
+                         obs_inst_combs=obs_inst_combs, telescope=telescope, check_exists=check_exists)
         self._prod_type = "expmap"
         # Need to overwrite the data unit attribute set by the Image init
         self._data_unit = Unit("s")
@@ -2627,7 +2816,7 @@ class ExpMap(Image):
 class RateMap(Image):
     """
     A very powerful class which allows interactions with 'RateMaps', though these are not directly generated by
-    SAS, they are images divided by matching exposure maps, to provide a count rate image.
+    backend software like XMM-SAS, they are images divided by matching exposure maps, to provide a count rate image.
 
     :param Image xga_image: The image component of the RateMap.
     :param ExpMap xga_expmap: The exposure map component of the RateMap.
@@ -2643,8 +2832,18 @@ class RateMap(Image):
                  regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None):
         """
-        This initialises a RateMap instance, where a count-rate image is divided by an exposure map, to create a map
-        of X-ray counts.
+        This initialises a RateMap instance, where a count image is divided by an exposure map, to create a map
+        of X-ray count rate.
+
+        :param Image xga_image: The image component of the RateMap.
+        :param ExpMap xga_expmap: The exposure map component of the RateMap.
+        :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
+            dictionary of region lists with ObsIDs as dictionary keys.
+        :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
+            that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
+            supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
+            if there is no match. Such a dictionary can be retrieved from a source using the 'matched_regions'
+            property. Default is None.
         """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
             raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
@@ -2661,7 +2860,8 @@ class RateMap(Image):
                                    "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
 
         super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
-                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1])
+                         xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
+                         telescope=xga_image.telescope, check_exists=False)
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
@@ -2725,10 +2925,16 @@ class RateMap(Image):
         #  mask as to whether you are on or off the sensor
         det_map = self.expmap.data.copy()
         det_map[det_map != 0] = 1
-        self._on_sensor_mask = det_map
+        self._on_sensor_mask = det_map.astype('int8')
 
         # Re-setting some paths to make more sense
         self._path = self._im_path
+
+        # Finally, we unload the image and exposure map data that was used to build the ratemap array, as we
+        #  are less likely to need those data from now on, and we can save some memory. Note that we
+        #  don't unload the image/expmap headers though
+        self.image.unload(unload_data=True, unload_header=False)
+        self.expmap.unload(unload_data=True, unload_header=False)
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -2757,6 +2963,32 @@ class RateMap(Image):
         if self._data is None:
             self._construct_on_demand()
         return self._data.copy()
+
+    @data.setter
+    def data(self, new_rt_arr: np.ndarray):
+        """
+        Property setter for the RateMap data.
+
+        :param np.ndarray new_rt_arr: The new ratemap data.
+        """
+        # Have to make sure the input is of the right type, and the right shape
+        if not isinstance(new_rt_arr, np.ndarray):
+            raise TypeError("You may only assign a numpy array to the data attribute.")
+        elif new_rt_arr.shape != self.shape:
+            raise ValueError("You may only assign a numpy array to the data attribute if it "
+                             "is the same shape as the original.")
+        else:
+            self._data = new_rt_arr
+
+    @data.deleter
+    def data(self):
+        """
+        Property deleter for data contained in this RateMap instance. The self._data array is removed from
+        memory, and then self._data is explicitly set to None so that self._construct_on_demand() will
+        be triggered if you ever want the data from this object again.
+        """
+        del self._data
+        self._data = None
 
     def get_rate(self, at_coord: Quantity) -> float:
         """
@@ -3042,7 +3274,8 @@ class RateMap(Image):
         return edge_flag
 
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
-                        allow_negative: bool = False):
+                        allow_negative: bool = False, x_slice_lims: List[int] = None,
+                        y_slice_lims: List[int] = None):
         """
         A signal-to-noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
@@ -3057,50 +3290,70 @@ class RateMap(Image):
             across the combined product.
         :param bool allow_negative: Should pixels in the background subtracted count map be allowed to go below
             zero, which results in a lower signal-to-noise (and can result in a negative signal-to-noise).
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+            masks, and as such have to be applied to the data array.
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+            masks, and as such have to be applied to the data array.
         :return: A signal-to-noise value for the source region.
         :rtype: float
         """
+        # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
+        #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
+        #  as well
+        if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
+            raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
+        elif x_slice_lims is None:
+            x_slice = slice(0, None)
+            y_slice = slice(0, None)
+        else:
+            x_slice = slice(*x_slice_lims)
+            y_slice = slice(*y_slice_lims)
+
+        # The shape of the data - we want to compare the mask shapes to make sure they can be applied. If the slicing
+        #  limits passed were None then it'll be the shape of the whole image
+        sel_shape = self.image.data[y_slice, x_slice].shape
+
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
-        if source_mask.shape != self.shape:
-            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        if source_mask.shape != sel_shape:
+            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
-        elif back_mask.shape != self.shape:
-            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif back_mask.shape != sel_shape:
+            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask*self.sensor_mask).sum()
-        back_area = (back_mask*self.sensor_mask).sum()
+        src_area = (source_mask*self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask*self.sensor_mask[y_slice, x_slice]).sum()
 
         # Exposure correction takes into account the different exposure times of the individual pixels
         if exp_corr:
             # Find an average background per pixel COUNT RATE by dividing the total cr in the background region by the
             #  number of pixels in the mask
-            av_back = (self.data * back_mask).sum() / back_area
+            av_back = (self.data[y_slice, x_slice] * back_mask).sum() / back_area
             # Then we use the exposure map to create a background COUNT map for the observation, by multiplying the
             #  average background count rate by the exposure map
-            scaled_source_back_counts = self.expmap.data * av_back * source_mask
+            scaled_source_back_counts = self.expmap.data[y_slice, x_slice] * av_back * source_mask
             # Then we create a background subtracted map of the source by subtracting the background map
-            source_map = (self.image.data * source_mask) - scaled_source_back_counts
+            source_map = (self.image.data[y_slice, x_slice] * source_mask) - scaled_source_back_counts
             # Some pixels could be negative now, but if we're not allowing negative values then they get
             #  set to zero
             if not allow_negative:
                 source_map[source_map < 0] = 0
             # Then we sum the source count map to find a total source count value, and divide that by the square root
             #  of the total number of counts (NON BACKGROUND SUBTRACTED) within the source mask
-            sn = source_map.sum() / np.sqrt((self.image.data * source_mask).sum())
+            sn = source_map.sum() / np.sqrt((self.image.data[y_slice, x_slice] * source_mask).sum())
         else:
             # Calculate an area normalisation so the background counts can be scaled to the source counts properly
             area_norm = src_area / back_area
             # Find the total counts within the source area
-            tot_cnt = (self.image.data * source_mask).sum()
+            tot_cnt = (self.image.data[y_slice, x_slice] * source_mask).sum()
             # Find the total counts within the background area
-            bck_cnt = (self.image.data * back_mask).sum()
+            bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
             # Signal to noise is then just finding the source counts by subtracting the area scaled background counts
             #  and dividing by the square root of the total counts within the source area
@@ -3108,50 +3361,99 @@ class RateMap(Image):
 
         return sn
 
-    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray) -> Quantity:
+    def background_subtracted_counts(self, source_mask: np.ndarray, back_mask: np.ndarray,
+                                     x_slice_lims: List[int] = None,
+                                     y_slice_lims: List[int] = None) -> Quantity:
         """
         This method uses a user-supplied source and background mask (alongside knowledge of the sensor layout
         drawn from the exposure map) to calculate the number of background-subtracted counts within the source
         region of the image used to construct this RateMap.
 
         The exposure map is used to construct a sensor mask, so that we know where the chip gaps are and take
-        them into account when calculating the ratio of areas of the source region to the background region. This
+        them into account when calculating the area ratio of the source region to the background region. This
         is why this method is built into the RateMap rather than Image class.
 
         :param np.ndarray source_mask: The mask which defines the source region, ideally with interlopers removed.
         :param np.ndarray back_mask: The mask which defines the background region, ideally with interlopers removed.
+        :param List[int] x_slice_lims: Lower and upper slice x-limits (numpy axis one) applied to the passed
+            masks, and as such have to be applied to the data array.
+        :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
+            masks, and as such have to be applied to the data array.
         :return: The background subtracted counts in the source region.
         :rtype: Quantity
         """
+        # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
+        #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
+        #  as well
+        if sum([x_slice_lims is None, y_slice_lims is None]) == 1:
+            raise ValueError("If either 'x_slice_lims' and 'y_slice_lims' is provided, the other must be as well.")
+        elif x_slice_lims is None:
+            x_slice = slice(0, None)
+            y_slice = slice(0, None)
+        else:
+            x_slice = slice(*x_slice_lims)
+            y_slice = slice(*y_slice_lims)
+
+        # The shape of the data - we want to compare the mask shapes to make sure they can be applied. If the slicing
+        #  limits passed were None then it'll be the shape of the whole image
+        sel_shape = self.image.data[y_slice, x_slice].shape
+
         # Perform some quick checks on the masks to check they are broadly compatible with this ratemap
-        if source_mask.shape != self.shape:
-            raise ValueError("The source mask shape {sm} is not the same as the ratemap shape "
-                             "{rt}!".format(sm=source_mask.shape, rt=self.shape))
+        if source_mask.shape != sel_shape:
+            raise ValueError("The source mask shape {sm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(sm=source_mask.shape, rt=sel_shape))
         elif not (source_mask >= 0).all() or not (source_mask <= 1).all():
             raise ValueError("The source mask has illegal values in it, there should only be ones and zeros.")
-        elif back_mask.shape != self.shape:
-            raise ValueError("The background mask shape {bm} is not the same as the ratemap shape "
-                             "{rt}!".format(bm=back_mask.shape, rt=self.shape))
+        elif back_mask.shape != sel_shape:
+            raise ValueError("The background mask shape {bm} is not the same as the selected ratemap shape "
+                             "{rt}!".format(bm=back_mask.shape, rt=sel_shape))
         elif not (back_mask >= 0).all() or not (back_mask <= 1).all():
             raise ValueError("The background mask has illegal values in it, there should only be ones and zeros.")
 
         # Find the total mask areas. As the mask is just an array of ones and zeros we can just sum the
         #  whole thing to find the total pixel area covered.
-        src_area = (source_mask * self.sensor_mask).sum()
-        back_area = (back_mask * self.sensor_mask).sum()
+        src_area = (source_mask * self.sensor_mask[y_slice, x_slice]).sum()
+        back_area = (back_mask * self.sensor_mask[y_slice, x_slice]).sum()
 
         # Calculate an area normalisation so the background counts can be scaled to the source counts properly
         area_norm = src_area / back_area
         # Find the total counts within the source area
-        tot_cnt = (self.image.data * source_mask).sum()
+        tot_cnt = (self.image.data[y_slice, x_slice] * source_mask).sum()
         # Find the total counts within the background area
-        bck_cnt = (self.image.data * back_mask).sum()
+        bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
         # Simple calculation, re-normalising the background counts with the area ratio and subtracting background
         #  from the source. Then storing it in an astropy quantity
         cnts = Quantity(tot_cnt - (bck_cnt*area_norm), 'ct')
 
         return cnts
+
+    def unload(self, unload_data: bool = True, unload_header: bool = False):
+        """
+        This method allows you to safely remove the data and/or header information contained in this
+        RateMap (and its component image and exposure map) from memory, while guaranteeing that it will be
+        read back in if required. We use the delete methods implemented for the data and header properties, which
+        can also be used directly by the user.
+
+        :param bool unload_data: Specifies whether the data should be unloaded from memory. Default is True, as the
+            data are liable to take up far more memory than the header, meaning it is more likely to need to
+            be removed.
+        :param bool unload_header: Specifies whether the header should be unloaded from memory. Default is False.
+        """
+        # Call the Image-implemented unload method first
+        super().unload(unload_data, unload_header)
+
+        # We also remove the arrays built to mask edges and act as a sensor mask, which can be quite large
+        #  themselves - and there is no point holding them in memory if the data arrays aren't
+        del self._on_sensor_mask
+        self._on_sensor_mask = None
+        del self._edge_mask
+        self._edge_mask = None
+
+        # Then we do a little extra job of unloading the component image and exposure map data as well
+        if unload_data or unload_header:
+            self.image.unload(unload_data, unload_header)
+            self.expmap.unload(unload_data, unload_header)
 
     @property
     def edge_mask(self) -> np.ndarray:
@@ -3242,7 +3544,7 @@ class RateMap(Image):
         elif isinstance(new_reg, str) and new_reg == '':
             pass
         elif isinstance(new_reg, str):
-            warnings.warn("That region file path does not exist")
+            warn("The region file path does not exist", stacklevel=2)
         # If an existing list of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
             self._reg_file_path = ""
@@ -3299,8 +3601,8 @@ class RateMap(Image):
 
 class PSF(Image):
     """
-    A subclass of image that is a wrapper for 2D images of PSFs that can be generated by SAS. This can be used to
-    view the PSF and is used in other analyses to correct images.
+    A subclass of image that is a wrapper for 2D images of PSFs. This can be used to view the PSF and is
+    used in other analyses to correct images.
 
     :param str path: The path to where the product file SHOULD be located.
     :param str psf_model: The model used for the generation of the PSF.
@@ -3309,15 +3611,34 @@ class PSF(Image):
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The command used to generate the product.
+    :param str telescope: The telescope that this product is derived from. Default is None.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: str, psf_model: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
-                 gen_cmd: str):
+                 gen_cmd: str, telescope: str = None, check_exists: bool = True):
         """
         The init method for PSF class.
+
+        :param str path: The path to where the product file SHOULD be located.
+        :param str psf_model: The model used for the generation of the PSF.
+        :param str obs_id: The ObsID related to the PSF being declared.
+        :param str instrument: The instrument related to the PSF being declared.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The command used to generate the product.
+        :param str telescope: The telescope that this product is derived from. Default is None.
+        :param bool check_exists: Controls whether the product instantiation process checks for the file
+            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            many products from the same directory/directory structure, it can be more performant to run listdir
+            or scandir and confirm files exist externally, than one by one in each product declaration.
         """
         lo_en = Quantity(0, 'keV')
         hi_en = Quantity(100, 'keV')
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, lo_en, hi_en,
+                         telescope=telescope, check_exists=check_exists)
         self._prod_type = "psf"
         self._data_unit = Unit('')
         self._psf_centre = None
@@ -3412,7 +3733,7 @@ class PSF(Image):
         """
         This is the model that was used to generate this PSF.
 
-        :return: XMM SAS psfgen model name.
+        :return: The psf model name used by the backend software.
         :rtype: str
         """
         return self._psf_model
@@ -3430,14 +3751,27 @@ class PSFGrid(BaseAggregateProduct):
     :param str stdout_str: The stdout from calling the terminal command.
     :param str stderr_str: The stderr from calling the terminal command.
     :param str gen_cmd: The commands used to generate the products.
+    :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
     """
     def __init__(self, file_paths: list, bins: int, psf_model: str, x_bounds: np.ndarray, y_bounds: np.ndarray,
-                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str):
+                 obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str, telescope: str = None):
         """
         The init of the PSFGrid class - a subclass of BaseAggregateProduct that wraps a set of PSFs that have been
         generated at different points on the detector.
+
+        :param list file_paths: The file paths of the individual PSF files for this grid.
+        :param int bins: The number of bins per side of the grid.
+        :param str psf_model: The model used to generate PSFs.
+        :param np.ndarray x_bounds: The upper and lower x boundaries of the bins in image pixel coordinates.
+        :param np.ndarray y_bounds: The upper and lower y boundaries of the bins in image pixel coordinates.
+        :param str obs_id: The ObsID for which this PSFGrid was generated.
+        :param str instrument: The instrument for which this PSFGrid was generated.
+        :param str stdout_str: The stdout from calling the terminal command.
+        :param str stderr_str: The stderr from calling the terminal command.
+        :param str gen_cmd: The commands used to generate the products.
+        :param str telescope: The telescope that this PSFGrid is derived for. Default is None.
         """
-        super().__init__(file_paths, 'psf', obs_id, instrument)
+        super().__init__(file_paths, 'psf', obs_id, instrument, telescope=telescope)
         self._psf_model = psf_model
         # Set none here because if I want positions of PSFs and there has been an error during generation, the user
         #  will only see the FileNotFoundError not the SAS error
@@ -3478,7 +3812,7 @@ class PSFGrid(BaseAggregateProduct):
         """
         This is the model that was used to generate the component PSFs in this PSFGrid.
 
-        :return: XMM SAS psfgen model name.
+        :return: The psf model name used by the backend software.
         :rtype: str
         """
         return self._psf_model

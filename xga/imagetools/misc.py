@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:44. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:24 PM. Copyright (c) The Contributors.
 
 
 from typing import Tuple, List, Union
@@ -59,7 +59,7 @@ def pix_deg_scale(coord: Quantity, input_wcs: WCS, small_offset: Quantity = Quan
 def sky_deg_scale(im_prod: Union[Image, RateMap, ExpMap], coord: Quantity,
                   small_offset: Quantity = Quantity(1, 'arcmin')) -> Quantity:
     """
-    This is equivelant to pix_deg_scale, but instead calculates the conversion factor between
+    This is equivalent to pix_deg_scale, but instead calculates the conversion factor between
     XMM's XY sky coordinate system and degrees.
 
     :param Image/Ratemap/ExpMap im_prod: The image product to calculate the conversion factor for.
@@ -146,7 +146,7 @@ def physical_rad_to_pix(im_prod: Union[Image, RateMap, ExpMap], physical_rad: Qu
     proper radii, so long as redshift and cosmology information is provided for the conversion from proper radii
     to pixels.
 
-    :param Image/RateMap/ExpMap im_prod:
+    :param Image/RateMap/ExpMap im_prod: The image product used for coordinate conversion.
     :param Quantity physical_rad: The physical radius to be converted to pixels.
     :param Quantity coord: The position of the object being analysed.
     :param float/int z: The redshift of the object (only required for input proper distance units like kpc).
@@ -183,7 +183,7 @@ def data_limits(im_prod: Union[Image, RateMap, ExpMap, np.ndarray]) -> Tuple[Lis
         boundary coordinates for.
     :return: Two lists, the first with the x lower and upper bounding coordinates, and the second with
         the y lower and upper bounding coordinates.
-    :rtype: Tuple[List[int, int], List[int, int]]
+    :rtype: Tuple[List[int], List[int]]
     """
     if isinstance(im_prod, Image) and im_prod.data.sum() != 0:
         # For the XGA Image products
@@ -288,6 +288,11 @@ def edge_finder(data: Union[RateMap, ExpMap, np.ndarray], keep_corners: bool = T
     #  set them to one
     if not keep_corners:
         comb[np.where((comb != 1) & (comb != 0))] = 1
+
+    # We alter the datatype of the combined array, seeing as the elements are low-value integers, we might as well
+    #  take up a little less memory (particularly relevant for large input arrays, such as those that can originate
+    #  from eROSITA)
+    comb = comb.astype('int8')
 
     return comb
 

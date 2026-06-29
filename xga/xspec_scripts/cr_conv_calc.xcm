@@ -1,5 +1,5 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (david.turner@sussex.ac.uk) 25/08/2020, 11:49. Copyright (c) David J Turner
+#  Last modified by David J Turner (djturner@umbc.edu) 25/08/2020, 11:49. Copyright (c) David J Turner
 
 # This XSPEC script requires parameter's to be filled in by XGA before running.
 
@@ -26,7 +26,7 @@ set instruments {inst}
 
 # This next part is largely from the general_xspec_fit.xcm script I wrote, its almost too general for this,
 #  but it saved time over writing a slightly simpler approach
-# Now we must define the model, but without setting any parameters (thats what /* does)
+# Now we must define the model, but without setting any parameters (that's what /* does)
 model {m}
 /*
 

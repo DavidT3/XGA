@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/08/2025, 15:58. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:26 PM. Copyright (c) The Contributors.
 
 import inspect
 from abc import ABCMeta, abstractmethod
@@ -226,6 +226,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
         if x.isscalar or (not x.isscalar and x.ndim == 1):
             realisations = self.model(x[..., None], *self._par_dists)
+
         else:
             # This case is for marginalising over a radius distribution (or distributions), so in other words we want
             #  distribution(s) of N values out (where N is the number of values in the model parameter posterior
@@ -246,6 +247,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :param Quantity x: The x-position at which the model should be evaluated.
         :param List[Quantity] pars: The parameters of model to be evaluated.
         :return: The y-value of the model at x.
+        :rtype: Quantity
         """
         raise NotImplementedError("Base Model doesn't have this implemented")
 
@@ -633,7 +635,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
         :param Quantity radius: The radius at which you wish to evaluate this model and view the
             predicted distribution.
-        :param Union[str, int] bins: Equivelant to the plt.hist bins argument, set either the number of bins
+        :param Union[str, int] bins: Equivalent to the plt.hist bins argument, set either the number of bins
             or the algorithm to decide on the number of bins.
         :param str colour: Set the colour of the histogram.
         :param tuple figsize: The desired dimensions of the figure.

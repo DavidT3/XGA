@@ -37,7 +37,7 @@ XGA is available on the popular Python Package Index (PyPI), and can be installe
 pip install xga
 ```
 
-You can also fetch the current working version from the git repository, and install it (this method has replaced 'python setup.py install'):
+You can also fetch the current working version from the git repository, and install it:
 
 ```shell script
 git clone https://github.com/DavidT3/XGA
@@ -45,7 +45,7 @@ cd XGA
 python -m pip install .
 ```
 
-Alternatively you could use the 'editable' option (this has replaced running setup.py and passing 'develop') so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
+Alternatively you could use the 'editable' option so that any changes you pull from the remote repository are reflected without having to reinstall XGA.
 
 ```shell script
 git clone https://github.com/DavidT3/XGA
@@ -60,6 +60,9 @@ conda-lock install -n <YOUR ENVIRONMENT NAME GOES HERE>
 conda activate <YOUR ENVIRONMENT NAME GOES HERE>
 pip install pyabel==0.9
 ```
+
+> [!IMPORTANT]
+> For Python 3.10 and earlier, the optional dependency [contextlib-chdir](https://pypi.org/project/contextlib-chdir/) must be installed.
 
 ## Required Dependencies
 XGA depends on two non-Python pieces of software:
@@ -90,8 +93,9 @@ Before XGA can be used you must fill out a configuration file (a completed examp
 
 Follow these steps to fill out the configuration file:
 1. Import XGA to generate the initial, incomplete, configuration file.
-2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is 
+2. Navigate to ~/.config/xga and open xga.cfg in a text editor. The .config directory is usually hidden, so it is
 probably easier to navigate via the terminal.
+   * Note: The location of the configuration directory can be overridden by setting the ``XGA_CONFIG_DIR`` environment variable. If set, XGA will look for its configuration and store its census files in exactly that directory.
 3. Take note of the entries that currently have /this/is/required at the beginning, without these entries the 
 module will not function.
 4. Set the directory where you wish XGA to save the products and files it generates. I just set it to xga_output,
@@ -136,7 +140,7 @@ If you encounter a bug, or would like to make a feature request, please use the 
 [issues](https://github.com/DavidT3/XGA/issues) page, it really helps to keep track of everything.
 
 However, if you have further questions, or just want to make doubly sure I notice the issue, feel free to send
-me an email at turne540@msu.edu
+me an email at djturner@umbc.edu
 
 
 

@@ -1,5 +1,6 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 03/11/2025, 19:11. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 2:00 PM. Copyright (c) The Contributors.
+
 import os.path
 from typing import List, Tuple
 from warnings import warn
@@ -36,11 +37,19 @@ class EventList(BaseProduct):
     :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
         datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
         argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+    :param Quantity energy_per_channel: An Astropy Quantity (units of channel/eV, or equivalent) that describes
+        the mean energy difference between PI channels. The default is None, in which case the EventList
+        instance uses a 'standard' value (not all missions/instruments will have a default value defined).
+        Specifying a value by passing a Quantity will override any default value that may be available.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed. However, if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
     """
 
     def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
                  stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None,
-                 force_remote: bool = False, fsspec_kwargs: dict = None, energy_per_channel: Quantity = None):
+                 force_remote: bool = False, fsspec_kwargs: dict = None, energy_per_channel: Quantity = None, check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -53,22 +62,24 @@ class EventList(BaseProduct):
         :param str stderr_str: The stderr from calling the terminal command.
         :param str gen_cmd: The command used to generate the event list.
         :param str telescope: The telescope that is the source of this event list. The default is None.
+        :param List[str] obs_ids: The obs ids that were combined to make this event list. The default is None.
         :param bool force_remote: Used to force the product instantiation to treat the passed path string as a url to
             a remote dataset, and to use fsspec to read/stream the data.
         :param dict fsspec_kwargs: Optional arguments that can be passed fsspec when reading or streaming remote
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
+        :param Quantity energy_per_channel: An Astropy Quantity (units of channel/eV, or equivalent) that describes
+        the mean energy difference between PI channels. The default is None, in which case the EventList
+        instance uses a 'standard' value (not all missions/instruments will have a default value defined).
+        Specifying a value by passing a Quantity will override any default value that may be available.
+    :param bool check_exists: Controls whether the product instantiation process checks for the file
+        path's existence or not. Default is True, in which case a check will be performed. However, if declaring
+        many products from the same directory/directory structure, it can be more performant to run listdir
+        or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        # A validity check to help remind me to pass the telescope to the super-class init when this merges with
-        #  multi-mission XGA
-        if hasattr(super(), 'telescope'):
-            raise XGADeveloperError("S3 streaming event lists have been merged into multi-mission XGA, and the "
-                                    "call to BaseProduct init in EventList needs to be updated.")
-        else:
-            self._telescope = telescope
-
         # Call the BaseProduct init, sets up some attributes
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, None, force_remote, fsspec_kwargs)
+        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
+                         force_remote=force_remote, fsspec_kwargs=fsspec_kwargs, check_exists=check_exists)
         self._prod_type = "events"
         # These store the header of the event list fits file (if read in), as well as the main table of event
         #  information (again if read in).
@@ -706,7 +717,7 @@ class EventList(BaseProduct):
 
         :param Quantity bin_size: The size of bins to use when creating the image. Can be specified in pixels
             ('pix') or angular units (e.g. 'deg', 'arcmin'). If None, uses mission defaults or falls back to 1 pixel.
-        :param Quantity x_lims: The x-axis boundaries of the generated image. Can be specified in pixels ('pix') or 
+        :param Quantity x_lims: The x-axis boundaries of the generated image. Can be specified in pixels ('pix') or
             angular units (e.g. 'deg'). If None, uses full detector field of view.
         :param Quantity y_lims: The y-axis boundaries of the generated image. Can be specified in pixels ('pix') or
             angular units (e.g. 'deg'). If None, uses full detector field of view.
@@ -868,7 +879,7 @@ class EventList(BaseProduct):
             lo_chan = (lo_en / self.ev_per_channel).decompose().value
             hi_chan = (hi_en / self.ev_per_channel).decompose().value
             filt_operations[en_col] = [f">={lo_chan}", f"<={hi_chan}"]
-        
+
         ############################################################
         ############################################################################
 
