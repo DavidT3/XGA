@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:22 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:26 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -934,7 +934,8 @@ class EventList(BaseProduct):
                       {'name': 'NAXIS2', 'value': binned_data.shape[0]}]
 
         new_im = Image({'data': binned_data, 'wcs': im_wcs, 'header': new_header}, self.obs_id,
-                       self.instrument, "", "", "", lo_en=lo_en, hi_en=hi_en, telescope=self._telescope)
+                       self.instrument, "", "", "",
+                       lo_en=lo_en, hi_en=hi_en, telescope=self.telescope)
 
         # We validated the 'save_path' argument earlier, so we'll just get on and save the file
         if save_path is not None:
