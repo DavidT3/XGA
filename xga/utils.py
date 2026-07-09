@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/15/26, 7:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 8:56 AM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -973,8 +973,10 @@ OBS_ID_REGEX = {'xmm': '^[0-9]{10}$', "erosita": '^[0-9]{6}$', "erass": '^[0-9]{
 #  there may be multi-level dictionaries
 # TODO when I chuck ROSAT in here add an entry like 'rosat': {'PSPCB': Quantity(60, 'arcmin'),
 #  'PSPCC': Quantity(60, 'arcmin'), 'HRI': Quantity(19, 'arcmin'), 'RASS': Quantity(3, 'deg')}}
-DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'), 'erosita': Quantity(60, 'arcmin'),
-                            'erass': Quantity(108, 'arcmin'), 'chandra': Quantity(30, 'arcmin')}
+DEFAULT_TELE_SEARCH_DIST = {'xmm': Quantity(30, 'arcmin'),
+                            'erosita': Quantity(60, 'arcmin'),
+                            'erass': Quantity(108, 'arcmin'),
+                            'chandra': Quantity(30, 'arcmin')}
 
 # This list contains banned filter types - these occur in observations that I don't want XGA to try and use
 BANNED_FILTS = {"xmm": ['CalClosed', 'Closed'],

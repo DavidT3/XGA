@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 12:56 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -56,8 +56,8 @@ class BaseProduct:
     """
 
     def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: dict = None, telescope: str = None, force_remote: bool = False, fsspec_kwargs: dict = None,
-                 check_exists: bool = True):
+                 extra_info: Optional[dict] = None, telescope: Optional[str] = None, force_remote: bool = False,
+                 fsspec_kwargs: Optional[dict] = None, check_exists: bool = True):
         """
         The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
         relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output

@@ -1,8 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/29/26, 12:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 12:55 PM. Copyright (c) The Contributors.
 
 import os.path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from warnings import warn
 
 import numpy as np
@@ -46,9 +46,10 @@ class EventList(BaseProduct):
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
 
-    def __init__(self, path: str, obs_id: str = None, instrument: str = None, stdout_str: str = None,
-                 stderr_str: str = None, gen_cmd: str = None, telescope: str = None, obs_ids: List[str] = None,
-                 force_remote: bool = False, fsspec_kwargs: dict = None, energy_per_channel: Quantity = None,
+    def __init__(self, path: str, obs_id: Optional[str] = None, instrument: Optional[str] = None,
+                 stdout_str: Optional[str] = None, stderr_str: Optional[str] = None, gen_cmd: Optional[str] = None,
+                 telescope: Optional[str] = None, obs_ids: Optional[List[str]] = None, force_remote: bool = False,
+                 fsspec_kwargs: Optional[dict] = None, energy_per_channel: Optional[Quantity] = None,
                  check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
@@ -187,6 +188,7 @@ class EventList(BaseProduct):
         else:
             self._ev_per_channel = None
 
+    # ------------- Define properties -------------
     @property
     def obs_ids(self) -> list:
         """
@@ -476,13 +478,14 @@ class EventList(BaseProduct):
         # Converting to the expected units
         self._ev_per_channel = new_val.to('eV/chan')
 
-    def _read_header_on_demand(self, table: str = None):
+    # --------- Define internal functions ---------
+    def _read_header_on_demand(self, table: Optional[str] = None):
         """
         This will read the primary event list header into memory, without loading the data from the event
         list main table. That way the user can get access to the summary information stored in the header
         without wasting a lot of memory.
 
-        :param table: Optionally defines which table's header to read; default is to read the primary header. Other
+        :param Optional[str] table: Optionally defines which table's header to read; default is to read the primary header. Other
             options that may be passed are 'event', which loads and stores the event table header in _event_header.
         """
         if table is None or table == 'primary':
@@ -521,7 +524,7 @@ class EventList(BaseProduct):
                                             "product (of type {t}) is associated "
                                             "with {s}.".format(f=self.path, s=self.src_name, t=self.type))
 
-    def _read_data_on_demand(self, columns: List[str] = None):
+    def _read_data_on_demand(self, columns: Optional[List[str]] = None):
         """
         This will read the event list table into memory, allowing for the loading of a specific subset of columns, as
         well as streaming data from remote files.
@@ -683,7 +686,6 @@ class EventList(BaseProduct):
 
         return rel_data[evt_mask]
 
-
     def unload(self, unload_data: bool = True, unload_header: bool = True):
         """
         This method allows you to safely remove the header and/or data information stored in memory.
@@ -708,9 +710,10 @@ class EventList(BaseProduct):
 
     # TODO Add a 'donor_image' argument that allows the user to specify the WCS grid on which
     #  this new image will be generated
-    def generate_image(self, bin_size: Quantity = None, x_lims: Quantity = None, y_lims: Quantity = None,
-                       lo_en: Quantity = None, hi_en: Quantity = None, filt_operations: dict = None,
-                       save_path: str = None) -> Image:
+    def generate_image(self, bin_size: Optional[Quantity] = None, x_lims: Optional[Quantity] = None,
+                       y_lims: Optional[Quantity] = None, lo_en: Optional[Quantity] = None,
+                       hi_en: Optional[Quantity] = None, filt_operations: Optional[dict] = None,
+                       save_path: Optional[str] = None) -> Image:
         """
         Generate a 2D image from the event list data by binning events into pixels. The method allows control over
         binning size, spatial boundaries, energy filtering, and output file saving.
