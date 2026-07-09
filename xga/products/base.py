@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 12:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:36 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -110,6 +110,9 @@ class BaseProduct:
             # We will use the existing 'local_file' mechanism in the case of in-memory declarations, so that the
             #  init does not try to determine if the file exists.
             self._local_file = False
+            # Have to set a remote type of None as well, otherwise the _remote_type attribute could be left
+            #  undeclared in some circumstances
+            self._remote_type = None
 
         # Keep track of whether the user forced the path to be considered as a remote url or not, that information
         #  may be required in some warning/error messages later on
