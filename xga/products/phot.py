@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/29/26, 12:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:41 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1373,8 +1373,10 @@ class Image(BaseProduct):
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
-        if self.telescope is not None:
-            ident = PRETTY_TELESCOPE_NAMES[self.telescope] + ' ' + ident
+        if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
+            ident = f"{PRETTY_TELESCOPE_NAMES[self.telescope]} {ident}"
+        elif self.telescope is not None:
+            ident = f"{self.telescope} {ident}"
 
         # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
         #  title - otherwise we use the custom title and don't add anything to it
