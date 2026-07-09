@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:34 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -907,13 +907,13 @@ class EventList(BaseProduct):
 
         # Setting up the new WCS
         im_wcs = WCS(naxis=2)
-        print(ang_bin_size)
-        print(bin_size)
+        # print(ang_bin_size)
+        # print(bin_size)
         im_wcs.wcs.cdelt = [np.sign(self.radec_sky_wcs.wcs.cdelt[0])*ang_bin_size,
                                 np.sign(self.radec_sky_wcs.wcs.cdelt[1])*ang_bin_size]
 
-        print(x_bins[0], y_bins[0])
-        print(x_bins, y_bins)
+        # print(x_bins[0], y_bins[0])
+        # print(x_bins, y_bins)
 
         # TODO Might need to change origin to zero?
         min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 0)
