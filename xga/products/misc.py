@@ -14,9 +14,9 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
-from . import BaseProduct, Image
-from .. import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
-from ..exceptions import XGADeveloperError
+from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
+from xga.products.base import BaseProduct
+from xga.products.phot import Image
 
 
 class EventList(BaseProduct):
