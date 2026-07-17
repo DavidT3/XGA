@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/13/26, 1:07 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -757,8 +757,8 @@ class EventList(BaseProduct):
             raise NotImplementedError("'{t}' does not have an mission DB entry, and manual specification is not "
                                       "supported yet.".format(t=self.telescope))
 
-        ###################### Validating input configuration ######################
-        ################## Checking the save path ##################
+        # --------------------- Validating input configuration ---------------------
+        # ---------------- Checking the save path ----------------
         # Checking that the directory in which the image should be saved (if the user has specified that
         #  it should be written to a file, and a directory is part of the save_path) actually exists
         if (save_path is not None and
@@ -775,9 +775,9 @@ class EventList(BaseProduct):
             raise ValueError("The filtering operations dictionary cannot contain keys spatial columns ({x}, {y}), or "
                              "the energy column ({e}), as these are controlled separately by this "
                              "method.".format(x=x_col, y=y_col, e=en_col))
-        ############################################################
+        # --------------------------------------------------------
 
-        ######### Converting ints to assumed pixel coords ##########
+        # ------- Converting ints to assumed pixel coords --------
         # Making some arguments into quantities with an assumed unit if they were passed as integers.
         # If a simple integer is passed, we assume that it is a bin size in pixels
         if isinstance(bin_size, int):
@@ -790,9 +790,9 @@ class EventList(BaseProduct):
         if (not isinstance(y_lims, Quantity) and
                 (isinstance(y_lims, (list, np.ndarray)) and all([isinstance(yl, int) for yl in y_lims]))):
             y_lims = Quantity(y_lims, 'pix')
-        ############################################################
+        # --------------------------------------------------------
 
-        ########## Setting up x and y coordinate limits ############
+        # --------- Setting up x and y coordinate limits ---------
         # Parsing the user-specified data limits
         if x_lims is not None and x_lims.diff() <= 0:
             raise ValueError("The second element of 'x_lims' must be greater than the first.")
@@ -824,9 +824,9 @@ class EventList(BaseProduct):
         #
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
-        ############################################################
+        # --------------------------------------------------------
 
-        ############### Setting up the binning size ################
+        # ------------- Setting up the binning size --------------
         # Parsing the user-specified bin size, if indeed they did specify one. If not, then we
         #  pull the default size for the mission, and if that isn't available then we default to a bin size of 1
 
@@ -863,9 +863,9 @@ class EventList(BaseProduct):
             # We enforce square pixels by using the first element of this calculation - though
             #  in most cases the calculated bin size for x and y axes will be the same
             bin_size = np.ceil((bin_size / self.deg_per_sky).to('pix'))[0]
-        ############################################################
+        # --------------------------------------------------------
 
-        ############### Setting up the energy limits ###############
+        # ------------- Setting up the energy limits -------------
         # Initially check that both energy boundaries have been set
         check_en = [lo_en is not None, hi_en is not None]
         if any(check_en) and not all(check_en):
@@ -883,11 +883,10 @@ class EventList(BaseProduct):
             lo_chan = (lo_en / self.ev_per_channel).decompose().value
             hi_chan = (hi_en / self.ev_per_channel).decompose().value
             filt_operations[en_col] = [f">={lo_chan}", f"<={hi_chan}"]
+        # --------------------------------------------------------
+        # --------------------------------------------------------------------------
 
-        ############################################################
-        ############################################################################
-
-        ################### Generating an image from user input ####################
+        # ------------------ Generating an image from user input -------------------
         # After all of this converting and dealing with different potential inputs for bin_size, we store
         #  the final angular width/height of each pixel
         ang_bin_size = (bin_size*self.deg_per_sky).to('deg')[0].value
@@ -907,13 +906,9 @@ class EventList(BaseProduct):
 
         # Setting up the new WCS
         im_wcs = WCS(naxis=2)
-        # print(ang_bin_size)
-        # print(bin_size)
         im_wcs.wcs.cdelt = [np.sign(self.radec_sky_wcs.wcs.cdelt[0])*ang_bin_size,
                                 np.sign(self.radec_sky_wcs.wcs.cdelt[1])*ang_bin_size]
 
-        # print(x_bins[0], y_bins[0])
-        # print(x_bins, y_bins)
 
         # TODO Might need to change origin to zero?
         min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 0)
@@ -923,10 +918,9 @@ class EventList(BaseProduct):
 
         # Set the lower and upper limits of the sky pixel coordinate system
         im_wcs.pixel_bounds = [x_lims.value, y_lims.value]
-        ############################################################################
+        # --------------------------------------------------------------------------
 
-        ############### Setting up XGA Image and saving if requested ###############
-
+        # -------------- Setting up XGA Image and saving if requested --------------
         new_header = [{'name': 'SIMPLE', 'value': 'T'},
                       {'name': 'BITPIX', 'value': binned_data.dtype.itemsize * 8},
                       {'name': 'NAXIS', 'value': 2},
@@ -946,5 +940,6 @@ class EventList(BaseProduct):
             im_hdu = PrimaryHDU(binned_data, im_hdr)
             hdu_list = HDUList([im_hdu])
             hdu_list.writeto(save_path, overwrite=True)
+        # --------------------------------------------------------------------------
 
         return new_im
