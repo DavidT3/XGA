@@ -1,30 +1,31 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 24/07/2024, 16:16. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 7/17/26, 3:42 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 import pandas as pd
 from astropy.convolution import Kernel, convolve, convolve_fft
 from fitsio import FITS
 
-from .. import OUTPUT
-from ..products import Image, RateMap, ExpMap
+from exceptions import ProductGenerationError
+from xga import OUTPUT
+from xga.products import Image, RateMap, ExpMap
 
 
-def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray = None, fft: bool = False,
-                   norm_kernel: bool = True, sm_im: bool = True) -> Union[Image, RateMap]:
+def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[np.ndarray] = None, fft: bool = False,
+                   norm_kernel: bool = True, sm_im: bool = True, force_resmooth: bool = False) -> Union[Image, RateMap]:
     """
-    Simple function to apply (in theory) any Astropy smoothing to an XGA Image/RateMap  and create a new smoothed
+    Simple function to apply (in theory) any Astropy smoothing to an XGA Image/RateMap and create a new smoothed
     XGA data product. This general function will produce XGA Image and RateMap
     objects from any instance of an Astropy Kernel, and if a RateMap is passed as the input then you may choose
     whether to smooth the image component or the image/expmap (using sm_im); if you choose the former then the final
     smoothed RateMap will be produced by dividing the smoothed Image by the original ExpMap.
 
-    :param Image/RateMap prod: The image/ratemap to be smoothed. If a RateMap is passed please see the 'sm_im'
-        parameter for extra options.
+    :param Image/RateMap prod: The XGA Image/RateMap to be smoothed. If you pass a RateMap, please see the 'sm_im'
+        argument for extra options.
     :param Kernel kernel: The kernel with which to smooth the input data. Should be an instance of an Astropy Kernel.
     :param np.ndarray mask: A mask to apply to the data while smoothing (removing point source interlopers for
         instance). The default is None, which means no mask is applied. This function expects a mask with 1s where
@@ -34,18 +35,20 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
     :param bool sm_im: If a RateMap is passed, should the image component be smoothed rather than the actual
         RateMap. Default is True, where the Image will be smoothed and divided by the original ExpMap. If set
         to False, the resulting RateMap will be bodged, with the ExpMap all 1s on the sensor.
+    :param bool force_resmooth: Force a second smoothing convolution on an already-smoothed Image/RateMap.
+        Default is False, in which case an error will be raised if the `prod` input is already smoothed.
     :return: An XGA product with the smoothed Image or RateMap.
     :rtype: Image/RateMap
     """
-    raise NotImplementedError("This function is not fully implemented yet!")
-    # First off we check the type of the product that has been passed in for smoothing
+    # First off, we check the type of the product that has been passed in for smoothing
     if not isinstance(prod, Image) or type(prod) == ExpMap:
         raise TypeError("This function can only smooth data if input in the form of an XGA Image/RateMap.")
 
     # Also need to check that the kernel has the right number of dimensions
     if len(kernel.shape) != 2:
-        raise ValueError("The smoothing kernel needs to be two-dimensional for application to Image/RateMap data - "
-                         "Gaussian2DKernel for instance.")
+        raise ValueError("The smoothing kernel needs to be two-dimensional for application to "
+                         "XGA Image or RateMap instances data - e.g. an astropy.convolution.Gaussian2DKernel "
+                         "instance.")
 
     # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately
     #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
@@ -55,26 +58,32 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: np.ndarray
         mask[mask == -1] = 1
 
     # Read in the inventory of products relevant to the input image/ratemap
-    inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(prod.obs_id), dtype=str)
+    # inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(prod.obs_id), dtype=str)
 
-    lo_en, hi_en = prod.energy_bounds
-    key = "bound_{l}-{u}".format(l=float(lo_en.value), u=float(hi_en.value))
+    inp_stor_key = prod.storage_key
 
+    # TODO I DON'T UNDERSTAND WHY I DID THIS ORIGINALLY, AND HAVE COMMENTED IT OUT FOR
+    #  NOW
     # This is what the Image storage_key method does, but I want to do it here so I can just read in an
     #  existing image if possible, and not waste time convolving over again
-    if prod.psf_corrected:
-        key += "_" + prod.psf_model + "_" + str(prod.psf_bins) + "_" + prod.psf_algorithm + \
-               str(prod.psf_iterations)
+    # if prod.psf_corrected:
+    #     key += "_" + prod.psf_model + "_" + str(prod.psf_bins) + "_" + prod.psf_algorithm + \
+    #            str(prod.psf_iterations)
 
-    # I don't want to let people smooth an image that has already been smoothed, that seems daft
-    if prod.smoothed:
-        raise ValueError("You cannot smooth an already smoothed image")
+    # By default, we raise an error if the input product has already been smoothed, but
+    #  we do also include an argument that allows the user to override the
+    #  behavior and smooth again.
+    if prod.smoothed and not force_resmooth:
+        raise ProductGenerationError("Input XGA Image or RateMap has already been smoothed, and "
+                                     "will not be smoothed again. To override this check you may pass "
+                                     "`force_resmooth=True`.")
 
     # Finally we add our information from the input kernel to the key, as the parse_smoothing method of Image is
     #  static we can just make use of that
-    sm, sp = Image.parse_smoothing(kernel)
-    sp = "_".join([str(k) + str(v) for k, v in sp.items()])
-    key += "_sm{sm}_sp{sp}".format(sm=sm, sp=sp)
+    smooth_name, smooth_pars = Image.parse_smoothing(kernel)
+    smooth_pars_str = "_".join([str(k) + str(v) for k, v in smooth_pars.items()])
+
+    inp_stor_key = f"{inp_stor_key}_sm{smooth_name}_sp{smooth_pars_str}"
 
     # rel_inven = inven[(inven['type'] == 'image')]
     # This narrows down the inventory to images that have the exact same info key (with smoothing information in), as
