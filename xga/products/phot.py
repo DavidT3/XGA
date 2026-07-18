@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:41 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/17/26, 10:21 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -151,7 +151,7 @@ class Image(BaseProduct):
             elif isinstance(path, list):
                 self._data = path[0]
                 self._wcs_radec = path[1]
-                self._header = path[3]
+                self._header = path[2]
             else:
                 raise TypeError("The 'path' argument must be a string path, a dictionary with 'data', 'wcs', and "
                                 "'header' keys, or a list containing a numpy array, an Astropy WCS object, and a "
