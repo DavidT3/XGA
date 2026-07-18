@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/13/26, 1:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/17/26, 11:08 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -910,14 +910,18 @@ class EventList(BaseProduct):
                                 np.sign(self.radec_sky_wcs.wcs.cdelt[1])*ang_bin_size]
 
 
-        # TODO Might need to change origin to zero?
-        min_bnd_radec = self.radec_sky_wcs.all_pix2world(x_bins[0], y_bins[0], 0)
+        # Calculate RA/Dec at the center of the first bin (origin=1) to set crval
+        #  We use the average of the first and second bin edges to get the center
+        center_x = (x_bins[0] + x_bins[1]) / 2
+        center_y = (y_bins[0] + y_bins[1]) / 2
+        min_bnd_radec = self.radec_sky_wcs.all_pix2world(center_x, center_y, 1)
+
         im_wcs.wcs.crpix = [1, 1]
         im_wcs.wcs.crval = [min_bnd_radec[0], min_bnd_radec[1]]
         im_wcs.wcs.ctype = [self.radec_sky_wcs.wcs.ctype[0], self.radec_sky_wcs.wcs.ctype[1]]
 
-        # Set the lower and upper limits of the sky pixel coordinate system
-        im_wcs.pixel_bounds = [x_lims.value, y_lims.value]
+        # Set the lower and upper limits of the image pixel coordinate system (1-based)
+        im_wcs.pixel_bounds = [(1, binned_data.shape[1]), (1, binned_data.shape[0])]
         # --------------------------------------------------------------------------
 
         # -------------- Setting up XGA Image and saving if requested --------------
