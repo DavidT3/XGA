@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/19/26, 1:01 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/19/26, 1:29 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -562,7 +562,7 @@ class EventList(BaseProduct):
     @property
     def x_col(self) -> str:
         """
-        The name of the column containing X-axis spatial coordinates.
+        The name of the event list column containing X-axis spatial coordinates.
 
         :return: The spatial X column name.
         :rtype: str
@@ -572,7 +572,8 @@ class EventList(BaseProduct):
                 self._x_col = MISSION_COL_DB[self.telescope.upper()]['x']
             else:
                 raise ValueError(f"The spatial X column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'x_col' argument when instantiating the EventList.")
+                                 f"it manually using the 'x_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.x_col' property.")
         return self._x_col
 
     @x_col.setter
@@ -582,7 +583,7 @@ class EventList(BaseProduct):
     @property
     def y_col(self) -> str:
         """
-        The name of the column containing Y-axis spatial coordinates.
+        The name of the event list column containing Y-axis spatial coordinates.
 
         :return: The spatial Y column name.
         :rtype: str
@@ -592,7 +593,8 @@ class EventList(BaseProduct):
                 self._y_col = MISSION_COL_DB[self.telescope.upper()]['y']
             else:
                 raise ValueError(f"The spatial Y column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'y_col' argument when instantiating the EventList.")
+                                 f"it manually using the 'y_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.y_col' property.")
         return self._y_col
 
     @y_col.setter
@@ -602,7 +604,7 @@ class EventList(BaseProduct):
     @property
     def en_col(self) -> str:
         """
-        The name of the column containing energy/channel information.
+        The name of the event list column containing energy/channel information.
 
         :return: The energy column name.
         :rtype: str
@@ -612,7 +614,8 @@ class EventList(BaseProduct):
                 self._en_col = MISSION_COL_DB[self.telescope.upper()]['ecol']
             else:
                 raise ValueError(f"The energy column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'en_col' argument when instantiating the EventList.")
+                                 f"it manually using the 'en_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.en_col' property.")
         return self._en_col
 
     @en_col.setter
