@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 7:52 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:07 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -15,8 +15,11 @@ from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
 from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
+from xga.exceptions import ProductGenerationError
 from xga.products.base import BaseProduct
 from xga.products.phot import Image
+
+LIM_KEY_MAP = {'sky': ('xsiz', 'ysiz'), 'det': ('detxsiz', 'detysiz'), 'raw': ('rawxsiz', 'rawysiz')}
 
 
 class EventList(BaseProduct):
@@ -767,6 +770,13 @@ class EventList(BaseProduct):
         # Check whether the telescope has information in the mission file we maintain
         has_db_info = self.telescope.upper() in MISSION_COL_DB
 
+        # Determine which database keys to look for based on position type
+        if position_type not in LIM_KEY_MAP:
+            raise KeyError(f"Value of 'position_type' ({position_type}) is not valid. It must "
+                           f"be one of {list(LIM_KEY_MAP.keys())}.")
+        else:
+            db_lim_keys = LIM_KEY_MAP[position_type]
+
         # We attempt to find the standard WCS header entries
         try:
             cdelt_keys = self._get_wcs_keys("TCDLT", x_col, y_col)
@@ -781,11 +791,6 @@ class EventList(BaseProduct):
             out_wcs.wcs.crval = [self.event_header[crval_keys[0]], self.event_header[crval_keys[1]]]
             out_wcs.wcs.ctype = [self.event_header[ctype_keys[0]], self.event_header[ctype_keys[1]]]
 
-            # Handling the coordinate limits
-            # Determine which database keys to look for based on position type
-            lim_map = {'sky': ('xsiz', 'ysiz'), 'det': ('detxsiz', 'detysiz'), 'raw': ('rawxsiz', 'rawysiz')}
-            db_lim_keys = lim_map.get(position_type, ('xsiz', 'ysiz'))
-
             max_sky_x, max_sky_y = None, None
             if has_db_info:
                 rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
@@ -796,38 +801,43 @@ class EventList(BaseProduct):
 
             # If we still don't have limits, we try TLMAX
             if max_sky_x is None:
-                x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                x_ind = [hdr_key.split('TTYPE')[-1]
+                         for hdr_key, hdr_val in self.event_header.items()
                          if hdr_val == x_col and 'TTYPE' in hdr_key]
                 if len(x_ind) == 1:
-                    max_sky_x = self.event_header.get('TLMAX' + x_ind[0], 0)
-                else:
-                    max_sky_x = 0
+                    max_sky_x = self.event_header.get('TLMAX' + x_ind[0], None)
 
             if max_sky_y is None:
-                y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                y_ind = [hdr_key.split('TTYPE')[-1]
+                         for hdr_key, hdr_val in self.event_header.items()
                          if hdr_val == y_col and 'TTYPE' in hdr_key]
                 if len(y_ind) == 1:
-                    max_sky_y = self.event_header.get('TLMAX' + y_ind[0], 0)
-                else:
-                    max_sky_y = 0
+                    max_sky_y = self.event_header.get('TLMAX' + y_ind[0], None)
 
-            out_wcs.pixel_bounds = [(0, int(max_sky_x)), (0, int(max_sky_y))]
+            # We only add pixel limits to the WCS if they are available for both
+            #  X and Y axes - otherwise any limits will be imposed at analysis time
+            #  (e.g. in generate_image, where the fallback is to find the maximum
+            #  value of the X and Y columns
+            if max_sky_x is not None and max_sky_y is not None:
+                out_wcs.pixel_bounds = [(0, int(max_sky_x)), (0, int(max_sky_y))]
 
-        except (KeyError, ValueError, TypeError):
+        except (KeyError, ValueError, TypeError) as err:
+            raise ProductGenerationError(f"The requested WCS ({position_type}) cannot "
+                                         f"be constructed for this event list: {err}")
             # Fallback to a simple Physical WCS if celestial mapping is missing
-            out_wcs = WCS(naxis=2)
-            out_wcs.wcs.crpix = [1, 1]
-            out_wcs.wcs.crval = [1, 1]
-            out_wcs.wcs.cdelt = [1, 1]
-            out_wcs.wcs.ctype = [x_col, y_col]
-            # Try to get basic limits
-            x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                     if hdr_val == x_col and 'TTYPE' in hdr_key]
-            y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                     if hdr_val == y_col and 'TTYPE' in hdr_key]
-            mx = self.event_header.get('TLMAX' + x_ind[0], 0) if len(x_ind) == 1 else 0
-            my = self.event_header.get('TLMAX' + y_ind[0], 0) if len(y_ind) == 1 else 0
-            out_wcs.pixel_bounds = [(0, int(mx)), (0, int(my))]
+            # out_wcs = WCS(naxis=2)
+            # out_wcs.wcs.crpix = [1, 1]
+            # out_wcs.wcs.crval = [1, 1]
+            # out_wcs.wcs.cdelt = [1, 1]
+            # out_wcs.wcs.ctype = [x_col, y_col]
+            # # Try to get basic limits
+            # x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+            #          if hdr_val == x_col and 'TTYPE' in hdr_key]
+            # y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+            #          if hdr_val == y_col and 'TTYPE' in hdr_key]
+            # mx = self.event_header.get('TLMAX' + x_ind[0], 0) if len(x_ind) == 1 else 0
+            # my = self.event_header.get('TLMAX' + y_ind[0], 0) if len(y_ind) == 1 else 0
+            # out_wcs.pixel_bounds = [(0, int(mx)), (0, int(my))]
 
         return out_wcs
 
@@ -1060,8 +1070,6 @@ class EventList(BaseProduct):
         if unload_header:
             del self.header
 
-    # TODO Add a 'donor_image' argument that allows the user to specify the WCS grid on which
-    #  this new image will be generated
     def generate_image(self, bin_size: Optional[Quantity] = None, x_lims: Optional[Quantity] = None,
                        y_lims: Optional[Quantity] = None, lo_en: Optional[Quantity] = None,
                        hi_en: Optional[Quantity] = None, filt_operations: Optional[dict] = None,
@@ -1196,9 +1204,6 @@ class EventList(BaseProduct):
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
         # --------------------------------------------------------
-
-        print(x_lims)
-        print(y_lims)
 
         # ------------- Setting up the binning size --------------
         # Parsing the user-specified bin size, if indeed they did specify one. If not, then we
