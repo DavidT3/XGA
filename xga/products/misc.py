@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:02 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:11 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -807,7 +807,6 @@ class EventList(BaseProduct):
             run_load = True
         else:
             run_load = False
-            # raise XGADeveloperError("No user should see this, contact an XGA developer.")
 
         # Now we try to load the requested data into this EventList instance (into memory) if necessary
         if run_load:
