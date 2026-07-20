@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 12:55 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 12:59 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -659,14 +659,17 @@ class EventList(BaseProduct):
         else:
             db_lim_keys = LIM_KEY_MAP[position_type]
 
+        # We use the position type to fetch the correct column names
+        x_col, y_col = self.get_position_type_col_names(position_type)
+
         # We attempt to find the standard WCS header entries
         try:
             rel_wcs_keys = self.get_wcs_keys(position_type)
-
-            # cdelt_keys = self._get_wcs_keys("TCDLT", x_col, y_col)
-            # crpix_keys = self._get_wcs_keys("TCRPX", x_col, y_col)
-            # crval_keys = self._get_wcs_keys("TCRVL", x_col, y_col)
-            # ctype_keys = self._get_wcs_keys("TCTYP", x_col, y_col)
+            # Split them out for convenience
+            cdelt_keys = rel_wcs_keys["TCDLT"]
+            crpix_keys = rel_wcs_keys["TCRPX"]
+            crval_keys = rel_wcs_keys["TCRVL"]
+            ctype_keys = rel_wcs_keys["TCTYP"]
 
             # Time to assemble the WCS!
             out_wcs = WCS(naxis=2)
@@ -708,20 +711,6 @@ class EventList(BaseProduct):
         except (KeyError, ValueError, TypeError) as err:
             raise ProductGenerationError(f"The requested WCS ({position_type}) cannot "
                                          f"be constructed for this event list: {err}")
-            # Fallback to a simple Physical WCS if celestial mapping is missing
-            # out_wcs = WCS(naxis=2)
-            # out_wcs.wcs.crpix = [1, 1]
-            # out_wcs.wcs.crval = [1, 1]
-            # out_wcs.wcs.cdelt = [1, 1]
-            # out_wcs.wcs.ctype = [x_col, y_col]
-            # # Try to get basic limits
-            # x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-            #          if hdr_val == x_col and 'TTYPE' in hdr_key]
-            # y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-            #          if hdr_val == y_col and 'TTYPE' in hdr_key]
-            # mx = self.event_header.get('TLMAX' + x_ind[0], 0) if len(x_ind) == 1 else 0
-            # my = self.event_header.get('TLMAX' + y_ind[0], 0) if len(y_ind) == 1 else 0
-            # out_wcs.pixel_bounds = [(0, int(mx)), (0, int(my))]
 
         return out_wcs
 
@@ -910,13 +899,13 @@ class EventList(BaseProduct):
         :param str/List[str]/None prefix: Manually specified prefix(es) of a WCS key(s); e.g. 'TCRPX'
             or ["TCDLT", "TCRPX"]. Default is None, in which case a standard set of prefixes defined by
             the keys of the `WCS_PREFIX_ALTS` constant are used.
-        :return: A dictionary, with "x" and "y" top-level keys, and standard WCS header key
-            prefixes (e.g. 'TCDLT') as lower level keys. Values are the corresponding keys for
-            the specific position type provided.
+        :return: A dictionary, with standard WCS header key prefixes (e.g. 'TCDLT') as top-level keys, and
+            "x" and "y" as lower-level keys. Values are the corresponding keys for the specific position
+            type provided.
         :rtype: dict
         """
 
-        # Checking the prefix input, and using it to decide which keys we are looking for.
+        # Checking the prefix input and using it to decide which keys we are looking for.
         if prefix is not None and isinstance(prefix, str):
             rel_prefixes = [prefix]
         elif prefix is not None and isinstance(prefix, list):
