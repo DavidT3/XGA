@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:17 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -672,10 +672,10 @@ class EventList(BaseProduct):
 
             # Time to assemble the WCS!
             out_wcs = WCS(naxis=2)
-            out_wcs.wcs.cdelt = [self.event_header[cdelt_keys[0]], self.event_header[cdelt_keys[1]]]
-            out_wcs.wcs.crpix = [self.event_header[crpix_keys[0]], self.event_header[crpix_keys[1]]]
-            out_wcs.wcs.crval = [self.event_header[crval_keys[0]], self.event_header[crval_keys[1]]]
-            out_wcs.wcs.ctype = [self.event_header[ctype_keys[0]], self.event_header[ctype_keys[1]]]
+            out_wcs.wcs.cdelt = [self.event_header[cdelt_keys['x']], self.event_header[cdelt_keys['y']]]
+            out_wcs.wcs.crpix = [self.event_header[crpix_keys['x']], self.event_header[crpix_keys['y']]]
+            out_wcs.wcs.crval = [self.event_header[crval_keys['x']], self.event_header[crval_keys['y']]]
+            out_wcs.wcs.ctype = [self.event_header[ctype_keys['x']], self.event_header[ctype_keys['y']]]
 
             max_sky_x, max_sky_y = None, None
             if has_db_info:
