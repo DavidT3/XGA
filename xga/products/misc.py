@@ -1,8 +1,8 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:42 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 12:50 PM. Copyright (c) The Contributors.
 
 import os.path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 from warnings import warn
 
 import numpy as np
@@ -14,12 +14,20 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
+from exceptions import XGADeveloperError
 from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
 from xga.exceptions import ProductGenerationError
 from xga.products.base import BaseProduct
 from xga.products.phot import Image
 
-LIM_KEY_MAP = {'sky': ('xsiz', 'ysiz'), 'det': ('detxsiz', 'detysiz'), 'raw': ('rawxsiz', 'rawysiz')}
+LIM_KEY_MAP = {'sky': ('xsiz', 'ysiz'),
+               'det': ('detxsiz', 'detysiz'),
+               'raw': ('rawxsiz', 'rawysiz')}
+
+WCS_PREFIX_ALTS = {'TCDLT': 'CDELT',
+                   'TCRPX': 'CRPIX',
+                   'TCRVL': 'CRVAL',
+                   'TCTYP': 'CTYPE'}
 
 
 class EventList(BaseProduct):
@@ -60,8 +68,6 @@ class EventList(BaseProduct):
         case XGA will attempt to determine the column name from the mission database.
     :param str evt_tab_name: The name of the FITS table containing the event data. The default is None, in which
         case XGA will attempt to determine the table name from the mission database.
-    :param dict wcs_keys: A dictionary of header key overrides for WCS information. The dictionary can contain
-        the keys 'TCDLT', 'TCRPX', 'TCRVL', 'TCTYP', 'xsiz', and 'ysiz'. The default is None.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
         path's existence or not. Default is True, in which case a check will be performed. However, if declaring
         many products from the same directory/directory structure, it can be more performant to run listdir
@@ -76,7 +82,7 @@ class EventList(BaseProduct):
                  det_x_col: Optional[str] = None, det_y_col: Optional[str] = None,
                  raw_x_col: Optional[str] = None, raw_y_col: Optional[str] = None,
                  en_col: Optional[str] = None, evt_tab_name: Optional[str] = None,
-                 wcs_keys: Optional[dict] = None, check_exists: bool = True):
+                 check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -115,8 +121,6 @@ class EventList(BaseProduct):
             case XGA will attempt to determine the column name from the mission database.
         :param str evt_tab_name: The name of the FITS table containing the event data. The default is None, in which
             case XGA will attempt to determine the table name from the mission database.
-        :param dict wcs_keys: A dictionary of header key overrides for WCS information. The dictionary can contain
-            the keys 'TCDLT', 'TCRPX', 'TCRVL', 'TCTYP', 'xsiz', and 'ysiz'. The default is None.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
             path's existence or not. Default is True, in which case a check will be performed. However, if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
@@ -142,7 +146,6 @@ class EventList(BaseProduct):
         self._raw_y_col = raw_y_col
         self._en_col = en_col
         self._evt_tab_name = evt_tab_name
-        self._wcs_key_overrides = wcs_keys if wcs_keys is not None else {}
 
         # These attributes will store information about the currently loaded data, but also all the data that COULD
         #  be loaded. The idea being that we can tightly control which columns are being loaded and presented as
@@ -637,83 +640,7 @@ class EventList(BaseProduct):
     def evt_tab_name(self, value: str):
         self._evt_tab_name = value
 
-    @property
-    def wcs_cdelt_keys(self) -> Tuple[str, str]:
-        """
-        The header keys for the WCS CDELT information.
-
-        :return: A tuple of (X key, Y key).
-        :rtype: Tuple[str, str]
-        """
-        return self._get_wcs_keys('TCDLT')
-
-    @property
-    def wcs_crpix_keys(self) -> Tuple[str, str]:
-        """
-        The header keys for the WCS CRPIX information.
-
-        :return: A tuple of (X key, Y key).
-        :rtype: Tuple[str, str]
-        """
-        return self._get_wcs_keys('TCRPX')
-
-    @property
-    def wcs_crval_keys(self) -> Tuple[str, str]:
-        """
-        The header keys for the WCS CRVAL information.
-
-        :return: A tuple of (X key, Y key).
-        :rtype: Tuple[str, str]
-        """
-        return self._get_wcs_keys('TCRVL')
-
-    @property
-    def wcs_ctype_keys(self) -> Tuple[str, str]:
-        """
-        The header keys for the WCS CTYPE information.
-
-        :return: A tuple of (X key, Y key).
-        :rtype: Tuple[str, str]
-        """
-        return self._get_wcs_keys('TCTYP')
-
     # --------- Define internal functions ---------
-    def _get_wcs_keys(self, prefix: str, x_col: str, y_col: str) -> Tuple[str, str]:
-        """
-        Internal helper method to determine WCS header keys for arbitrary columns.
-
-        :param str prefix: The prefix of the WCS key (e.g. 'TCRPX').
-        :param str x_col: The name of the column for the X-axis.
-        :param str y_col: The name of the column for the Y-axis.
-        :return: A tuple of (X key, Y key).
-        :rtype: Tuple[str, str]
-        """
-        # Check overrides first - but only if the columns match the default sky_x_col/sky_y_col
-        if prefix in self._wcs_key_overrides and x_col == self.sky_x_col and y_col == self.sky_y_col:
-            # We expect a two-element list/tuple in the overrides
-            return tuple(self._wcs_key_overrides[prefix])
-
-        # We attempt to find the keys using TTYPE indices
-        x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == x_col and 'TTYPE' in hdr_key]
-        y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == y_col and 'TTYPE' in hdr_key]
-
-        if len(x_ind) == 1 and len(y_ind) == 1:
-            # We try the standard prefix + index first
-            x_key = prefix + x_ind[0]
-            y_key = prefix + y_ind[0]
-
-            # If that's not in the header, we try the prefix minus the 'T' + index
-            if x_key not in self.event_header:
-                x_key = prefix[1:] + x_ind[0]
-            if y_key not in self.event_header:
-                y_key = prefix[1:] + y_ind[0]
-
-            return x_key, y_key
-        else:
-            raise KeyError(f"The WCS keys for the {prefix} prefix and columns {x_col}/{y_col} cannot be determined.")
-
     def _build_wcs(self, x_col: str, y_col: str, position_type: str = 'sky') -> wcs.WCS:
         """
         Internal factory method to construct a WCS object for arbitrary columns and position types.
@@ -939,6 +866,130 @@ class EventList(BaseProduct):
                                             " type {t}) is associated with {s}.".format(f=self.path, s=self.src_name,
                                                                                         t=self.type))
 
+    # --------- Define external functions ---------
+    def get_position_type_col_names(self, position_type: str) -> Tuple[str, str]:
+        """
+        Get method to retrieve the event list data table column names (both X and Y) which
+        are currently assigned to the input position type. The input position type
+        may be 'sky', 'det', or 'raw'.
+
+        :param None position_type: The position type to fetch event list data table column
+            names for; either 'sky', 'det', or 'raw'.
+        :return: A tuple of the form (<x column name>, <y column name>)
+        :rtype: Tuple[str, str]
+        """
+        position_type = position_type.lower()
+        if position_type not in LIM_KEY_MAP:
+            raise KeyError(f"Value of 'position_type' ({position_type}) is not valid. It must "
+                           f"be one of {list(LIM_KEY_MAP.keys())}.")
+
+        # Attempting to determine the columns to use for image generation
+        if position_type == 'sky':
+            x_col, y_col = self.sky_x_col, self.sky_y_col
+        elif position_type == 'det':
+            x_col, y_col = self.det_x_col, self.det_y_col
+        elif position_type == 'raw':
+            x_col, y_col = self.raw_x_col, self.raw_y_col
+        else:
+            raise XGADeveloperError(f"The {position_type} position type has been added "
+                                    f"to the LIM_KEY_MAP constant, but not this function. "
+                                    f"Contact the developers.")
+
+        return x_col, y_col
+
+    def get_wcs_keys(self, position_type: str, prefix: Optional[Union[str, List[str]]] = None) -> dict:
+        """
+        Get method to fetch the names of the FITS header keys required to construct a WCS, for the
+        input position type. This method tries several different formats for the necessary key
+        names, and will raise an error if the key cannot be found.
+
+        To search for a specific key, pass the prefix(es) to the 'prefix' argument; e.g. `prefix="TCDLT"`, or
+        `prefix=["TCDLT", "TCRPX"]`.
+
+        :param str position_type: The coordinate system type, 'sky', 'det', or 'raw'.
+        :param str/List[str]/None prefix: Manually specified prefix(es) of a WCS key(s); e.g. 'TCRPX'
+            or ["TCDLT", "TCRPX"]. Default is None, in which case a standard set of prefixes defined by
+            the keys of the `WCS_PREFIX_ALTS` constant are used.
+        :return: A dictionary, with "x" and "y" top-level keys, and standard WCS header key
+            prefixes (e.g. 'TCDLT') as lower level keys. Values are the corresponding keys for
+            the specific position type provided.
+        :rtype: dict
+        """
+
+        # Checking the prefix input, and using it to decide which keys we are looking for.
+        if prefix is not None and isinstance(prefix, str):
+            rel_prefixes = [prefix]
+        elif prefix is not None and isinstance(prefix, list):
+            rel_prefixes = prefix
+        elif prefix is not None:
+            raise TypeError("The 'prefix' argument must be either a string or a list of strings.")
+        else:
+            rel_prefixes = list(WCS_PREFIX_ALTS.keys())
+
+        # Use the position type supplied by the user to fetch the correct x and y col names
+        x_col, y_col = self.get_position_type_col_names(position_type)
+
+        # We attempt to find the keys using TTYPE indices
+        # For the x-col
+        x_ind = [hdr_key.split('TTYPE')[-1]
+                 for hdr_key, hdr_val in self.event_header.items()
+                 if hdr_val == x_col and 'TTYPE' in hdr_key]
+        # Then the y-col
+        y_ind = [hdr_key.split('TTYPE')[-1]
+                 for hdr_key, hdr_val in self.event_header.items()
+                 if hdr_val == y_col and 'TTYPE' in hdr_key]
+
+        ret_keys = {"x": {}, "y": {}}
+        if len(x_ind) == 1 and len(y_ind) == 1:
+            for cur_prefix in rel_prefixes:
+                cur_all_x_key_attempts = []
+                cur_all_y_key_attempts = []
+
+                # We try the standard prefix + index first
+                cur_x_key = cur_prefix + x_ind[0]
+                cur_y_key = cur_prefix + y_ind[0]
+                cur_all_x_key_attempts.append(cur_x_key)
+                cur_all_y_key_attempts.append(cur_y_key)
+
+                # If that's not in the header, we try the prefix minus the 'T' + index
+                if cur_x_key not in self.event_header:
+                    cur_x_key = cur_prefix[1:] + x_ind[0]
+                    cur_all_x_key_attempts.append(cur_x_key)
+                else:
+                    ret_keys["x"][cur_prefix] = cur_x_key
+                if cur_y_key not in self.event_header:
+                    cur_y_key = cur_prefix[1:] + y_ind[0]
+                    cur_all_y_key_attempts.append(cur_y_key)
+                else:
+                    ret_keys["y"][cur_prefix] = cur_y_key
+
+                if cur_prefix in ret_keys["x"] and cur_prefix in ret_keys["y"]:
+                    continue
+
+                # Second fallback is to check some slightly different names for these
+                #  WCS keys that have been used by older missions
+                if cur_x_key not in self.event_header and cur_prefix in WCS_PREFIX_ALTS:
+                    cur_x_key = WCS_PREFIX_ALTS[cur_prefix] + x_ind[0]
+                    cur_all_x_key_attempts.append(cur_x_key)
+                else:
+                    ret_keys["x"][cur_prefix] = cur_x_key
+
+                if cur_y_key not in self.event_header and cur_prefix in WCS_PREFIX_ALTS:
+                    cur_y_key = WCS_PREFIX_ALTS[cur_prefix] + y_ind[0]
+                    cur_all_y_key_attempts.append(cur_y_key)
+                else:
+                    ret_keys["y"][cur_prefix] = cur_y_key
+
+                # Now if the keys aren't there, we raise an error
+                if cur_x_key not in self.event_header:
+                    raise KeyError(f"The {cur_prefix}-type key for {x_col} cannot be found in the events "
+                                   f"header. The following were tested; {cur_all_x_key_attempts}")
+                if cur_y_key not in self.event_header:
+                    raise KeyError(f"The {cur_prefix}-type key for {y_col} cannot be found in the events "
+                                   f"header. The following were tested; {cur_all_y_key_attempts}")
+
+        return ret_keys
+
     def get_columns_from_data(self, col_names: List[str]) -> pd.DataFrame:
         """
         This method allows you to retrieve specific columns from the event list table, without loading the whole table
@@ -1060,32 +1111,16 @@ class EventList(BaseProduct):
         :return: An XGA Image object made up of the spatially binned event data and associated WCS information.
         :rtype: Image
         """
+        position_type = position_type.lower()
+
         # Determine the position type to use
         if position_type is None and self.telescope.upper() in MISSION_COL_DB:
-            position_type = MISSION_COL_DB[self.telescope.upper()].get('imagecoord', 'SKY').lower()
-            # XGA uses 'sky' and 'det' but XSelect DB uses 'SKY' and 'DETECTOR'
-            if position_type == 'detector':
-                position_type = 'det'
+            position_type = MISSION_COL_DB[self.telescope.upper()].get('imagecoord').lower()
         elif position_type is None:
             position_type = 'sky'
 
-        position_type = position_type.lower()
-        if position_type not in ['sky', 'det', 'raw']:
-            raise ValueError(f"'{position_type}' is not a valid position type, please use 'sky', 'det', or 'raw'.")
-
-        # Attempting to determine the columns to use for image generation
-        try:
-            if position_type == 'sky':
-                x_col, y_col = self.sky_x_col, self.sky_y_col
-            elif position_type == 'det':
-                x_col, y_col = self.det_x_col, self.det_y_col
-            elif position_type == 'raw':
-                x_col, y_col = self.raw_x_col, self.raw_y_col
-            en_col = self.en_col
-        except ValueError as err:
-            # We raise a ValueError here because it is a configuration problem, the user has not provided
-            #  enough information for us to know which columns to use
-            raise ValueError(f"Image generation cannot proceed: {err}")
+        x_col, y_col = self.get_position_type_col_names(position_type)
+        en_col = self.en_col
 
         # If the telescope is in the mission database, we can check for extra information
         if self.telescope.upper() in MISSION_COL_DB:
