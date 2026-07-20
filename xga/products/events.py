@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 5:21 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -185,8 +185,17 @@ class EventList(BaseProduct):
 
         # We have to do the same for the instrument
         if instrument is None:
+            # TODO Figure out why on earth IXPE completely bucked the usual
+            #  setup for this.
+            # TODO This is another good argument for sub-classed event lists (see issue #1534)
+            if self.telescope.upper() == "IXPE":
+                inst_key_name = 'DETNAM'
+            else:
+                inst_key_name = 'INSTRUME'
+
+            # Try to pull out instrument name information
             try:
-                self._inst = self.header['INSTRUME']
+                self._inst = self.header[inst_key_name]
             except KeyError:
                 # Same bodge as above
                 self._evt_tab_name = 'EVENTS'
@@ -215,15 +224,27 @@ class EventList(BaseProduct):
         # And now we know we have the right event table name, we'll automatically determine the ObsID and instrument
         #  from the header, if they haven't been passed by the user.
         if obs_id is None:
-            try:
-                self._obs_id = self.header['OBS_ID']
-            except KeyError:
-                try:
-                    self._obs_id = self.event_header['OBS_ID']
-                # This is trying to catch a behaviour that might be unique to Einstein
-                except KeyError:
-                    self._obs_id = self.event_header['XS-OBSID']
+            # TODO Another motivator for sub-classed event lists (see issue #1534)
+            # XS-OBSID may be unique to Einstein
+            # SEQNUM may be unique to ASCA
+            # OBS_ID is very much the most widely used.
+            poss_oi_key_names = ['OBS_ID', 'XS-OBSID', 'SEQNUM']
 
+            # Iterating through the possible ObsID key names to try
+            for cur_oi_key_name in poss_oi_key_names:
+                # Checking to see if the possible ObsID key name we are currently testing
+                #  is present in the overall file header - if yes then we'll break and
+                #  move on with the rest of the init.
+                if cur_oi_key_name in self.header:
+                    self._obs_id = self.header[cur_oi_key_name]
+                    break
+
+                # If we couldn't find the ObsID key name in the primary header, we'll try
+                #  the event table header. If that then fails the loop will continue
+                #  to the next possible ObsID key name.
+                elif cur_oi_key_name in self.event_header:
+                    self._obs_id = self.event_header[cur_oi_key_name]
+                    break
 
         # Checking the formatting of the obs_ids argument
         if obs_ids is not None and (not isinstance(obs_ids, List) or
@@ -410,6 +431,9 @@ class EventList(BaseProduct):
                 if len(ecol_ttype_ind) > 1:
                     raise KeyError("Multiple TTYPE entries found for the energy column 'coordinate system' "
                                    "in the event table header.")
+                elif len(ecol_ttype_ind) == 0:
+                    raise KeyError("No TTYPE entry found for the energy column 'coordinate system' in the event "
+                                   "table header.")
                 else:
                     ecol_ttype_ind = ecol_ttype_ind[0]
 
@@ -428,6 +452,9 @@ class EventList(BaseProduct):
                         min_ecol = self.event_header['TLMIN' + ecol_ttype_ind]
                     else:
                         min_ecol = 0
+
+                print(min_ecol)
+                print(max_ecol)
 
                 # TODO Will need to implement said default values.
                 raise NotImplementedError("Default values for 'ev_per_channel' are not yet implemented, please pass "
