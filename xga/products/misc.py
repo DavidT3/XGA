@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:07 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:17 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -367,6 +367,11 @@ class EventList(BaseProduct):
             for the primary coordinate (usually sky) coordinate system x-axis, and the second being for the y-axis.
         :rtype: Tuple[Quantity, Quantity]
         """
+        if self.radec_sky_wcs.pixel_bounds is None:
+            raise ValueError("The Sky coordinate system pixel limits could not be automatically determined from the "
+                             "FITS header of this EventList - instead, we suggest finding the minimum and maximum "
+                             "values of the relevant X and Y columns.")
+
         return (Quantity(self.radec_sky_wcs.pixel_bounds[0], 'pix'),
                     Quantity(self.radec_sky_wcs.pixel_bounds[1], 'pix'))
 
@@ -1184,7 +1189,13 @@ class EventList(BaseProduct):
             x_lims[0] = np.floor(x_lims[0])
             x_lims[1] = np.ceil(x_lims[1])
         elif x_lims is None:
-            x_lims = self.sky_pix_lims[0]
+            try:
+                x_lims = self.sky_pix_lims[0]
+            except ValueError:
+                # The final fallback - finding upper and lower limits using the data.
+                #  We deliberately use the unfiltered data here, as we would rather
+                #  err on the side of caution and have wider limits
+                x_lims = (self.data[x_col].min(), self.data[x_col].max())
         #
         x_lims = x_lims.astype(int)
 
@@ -1199,7 +1210,13 @@ class EventList(BaseProduct):
             y_lims[0] = np.floor(y_lims[0])
             y_lims[1] = np.ceil(y_lims[1])
         elif y_lims is None:
-            y_lims = self.sky_pix_lims[1]
+            try:
+                y_lims = self.sky_pix_lims[1]
+            except ValueError:
+                # The final fallback - finding upper and lower limits using the data.
+                #  We deliberately use the unfiltered data here, as we would rather
+                #  err on the side of caution and have wider limits
+                y_lims = (self.data[y_col].min(), self.data[y_col].max())
         #
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
