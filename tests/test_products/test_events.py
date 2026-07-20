@@ -1,11 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 6:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 7:14 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
 
 from astropy.wcs import WCS
 
+from xga.exceptions import ProductGenerationError
 from xga.products.events import EventList
 from xga.products.phot import Image
 from .. import MISC_OUTPUT_TESTS
@@ -64,9 +65,9 @@ TEST_EVTS = {
     "XMM_MOS2": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501M2S002MIEVLI0000.FTZ",
                  "tele": "xmm", "inst": "emos2", "imaging": True},
     "XMM_RGS1": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501R1S004EVENLI0000.FTZ",
-                 "tele": "xmm", "inst": "rgs1", "imaging": True},
+                 "tele": "xmm", "inst": "rgs1", "imaging": False},
     "XMM_RGS2": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501R2S005EVENLI0000.FTZ",
-                 "tele": "xmm", "inst": "rgs2", "imaging": True},
+                 "tele": "xmm", "inst": "rgs2", "imaging": False},
     "XRISM_XTEND": {"path": "xrism/data/obs/3/300049010/xtend/event_cl/xa300049010xtd_p032000010_cl.evt.gz",
                     "tele": "xrism", "inst": "xtend", "imaging": True},
     "XRISM_Resolve": {"path": "xrism/data/obs/3/300049010/resolve/event_cl/xa300049010rsl_p0px5000_cl.evt.gz",
@@ -117,7 +118,8 @@ class TestEventListImageGeneration(unittest.TestCase):
                 raise e
         else:
             # For non-imaging missions, we expect a ValueError.
-            with self.assertRaises(ValueError, msg=f"Image generation should have failed for non-imaging mission {name}"):
+            with self.assertRaises((ValueError, ProductGenerationError),
+                                   msg=f"Image generation should have failed for non-imaging mission {name}"):
                 evt.generate_image()
 
 
