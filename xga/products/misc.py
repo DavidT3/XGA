@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:11 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:15 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -14,9 +14,8 @@ from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
 
-from exceptions import XGADeveloperError
 from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
-from xga.exceptions import ProductGenerationError
+from xga.exceptions import ProductGenerationError, XGADeveloperError
 from xga.products.base import BaseProduct
 from xga.products.phot import Image
 
