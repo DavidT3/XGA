@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 12:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 12:55 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -641,12 +641,10 @@ class EventList(BaseProduct):
         self._evt_tab_name = value
 
     # --------- Define internal functions ---------
-    def _build_wcs(self, x_col: str, y_col: str, position_type: str = 'sky') -> wcs.WCS:
+    def _build_wcs(self, position_type: str = 'sky') -> wcs.WCS:
         """
         Internal factory method to construct a WCS object for arbitrary columns and position types.
 
-        :param str x_col: The name of the column for the X-axis.
-        :param str y_col: The name of the column for the Y-axis.
         :param str position_type: The coordinate system type, 'sky', 'det', or 'raw'. Default is 'sky'.
         :return: A constructed Astropy WCS object.
         :rtype: wcs.WCS
@@ -663,10 +661,12 @@ class EventList(BaseProduct):
 
         # We attempt to find the standard WCS header entries
         try:
-            cdelt_keys = self._get_wcs_keys("TCDLT", x_col, y_col)
-            crpix_keys = self._get_wcs_keys("TCRPX", x_col, y_col)
-            crval_keys = self._get_wcs_keys("TCRVL", x_col, y_col)
-            ctype_keys = self._get_wcs_keys("TCTYP", x_col, y_col)
+            rel_wcs_keys = self.get_wcs_keys(position_type)
+
+            # cdelt_keys = self._get_wcs_keys("TCDLT", x_col, y_col)
+            # crpix_keys = self._get_wcs_keys("TCRPX", x_col, y_col)
+            # crval_keys = self._get_wcs_keys("TCRVL", x_col, y_col)
+            # ctype_keys = self._get_wcs_keys("TCTYP", x_col, y_col)
 
             # Time to assemble the WCS!
             out_wcs = WCS(naxis=2)
@@ -939,7 +939,7 @@ class EventList(BaseProduct):
                  for hdr_key, hdr_val in self.event_header.items()
                  if hdr_val == y_col and 'TTYPE' in hdr_key]
 
-        ret_keys = {"x": {}, "y": {}}
+        ret_keys = {cur_prefix: {} for cur_prefix in rel_prefixes}
         if len(x_ind) == 1 and len(y_ind) == 1:
             for cur_prefix in rel_prefixes:
                 cur_all_x_key_attempts = []
@@ -956,14 +956,14 @@ class EventList(BaseProduct):
                     cur_x_key = cur_prefix[1:] + x_ind[0]
                     cur_all_x_key_attempts.append(cur_x_key)
                 else:
-                    ret_keys["x"][cur_prefix] = cur_x_key
+                    ret_keys[cur_prefix]["x"] = cur_x_key
                 if cur_y_key not in self.event_header:
                     cur_y_key = cur_prefix[1:] + y_ind[0]
                     cur_all_y_key_attempts.append(cur_y_key)
                 else:
-                    ret_keys["y"][cur_prefix] = cur_y_key
+                    ret_keys[cur_prefix]["y"] = cur_y_key
 
-                if cur_prefix in ret_keys["x"] and cur_prefix in ret_keys["y"]:
+                if "x" in ret_keys[cur_prefix] and "y" in ret_keys[cur_prefix]:
                     continue
 
                 # Second fallback is to check some slightly different names for these
@@ -972,21 +972,30 @@ class EventList(BaseProduct):
                     cur_x_key = WCS_PREFIX_ALTS[cur_prefix] + x_ind[0]
                     cur_all_x_key_attempts.append(cur_x_key)
                 else:
-                    ret_keys["x"][cur_prefix] = cur_x_key
+                    ret_keys[cur_prefix]["x"] = cur_x_key
 
                 if cur_y_key not in self.event_header and cur_prefix in WCS_PREFIX_ALTS:
                     cur_y_key = WCS_PREFIX_ALTS[cur_prefix] + y_ind[0]
                     cur_all_y_key_attempts.append(cur_y_key)
                 else:
-                    ret_keys["y"][cur_prefix] = cur_y_key
+                    ret_keys[cur_prefix]["y"] = cur_y_key
+
+                if "x" in ret_keys[cur_prefix] and "y" in ret_keys[cur_prefix]:
+                    continue
 
                 # Now if the keys aren't there, we raise an error
                 if cur_x_key not in self.event_header:
                     raise KeyError(f"The {cur_prefix}-type key for {x_col} cannot be found in the events "
                                    f"header. The following were tested; {cur_all_x_key_attempts}")
+                else:
+                    ret_keys[cur_prefix]["x"] = cur_x_key
+
                 if cur_y_key not in self.event_header:
                     raise KeyError(f"The {cur_prefix}-type key for {y_col} cannot be found in the events "
                                    f"header. The following were tested; {cur_all_y_key_attempts}")
+                else:
+                    ret_keys[cur_prefix]["y"] = cur_y_key
+
 
         return ret_keys
 
