@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 12:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:00 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -342,7 +342,7 @@ class EventList(BaseProduct):
         """
         # If we haven't already, we need to construct the WCS now
         if self._radec_sky_wcs is None:
-            self._radec_sky_wcs = self._build_wcs(self.sky_x_col, self.sky_y_col, 'sky')
+            self._radec_sky_wcs = self._build_wcs('sky')
         return self._radec_sky_wcs
 
     @property
@@ -1290,7 +1290,7 @@ class EventList(BaseProduct):
             binned_data = np.histogram2d(rel_evt_data[y_col], rel_evt_data[x_col], bins=(y_bins, x_bins))[0]
 
             # Setting up the new WCS - we use the internal build method for the relevant columns
-            base_wcs = self._build_wcs(x_col, y_col, position_type)
+            base_wcs = self._build_wcs(position_type)
             im_wcs = WCS(naxis=2)
             im_wcs.wcs.cdelt = [np.sign(base_wcs.wcs.cdelt[0])*ang_bin_size,
                                     np.sign(base_wcs.wcs.cdelt[1])*ang_bin_size]
