@@ -1163,7 +1163,7 @@
     "rawysiz": "TLMAX",
     "phamax": "PHACHANS",
     "gti": "ALLGTI",
-    "events": "PHOTON_LIST",
+    "events": "EVENTS",
     "timeorder": "no",
     "instruments": "AO-B4",
     "imagecoord": "SKY",
