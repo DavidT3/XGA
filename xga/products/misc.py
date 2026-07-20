@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:20 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:42 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -199,8 +199,8 @@ class EventList(BaseProduct):
         # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT, for
         #  instance, calls it STDEVT - obviously very important that we get this right
         if self.telescope.upper() not in MISSION_COL_DB:
-            warn("The {t} telescope cannot be found in the XSELECT mission database file, so the name of the table "
-                 "containing event information is assumed to be 'EVENTS'.".format(t=self.telescope), stacklevel=2)
+            warn(f"The {self.telescope} telescope cannot be found in the XSELECT mission database file, so "
+                 f"the name of the table containing event information is assumed to be 'EVENTS'.", stacklevel=2)
             self._evt_tab_name = "EVENTS"
         # In cases where individual instruments have entries for this, we'll use them
         elif (self._inst.upper() in MISSION_COL_DB[self.telescope.upper()] and
@@ -308,9 +308,9 @@ class EventList(BaseProduct):
     @property
     def data(self) -> pd.DataFrame:
         """
-        Property getter allowing access to the astropy fits header object of this event list.
+        Returns the primary events table included in this event list.
 
-        :return: The header of the primary data table of the event list.
+        :return: The contents of the primary data table of the event list.
         :rtype: pd.DataFrame
         """
         # If the header attribute is None then we know we have to read the header in
@@ -332,8 +332,7 @@ class EventList(BaseProduct):
     @property
     def radec_sky_wcs(self) -> wcs.WCS:
         """
-        WCS information that relates this event list's 'sky' coordinate system (or the system that is primary and
-        used for imaging positions) to RA-Dec coordinates.
+        WCS information that relates this event list's 'sky' coordinate system to RA-Dec coordinates.
 
         :return: The WCS information that relates this event list's 'sky' coordinate system to RA-Dec coordinates.
         :rtype: astropy.wcs.WCS
@@ -346,9 +345,11 @@ class EventList(BaseProduct):
     @property
     def deg_per_sky(self) -> Quantity:
         """
-        Uses the Sky-RA/Dec WCS (accessible through the radec_sky_wcs property) to provide the angular
-        size of a pixel in the sky coordinate system - both x and y directions are returned, though they
-        are often the same.
+        The angular size of a 'pixel' in the sky coordinate system, in both the x and y directions (though
+        they are often the same).
+
+        This information is extracted from the the Sky-RA/Dec WCS (accessible through the 'radec_sky_wcs'
+        property of this EventList).
 
         :return: A two-entry non-scalar property, with the first entry being the x-direction sky pixel
             scale and the second being the y-direction sky pixel scale.
@@ -360,8 +361,10 @@ class EventList(BaseProduct):
     @property
     def sky_pix_lims(self) -> Tuple[Quantity, Quantity]:
         """
-        The X and Y pixel limits of the sky coordinate system (or the system that is primary and
-        used for imaging positions).
+        The X and Y pixel limits of the sky coordinate system. As this information
+        is extracted from the 'radec_sky_wcs' of this EventList instance, and not all
+        event lists contain the necessary FITS header entries to determine coordinate
+        system limits, a ValueError can be raised.
 
         :return: Two non-scalar quantities, with the first representing the lower and upper allowed values
             for the primary coordinate (usually sky) coordinate system x-axis, and the second being for the y-axis.
@@ -424,8 +427,9 @@ class EventList(BaseProduct):
                     else:
                         min_ecol = 0
 
-                raise NotImplementedError("Default values for 'ev_per_channel' are not yet implemented, please pass"
-                                          " a value to the 'ev_per_channel' argument when instantiating the EventList.")
+                # TODO Will need to implement said default values.
+                raise NotImplementedError("Default values for 'ev_per_channel' are not yet implemented, please pass "
+                                          "a value to the 'ev_per_channel' argument when instantiating the EventList.")
 
         return self._ev_per_channel
 
@@ -442,9 +446,9 @@ class EventList(BaseProduct):
         """
         # Validity checks on the input
         if not isinstance(new_val, Quantity):
-            raise ValueError("The 'new_val' argument must be an astropy quantity.")
+            raise ValueError("The 'new_val' argument must be an Astropy quantity.")
         elif not new_val.unit.is_equivalent('eV/chan'):
-            raise UnitConversionError("The 'new_val' argument must be in units of eV/chan.")
+            raise UnitConversionError("The 'new_val' argument must be convertible to units of 'eV/chan'.")
 
         # Converting to the expected units
         self._ev_per_channel = new_val.to('eV/chan')
@@ -672,58 +676,6 @@ class EventList(BaseProduct):
         :rtype: Tuple[str, str]
         """
         return self._get_wcs_keys('TCTYP')
-
-    @property
-    def wcs_xsiz_key(self) -> str:
-        """
-        The header key for the maximum size of the X coordinate system.
-
-        :return: The X size key name.
-        :rtype: str
-        """
-        # Checks overrides first
-        if 'xsiz' in self._wcs_key_overrides:
-            return self._wcs_key_overrides['xsiz']
-
-        # Then checks mission database
-        if self.telescope.upper() in MISSION_COL_DB:
-            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-            if 'xsiz' in rel_miss_info:
-                return rel_miss_info['xsiz']
-
-        # Otherwise defaults to TLMAX + index
-        x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == self.sky_x_col and 'TTYPE' in hdr_key]
-        if len(x_ind) == 1:
-            return 'TLMAX' + x_ind[0]
-        else:
-            return None
-
-    @property
-    def wcs_ysiz_key(self) -> str:
-        """
-        The header key for the maximum size of the Y coordinate system.
-
-        :return: The Y size key name.
-        :rtype: str
-        """
-        # Checks overrides first
-        if 'ysiz' in self._wcs_key_overrides:
-            return self._wcs_key_overrides['ysiz']
-
-        # Then checks mission database
-        if self.telescope.upper() in MISSION_COL_DB:
-            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-            if 'ysiz' in rel_miss_info:
-                return rel_miss_info['ysiz']
-
-        # Otherwise defaults to TLMAX + index
-        y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == self.sky_y_col and 'TTYPE' in hdr_key]
-        if len(y_ind) == 1:
-            return 'TLMAX' + y_ind[0]
-        else:
-            return None
 
     # --------- Define internal functions ---------
     def _get_wcs_keys(self, prefix: str, x_col: str, y_col: str) -> Tuple[str, str]:
