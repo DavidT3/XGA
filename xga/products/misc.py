@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:17 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:20 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -1195,7 +1195,7 @@ class EventList(BaseProduct):
                 # The final fallback - finding upper and lower limits using the data.
                 #  We deliberately use the unfiltered data here, as we would rather
                 #  err on the side of caution and have wider limits
-                x_lims = (self.data[x_col].min(), self.data[x_col].max())
+                x_lims = Quantity([self.data[x_col].min(), self.data[x_col].max()], 'pix')
         #
         x_lims = x_lims.astype(int)
 
@@ -1216,7 +1216,7 @@ class EventList(BaseProduct):
                 # The final fallback - finding upper and lower limits using the data.
                 #  We deliberately use the unfiltered data here, as we would rather
                 #  err on the side of caution and have wider limits
-                y_lims = (self.data[y_col].min(), self.data[y_col].max())
+                y_lims = Quantity([self.data[y_col].min(), self.data[y_col].max()], 'pix')
         #
         x_lims = x_lims.astype(int)
         y_lims = y_lims.astype(int)
