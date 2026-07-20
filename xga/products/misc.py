@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:00 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:02 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -459,9 +459,9 @@ class EventList(BaseProduct):
     @property
     def sky_x_col(self) -> str:
         """
-        The name of the event list column containing the Sky X coordinates.
+        The name of the event list column containing the SKYX coordinates.
 
-        :return: The sky X column name.
+        :return: The SKYX column name.
         :rtype: str
         """
         if self._sky_x_col is None:
@@ -482,9 +482,9 @@ class EventList(BaseProduct):
     @property
     def sky_y_col(self) -> str:
         """
-        The name of the event list column containing the Sky Y coordinates.
+        The name of the event list column containing the SKYY coordinates.
 
-        :return: The sky Y column name.
+        :return: The SKYY column name.
         :rtype: str
         """
         if self._sky_y_col is None:
@@ -505,9 +505,9 @@ class EventList(BaseProduct):
     @property
     def det_x_col(self) -> str:
         """
-        The name of the event list column containing the Detector X coordinates.
+        The name of the event list column containing the DETX coordinates.
 
-        :return: The detector X column name.
+        :return: The DETX column name.
         :rtype: str
         """
         if self._det_x_col is None:
@@ -527,9 +527,9 @@ class EventList(BaseProduct):
     @property
     def det_y_col(self) -> str:
         """
-        The name of the event list column containing the Detector Y coordinates.
+        The name of the event list column containing the DETY coordinates.
 
-        :return: The detector Y column name.
+        :return: The DETY column name.
         :rtype: str
         """
         if self._det_y_col is None:
