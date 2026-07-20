@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/19/26, 1:29 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 7:52 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional
@@ -41,10 +41,18 @@ class EventList(BaseProduct):
         the mean energy difference between PI channels. The default is None, in which case the EventList
         instance uses a 'standard' value (not all missions/instruments will have a default value defined).
         Specifying a value by passing a Quantity will override any default value that may be available.
-    :param str x_col: The name of the column containing X-axis spatial coordinates. The default is None, in which
-        case XGA will attempt to determine the column name from the mission database.
-    :param str y_col: The name of the column containing Y-axis spatial coordinates. The default is None, in which
-        case XGA will attempt to determine the column name from the mission database.
+    :param str sky_x_col: The name of the column containing X-axis spatial coordinates for the sky coordinate
+        system. The default is None, in which case XGA will attempt to determine it from the mission database.
+    :param str sky_y_col: The name of the column containing Y-axis spatial coordinates for the sky coordinate
+        system. The default is None, in which case XGA will attempt to determine it from the mission database.
+    :param str det_x_col: The name of the column containing X-axis spatial coordinates for the detector coordinate
+        system. The default is None, in which case XGA will attempt to determine it from the mission database.
+    :param str det_y_col: The name of the column containing Y-axis spatial coordinates for the detector coordinate
+        system. The default is None, in which case XGA will attempt to determine it from the mission database.
+    :param str raw_x_col: The name of the column containing X-axis spatial coordinates for the raw coordinate
+        system. The default is None, in which case XGA will attempt to determine it from the mission database.
+    :param str raw_y_col: The name of the column containing Y-axis spatial coordinates for the raw coordinate
+        system. The default is None, in which case XGA will attempt to determine it from the mission database.
     :param str en_col: The name of the column containing energy/channel information. The default is None, in which
         case XGA will attempt to determine the column name from the mission database.
     :param str evt_tab_name: The name of the FITS table containing the event data. The default is None, in which
@@ -61,9 +69,11 @@ class EventList(BaseProduct):
                  stdout_str: Optional[str] = None, stderr_str: Optional[str] = None, gen_cmd: Optional[str] = None,
                  telescope: Optional[str] = None, obs_ids: Optional[List[str]] = None, force_remote: bool = False,
                  fsspec_kwargs: Optional[dict] = None, energy_per_channel: Optional[Quantity] = None,
-                 x_col: Optional[str] = None, y_col: Optional[str] = None, en_col: Optional[str] = None,
-                 evt_tab_name: Optional[str] = None, wcs_keys: Optional[dict] = None,
-                 check_exists: bool = True):
+                 sky_x_col: Optional[str] = None, sky_y_col: Optional[str] = None,
+                 det_x_col: Optional[str] = None, det_y_col: Optional[str] = None,
+                 raw_x_col: Optional[str] = None, raw_y_col: Optional[str] = None,
+                 en_col: Optional[str] = None, evt_tab_name: Optional[str] = None,
+                 wcs_keys: Optional[dict] = None, check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -86,10 +96,18 @@ class EventList(BaseProduct):
             the mean energy difference between PI channels. The default is None, in which case the EventList
             instance uses a 'standard' value (not all missions/instruments will have a default value defined).
             Specifying a value by passing a Quantity will override any default value that may be available.
-        :param str x_col: The name of the column containing X-axis spatial coordinates. The default is None, in which
-            case XGA will attempt to determine the column name from the mission database.
-        :param str y_col: The name of the column containing Y-axis spatial coordinates. The default is None, in which
-            case XGA will attempt to determine the column name from the mission database.
+        :param str sky_x_col: The name of the column containing X-axis spatial coordinates for the sky coordinate
+            system. The default is None, in which case XGA will attempt to determine it from the mission database.
+        :param str sky_y_col: The name of the column containing Y-axis spatial coordinates for the sky coordinate
+            system. The default is None, in which case XGA will attempt to determine it from the mission database.
+        :param str det_x_col: The name of the column containing X-axis spatial coordinates for the detector coordinate
+            system. The default is None, in which case XGA will attempt to determine it from the mission database.
+        :param str det_y_col: The name of the column containing Y-axis spatial coordinates for the detector coordinate
+            system. The default is None, in which case XGA will attempt to determine it from the mission database.
+        :param str raw_x_col: The name of the column containing X-axis spatial coordinates for the raw coordinate
+            system. The default is None, in which case XGA will attempt to determine it from the mission database.
+        :param str raw_y_col: The name of the column containing Y-axis spatial coordinates for the raw coordinate
+            system. The default is None, in which case XGA will attempt to determine it from the mission database.
         :param str en_col: The name of the column containing energy/channel information. The default is None, in which
             case XGA will attempt to determine the column name from the mission database.
         :param str evt_tab_name: The name of the FITS table containing the event data. The default is None, in which
@@ -113,8 +131,12 @@ class EventList(BaseProduct):
         self._event_header = None
 
         # These store the user-provided column and table names, as well as WCS key overrides
-        self._x_col = x_col
-        self._y_col = y_col
+        self._sky_x_col = sky_x_col
+        self._sky_y_col = sky_y_col
+        self._det_x_col = det_x_col
+        self._det_y_col = det_y_col
+        self._raw_x_col = raw_x_col
+        self._raw_y_col = raw_y_col
         self._en_col = en_col
         self._evt_tab_name = evt_tab_name
         self._wcs_key_overrides = wcs_keys if wcs_keys is not None else {}
@@ -315,147 +337,7 @@ class EventList(BaseProduct):
         """
         # If we haven't already, we need to construct the WCS now
         if self._radec_sky_wcs is None:
-            # Check whether the telescope has information in the mission file we maintain (derived from XSELECT's
-            #  mission database file) - if it does then we'll use that to specify the header columns that contain
-            #  the relevant WCS information.
-            if self.telescope.upper() in MISSION_COL_DB:
-                # Read out the mission database file's entry for the current mission
-                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-
-                # First we must identify the relevant header entries for the RA-Dec WCS - particularly the
-                #  index numbers appended to header keys like 'TCRPX'. We'll achieve this by looking for the TTYPE{N}
-                #  header entries that correspond to the names of the event columns that contain sky coordinate data.
-                sky_x_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                                   if hdr_val == rel_miss_info['x'] and 'TTYPE' in hdr_key]
-                sky_y_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                                   if hdr_val == rel_miss_info['y'] and 'TTYPE' in hdr_key]
-
-                # Check for multiple entries - if there are then something has gone awry
-                if len(sky_x_ttype_ind) > 1 or len(sky_y_ttype_ind) > 1:
-                    raise KeyError("Multiple TTYPE entries found for sky coordinates in the event table header.")
-                else:
-                    sky_x_ttype_ind = sky_x_ttype_ind[0]
-                    sky_y_ttype_ind = sky_y_ttype_ind[0]
-
-                # Now we have to check what WCS-related information is present in the database file, as well as
-                #  whether the entries are default values or not.
-                # TLMAX is the default value for the 'xsiz' entry, which describes the maximum size of the X
-                #  coordinate system. If the entry isn't default then we make sure to use the value from the
-                #  mission database.
-                if 'xsiz' in rel_miss_info and rel_miss_info['xsiz'] != 'TLMAX':
-                    max_sky_x = self.event_header[rel_miss_info['xsiz']]
-                    # We have to assume that the minimum value is 0 in this case, as we don't know what
-                    #  header name to look out for
-                    min_sky_x = 0
-                elif 'xsiz' in rel_miss_info and rel_miss_info['xsiz'] == 'TLMAX':
-                    max_sky_x = self.event_header['TLMAX'+sky_x_ttype_ind]
-                    # If there is a matching TLMIN entry, we'll use that information to describe the minimum
-                    #  value of the sky x coordinates
-                    if 'TLMIN'+sky_x_ttype_ind in rel_miss_info:
-                        min_sky_x = self.event_header['TLMIN'+sky_x_ttype_ind]
-                    else:
-                        min_sky_x = 0
-
-                # In a fit of paranoia we'll assume that the y entries could behave different from the x entries
-                if 'ysiz' in rel_miss_info and rel_miss_info['ysiz'] != 'TLMAX':
-                    max_sky_y = self.event_header[rel_miss_info['ysiz']]
-                    # We have to assume that the minimum value is 0 in this case, as we don't know what
-                    #  header name to look out for
-                    min_sky_y = 0
-                elif 'ysiz' in rel_miss_info and rel_miss_info['ysiz'] == 'TLMAX':
-                    max_sky_y = self.event_header['TLMAX' + sky_y_ttype_ind]
-                    # If there is a matching TLMIN entry, we'll use that information to describe the minimum
-                    #  value of the sky x coordinates
-                    if 'TLMIN' + sky_y_ttype_ind in rel_miss_info:
-                        min_sky_y = self.event_header['TLMIN' + sky_y_ttype_ind]
-                    else:
-                        min_sky_y = 0
-
-                # Some older missions might have slightly different spellings of the WCS header information, so
-                #  we'll have to account for that here
-                alt_hdr_spell = {'TCDLT': 'CDELT', 'TCRPX': 'CRPIX', 'TCRVL': 'CRVAL', 'TCTYP': 'CTYPE'}
-                final_wcs_key_names = {}
-                for new_key, old_key in alt_hdr_spell.items():
-                    # Use the appended TTYPE index for the x-axis to check
-                    if new_key+sky_x_ttype_ind in self.event_header:
-                        final_wcs_key_names[new_key] = new_key
-                    elif old_key+sky_x_ttype_ind in self.event_header:
-                        final_wcs_key_names[new_key] = old_key
-                    else:
-                        raise KeyError("The '{k}' WCS key cannot be identified in the event table "
-                                       "header.".format(k=new_key))
-
-                # Time to assemble the WCS!
-                radec_wcs = WCS(naxis=2)
-                radec_wcs.wcs.cdelt = [self.event_header[final_wcs_key_names["TCDLT"]+sky_x_ttype_ind],
-                                       self.event_header[final_wcs_key_names["TCDLT"]+sky_y_ttype_ind]]
-
-                radec_wcs.wcs.crpix = [self.event_header[final_wcs_key_names['TCRPX']+sky_x_ttype_ind],
-                                       self.event_header[final_wcs_key_names['TCRPX']+sky_y_ttype_ind]]
-
-                radec_wcs.wcs.crval = [self.event_header[final_wcs_key_names["TCRVL"]+sky_x_ttype_ind],
-                                       self.event_header[final_wcs_key_names["TCRVL"]+sky_y_ttype_ind]]
-
-                radec_wcs.wcs.ctype = [self.event_header[final_wcs_key_names["TCTYP"]+sky_x_ttype_ind],
-                                       self.event_header[final_wcs_key_names["TCTYP"]+sky_y_ttype_ind]]
-
-                x_lims = (int(min_sky_x), int(max_sky_x))
-                y_lims = (int(min_sky_y), int(max_sky_y))
-                # Set the lower and upper limits of the sky pixel coordinate system
-                radec_wcs.pixel_bounds = [x_lims, y_lims]
-                self._radec_sky_wcs = radec_wcs
-
-            else:
-                # Use user-defined WCS keys (or auto-derived ones) if they are available
-                try:
-                    cdelt_keys = self.wcs_cdelt_keys
-                    crpix_keys = self.wcs_crpix_keys
-                    crval_keys = self.wcs_crval_keys
-                    ctype_keys = self.wcs_ctype_keys
-
-                    # Time to assemble the WCS!
-                    radec_wcs = WCS(naxis=2)
-                    radec_wcs.wcs.cdelt = [self.event_header[cdelt_keys[0]],
-                                           self.event_header[cdelt_keys[1]]]
-
-                    radec_wcs.wcs.crpix = [self.event_header[crpix_keys[0]],
-                                           self.event_header[crpix_keys[1]]]
-
-                    radec_wcs.wcs.crval = [self.event_header[crval_keys[0]],
-                                           self.event_header[crval_keys[1]]]
-
-                    radec_wcs.wcs.ctype = [self.event_header[ctype_keys[0]],
-                                           self.event_header[ctype_keys[1]]]
-
-                    # Handling the coordinate limits
-                    xsiz_key = self.wcs_xsiz_key
-                    ysiz_key = self.wcs_ysiz_key
-
-                    if xsiz_key is not None and xsiz_key in self.event_header:
-                        max_sky_x = self.event_header[xsiz_key]
-                    else:
-                        # Fallback for when we can't find a limit
-                        max_sky_x = 0
-                    min_sky_x = 0
-
-                    if ysiz_key is not None and ysiz_key in self.event_header:
-                        max_sky_y = self.event_header[ysiz_key]
-                    else:
-                        max_sky_y = 0
-                    min_sky_y = 0
-
-                    x_lims = (int(min_sky_x), int(max_sky_x))
-                    y_lims = (int(min_sky_y), int(max_sky_y))
-                    # Set the lower and upper limits of the sky pixel coordinate system
-                    radec_wcs.pixel_bounds = [x_lims, y_lims]
-                    self._radec_sky_wcs = radec_wcs
-
-                except (KeyError, ValueError, TypeError):
-                    raise NotImplementedError(f"We cannot yet determine WCS information for {self.telescope} without "
-                                              f"header entry names being specified in the "
-                                              f"'mission_event_column_name_map.json' file, or provided manually "
-                                              f"using the 'x_col', 'y_col', and 'wcs_keys' arguments when "
-                                              f"instantiating the EventList.")
+            self._radec_sky_wcs = self._build_wcs(self.sky_x_col, self.sky_y_col, 'sky')
         return self._radec_sky_wcs
 
     @property
@@ -560,46 +442,138 @@ class EventList(BaseProduct):
         self._ev_per_channel = new_val.to('eV/chan')
 
     @property
-    def x_col(self) -> str:
+    def sky_x_col(self) -> str:
         """
-        The name of the event list column containing X-axis spatial coordinates.
+        The name of the event list column containing the Sky X coordinates.
 
-        :return: The spatial X column name.
+        :return: The sky X column name.
         :rtype: str
         """
-        if self._x_col is None:
+        if self._sky_x_col is None:
             if self.telescope.upper() in MISSION_COL_DB:
-                self._x_col = MISSION_COL_DB[self.telescope.upper()]['x']
+                self._sky_x_col = MISSION_COL_DB[self.telescope.upper()]['x']
             else:
-                raise ValueError(f"The spatial X column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'x_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.x_col' property.")
-        return self._x_col
+                raise ValueError(f"The sky X column name cannot be determined for {self.telescope}, please provide "
+                                 f"it manually using the 'sky_x_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.sky_x_col' property.")
+        return self._sky_x_col
 
-    @x_col.setter
-    def x_col(self, value: str):
-        self._x_col = value
+    @sky_x_col.setter
+    def sky_x_col(self, value: str):
+        self._sky_x_col = value
+        # Clear the cached radec WCS as the columns have changed
+        self._radec_sky_wcs = None
 
     @property
-    def y_col(self) -> str:
+    def sky_y_col(self) -> str:
         """
-        The name of the event list column containing Y-axis spatial coordinates.
+        The name of the event list column containing the Sky Y coordinates.
 
-        :return: The spatial Y column name.
+        :return: The sky Y column name.
         :rtype: str
         """
-        if self._y_col is None:
+        if self._sky_y_col is None:
             if self.telescope.upper() in MISSION_COL_DB:
-                self._y_col = MISSION_COL_DB[self.telescope.upper()]['y']
+                self._sky_y_col = MISSION_COL_DB[self.telescope.upper()]['y']
             else:
-                raise ValueError(f"The spatial Y column name cannot be determined for {self.telescope}, please provide "
-                                 f"it manually using the 'y_col' argument when instantiating the EventList, or by "
-                                 f"setting this object's '.y_col' property.")
-        return self._y_col
+                raise ValueError(f"The sky Y column name cannot be determined for {self.telescope}, please provide "
+                                 f"it manually using the 'sky_y_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.sky_y_col' property.")
+        return self._sky_y_col
 
-    @y_col.setter
-    def y_col(self, value: str):
-        self._y_col = value
+    @sky_y_col.setter
+    def sky_y_col(self, value: str):
+        self._sky_y_col = value
+        # Clear the cached radec WCS as the columns have changed
+        self._radec_sky_wcs = None
+
+    @property
+    def det_x_col(self) -> str:
+        """
+        The name of the event list column containing the Detector X coordinates.
+
+        :return: The detector X column name.
+        :rtype: str
+        """
+        if self._det_x_col is None:
+            if (self.telescope.upper() in MISSION_COL_DB and
+                    'detx' in MISSION_COL_DB[self.telescope.upper()]):
+                self._det_x_col = MISSION_COL_DB[self.telescope.upper()]['detx']
+            else:
+                raise ValueError(f"The detector X column name cannot be determined for {self.telescope}, please provide "
+                                 f"it manually using the 'det_x_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.det_x_col' property.")
+        return self._det_x_col
+
+    @det_x_col.setter
+    def det_x_col(self, value: str):
+        self._det_x_col = value
+
+    @property
+    def det_y_col(self) -> str:
+        """
+        The name of the event list column containing the Detector Y coordinates.
+
+        :return: The detector Y column name.
+        :rtype: str
+        """
+        if self._det_y_col is None:
+            if (self.telescope.upper() in MISSION_COL_DB and
+                    'dety' in MISSION_COL_DB[self.telescope.upper()]):
+                self._det_y_col = MISSION_COL_DB[self.telescope.upper()]['dety']
+            else:
+                raise ValueError(f"The detector Y column name cannot be determined for {self.telescope}, please provide "
+                                 f"it manually using the 'det_y_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.det_y_col' property.")
+        return self._det_y_col
+
+    @det_y_col.setter
+    def det_y_col(self, value: str):
+        self._det_y_col = value
+
+    @property
+    def raw_x_col(self) -> str:
+        """
+        The name of the event list column containing the Raw X coordinates.
+
+        :return: The raw X column name.
+        :rtype: str
+        """
+        if self._raw_x_col is None:
+            if (self.telescope.upper() in MISSION_COL_DB and
+                    'rawx' in MISSION_COL_DB[self.telescope.upper()]):
+                self._raw_x_col = MISSION_COL_DB[self.telescope.upper()]['rawx']
+            else:
+                raise ValueError(f"The raw X column name cannot be determined for {self.telescope}, please provide "
+                                 f"it manually using the 'raw_x_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.raw_x_col' property.")
+        return self._raw_x_col
+
+    @raw_x_col.setter
+    def raw_x_col(self, value: str):
+        self._raw_x_col = value
+
+    @property
+    def raw_y_col(self) -> str:
+        """
+        The name of the event list column containing the Raw Y coordinates.
+
+        :return: The raw Y column name.
+        :rtype: str
+        """
+        if self._raw_y_col is None:
+            if (self.telescope.upper() in MISSION_COL_DB and
+                    'rawy' in MISSION_COL_DB[self.telescope.upper()]):
+                self._raw_y_col = MISSION_COL_DB[self.telescope.upper()]['rawy']
+            else:
+                raise ValueError(f"The raw Y column name cannot be determined for {self.telescope}, please provide "
+                                 f"it manually using the 'raw_y_col' argument when instantiating the EventList, or by "
+                                 f"setting this object's '.raw_y_col' property.")
+        return self._raw_y_col
+
+    @raw_y_col.setter
+    def raw_y_col(self, value: str):
+        self._raw_y_col = value
 
     @property
     def en_col(self) -> str:
@@ -711,7 +685,7 @@ class EventList(BaseProduct):
 
         # Otherwise defaults to TLMAX + index
         x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == self.x_col and 'TTYPE' in hdr_key]
+                 if hdr_val == self.sky_x_col and 'TTYPE' in hdr_key]
         if len(x_ind) == 1:
             return 'TLMAX' + x_ind[0]
         else:
@@ -737,31 +711,33 @@ class EventList(BaseProduct):
 
         # Otherwise defaults to TLMAX + index
         y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == self.y_col and 'TTYPE' in hdr_key]
+                 if hdr_val == self.sky_y_col and 'TTYPE' in hdr_key]
         if len(y_ind) == 1:
             return 'TLMAX' + y_ind[0]
         else:
             return None
 
     # --------- Define internal functions ---------
-    def _get_wcs_keys(self, prefix: str) -> Tuple[str, str]:
+    def _get_wcs_keys(self, prefix: str, x_col: str, y_col: str) -> Tuple[str, str]:
         """
-        Internal helper method to determine WCS header keys.
+        Internal helper method to determine WCS header keys for arbitrary columns.
 
         :param str prefix: The prefix of the WCS key (e.g. 'TCRPX').
+        :param str x_col: The name of the column for the X-axis.
+        :param str y_col: The name of the column for the Y-axis.
         :return: A tuple of (X key, Y key).
         :rtype: Tuple[str, str]
         """
-        # Check overrides first
-        if prefix in self._wcs_key_overrides:
+        # Check overrides first - but only if the columns match the default sky_x_col/sky_y_col
+        if prefix in self._wcs_key_overrides and x_col == self.sky_x_col and y_col == self.sky_y_col:
             # We expect a two-element list/tuple in the overrides
             return tuple(self._wcs_key_overrides[prefix])
 
-        # If not in overrides, we attempt to find the keys using TTYPE indices
+        # We attempt to find the keys using TTYPE indices
         x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == self.x_col and 'TTYPE' in hdr_key]
+                 if hdr_val == x_col and 'TTYPE' in hdr_key]
         y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                 if hdr_val == self.y_col and 'TTYPE' in hdr_key]
+                 if hdr_val == y_col and 'TTYPE' in hdr_key]
 
         if len(x_ind) == 1 and len(y_ind) == 1:
             # We try the standard prefix + index first
@@ -776,9 +752,84 @@ class EventList(BaseProduct):
 
             return x_key, y_key
         else:
-            raise KeyError(f"The WCS keys for the {prefix} prefix cannot be determined. You can provide manual "
-                           f"overrides using the 'wcs_keys' dictionary argument (with the '{prefix}' key) when "
-                           f"instantiating the EventList.")
+            raise KeyError(f"The WCS keys for the {prefix} prefix and columns {x_col}/{y_col} cannot be determined.")
+
+    def _build_wcs(self, x_col: str, y_col: str, position_type: str = 'sky') -> wcs.WCS:
+        """
+        Internal factory method to construct a WCS object for arbitrary columns and position types.
+
+        :param str x_col: The name of the column for the X-axis.
+        :param str y_col: The name of the column for the Y-axis.
+        :param str position_type: The coordinate system type, 'sky', 'det', or 'raw'. Default is 'sky'.
+        :return: A constructed Astropy WCS object.
+        :rtype: wcs.WCS
+        """
+        # Check whether the telescope has information in the mission file we maintain
+        has_db_info = self.telescope.upper() in MISSION_COL_DB
+
+        # We attempt to find the standard WCS header entries
+        try:
+            cdelt_keys = self._get_wcs_keys("TCDLT", x_col, y_col)
+            crpix_keys = self._get_wcs_keys("TCRPX", x_col, y_col)
+            crval_keys = self._get_wcs_keys("TCRVL", x_col, y_col)
+            ctype_keys = self._get_wcs_keys("TCTYP", x_col, y_col)
+
+            # Time to assemble the WCS!
+            out_wcs = WCS(naxis=2)
+            out_wcs.wcs.cdelt = [self.event_header[cdelt_keys[0]], self.event_header[cdelt_keys[1]]]
+            out_wcs.wcs.crpix = [self.event_header[crpix_keys[0]], self.event_header[crpix_keys[1]]]
+            out_wcs.wcs.crval = [self.event_header[crval_keys[0]], self.event_header[crval_keys[1]]]
+            out_wcs.wcs.ctype = [self.event_header[ctype_keys[0]], self.event_header[ctype_keys[1]]]
+
+            # Handling the coordinate limits
+            # Determine which database keys to look for based on position type
+            lim_map = {'sky': ('xsiz', 'ysiz'), 'det': ('detxsiz', 'detysiz'), 'raw': ('rawxsiz', 'rawysiz')}
+            db_lim_keys = lim_map.get(position_type, ('xsiz', 'ysiz'))
+
+            max_sky_x, max_sky_y = None, None
+            if has_db_info:
+                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
+                if db_lim_keys[0] in rel_miss_info and rel_miss_info[db_lim_keys[0]] in self.event_header:
+                    max_sky_x = self.event_header[rel_miss_info[db_lim_keys[0]]]
+                if db_lim_keys[1] in rel_miss_info and rel_miss_info[db_lim_keys[1]] in self.event_header:
+                    max_sky_y = self.event_header[rel_miss_info[db_lim_keys[1]]]
+
+            # If we still don't have limits, we try TLMAX
+            if max_sky_x is None:
+                x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                         if hdr_val == x_col and 'TTYPE' in hdr_key]
+                if len(x_ind) == 1:
+                    max_sky_x = self.event_header.get('TLMAX' + x_ind[0], 0)
+                else:
+                    max_sky_x = 0
+
+            if max_sky_y is None:
+                y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                         if hdr_val == y_col and 'TTYPE' in hdr_key]
+                if len(y_ind) == 1:
+                    max_sky_y = self.event_header.get('TLMAX' + y_ind[0], 0)
+                else:
+                    max_sky_y = 0
+
+            out_wcs.pixel_bounds = [(0, int(max_sky_x)), (0, int(max_sky_y))]
+
+        except (KeyError, ValueError, TypeError):
+            # Fallback to a simple Physical WCS if celestial mapping is missing
+            out_wcs = WCS(naxis=2)
+            out_wcs.wcs.crpix = [1, 1]
+            out_wcs.wcs.crval = [1, 1]
+            out_wcs.wcs.cdelt = [1, 1]
+            out_wcs.wcs.ctype = [x_col, y_col]
+            # Try to get basic limits
+            x_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                     if hdr_val == x_col and 'TTYPE' in hdr_key]
+            y_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
+                     if hdr_val == y_col and 'TTYPE' in hdr_key]
+            mx = self.event_header.get('TLMAX' + x_ind[0], 0) if len(x_ind) == 1 else 0
+            my = self.event_header.get('TLMAX' + y_ind[0], 0) if len(y_ind) == 1 else 0
+            out_wcs.pixel_bounds = [(0, int(mx)), (0, int(my))]
+
+        return out_wcs
 
     def _read_header_on_demand(self, table: Optional[str] = None):
         """
@@ -1014,7 +1065,8 @@ class EventList(BaseProduct):
     def generate_image(self, bin_size: Optional[Quantity] = None, x_lims: Optional[Quantity] = None,
                        y_lims: Optional[Quantity] = None, lo_en: Optional[Quantity] = None,
                        hi_en: Optional[Quantity] = None, filt_operations: Optional[dict] = None,
-                       save_path: Optional[str] = None, donor_image: Optional[Image] = None) -> Image:
+                       save_path: Optional[str] = None, donor_image: Optional[Image] = None,
+                       position_type: Optional[str] = None) -> Image:
         """
         Generate a 2D image from the event list data by binning events into pixels. The method allows control over
         binning size, spatial boundaries, energy filtering, and output file saving.
@@ -1038,13 +1090,32 @@ class EventList(BaseProduct):
             None, then the image will exist only in memory, and will not be written to storage.
         :param Image donor_image: An existing XGA Image object whose WCS and grid will be used to project the
             event data into. If this is provided, bin_size, x_lims, and y_lims are ignored.
+        :param str position_type: The coordinate system to use for the image generation, 'sky', 'det', or 'raw'.
+            The default is None, in which case the mission's default imaging coordinate system is used.
         :return: An XGA Image object made up of the spatially binned event data and associated WCS information.
         :rtype: Image
         """
+        # Determine the position type to use
+        if position_type is None and self.telescope.upper() in MISSION_COL_DB:
+            position_type = MISSION_COL_DB[self.telescope.upper()].get('imagecoord', 'SKY').lower()
+            # XGA uses 'sky' and 'det' but XSelect DB uses 'SKY' and 'DETECTOR'
+            if position_type == 'detector':
+                position_type = 'det'
+        elif position_type is None:
+            position_type = 'sky'
+
+        position_type = position_type.lower()
+        if position_type not in ['sky', 'det', 'raw']:
+            raise ValueError(f"'{position_type}' is not a valid position type, please use 'sky', 'det', or 'raw'.")
+
         # Attempting to determine the columns to use for image generation
         try:
-            x_col = self.x_col
-            y_col = self.y_col
+            if position_type == 'sky':
+                x_col, y_col = self.sky_x_col, self.sky_y_col
+            elif position_type == 'det':
+                x_col, y_col = self.det_x_col, self.det_y_col
+            elif position_type == 'raw':
+                x_col, y_col = self.raw_x_col, self.raw_y_col
             en_col = self.en_col
         except ValueError as err:
             # We raise a ValueError here because it is a configuration problem, the user has not provided
@@ -1056,9 +1127,6 @@ class EventList(BaseProduct):
             rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
             if rel_miss_info['imagecoord'] is None:
                 raise ValueError(f"Observations taken by {self.telescope} may not contain spatial information.")
-            elif rel_miss_info['imagecoord'] == "DET":
-                raise NotImplementedError(f"Image generation from event lists for observations taken by "
-                                          f"{self.telescope} with detector coordinates is not yet implemented.")
 
         # --------------------- Validating input configuration ---------------------
         # ---------------- Checking the save path ----------------
@@ -1069,7 +1137,7 @@ class EventList(BaseProduct):
             raise FileNotFoundError("The directory in which the image is to be saved "
                                     "({d}) does not exist.".format(d=os.path.dirname(save_path)))
 
-        # If None has been passed for the filtering operations, we'l turn it into an empty dictionary
+        # If None has been passed for the filtering operations, we'll turn it into an empty dictionary
         if filt_operations is None:
             filt_operations = {}
         # Otherwise we'll check that the user isn't trying to specify x_col, y_col, or en_col limits in
@@ -1129,14 +1197,17 @@ class EventList(BaseProduct):
         y_lims = y_lims.astype(int)
         # --------------------------------------------------------
 
+        print(x_lims)
+        print(y_lims)
+
         # ------------- Setting up the binning size --------------
         # Parsing the user-specified bin size, if indeed they did specify one. If not, then we
-        #  pull the default size for the mission, and if that isn't available then we default to a bin size of 1
+        #  pull the default size for the mission, and if that isn't available, then we default to a bin size of 1
 
         # Need to lower the telescope name for this check, as in XGA mission names are in lower case (not necessarily
         #  true in event file headers).
         if bin_size is None and self.telescope.lower() in DEFAULT_IMAGE_BINNING:
-            # Read out the default bin size for this mission, if this event list's instrument is a key in the image
+            # Read out the default bin size for this mission if this event list's instrument is a key in the image
             #  binning constant dictionary
             if self.instrument.lower() in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
                 bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][self.instrument.lower()], 'pix')
@@ -1152,8 +1223,8 @@ class EventList(BaseProduct):
                 if rel_xga_inst_name in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
                     bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], 'pix')
                 else:
-                    warn("No XGA default binning size has been set for the instrument '{i}' (please contact the "
-                         "developers), defaulting to a bin size of 1.".format(i=self.instrument), stacklevel=2)
+                    warn(f"No XGA default binning size has been set for the instrument '{self.instrument}' "
+                         f"(please contact the developers), defaulting to a bin size of 1.", stacklevel=2)
                     bin_size = Quantity(1, 'pix')
         # The overall fallback, setting the binning to one
         elif bin_size is None:
@@ -1211,20 +1282,21 @@ class EventList(BaseProduct):
             # We bin the filtered event data into the histogram
             binned_data = np.histogram2d(rel_evt_data[y_col], rel_evt_data[x_col], bins=(y_bins, x_bins))[0]
 
-            # Setting up the new WCS
+            # Setting up the new WCS - we use the internal build method for the relevant columns
+            base_wcs = self._build_wcs(x_col, y_col, position_type)
             im_wcs = WCS(naxis=2)
-            im_wcs.wcs.cdelt = [np.sign(self.radec_sky_wcs.wcs.cdelt[0])*ang_bin_size,
-                                    np.sign(self.radec_sky_wcs.wcs.cdelt[1])*ang_bin_size]
+            im_wcs.wcs.cdelt = [np.sign(base_wcs.wcs.cdelt[0])*ang_bin_size,
+                                    np.sign(base_wcs.wcs.cdelt[1])*ang_bin_size]
 
             # Calculate RA/Dec at the center of the first bin (origin=1) to set crval
             #  We use the average of the first and second bin edges to get the center
             center_x = (x_bins[0] + x_bins[1]) / 2
             center_y = (y_bins[0] + y_bins[1]) / 2
-            min_bnd_radec = self.radec_sky_wcs.all_pix2world(center_x, center_y, 1)
+            min_bnd_radec = base_wcs.all_pix2world(center_x, center_y, 1)
 
             im_wcs.wcs.crpix = [1, 1]
             im_wcs.wcs.crval = [min_bnd_radec[0], min_bnd_radec[1]]
-            im_wcs.wcs.ctype = [self.radec_sky_wcs.wcs.ctype[0], self.radec_sky_wcs.wcs.ctype[1]]
+            im_wcs.wcs.ctype = [base_wcs.wcs.ctype[0], base_wcs.wcs.ctype[1]]
 
             # Set the lower and upper limits of the image pixel coordinate system (1-based)
             im_wcs.pixel_bounds = [(1, binned_data.shape[1]), (1, binned_data.shape[0])]
