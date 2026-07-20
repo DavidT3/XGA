@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/12/26, 7:27 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 1:28 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy, copy
@@ -19,7 +19,7 @@ from ..sas._common import region_setup
 from ... import OUTPUT, NUM_CORES, ESASS_VERSION
 from ...exceptions import eSASSInputInvalid, NoProductAvailableError, \
     TelescopeNotAssociatedError
-from ...products.misc import EventList
+from ...products.events import EventList
 from ...samples.base import BaseSample
 from ...sources import BaseSource, ExtendedSource, GalaxyCluster
 
