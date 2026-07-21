@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 4:35 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:46 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -1468,6 +1468,11 @@ class EventList(BaseProduct):
             im_wcs.wcs.crval = [min_bnd_radec[0], min_bnd_radec[1]]
             im_wcs.wcs.ctype = [base_wcs.wcs.ctype[0], base_wcs.wcs.ctype[1]]
 
+            # We also ensure that the equinox and coordinate system information is captured from the source
+            #  WCS, so that the new image's WCS is also frame-aware.
+            im_wcs.wcs.equinox = base_wcs.wcs.equinox
+            im_wcs.wcs.radesys = base_wcs.wcs.radesys
+
             # Set the lower and upper limits of the image pixel coordinate system (1-based)
             im_wcs.pixel_bounds = [(1, binned_data.shape[1]), (1, binned_data.shape[0])]
 
@@ -1498,7 +1503,19 @@ class EventList(BaseProduct):
                       {'name': 'BITPIX', 'value': binned_data.dtype.itemsize * 8},
                       {'name': 'NAXIS', 'value': 2},
                       {'name': 'NAXIS1', 'value': binned_data.shape[1]},
-                      {'name': 'NAXIS2', 'value': binned_data.shape[0]}]
+                      {'name': 'NAXIS2', 'value': binned_data.shape[0]},
+                      {'name': 'TELESCOP', 'value': self.telescope},
+                      {'name': 'INSTRUME', 'value': self.instrument},
+                      {'name': 'OBS_ID', 'value': self.obs_id}]
+
+        if lo_en is not None:
+            new_header.append({'name': 'LO_EN', 'value': lo_en.to('keV').value, 'comment': 'Lower energy bound in keV'})
+            new_header.append({'name': 'HI_EN', 'value': hi_en.to('keV').value, 'comment': 'Upper energy bound in keV'})
+
+        # We also try to grab the exposure time from the original headers
+        exposure = self.event_header.get('EXPOSURE', self.header.get('EXPOSURE', None))
+        if exposure is not None:
+            new_header.append({'name': 'EXPOSURE', 'value': float(exposure), 'comment': 'Exposure time in seconds'})
 
         new_im = Image({'data': binned_data, 'wcs': im_wcs, 'header': new_header}, self.obs_id,
                        self.instrument, "", "", "",
@@ -1509,6 +1526,10 @@ class EventList(BaseProduct):
             # Setting up the header that we'll feed into the HDU that will become the image file - the WCS
             #  is the most important part of that
             im_hdr = im_wcs.to_header()
+            # We add our custom keywords to the FITS header
+            for entry in new_header:
+                im_hdr[entry['name']] = (entry['value'], entry.get('comment', ''))
+
             # Create a single-HDU fits file, just containing the image
             im_hdu = PrimaryHDU(binned_data, im_hdr)
             hdu_list = HDUList([im_hdu])
