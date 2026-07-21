@@ -1028,7 +1028,7 @@
       }
     }
   },
-  "AXAF": {
+  "CHANDRA": {
     "submkey": "GRATING",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -1037,8 +1037,8 @@
     "time": "TIME",
     "tunits": "s",
     "binsize": 16.0,
-    "x": "X",
-    "y": "Y",
+    "x": "x",
+    "y": "y",
     "xsiz": "TLMAX",
     "ysiz": "TLMAX",
     "detx": "DETX",
