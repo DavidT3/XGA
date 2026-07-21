@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:09 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:20 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -449,14 +449,11 @@ class EventList(BaseProduct):
             # Check whether the telescope has information in the mission file we maintain (derived from XSELECT's
             #  mission database file) - if it does then we'll use that to specify the header columns that contain
             #  the relevant WCS information.
-            if self.telescope.upper() in MISSION_COL_DB:
-                # Read out the mission database file's entry for the current mission
-                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-
+            if self.mission_db_entry is not None:
                 # Try to identify the TTYPE ind associated with the channel 'coordinate system'
                 ecol_ttype_ind = [hdr_key.split('TTYPE')[-1] for hdr_key, hdr_val in self.event_header.items()
-                                  if hdr_val == rel_miss_info['ecol'] and 'TTYPE' in hdr_key]
-                # Check for multiple entries - if there are then something has gone awry
+                                  if hdr_val == self.mission_db_entry['ecol'] and 'TTYPE' in hdr_key]
+                # Check for multiple entries - if there are, then something has gone awry.
                 if len(ecol_ttype_ind) > 1:
                     raise KeyError("Multiple TTYPE entries found for the energy column 'coordinate system' "
                                    "in the event table header.")
@@ -466,24 +463,21 @@ class EventList(BaseProduct):
                 else:
                     ecol_ttype_ind = ecol_ttype_ind[0]
 
-                if ('phamax' in rel_miss_info and rel_miss_info['phamax'] != 'TLMAX' and
-                        rel_miss_info['phamax'] in self.event_header):
-                    max_ecol = self.event_header[rel_miss_info['phamax']]
+                if ('phamax' in self.mission_db_entry and self.mission_db_entry['phamax'] != 'TLMAX' and
+                        self.mission_db_entry['phamax'] in self.event_header):
+                    max_ecol = self.event_header[self.mission_db_entry['phamax']]
                     # We have to assume that the minimum value is 0 in this case, as we don't know what
                     #  header name to look out for
                     min_ecol = 0
-                elif 'phamax' in rel_miss_info and (rel_miss_info['phamax'] == 'TLMAX' or
-                                                    rel_miss_info['phamax'] not in self.event_header):
+                elif 'phamax' in self.mission_db_entry and (self.mission_db_entry['phamax'] == 'TLMAX' or
+                                                            self.mission_db_entry['phamax'] not in self.event_header):
                     max_ecol = self.event_header['TLMAX' + ecol_ttype_ind]
                     # If there is a matching TLMIN entry, we'll use that information to describe the minimum
                     #  value of the energy column
-                    if 'TLMIN' + ecol_ttype_ind in rel_miss_info:
+                    if 'TLMIN' + ecol_ttype_ind in self.mission_db_entry:
                         min_ecol = self.event_header['TLMIN' + ecol_ttype_ind]
                     else:
                         min_ecol = 0
-
-                print(min_ecol)
-                print(max_ecol)
 
                 # TODO Will need to implement said default values.
                 raise NotImplementedError("Default values for 'ev_per_channel' are not yet implemented, please pass "
@@ -520,8 +514,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._sky_x_col is None:
-            if self.telescope.upper() in MISSION_COL_DB:
-                self._sky_x_col = MISSION_COL_DB[self.telescope.upper()]['x']
+            if self.mission_db_entry is not None:
+                self._sky_x_col = self.mission_db_entry['x']
             else:
                 raise ValueError(f"The sky X column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'sky_x_col' argument when instantiating the EventList, or by "
@@ -543,8 +537,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._sky_y_col is None:
-            if self.telescope.upper() in MISSION_COL_DB:
-                self._sky_y_col = MISSION_COL_DB[self.telescope.upper()]['y']
+            if self.mission_db_entry is not None:
+                self._sky_y_col = self.mission_db_entry['y']
             else:
                 raise ValueError(f"The sky Y column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'sky_y_col' argument when instantiating the EventList, or by "
@@ -566,9 +560,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._det_x_col is None:
-            if (self.telescope.upper() in MISSION_COL_DB and
-                    'detx' in MISSION_COL_DB[self.telescope.upper()]):
-                self._det_x_col = MISSION_COL_DB[self.telescope.upper()]['detx']
+            if self.mission_db_entry is not None and 'detx' in self.mission_db_entry:
+                self._det_x_col = self.mission_db_entry['detx']
             else:
                 raise ValueError(f"The detector X column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'det_x_col' argument when instantiating the EventList, or by "
@@ -588,9 +581,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._det_y_col is None:
-            if (self.telescope.upper() in MISSION_COL_DB and
-                    'dety' in MISSION_COL_DB[self.telescope.upper()]):
-                self._det_y_col = MISSION_COL_DB[self.telescope.upper()]['dety']
+            if self.mission_db_entry is not None and 'dety' in self.mission_db_entry:
+                self._det_y_col = self.mission_db_entry['dety']
             else:
                 raise ValueError(f"The detector Y column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'det_y_col' argument when instantiating the EventList, or by "
@@ -610,9 +602,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._raw_x_col is None:
-            if (self.telescope.upper() in MISSION_COL_DB and
-                    'rawx' in MISSION_COL_DB[self.telescope.upper()]):
-                self._raw_x_col = MISSION_COL_DB[self.telescope.upper()]['rawx']
+            if self.mission_db_entry is not None and 'rawx' in self.mission_db_entry:
+                self._raw_x_col = self.mission_db_entry['rawx']
             else:
                 raise ValueError(f"The raw X column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'raw_x_col' argument when instantiating the EventList, or by "
@@ -632,9 +623,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._raw_y_col is None:
-            if (self.telescope.upper() in MISSION_COL_DB and
-                    'rawy' in MISSION_COL_DB[self.telescope.upper()]):
-                self._raw_y_col = MISSION_COL_DB[self.telescope.upper()]['rawy']
+            if self.mission_db_entry is not None and 'rawy' in self.mission_db_entry:
+                self._raw_y_col = self.mission_db_entry['rawy']
             else:
                 raise ValueError(f"The raw Y column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'raw_y_col' argument when instantiating the EventList, or by "
@@ -654,8 +644,8 @@ class EventList(BaseProduct):
         :rtype: str
         """
         if self._en_col is None:
-            if self.telescope.upper() in MISSION_COL_DB:
-                self._en_col = MISSION_COL_DB[self.telescope.upper()]['ecol']
+            if self.mission_db_entry is not None:
+                self._en_col = self.mission_db_entry['ecol']
             else:
                 raise ValueError(f"The energy column name cannot be determined for {self.telescope}, please provide "
                                  f"it manually using the 'en_col' argument when instantiating the EventList, or by "
@@ -674,26 +664,7 @@ class EventList(BaseProduct):
         :return: The event table name.
         :rtype: str
         """
-        if self._evt_tab_name is None:
-            # If it's not manually set, we try to find it in the mission database
-            if self.telescope.upper() in MISSION_COL_DB:
-                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-                # In cases where individual instruments have entries for this, we'll use them
-                if (self.instrument.upper() in rel_miss_info and
-                        'events' in rel_miss_info[self.instrument.upper()]):
-                    self._evt_tab_name = rel_miss_info[self.instrument.upper()]['events']
-                # Otherwise we'll look for the top-level events entry for the mission
-                elif 'events' in rel_miss_info:
-                    self._evt_tab_name = rel_miss_info['events']
-                else:
-                    self._evt_tab_name = "EVENTS"
-            else:
-                self._evt_tab_name = "EVENTS"
         return self._evt_tab_name
-
-    @evt_tab_name.setter
-    def evt_tab_name(self, value: str):
-        self._evt_tab_name = value
 
     @property
     def imaging(self) -> Union[bool, None]:
@@ -732,20 +703,18 @@ class EventList(BaseProduct):
             # Pull out the relevant mission database entry for the telescope that
             #  created this event list - though we have to check whether there
             #  IS an entry to retrieve, of course.
-            if self.telescope.upper() in MISSION_COL_DB:
-                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-
+            if self.mission_db_entry is not None:
                 # Now we deal with the three possible scenarios - it is imaging, it isn't imaging,
                 #  or we can't tell.
                 # First, if there IS an imagecoord entry in the telescope's mission DB entry, but
                 #  the value is None (corresponding to null in the json file), we set the
                 #  _imaging attribute to False.
-                if 'imagecoord' in rel_miss_info and rel_miss_info['imagecoord'] is None:
+                if 'imagecoord' in self.mission_db_entry and self.mission_db_entry['imagecoord'] is None:
                     self._imaging = False
 
                 # Second scenario when there IS an imagecoord entry is that it ISN'T null, and
                 #  so we set the self._imaging attribute to True
-                elif 'imagecoord' in rel_miss_info:
+                elif 'imagecoord' in self.mission_db_entry:
                     self._imaging = True
 
                 # Finally, the only scenario left is that there ISN'T an 'imagecoord' entry in the
@@ -809,9 +778,6 @@ class EventList(BaseProduct):
         :return: A constructed Astropy WCS object.
         :rtype: wcs.WCS
         """
-        # Check whether the telescope has information in the mission file we maintain
-        has_db_info = self.telescope.upper() in MISSION_COL_DB
-
         # Determine which database keys to look for based on position type
         if position_type not in LIM_KEY_MAP:
             raise KeyError(f"Value of 'position_type' ({position_type}) is not valid. It must "
@@ -839,12 +805,11 @@ class EventList(BaseProduct):
             out_wcs.wcs.ctype = [self.event_header[ctype_keys['x']], self.event_header[ctype_keys['y']]]
 
             max_sky_x, max_sky_y = None, None
-            if has_db_info:
-                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-                if db_lim_keys[0] in rel_miss_info and rel_miss_info[db_lim_keys[0]] in self.event_header:
-                    max_sky_x = self.event_header[rel_miss_info[db_lim_keys[0]]]
-                if db_lim_keys[1] in rel_miss_info and rel_miss_info[db_lim_keys[1]] in self.event_header:
-                    max_sky_y = self.event_header[rel_miss_info[db_lim_keys[1]]]
+            if self.mission_db_entry is not None:
+                if db_lim_keys[0] in self.mission_db_entry and self.mission_db_entry[db_lim_keys[0]] in self.event_header:
+                    max_sky_x = self.event_header[self.mission_db_entry[db_lim_keys[0]]]
+                if db_lim_keys[1] in self.mission_db_entry and self.mission_db_entry[db_lim_keys[1]] in self.event_header:
+                    max_sky_y = self.event_header[self.mission_db_entry[db_lim_keys[1]]]
 
             # If we still don't have limits, we try TLMAX
             if max_sky_x is None:
@@ -1231,7 +1196,7 @@ class EventList(BaseProduct):
         if unload_data:
             del self.data
 
-        # And if they want the header gone then we use the property delete method for header
+        # And if they want the header gone, then we use the property delete method for header
         if unload_header:
             del self.header
 
