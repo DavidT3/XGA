@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:37 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:42 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -1200,7 +1200,7 @@ class EventList(BaseProduct):
         if unload_header:
             del self.header
 
-    def generate_image(self, bin_size: Optional[Quantity] = None, x_lims: Optional[Quantity] = None,
+    def generate_image(self, bin_size: Optional[Union[Quantity, int]] = None, x_lims: Optional[Quantity] = None,
                        y_lims: Optional[Quantity] = None, lo_en: Optional[Quantity] = None,
                        hi_en: Optional[Quantity] = None, filt_operations: Optional[dict] = None,
                        save_path: Optional[str] = None, donor_image: Optional[Image] = None,
@@ -1209,7 +1209,7 @@ class EventList(BaseProduct):
         Generate a 2D image from the event list data by binning events into pixels. The method allows control over
         binning size, spatial boundaries, energy filtering, and output file saving.
 
-        :param Quantity bin_size: The size of bins to use when creating the image. Can be specified in pixels
+        :param Quantity/int bin_size: The size of bins to use when creating the image. Can be specified in pixels
             ('pix') or angular units (e.g. 'deg', 'arcmin'). If None, uses mission defaults or falls back to 1 pixel.
         :param Quantity x_lims: The x-axis boundaries of the generated image. Can be specified in pixels ('pix') or
             angular units (e.g. 'deg'). If None, uses full detector field of view.

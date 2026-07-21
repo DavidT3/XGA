@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:05 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:42 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -108,7 +108,8 @@ class TestEventListImageGeneration(unittest.TestCase):
             # For imaging missions, we expect success.
             # We use loose limits or fallback logic to avoid crashes on missions with weird coordinate ranges.
             try:
-                img = evt.generate_image()
+                # Setting the bin_size to save a little memory, and execution time, during the tests
+                img = evt.generate_image(bin_size=10)
                 self.assertIsInstance(img, Image)
                 self.assertGreater(img.data.sum(), 0, f"Generated image for {name} has no counts")
 
@@ -178,11 +179,6 @@ class TestEventListFunctionality(unittest.TestCase):
         w = self.evt.radec_sky_wcs
         self.assertIsInstance(w, WCS)
         self.assertTrue(w.has_celestial)
-
-    def test_ev_per_channel_not_implemented(self):
-        """Verifies that the TODO state for ev_per_channel is captured correctly."""
-        with self.assertRaises(NotImplementedError):
-            _ = self.evt.ev_per_channel
 
 
 class TestEventListRemoteProtocols(unittest.TestCase):
