@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:35 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:49 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -712,13 +712,8 @@ class EventList(BaseProduct):
         """
         # If self._imaging_known is True, we've already tried to determine whether this instrument
         #  is imaging or not (or the user has set this EventList up with that knowledge already). So
-        #  we just need to return the current value of self._imaging (with a handy warning if the
-        #  value is None that we don't actually know whether this instrument is imaging or not).
+        #  we just need to return the current value of self._imaging.
         if self._imaging_known:
-            if self._imaging is None:
-                warn(f"This EventList ({self.telescope}-{self.instrument}) cannot automatically "
-                     f"determine whether the source instrument has imaging capabilities - use functions"
-                     f"such as 'generate_image' with caution.", stacklevel=2)
             return self._imaging
 
         # In this case, we haven't checked for imaging capabilities yet, and the user has not
@@ -1260,8 +1255,10 @@ class EventList(BaseProduct):
             if rel_miss_info['imagecoord'] is None:
                 # TODO This should be a more intrinsic check, perhaps in the init, or at least
                 #  in a property (.imaging perhaps?)
-                raise ValueError(f"Event lists created by {self.telescope}-{self.instrument} may not "
-                                 f"contain spatial information.")
+                raise ProductGenerationError(f"This {self.telescope}-{self.instrument} event list has been determined to "
+                                         f"be non-imaging, either by user input to the `imaging_evts` argument during "
+                                         f"instantiation/setting the `imaging` property, or by the XSELECT mission "
+                                         f"database.")
             else:
                 position_type = MISSION_COL_DB[self.telescope.upper()]['imagecoord'].lower()
         elif position_type is None:
@@ -1273,6 +1270,22 @@ class EventList(BaseProduct):
         en_col = self.en_col
 
         # --------------------- Validating input configuration ---------------------
+        # ------------ Checking imaging/position type ------------
+        # See if this event list thinks the instrument has imaging capabilities
+        if self.imaging is not None and  not self.imaging:
+            raise ProductGenerationError(f"This {self.telescope}-{self.instrument} event list has been determined to "
+                                         f"be non-imaging, either by user input to the `imaging_evts` argument during "
+                                         f"instantiation/setting the `imaging` property, or by the XSELECT mission "
+                                         f"database.")
+        elif self.imaging is None:
+            warn(f"This event list ({self.telescope}-{self.instrument}) cannot automatically "
+                 f"determine whether the source instrument has imaging capabilities - this method"
+                 f"may fail.", stacklevel=2)
+
+        # Determine the position type to use.
+
+        # --------------------------------------------------------
+
         # ---------------- Checking the save path ----------------
         # Checking that the directory in which the image should be saved (if the user has specified that
         #  it should be written to a file, and a directory is part of the save_path) actually exists
