@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:43 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 2:09 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -187,6 +187,38 @@ class TestEventListFunctionality(unittest.TestCase):
         w = self.evt.radec_sky_wcs
         self.assertIsInstance(w, WCS)
         self.assertTrue(w.has_celestial)
+
+    def test_donor_image_generation(self):
+        """Tests generating an image using another image as a donor for the WCS grid."""
+        rosat_path = os.path.join(S3_ROOT, "rosat/data/pspc/processed_data/900000/rp900029a02/rp900029a02_bas.fits.Z")
+        xmm_path = os.path.join(S3_ROOT, "xmm/data/rev0/0843441101/PPS/P0843441101PNS003PIEVLI0000.FTZ")
+
+        rosat_evt = EventList(rosat_path)
+        xmm_evt = EventList(xmm_path)
+
+        # Create ROSAT donor image
+        rosat_img = rosat_evt.generate_image(bin_size=30)
+
+        # Create XMM image using donor
+        xmm_img = xmm_evt.generate_image(donor_image=rosat_img)
+
+        # Assertions
+        self.assertEqual(xmm_img.shape, rosat_img.shape, "XMM image shape does not match donor image shape.")
+        # The WCS should be identical
+        self.assertEqual(xmm_img.radec_wcs.to_header().to_string(), rosat_img.radec_wcs.to_header().to_string(),
+                         "XMM image WCS does not match donor image WCS.")
+
+        # Save views as PNGs
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+        rosat_img.save_view(os.path.join(test_out_path, "rosat_donor.png"))
+        xmm_img.save_view(os.path.join(test_out_path, "xmm_from_donor.png"))
+
+        # Memory management
+        rosat_evt.unload()
+        xmm_evt.unload()
+        rosat_img.unload()
+        xmm_img.unload()
 
 
 class TestEventListRemoteProtocols(unittest.TestCase):
