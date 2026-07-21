@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 9:32 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:24 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -67,8 +67,12 @@ class EventList(BaseProduct):
         case XGA will attempt to determine the column name from the mission database.
     :param str evt_tab_name: The name of the FITS table containing the event data. The default is None, in which
         case XGA will attempt to determine the table name from the mission database.
+    :param Optional[bool] imaging_evts: Specifies whether the instrument that recorded this event list
+        can assign the detector coordinate of an event to a coordinate on the sky (e.g. XMM's EPIC-PN
+        is an imaging detector, NICER's collimator-based XTI instrument is not). Default is None, in which
+        case XGA will attempt to determine whether it is an imaging event list from the mission database.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
-        path's existence or not. Default is True, in which case a check will be performed. However, if declaring
+        path's existence. Default is True, in which case a check will be performed. However, if declaring
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
@@ -81,7 +85,7 @@ class EventList(BaseProduct):
                  det_x_col: Optional[str] = None, det_y_col: Optional[str] = None,
                  raw_x_col: Optional[str] = None, raw_y_col: Optional[str] = None,
                  en_col: Optional[str] = None, evt_tab_name: Optional[str] = None,
-                 check_exists: bool = True):
+                 imaging_evts: Optional[bool] = None, check_exists: bool = True):
         """
         The init method of the EventList class, a product class for event lists, it stores information about
         the event list.
@@ -120,8 +124,12 @@ class EventList(BaseProduct):
             case XGA will attempt to determine the column name from the mission database.
         :param str evt_tab_name: The name of the FITS table containing the event data. The default is None, in which
             case XGA will attempt to determine the table name from the mission database.
+        :param Optional[bool] imaging_evts: Specifies whether the instrument that recorded this event list
+            can assign the detector coordinate of an event to a coordinate on the sky (e.g. XMM's EPIC-PN
+            is an imaging detector, NICER's collimator-based XTI instrument is not). Default is None, in which
+            case XGA will attempt to determine whether it is an imaging event list from the mission database.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
-            path's existence or not. Default is True, in which case a check will be performed. However, if declaring
+            path's existence. Default is True, in which case a check will be performed. However, if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
@@ -145,6 +153,19 @@ class EventList(BaseProduct):
         self._raw_y_col = raw_y_col
         self._en_col = en_col
         self._evt_tab_name = evt_tab_name
+
+        # Store the input imaging_evts value in an attribute, and also create a '_imaging_unknown' attribute - this
+        #  is because the imaging property will return either True (meaning definitely yes, or that the user has
+        #  set their own imaging value), False (same deal as with True), or None (which will mean
+        #  that we cannot determine whether this is an imaging mission). As `imaging_evts=None` is the
+        #  default on instantiation of an EventList, we need to make the distinction between the
+        #  initial None which means we need to try and figure out if this is imaging, and the None
+        #  which means we CAN'T figure it out.
+        # Also, we set _imaging_known to False by default (for imaging_evts=None), but True if
+        #  either True or False is passed to imaging_evts - that stops us from trying to automatically
+        #  determine the answer when the user has set their own value.
+        self._imaging = imaging_evts
+        self._imaging_known = False if imaging_evts is None else True
 
         # These attributes will store information about the currently loaded data, but also all the data that COULD
         #  be loaded. The idea being that we can tightly control which columns are being loaded and presented as
@@ -665,6 +686,77 @@ class EventList(BaseProduct):
     @evt_tab_name.setter
     def evt_tab_name(self, value: str):
         self._evt_tab_name = value
+
+    @property
+    def imaging(self) -> Union[bool, None]:
+        """
+        This property describes whether the instrument that recorded this event list
+        can assign the detector coordinate of an event to a coordinate on the sky (e.g. XMM's EPIC-PN
+        is an imaging detector, NICER's collimator-based XTI instrument is not).
+
+        If this information was not passed to the `imaging_evts` argument when the EventList was
+        instantiated or set manually through `<event list variable>.imaging = True/False` property, then
+        this property will attempt to determine the imaging status from the XSELECT mission DB.
+
+        It is possible for the return of this property to be None, which indicates that the
+        imaging status of this event list could not be automatically determined.
+
+        :return: Whether the event list is considered 'imaging'. A value of True means it is, False means it is
+            not, and None means that it cannot be determined.
+        :rtype: bool/None
+        """
+        # If self._imaging_known is True, we've already tried to determine whether this instrument
+        #  is imaging or not (or the user has set this EventList up with that knowledge already). So
+        #  we just need to return the current value of self._imaging (with a handy warning if the
+        #  value is None that we don't actually know whether this instrument is imaging or not).
+        if self._imaging_known:
+            if self._imaging is None:
+                warn(f"This EventList ({self.telescope}-{self.instrument}) cannot automatically "
+                     f"determine whether the source instrument has imaging capabilities - use functions"
+                     f"such as 'generate_image' with caution.", stacklevel=2)
+            return self._imaging
+
+        # In this case, we haven't checked for imaging capabilities yet, and the user has not
+        #  passed their own True/False to imaging (whether through the property setter or the
+        #  init). We know this because in those situations the self._imaging_known attribute
+        #  is set to True
+        else:
+            # Pull out the relevant mission database entry for the telescope that
+            #  created this event list - though we have to check whether there
+            #  IS an entry to retrieve, of course.
+            if self.telescope.upper() in MISSION_COL_DB:
+                rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
+
+                # Now we deal with the three possible scenarios - it is imaging, it isn't imaging,
+                #  or we can't tell.
+                # First, if there IS an imagecoord entry in the telescope's mission DB entry, but
+                #  the value is None (corresponding to null in the json file), we set the
+                #  _imaging attribute to False.
+                if 'imagecoord' in rel_miss_info and rel_miss_info['imagecoord'] is None:
+                    self._imaging = False
+
+                # Second scenario when there IS an imagecoord entry is that it ISN'T null, and
+                #  so we set the self._imaging attribute to True
+                elif 'imagecoord' in rel_miss_info:
+                    self._imaging = True
+
+                # Finally, the only scenario left is that there ISN'T an 'imagecoord' entry in the
+                #  mission DB, and so we have to say that we can't determine if this is an
+                #  imaging event list.
+                else:
+                    self._imaging = None
+
+            # If there isn't an entry for the current telescope in the DB, then we have to set the
+            #  _imaging attribute to None, meaning we don't know.
+            else:
+                self._imaging = None
+
+            # If we get to this point, we have attempted to determine whether this event list is 'imaging'
+            #  or not, and so we set _imaging_known to True, which will ensure that this process
+            #  doesn't run again if the property is called repeatedly.
+            self._imaging_known = True
+            return self._imaging
+
 
     # --------- Define internal functions ---------
     def _build_wcs(self, position_type: str = 'sky') -> wcs.WCS:
