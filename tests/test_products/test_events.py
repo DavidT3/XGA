@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 2:24 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 2:49 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -191,7 +191,7 @@ class TestEventListFunctionality(unittest.TestCase):
     def test_donor_image_generation(self):
         """Tests generating an image using another image as a donor for the WCS grid."""
         rosat_path = os.path.join(S3_ROOT, "rosat/data/pspc/processed_data/900000/rp900029a02/rp900029a02_bas.fits.Z")
-        xmm_path = os.path.join(S3_ROOT, "xmm/data/rev0/0843441101/PPS/P0843441101PNS003PIEVLI0000.FTZ")
+        xmm_path = os.path.join(S3_ROOT, "xmm/data/rev0/0147511701/PPS/P0147511701PNS003PIEVLI0000.FTZ")
 
         rosat_evt = EventList(rosat_path)
         xmm_evt = EventList(xmm_path)
