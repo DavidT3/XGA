@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:20 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:37 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -1356,20 +1356,28 @@ class EventList(BaseProduct):
             #  to that used by XGA, so we check an 'alternative name' constant set up for this purpose
             elif [self.instrument.lower() in inst_alts for inst_alts in
                   ALT_INST_NAMES[self.telescope.lower()].values()]:
+
                 # Inefficient considering we've already performed the check, but nicer code structure
                 rel_xga_inst_name = [xga_inst for xga_inst, inst_alts in
                                      ALT_INST_NAMES[self.telescope.lower()].items()
                                      if self.instrument.lower() in inst_alts][0]
+
                 if rel_xga_inst_name in DEFAULT_IMAGE_BINNING[self.telescope.lower()]:
                     bin_size = Quantity(DEFAULT_IMAGE_BINNING[self.telescope.lower()][rel_xga_inst_name], 'pix')
                 else:
-                    warn(f"No XGA default binning size has been set for the instrument '{self.instrument}' "
-                         f"(please contact the developers), defaulting to a bin size of 1.", stacklevel=2)
-                    bin_size = Quantity(1, 'pix')
-        # The overall fallback, setting the binning to one
-        elif bin_size is None:
-            warn("No XGA default binning size has been set for the instrument '{i}' (please contact the "
-                 "developers), defaulting to a bin size of 1.".format(i=self.instrument), stacklevel=2)
+                    # This will trigger the separate bin_size is None check below, and a default of one
+                    #  will be assigned - just means we don't need the same warning in two different
+                    #  places, which is more elegant.
+                    bin_size = None
+
+        # The overall fallback, setting the binning to one.
+        # Note that this is deliberately not an elif. The 'if bin_size...' check above can end up
+        #  setting the bin_size to None in order to trigger this check. Means we don't need
+        #  to have the same behaviour and warning in two different places.
+        if bin_size is None:
+            warn(f"No XGA default binning size has been set for the instrument '{self.instrument}' - "
+                 f"defaulting to a bin size of 1. Pass to this function's `bin_size` argument to control "
+                 f"binning directly.", stacklevel=2)
             bin_size = Quantity(1, 'pix')
 
         # We allow the bin_size argument to be in angular units, but make sure to translate it to pixels
