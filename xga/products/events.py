@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:24 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:32 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -756,6 +756,24 @@ class EventList(BaseProduct):
             #  doesn't run again if the property is called repeatedly.
             self._imaging_known = True
             return self._imaging
+
+    @imaging.setter
+    def imaging(self, new_val: Union[bool, str]):
+        """
+        Setter for the imaging property.
+        """
+        # Check to make sure the type is legal.
+        if not isinstance(new_val, bool) and new_val is not None:
+            raise TypeError("The 'imaging' property can only be set to True, False, or None.")
+
+        # If the property is being set as None, we take that to mean that the EventList should
+        #  attempt to automatically determine the imaging status next time the 'imaging' property
+        #  is used. So we have to set _imaging_known = False
+        if new_val is None:
+            self._imaging_known = False
+
+        # Now we set the new _imaging value.
+        self._imaging = new_val
 
 
     # --------- Define internal functions ---------
