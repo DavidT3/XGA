@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:09 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -796,10 +796,9 @@ class EventList(BaseProduct):
 
         :return: The XSELECT mission database entry relevant to this EventList's telescope. If there IS no
             entry for this EventList's telescope, then None is returned.
-        :rtype Union[dict/None]
+        :rtype: Union[dict/None]
         """
         return self._rel_miss_db
-
 
     # --------- Define internal functions ---------
     def _build_wcs(self, position_type: str = 'sky') -> wcs.WCS:
@@ -1283,18 +1282,8 @@ class EventList(BaseProduct):
                  f"may fail.", stacklevel=2)
 
         # Determine the position type to use
-        if position_type is None and self.telescope.upper() in MISSION_COL_DB:
-            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-            if rel_miss_info['imagecoord'] is None:
-                # TODO This should be a more intrinsic check, perhaps in the init, or at least
-                #  in a property (.imaging perhaps?)
-                raise ProductGenerationError(
-                    f"This {self.telescope}-{self.instrument} event list has been determined to "
-                    f"be non-imaging, either by user input to the `imaging_evts` argument during "
-                    f"instantiation/setting the `imaging` property, or by the XSELECT mission "
-                    f"database.")
-            else:
-                position_type = MISSION_COL_DB[self.telescope.upper()]['imagecoord'].lower()
+        if position_type is None and self.mission_db_entry is not None and 'imagecoord' in self.mission_db_entry:
+            position_type = self.mission_db_entry['imagecoord']
         elif position_type is None:
             position_type = 'sky'
 
