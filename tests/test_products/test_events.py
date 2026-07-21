@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:50 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -116,7 +116,7 @@ class TestEventListImageGeneration(unittest.TestCase):
                 # Saving the generated image as a PNG following the pattern in TestProfileView
                 test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
                 os.makedirs(test_out_path, exist_ok=True)
-                img.save_view(os.path.join(test_out_path, f"{name}_default.png"))
+                img.save_view(os.path.join(test_out_path, f"{name}_binsize10.png"))
 
             except Exception as e:
                 raise e
@@ -125,6 +125,11 @@ class TestEventListImageGeneration(unittest.TestCase):
             with self.assertRaises((ValueError, ProductGenerationError),
                                    msg=f"Image generation should have failed for non-imaging mission {name}"):
                 evt.generate_image()
+
+        # Explicitly unload to free data memory immediately
+        evt.unload()
+        if 'img' in locals():
+            img.unload()
 
 
 # Dynamically attach init and generation tests for every mission
