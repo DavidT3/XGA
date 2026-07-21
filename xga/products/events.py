@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 5:21 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 9:32 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -736,7 +736,7 @@ class EventList(BaseProduct):
 
         except (KeyError, ValueError, TypeError) as err:
             raise ProductGenerationError(f"The requested WCS ({position_type}) cannot "
-                                         f"be constructed for this event list: {err}")
+                                         f"be constructed for this event list. Error: {err}")
 
         return out_wcs
 
@@ -1136,7 +1136,14 @@ class EventList(BaseProduct):
         """
         # Determine the position type to use
         if position_type is None and self.telescope.upper() in MISSION_COL_DB:
-            position_type = MISSION_COL_DB[self.telescope.upper()].get('imagecoord').lower()
+            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
+            if rel_miss_info['imagecoord'] is None:
+                # TODO This should be a more intrinsic check, perhaps in the init, or at least
+                #  in a property (.imaging perhaps?)
+                raise ValueError(f"Event lists created by {self.telescope}-{self.instrument} may not "
+                                 f"contain spatial information.")
+            else:
+                position_type = MISSION_COL_DB[self.telescope.upper()]['imagecoord'].lower()
         elif position_type is None:
             position_type = 'sky'
 
@@ -1144,12 +1151,6 @@ class EventList(BaseProduct):
 
         x_col, y_col = self.get_position_type_col_names(position_type)
         en_col = self.en_col
-
-        # If the telescope is in the mission database, we can check for extra information
-        if self.telescope.upper() in MISSION_COL_DB:
-            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-            if rel_miss_info['imagecoord'] is None:
-                raise ValueError(f"Observations taken by {self.telescope} may not contain spatial information.")
 
         # --------------------- Validating input configuration ---------------------
         # ---------------- Checking the save path ----------------
