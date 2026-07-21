@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 7:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 10:10 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -17,7 +17,7 @@ TEST_EVTS = {
                  "tele": "asca", "inst": "gis3", "imaging": True},
     "ASCA_SIS": {"path": "asca/data/rev2/87036000/screened/ad87036000s000302m.evt.gz",
                  "tele": "asca", "inst": "sis0", "imaging": True},
-    "BBXRT": {"path": "bbxrt/events/a2256i.evt.gz", "tele": "bbxrt", "inst": "A0-B4", "imaging": True},
+    "BBXRT": {"path": "bbxrt/events/a2256i.evt.gz", "tele": "bbxrt", "inst": "A0-B4", "imaging": False},
     "Calet": {"path": "calet/data/cgbm/obs/2025/20250318/events/cgbm_20250318_hx2_113151.evt.gz",
               "tele": "calet", "inst": "cgbm", "imaging": False},
     "Chandra_ACIS": {"path": "chandra/data/byobsid/2/12812/primary/acisf12812N003_evt2.fits.gz",
@@ -83,13 +83,16 @@ class TestEventListInitialization(unittest.TestCase):
     Granular tests for mission initialization across all defined event lists.
     """
     def check_mission_init(self, name):
-        info = TEST_EVTS[name]
-        evt = EventList(S3_ROOT + info['path'])
-        self.assertEqual(evt.telescope.lower(), info['tele'].lower())
+
+        cur_info = TEST_EVTS[name]
+        evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
+
+        self.assertEqual(evt.telescope.lower(), cur_info['tele'].lower())
+
         actual_inst = evt.instrument.lower()
-        expected_inst = info['inst'].lower()
+        expected_inst = cur_info['inst'].lower()
         self.assertTrue(actual_inst.startswith(expected_inst) or expected_inst.startswith(actual_inst),
-                        f"Instrument mismatch for {name}: {evt.instrument} vs {info['inst']}")
+                        f"Instrument mismatch for {name}: {evt.instrument} vs {cur_info['inst']}")
 
 
 class TestEventListImageGeneration(unittest.TestCase):
@@ -98,10 +101,10 @@ class TestEventListImageGeneration(unittest.TestCase):
     Asserts success for imaging missions and failure for non-imaging missions.
     """
     def check_mission_gen(self, name):
-        info = TEST_EVTS[name]
-        evt = EventList(S3_ROOT + info['path'])
+        cur_info = TEST_EVTS[name]
+        evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
 
-        if info['imaging']:
+        if cur_info['imaging']:
             # For imaging missions, we expect success.
             # We use loose limits or fallback logic to avoid crashes on missions with weird coordinate ranges.
             try:
