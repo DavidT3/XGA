@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:06 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -204,6 +204,10 @@ class EventList(BaseProduct):
                 self._evt_tab_name = evt_tab_name
                 self._event_header = None
 
+        # Now that we know the name of the telescope, we can store the relevant mission DB entry in an attribute
+        #  for easy access throughout this class. If there IS no entry for this telescope, then we set it to None.
+        self._rel_miss_db = None if self.telescope.upper() not in MISSION_COL_DB else MISSION_COL_DB[self.telescope.upper()]
+
         # We have to do the same for the instrument
         if instrument is None:
             # TODO Figure out why on earth IXPE completely bucked the usual
@@ -230,17 +234,19 @@ class EventList(BaseProduct):
 
         # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT, for
         #  instance, calls it STDEVT - obviously very important that we get this right
-        if self.telescope.upper() not in MISSION_COL_DB:
+        if self._rel_miss_db is None:
             warn(f"The {self.telescope} telescope cannot be found in the XSELECT mission database file, so "
                  f"the name of the table containing event information is assumed to be 'EVENTS'.", stacklevel=2)
             self._evt_tab_name = "EVENTS"
+
         # In cases where individual instruments have entries for this, we'll use them
-        elif (self._inst.upper() in MISSION_COL_DB[self.telescope.upper()] and
-              'events' in MISSION_COL_DB[self.telescope.upper()][self._inst.upper()]):
-            self._evt_tab_name = MISSION_COL_DB[self.telescope.upper()][self._inst.upper()]['events']
+        elif (self._inst.upper() in self._rel_miss_db and
+              'events' in self._rel_miss_db[self._inst.upper()]):
+            self._evt_tab_name = self._rel_miss_db[self._inst.upper()]['events']
+
         # Otherwise we'll look for the top-level events entry for the mission
-        elif 'events' in MISSION_COL_DB[self.telescope.upper()]:
-            self._evt_tab_name = MISSION_COL_DB[self.telescope.upper()]['events']
+        elif 'events' in self._rel_miss_db:
+            self._evt_tab_name = self._rel_miss_db['events']
 
         # And now we know we have the right event table name, we'll automatically determine the ObsID and instrument
         #  from the header, if they haven't been passed by the user.
@@ -268,8 +274,10 @@ class EventList(BaseProduct):
                     break
 
         # Checking the formatting of the obs_ids argument
-        if obs_ids is not None and (not isinstance(obs_ids, List) or
-                                    (isinstance(obs_ids, List) and not all(isinstance(obs, str) for obs in obs_ids))):
+        if obs_ids is not None and (not isinstance(obs_ids, List)
+                                    or (isinstance(obs_ids, List)
+                                        and not all(isinstance(obs, str)
+                                                    for obs in obs_ids))):
             raise ValueError("The 'obs_ids' argument must be a list of strings.")
         self._obs_ids = obs_ids
 
@@ -780,6 +788,18 @@ class EventList(BaseProduct):
         # Now we set the new _imaging value.
         self._imaging = new_val
 
+    @property
+    def mission_db_entry(self) -> Union[dict, None]:
+        """
+        Easy access to this EventList's telescope's entry in the version of the XSELECT mission database
+        that ships with XGA - returns the dictionary entry if there is one, else None is returned.
+
+        :return: The XSELECT mission database entry relevant to this EventList's telescope. If there IS no
+            entry for this EventList's telescope, then None is returned.
+        :rtype Union[dict/None]
+        """
+        return self._rel_miss_db
+
 
     # --------- Define internal functions ---------
     def _build_wcs(self, position_type: str = 'sky') -> wcs.WCS:
@@ -1249,26 +1269,6 @@ class EventList(BaseProduct):
         :return: An XGA Image object made up of the spatially binned event data and associated WCS information.
         :rtype: Image
         """
-        # Determine the position type to use
-        if position_type is None and self.telescope.upper() in MISSION_COL_DB:
-            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
-            if rel_miss_info['imagecoord'] is None:
-                # TODO This should be a more intrinsic check, perhaps in the init, or at least
-                #  in a property (.imaging perhaps?)
-                raise ProductGenerationError(f"This {self.telescope}-{self.instrument} event list has been determined to "
-                                         f"be non-imaging, either by user input to the `imaging_evts` argument during "
-                                         f"instantiation/setting the `imaging` property, or by the XSELECT mission "
-                                         f"database.")
-            else:
-                position_type = MISSION_COL_DB[self.telescope.upper()]['imagecoord'].lower()
-        elif position_type is None:
-            position_type = 'sky'
-
-        position_type = position_type.lower()
-
-        x_col, y_col = self.get_position_type_col_names(position_type)
-        en_col = self.en_col
-
         # --------------------- Validating input configuration ---------------------
         # ------------ Checking imaging/position type ------------
         # See if this event list thinks the instrument has imaging capabilities
@@ -1282,8 +1282,28 @@ class EventList(BaseProduct):
                  f"determine whether the source instrument has imaging capabilities - this method"
                  f"may fail.", stacklevel=2)
 
-        # Determine the position type to use.
+        # Determine the position type to use
+        if position_type is None and self.telescope.upper() in MISSION_COL_DB:
+            rel_miss_info = MISSION_COL_DB[self.telescope.upper()]
+            if rel_miss_info['imagecoord'] is None:
+                # TODO This should be a more intrinsic check, perhaps in the init, or at least
+                #  in a property (.imaging perhaps?)
+                raise ProductGenerationError(
+                    f"This {self.telescope}-{self.instrument} event list has been determined to "
+                    f"be non-imaging, either by user input to the `imaging_evts` argument during "
+                    f"instantiation/setting the `imaging` property, or by the XSELECT mission "
+                    f"database.")
+            else:
+                position_type = MISSION_COL_DB[self.telescope.upper()]['imagecoord'].lower()
+        elif position_type is None:
+            position_type = 'sky'
 
+        position_type = position_type.lower()
+        # --------------------------------------------------------
+
+        # ----------- Fetching X/Y/energy column names -----------
+        x_col, y_col = self.get_position_type_col_names(position_type)
+        en_col = self.en_col
         # --------------------------------------------------------
 
         # ---------------- Checking the save path ----------------
