@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 10:10 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:05 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -31,11 +31,11 @@ TEST_EVTS = {
     "IXPE": {"path": "ixpe/data/obs/03/03005001/event_l2/ixpe03005001_det1_evt2_v02.fits.gz",
              "tele": "ixpe", "inst": "DU1", "imaging": True},
     "MAXI_GSC_Low": {"path": "maxi/data/obs/MJD57000/MJD57115/events/gsc_low/mx_mjd57115_gsc_low_078.evt.gz",
-                     "tele": "maxi", "inst": "gsc", "imaging": False},
+                     "tele": "maxi", "inst": "gsc", "imaging": True},
     "MAXI_GSC_Med": {"path": "maxi/data/obs/MJD57000/MJD57115/events/gsc_med/mx_mjd57115_gsc_med_126.evt.gz",
-                     "tele": "maxi", "inst": "gsc", "imaging": False},
+                     "tele": "maxi", "inst": "gsc", "imaging": True},
     "MAXI_SSC_Med": {"path": "maxi/data/obs/MJD57000/MJD57115/events/ssc_med/mx_mjd57115_ssch_med_167.evt.gz",
-                     "tele": "maxi", "inst": "ssc", "imaging": False},
+                     "tele": "maxi", "inst": "ssc", "imaging": True},
     "NICER_XTI": {"path": "nicer/data/obs/2023_06/6060040431/xti/event_cl/ni6060040431_0mpu7_cl.evt.gz",
                   "tele": "nicer", "inst": "xti", "imaging": False},
     "NuSTAR": {"path": "nustar/data/obs/10/7/71010003002/event_cl/nu71010003002A01_cl.evt.gz",
