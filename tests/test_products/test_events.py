@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:40 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:43 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -112,7 +112,7 @@ class TestEventListImageGeneration(unittest.TestCase):
                 #  special cases may have a different binsize set in the TEST_EVTS dictionary (e.g. eROSITA
                 #  because otherwise it gobbles a LOT of memory).
                 cur_bin_size = cur_info.get('use_binsize', 10)
-                img = evt.generate_image(bin_size=10)
+                img = evt.generate_image(bin_size=cur_bin_size)
                 self.assertIsInstance(img, Image)
                 self.assertGreater(img.data.sum(), 0, f"Generated image for {name} has no counts")
 
