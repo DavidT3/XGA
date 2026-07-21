@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:39 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -222,9 +222,9 @@ class TestEventListFunctionality(unittest.TestCase):
         rosat_img.unload()
         xmm_img.unload()
 
-    def test_donor_image_generation_legacy(self):
+    def test_donor_image_diff_frame_epoch(self):
         """Tests generating an XMM image using a legacy Einstein image as a donor (FK4/B1950)."""
-        einstein_img_path = os.path.join(S3_ROOT, "einstein/data/hri/images/h0039n40.xia.Z")
+        einstein_img_path = os.path.join(HTTPS_ROOT, "einstein/data/hri/images/h0039n40.xia.Z")
         xmm_evt_path = os.path.join(S3_ROOT, "xmm/data/rev0/0727960401/PPS/P0727960401PNS003PIEVLI0000.FTZ")
 
         einstein_img = Image(einstein_img_path, "h0039n40", "HRI", "", "", "", Quantity(0.5, 'keV'),
