@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:32 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 11:35 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -701,6 +701,11 @@ class EventList(BaseProduct):
         It is possible for the return of this property to be None, which indicates that the
         imaging status of this event list could not be automatically determined.
 
+        If setting this property, the input must be either True, False, or None - if None is passed
+        then the imaging property will attempt to automatically determine the imaging status of the
+        event list the next time it is called.
+
+        :param bool/str new_val: New value for the imaging property - must be True, False, or None.
         :return: Whether the event list is considered 'imaging'. A value of True means it is, False means it is
             not, and None means that it cannot be determined.
         :rtype: bool/None
@@ -761,6 +766,11 @@ class EventList(BaseProduct):
     def imaging(self, new_val: Union[bool, str]):
         """
         Setter for the imaging property.
+
+        If None is passed then the imaging property will attempt to automatically determine the imaging
+        status of the event list the next time it is called.
+
+        :param bool/str new_val: New value for the imaging property - must be True, False, or None.
         """
         # Check to make sure the type is legal.
         if not isinstance(new_val, bool) and new_val is not None:
