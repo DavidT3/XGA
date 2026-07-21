@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 12:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:40 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -49,7 +49,7 @@ TEST_EVTS = {
     "BeppoSAX_MECS": {"path": "sax/data/events/20309003/event_files/MECS2_20309003.evt.gz",
                       "tele": "sax", "inst": "mecs2", "imaging": True},
     "SRG_eROSITA": {"path": "srg/data/erosita/erass1/obs/141/053/EXP_010/em01_053141_020_EventList_c010.fits.gz",
-                    "tele": "erosita", "inst": "merged", "imaging": True},
+                    "tele": "erosita", "inst": "merged", "imaging": True, "use_binsize": 500},
     "Suzaku_XIS": {"path": "suzaku/data/obs/7/704015010/xis/event_cl/ae704015010xi1_0_3x3n069b_cl.evt.gz",
                    "tele": "suzaku", "inst": "xis1", "imaging": True},
     "Suzaku_HXD_GSO": {"path": "suzaku/data/obs/7/704015010/hxd/event_cl/ae704015010hxd_0_gsono_cl.evt.gz",
@@ -108,7 +108,10 @@ class TestEventListImageGeneration(unittest.TestCase):
             # For imaging missions, we expect success.
             # We use loose limits or fallback logic to avoid crashes on missions with weird coordinate ranges.
             try:
-                # Setting the bin_size to save a little memory, and execution time, during the tests
+                # Setting the bin_size to save a little memory, and execution time, during the tests. Some
+                #  special cases may have a different binsize set in the TEST_EVTS dictionary (e.g. eROSITA
+                #  because otherwise it gobbles a LOT of memory).
+                cur_bin_size = cur_info.get('use_binsize', 10)
                 img = evt.generate_image(bin_size=10)
                 self.assertIsInstance(img, Image)
                 self.assertGreater(img.data.sum(), 0, f"Generated image for {name} has no counts")
@@ -116,7 +119,7 @@ class TestEventListImageGeneration(unittest.TestCase):
                 # Saving the generated image as a PNG following the pattern in TestProfileView
                 test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
                 os.makedirs(test_out_path, exist_ok=True)
-                img.save_view(os.path.join(test_out_path, f"{name}_binsize10.png"))
+                img.save_view(os.path.join(test_out_path, f"{name}_binsize{cur_bin_size}.png"))
 
             except Exception as e:
                 raise e
