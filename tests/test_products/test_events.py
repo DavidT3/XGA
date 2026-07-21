@@ -4,6 +4,7 @@
 import os
 import unittest
 
+import matplotlib.pyplot as plt
 from astropy.wcs import WCS
 
 from xga.exceptions import ProductGenerationError
@@ -218,6 +219,43 @@ class TestEventListFunctionality(unittest.TestCase):
         rosat_evt.unload()
         xmm_evt.unload()
         rosat_img.unload()
+        xmm_img.unload()
+
+    def test_donor_image_generation_legacy(self):
+        """Tests generating an XMM image using a legacy Einstein image as a donor (FK4/B1950)."""
+        einstein_img_path = os.path.join(S3_ROOT, "einstein/data/hri/images/h0039n40.xia.Z")
+        xmm_evt_path = os.path.join(S3_ROOT, "xmm/data/rev0/0727960401/PPS/P0727960401PNS003PIEVLI0000.FTZ")
+
+        einstein_img = Image(einstein_img_path, "h0039n40", "HRI", "", "", "", Quantity(0.5, 'keV'),
+                             Quantity(2.0, 'keV'), telescope='einstein')
+        xmm_evt = EventList(xmm_evt_path)
+
+        # Create XMM image using Einstein donor
+        xmm_img = xmm_evt.generate_image(donor_image=einstein_img)
+
+        # Save views as PNGs
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+        einstein_img.save_view(os.path.join(test_out_path, "einstein_legacy_donor.png"))
+        xmm_img.save_view(os.path.join(test_out_path, "xmm_from_legacy_donor.png"))
+
+        # Comparison plot
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
+        einstein_img.get_view(ax1)
+        xmm_img.get_view(ax2)
+        plt.tight_layout()
+        plt.savefig(os.path.join(test_out_path, "comparison_einstein_xmm.png"))
+        plt.close(fig)
+
+        # Assertions
+        self.assertEqual(xmm_img.shape, einstein_img.shape, "XMM image shape does not match legacy donor shape.")
+        # The WCS should match exactly
+        self.assertEqual(xmm_img.radec_wcs.to_header().tostring(), einstein_img.radec_wcs.to_header().tostring(),
+                         "XMM image WCS does not match legacy donor WCS.")
+
+        # Memory management
+        xmm_evt.unload()
+        einstein_img.unload()
         xmm_img.unload()
 
 
