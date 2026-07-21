@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 4:36 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 10:17 AM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -79,7 +79,7 @@ class BaseProduct:
             datasets - e.g. to pass credentials to access an S3 bucket. Default value is None, which sets the
             argument to {"anon": True}, making it instantly compatible with NASA archive S3 buckets.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
-            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            path's existence. Default is True, in which case a check will be performed, but if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """

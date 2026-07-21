@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 10:17 AM. Copyright (c) The Contributors.
 import re
 from datetime import datetime
 from typing import Union, List, Tuple, Dict
@@ -43,7 +43,7 @@ class LightCurve(BaseProduct):
     :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
-        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        path's existence. Default is True, in which case a check will be performed, but if declaring
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
@@ -73,7 +73,7 @@ class LightCurve(BaseProduct):
         :param bool is_back_sub: Whether this lightcurve is background subtracted or not.
         :param str telescope: The telescope that this product is derived from. Default is None.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
-            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            path's existence. Default is True, in which case a check will be performed, but if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
