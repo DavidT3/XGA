@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:12 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -893,6 +893,11 @@ class EventList(BaseProduct):
         This will read the event list table into memory, allowing for the loading of a specific subset of columns, as
         well as streaming data from remote files.
         """
+        # Have to check whether we can use this event list
+        if not self.usable:
+            raise ProductNotUsableError(f"This event list has been flagged as 'not usable' for the "
+                                        f"following reason: {self.not_usable_reasons}.")
+
         # This is rather inelegant, but if we already have the whole set of column names saved in an attribute (which
         #  happens down below the first time the events table is accessed in any way); we'll check here if the
         #  columns passed by the user are actually in the table. If we don't have that info this same check is
