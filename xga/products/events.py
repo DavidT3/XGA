@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 1:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 4:35 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -13,6 +13,7 @@ from astropy.io.fits import PrimaryHDU, HDUList
 from astropy.table import Table
 from astropy.units import Quantity, UnitConversionError
 from astropy.wcs import WCS
+from astropy.wcs import utils as wcs_utils
 
 from xga import MISSION_COL_DB, DEFAULT_IMAGE_BINNING, ALT_INST_NAMES
 from xga.exceptions import ProductGenerationError, XGADeveloperError, ProductNotUsableError
@@ -804,6 +805,18 @@ class EventList(BaseProduct):
             out_wcs.wcs.crval = [self.event_header[crval_keys['x']], self.event_header[crval_keys['y']]]
             out_wcs.wcs.ctype = [self.event_header[ctype_keys['x']], self.event_header[ctype_keys['y']]]
 
+            # We also ensure that the equinox and coordinate system information is captured, so that
+            #  transformations (e.g. for donor image projection) are frame-aware.
+            if 'EQUINOX' in self.event_header:
+                out_wcs.wcs.equinox = self.event_header['EQUINOX']
+            elif 'EPOCH' in self.event_header:
+                out_wcs.wcs.equinox = self.event_header['EPOCH']
+
+            if 'RADECSYS' in self.event_header:
+                out_wcs.wcs.radesys = self.event_header['RADECSYS']
+            elif 'RADESYS' in self.event_header:
+                out_wcs.wcs.radesys = self.event_header['RADESYS']
+
             max_sky_x, max_sky_y = None, None
             if self.mission_db_entry is not None:
                 if db_lim_keys[0] in self.mission_db_entry and self.mission_db_entry[db_lim_keys[0]] in self.event_header:
@@ -1460,10 +1473,14 @@ class EventList(BaseProduct):
 
         else:
             # If a donor image is provided, we project the events onto its coordinate grid
-            # First we transform the filtered event coordinates to RA and Dec (origin=1)
-            ev_radec = self.radec_sky_wcs.all_pix2world(rel_evt_data[x_col], rel_evt_data[y_col], 1)
+            # First we transform the filtered event coordinates to SkyCoords (origin=1) using the source WCS
+            #  this allows for frame-aware transformations (e.g. FK4 -> ICRS)
+            ev_skycoord = wcs_utils.pixel_to_skycoord(rel_evt_data[x_col], rel_evt_data[y_col], self.radec_sky_wcs,
+                                                     origin=1)
+
             # Then we transform those world coordinates to the pixel grid of the donor image (origin=1)
-            ev_donor_pix = donor_image.radec_wcs.all_world2pix(ev_radec[0], ev_radec[1], 1)
+            #  using the donor's WCS. skycoord_to_pixel handles the frame conversion internally
+            ev_donor_pix = wcs_utils.skycoord_to_pixel(ev_skycoord, donor_image.radec_wcs, origin=1)
 
             # We define bins based on the donor image's shape (again centering on pixels, edges are [0.5, 1.5))
             x_bins = np.arange(0.5, donor_image.shape[1] + 1.5, 1)
