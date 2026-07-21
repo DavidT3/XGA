@@ -1060,7 +1060,7 @@
     "fbin": 4,
     "hbin": 8,
     "spbn": 1,
-    "ecol": "PI",
+    "ecol": "pi",
     "ccol": "CCD_ID",
     "gcol": "GRADE",
     "imagecoord": "SKY",
