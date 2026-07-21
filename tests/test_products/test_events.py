@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 2:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:34 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
 
 import matplotlib.pyplot as plt
+from astropy.units import Quantity
 from astropy.wcs import WCS
 
 from xga.exceptions import ProductGenerationError
