@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 2:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 2:24 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -202,17 +202,17 @@ class TestEventListFunctionality(unittest.TestCase):
         # Create XMM image using donor
         xmm_img = xmm_evt.generate_image(donor_image=rosat_img)
 
-        # Assertions
-        self.assertEqual(xmm_img.shape, rosat_img.shape, "XMM image shape does not match donor image shape.")
-        # The WCS should be identical
-        self.assertEqual(xmm_img.radec_wcs.to_header().tostring(), rosat_img.radec_wcs.to_header().tostring(),
-                         "XMM image WCS does not match donor image WCS.")
-
         # Save views as PNGs
         test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
         os.makedirs(test_out_path, exist_ok=True)
         rosat_img.save_view(os.path.join(test_out_path, "rosat_donor.png"))
         xmm_img.save_view(os.path.join(test_out_path, "xmm_from_donor.png"))
+
+        # Assertions
+        self.assertEqual(xmm_img.shape, rosat_img.shape, "XMM image shape does not match donor image shape.")
+        # The WCS should be identical
+        self.assertEqual(xmm_img.radec_wcs.to_header().tostring(), rosat_img.radec_wcs.to_header().tostring(),
+                         "XMM image WCS does not match donor image WCS.")
 
         # Memory management
         rosat_evt.unload()
