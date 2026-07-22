@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 3:12 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -18,85 +18,71 @@ from .. import MISC_OUTPUT_TESTS, EXTERNAL_TEST_DATA_PATH
 # These are a selection of event lists, with expected telescope/instrument, to test with
 TEST_EVTS = {
     "ASCA_GIS": {"path": "asca/data/rev2/87036000/screened/ad87036000g300370m.evt.gz",
-                 "tele": "asca", "inst": "gis3", "imaging": True},
+                 "tele": "asca", "inst": "gis3", "obsid": "87036000", "imaging": True},
     "ASCA_SIS": {"path": "asca/data/rev2/87036000/screened/ad87036000s000302m.evt.gz",
-                 "tele": "asca", "inst": "sis0", "imaging": True},
-    "BBXRT": {"path": "bbxrt/events/a2256i.evt.gz", "tele": "bbxrt", "inst": "A0-B4", "imaging": False},
+                 "tele": "asca", "inst": "sis0", "obsid": "87036000", "imaging": True},
+    "BBXRT": {"path": "bbxrt/events/a2256i.evt.gz",
+              "tele": "bbxrt", "inst": "A0-B4", "obsid": "a2256i", "imaging": False},
     "Calet": {"path": "calet/data/cgbm/obs/2025/20250318/events/cgbm_20250318_hx2_113151.evt.gz",
-              "tele": "calet", "inst": "cgbm", "imaging": False},
+              "tele": "calet", "inst": "cgbm", "obsid": "113151", "imaging": False},
     "Chandra_ACIS": {"path": "chandra/data/byobsid/2/12812/primary/acisf12812N003_evt2.fits.gz",
-                     "tele": "chandra", "inst": "acis", "imaging": True},
+                     "tele": "chandra", "inst": "acis", "obsid": "12812", "imaging": True},
     "Chandra_HRC": {"path": "chandra/data/byobsid/2/22642/primary/hrcf22642N003_evt2.fits.gz",
-                    "tele": "chandra", "inst": "hrc", "imaging": True},
-    "Einstein_HRI": {"path": "einstein/data/hri/events/h0039n40.xpa.Z", "tele": "einstein", "inst": "hri", "imaging": True},
-    "Einstein_IPC": {"path": "einstein/data/ipc/events/i2030n40.xpb.Z", "tele": "einstein", "inst": "ipc", "imaging": True},
+                    "tele": "chandra", "inst": "hrc", "obsid": "22642", "imaging": True},
+    "Einstein_HRI": {"path": "einstein/data/hri/events/h0039n40.xpa.Z",
+                     "tele": "einstein", "inst": "hri", "obsid": "h0039n40", "imaging": True},
+    "Einstein_IPC": {"path": "einstein/data/ipc/events/i2030n40.xpb.Z",
+                     "tele": "einstein", "inst": "ipc", "obsid": "i2030n40", "imaging": True},
     "HaloSat": {"path": "halosat/data/obs/101601/products/hs101601_s14_cl.evt.gz",
-                "tele": "halosat", "inst": "sdd14", "imaging": False},
+                "tele": "halosat", "inst": "sdd14", "obsid": "101601", "imaging": False},
     "IXPE": {"path": "ixpe/data/obs/03/03005001/event_l2/ixpe03005001_det1_evt2_v02.fits.gz",
-             "tele": "ixpe", "inst": "DU1", "imaging": True},
+             "tele": "ixpe", "inst": "DU1", "obsid": "03005001", "imaging": True},
     "MAXI_GSC_Low": {"path": "maxi/data/obs/MJD57000/MJD57115/events/gsc_low/mx_mjd57115_gsc_low_078.evt.gz",
-                     "tele": "maxi", "inst": "gsc", "imaging": True},
+                     "tele": "maxi", "inst": "gsc", "obsid": "MJD57115", "imaging": True},
     "MAXI_GSC_Med": {"path": "maxi/data/obs/MJD57000/MJD57115/events/gsc_med/mx_mjd57115_gsc_med_126.evt.gz",
-                     "tele": "maxi", "inst": "gsc", "imaging": True},
+                     "tele": "maxi", "inst": "gsc", "obsid": "MJD57115", "imaging": True},
     "MAXI_SSC_Med": {"path": "maxi/data/obs/MJD57000/MJD57115/events/ssc_med/mx_mjd57115_ssch_med_167.evt.gz",
-                     "tele": "maxi", "inst": "ssc", "imaging": True},
+                     "tele": "maxi", "inst": "ssc", "obsid": "MJD57115", "imaging": True},
     "NICER_XTI": {"path": "nicer/data/obs/2023_06/6060040431/xti/event_cl/ni6060040431_0mpu7_cl.evt.gz",
-                  "tele": "nicer", "inst": "xti", "imaging": False},
+                  "tele": "nicer", "inst": "xti", "obsid": "6060040431", "imaging": False},
     "NuSTAR": {"path": "nustar/data/obs/10/7/71010003002/event_cl/nu71010003002A01_cl.evt.gz",
-               "tele": "nustar", "inst": "fpma", "imaging": True},
+               "tele": "nustar", "inst": "fpma", "obsid": "71010003002", "imaging": True},
     "ROSAT_HRI": {"path": "rosat/data/hri/processed_data/800000/rh800446a01/rh800446a01_bas.fits.Z",
-                  "tele": "rosat", "inst": "hri", "imaging": True},
+                  "tele": "rosat", "inst": "hri", "obsid": "rh800446a01", "imaging": True},
     "ROSAT_PSPC": {"path": "rosat/data/pspc/processed_data/500000/rp500211n00/rp500211n00_bas.fits.Z",
-                   "tele": "rosat", "inst": "pspcb", "imaging": True},
+                   "tele": "rosat", "inst": "pspcb", "obsid": "rp500211n00", "imaging": True},
     "BeppoSAX_LECS": {"path": "sax/data/events/20309003/event_files/LECS_20309003.evt.gz",
-                      "tele": "sax", "inst": "lecs", "imaging": True},
+                      "tele": "sax", "inst": "lecs", "obsid": "20309003", "imaging": True},
     "BeppoSAX_MECS": {"path": "sax/data/events/20309003/event_files/MECS2_20309003.evt.gz",
-                      "tele": "sax", "inst": "mecs2", "imaging": True},
+                      "tele": "sax", "inst": "mecs2", "obsid": "20309003", "imaging": True},
     "SRG_eROSITA": {"path": "srg/data/erosita/erass1/obs/141/053/EXP_010/em01_053141_020_EventList_c010.fits.gz",
-                    "tele": "erosita", "inst": "merged", "imaging": True, "use_binsize": 500},
+                    "tele": "erosita", "inst": "merged", "obsid": "053141", "imaging": True, "use_binsize": 500},
     "Suzaku_XIS": {"path": "suzaku/data/obs/7/704015010/xis/event_cl/ae704015010xi1_0_3x3n069b_cl.evt.gz",
-                   "tele": "suzaku", "inst": "xis1", "imaging": True},
+                   "tele": "suzaku", "inst": "xis1", "obsid": "704015010", "imaging": True},
     "Suzaku_HXD_GSO": {"path": "suzaku/data/obs/7/704015010/hxd/event_cl/ae704015010hxd_0_gsono_cl.evt.gz",
-                       "tele": "suzaku", "inst": "hxd", "imaging": False},
+                       "tele": "suzaku", "inst": "hxd", "obsid": "704015010", "imaging": False},
     "Suzaku_HXD_PIN": {"path": "suzaku/data/obs/7/704015010/hxd/event_cl/ae704015010hxd_0_pinno_cl.evt.gz",
-                       "tele": "suzaku", "inst": "hxd", "imaging": False},
+                       "tele": "suzaku", "inst": "hxd", "obsid": "704015010", "imaging": False},
     "Swift_XRT": {"path": "swift/data/obs/2010_12/00020153006/xrt/event/sw00020153006xpcw3po_cl.evt.gz",
-                  "tele": "swift", "inst": "xrt", "imaging": True},
+                  "tele": "swift", "inst": "xrt", "obsid": "00020153006", "imaging": True},
     "XMM_PN": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501PNS003PIEVLI0000.FTZ",
-               "tele": "xmm", "inst": "epn", "imaging": True},
+               "tele": "xmm", "inst": "epn", "obsid": "0201903501", "imaging": True},
     "XMM_MOS1": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501M1S001MIEVLI0000.FTZ",
-                 "tele": "xmm", "inst": "emos1", "imaging": True},
+                 "tele": "xmm", "inst": "emos1", "obsid": "0201903501", "imaging": True},
     "XMM_MOS2": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501M2S002MIEVLI0000.FTZ",
-                 "tele": "xmm", "inst": "emos2", "imaging": True},
+                 "tele": "xmm", "inst": "emos2", "obsid": "0201903501", "imaging": True},
     "XMM_RGS1": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501R1S004EVENLI0000.FTZ",
-                 "tele": "xmm", "inst": "rgs1", "imaging": False},
+                 "tele": "xmm", "inst": "rgs1", "obsid": "0201903501", "imaging": False},
     "XMM_RGS2": {"path": "xmm/data/rev0/0201903501/PPS/P0201903501R2S005EVENLI0000.FTZ",
-                 "tele": "xmm", "inst": "rgs2", "imaging": False},
+                 "tele": "xmm", "inst": "rgs2", "obsid": "0201903501", "imaging": False},
     "XRISM_XTEND": {"path": "xrism/data/obs/3/300049010/xtend/event_cl/xa300049010xtd_p032000010_cl.evt.gz",
-                    "tele": "xrism", "inst": "xtend", "imaging": True},
+                    "tele": "xrism", "inst": "xtend", "obsid": "300049010", "imaging": True},
     "XRISM_Resolve": {"path": "xrism/data/obs/3/300049010/resolve/event_cl/xa300049010rsl_p0px5000_cl.evt.gz",
-                      "tele": "xrism", "inst": "resolve", "imaging": True},
+                      "tele": "xrism", "inst": "resolve", "obsid": "300049010", "imaging": True},
 }
 
 S3_ROOT = "s3://nasa-heasarc/"
 HTTPS_ROOT = "https://heasarc.gsfc.nasa.gov/FTP/"
-
-
-class TestEventListInitialization(unittest.TestCase):
-    """
-    Granular tests for mission initialization across all defined event lists.
-    """
-    def check_mission_init(self, name):
-
-        cur_info = TEST_EVTS[name]
-        evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
-
-        self.assertEqual(evt.telescope.lower(), cur_info['tele'].lower())
-
-        actual_inst = evt.instrument.lower()
-        expected_inst = cur_info['inst'].lower()
-        self.assertTrue(actual_inst.startswith(expected_inst) or expected_inst.startswith(actual_inst),
-                        f"Instrument mismatch for {name}: {evt.instrument} vs {cur_info['inst']}")
 
 
 class TestEventListImageGeneration(unittest.TestCase):
@@ -111,9 +97,32 @@ class TestEventListImageGeneration(unittest.TestCase):
         cls.evt = EventList(S3_ROOT + xmm_pn_test_info['path'])
         cls.test_evt_name = "XMM_PN"
 
-    def check_missions_image_gen(self, name):
+    def check_missions_evt_init_image_gen(self, name):
         cur_info = TEST_EVTS[name]
-        evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
+
+        # We'll do a sub-test of the base event list checks first - no sense
+        #  having a separate test for this when we're loading them all anyway to attempt to
+        #  make images.
+
+        # Declare the event list from the S3 URI
+        cur_test_evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
+
+        with self.subTest(check=f"Telescope, instrument, ObsID checks of EventList for {name}"):
+            # Check the telescope is what we expected
+            self.assertEqual(cur_test_evt.telescope.lower(), cur_info['tele'].lower(),
+                             msg=f"Telescope mismatch for {name}: {cur_test_evt.telescope} vs {cur_info['tele']}")
+
+            # Then same deal for the instrument
+            actual_inst = cur_test_evt.instrument.lower()
+            expected_inst = cur_info['inst'].lower()
+            self.assertTrue(actual_inst.startswith(expected_inst) or expected_inst.startswith(actual_inst),
+                            f"Instrument mismatch for {name}: {cur_test_evt.instrument} vs {cur_info['inst']}")
+
+            # Then finally for the ObsID
+            actual_obsid = cur_test_evt.obs_id.lower()
+            expected_obsid = cur_info['obsid'].lower()
+            self.assertEqual(actual_obsid, expected_obsid,
+                            f"Instrument mismatch for {name}: {cur_test_evt.obs_id} vs {cur_info['obsid']}")
 
         if cur_info['imaging']:
             # For imaging missions, we expect success.
@@ -123,7 +132,7 @@ class TestEventListImageGeneration(unittest.TestCase):
                 #  special cases may have a different binsize set in the TEST_EVTS dictionary (e.g. eROSITA
                 #  because otherwise it gobbles a LOT of memory).
                 cur_bin_size = cur_info.get('use_binsize', 10)
-                img = evt.generate_image(bin_size=cur_bin_size)
+                img = cur_test_evt.generate_image(bin_size=cur_bin_size)
                 self.assertIsInstance(img, Image)
                 self.assertGreater(img.data.sum(), 0, f"Generated image for {name} has no counts")
 
@@ -138,10 +147,10 @@ class TestEventListImageGeneration(unittest.TestCase):
             # For non-imaging missions, we expect a ValueError.
             with self.assertRaises((ValueError, ProductGenerationError),
                                    msg=f"Image generation should have failed for non-imaging mission {name}"):
-                evt.generate_image()
+                cur_test_evt.generate_image()
 
         # Explicitly unload to free data memory immediately
-        evt.unload()
+        cur_test_evt.unload()
         if 'img' in locals():
             img.unload()
 
@@ -357,16 +366,10 @@ class TestEventListImageGeneration(unittest.TestCase):
 # Dynamically attach init and generation tests for every mission
 # This avoids manual repetition while providing granular results for each mission
 for mission_name in TEST_EVTS:
-    # All the tests that check that an EventList can be declared
-    init_method = f"test_init_{mission_name}"
-    def create_init_test(m_name):
-        return lambda self: self.check_mission_init(m_name)
-    setattr(TestEventListInitialization, init_method, create_init_test(mission_name))
-
-    # And all the generic generation of image tests
-    gen_method = f"test_gen_{mission_name}"
+    # All the tests that check that an EventList can be declared and an image can be generated from them
+    gen_method = f"test_evt_init_im_gen_{mission_name}"
     def create_gen_test(m_name):
-        return lambda self: self.check_missions_image_gen(m_name)
+        return lambda self: self.check_missions_evt_init_image_gen(m_name)
     setattr(TestEventListImageGeneration, gen_method, create_gen_test(mission_name))
 
 
