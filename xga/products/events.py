@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 10:15 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 10:18 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -1480,19 +1480,18 @@ class EventList(BaseProduct):
             # If a donor image is provided, we project the events onto its coordinate grid
             # First we transform the filtered event coordinates to SkyCoords (origin=1) using the source WCS
             #  this allows for frame-aware transformations (e.g. FK4 -> ICRS)
-            ev_skycoord = wcs_utils.pixel_to_skycoord(rel_evt_data[x_col], rel_evt_data[y_col], self.radec_sky_wcs,
-                                                     origin=1)
+            evt_skycoord = wcs_utils.pixel_to_skycoord(rel_evt_data[x_col], rel_evt_data[y_col], self.radec_sky_wcs, origin=1)
 
             # Then we transform those world coordinates to the pixel grid of the donor image (origin=1)
             #  using the donor's WCS. skycoord_to_pixel handles the frame conversion internally
-            ev_donor_pix = wcs_utils.skycoord_to_pixel(ev_skycoord, donor_image.radec_wcs, origin=1)
+            evt_donor_pix = wcs_utils.skycoord_to_pixel(evt_skycoord, donor_image.radec_wcs, origin=1)
 
             # We define bins based on the donor image's shape (again centering on pixels, edges are [0.5, 1.5))
             x_bins = np.arange(0.5, donor_image.shape[1] + 1.5, 1)
             y_bins = np.arange(0.5, donor_image.shape[0] + 1.5, 1)
 
             # We bin the calculated donor pixel coordinates into the grid
-            binned_data = np.histogram2d(ev_donor_pix[1], ev_donor_pix[0], bins=(y_bins, x_bins))[0]
+            binned_data = np.histogram2d(evt_donor_pix[1], evt_donor_pix[0], bins=(y_bins, x_bins))[0]
 
             # The WCS for this new image is simply inherited from the donor image
             im_wcs = donor_image.radec_wcs

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 10:17 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 10:25 AM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -183,6 +183,7 @@ class BaseProduct:
         #  highlight to the user that it shouldn't be accessed by them.
         self._extra_info = extra_info
 
+    # ------------- Define properties -------------
     # Users are not allowed to change this, so just a getter.
     @property
     def usable(self) -> bool:
@@ -253,6 +254,155 @@ class BaseProduct:
         """
         return self._fsspec_kwargs
 
+    @property
+    def gen_errors(self) -> List[str]:
+        """
+        Property getter for the confirmed generation errors associated with a product.
+
+        :return: The list of confirmed generation errors.
+        :rtype: List[str]
+        """
+        return self._gen_error
+
+    @property
+    def gen_warnings(self) -> List[Dict]:
+        """
+        Property getter for the confirmed generation warnings associated with a product.
+
+        :return: The list of confirmed generation warnings.
+        :rtype: List[Dict]
+        """
+        return self._gen_warn
+
+    @property
+    def telescope(self) -> str:
+        """
+        Property getter for the name of the telescope that this product was derived from.
+
+        :return: The telescope name.
+        :rtype: str
+        """
+        return self._tele
+
+    @property
+    def pretty_telescope_name(self) -> Union[str, None]:
+        """
+        Property getter for a 'pretty' version of a telescope name, for inclusion in
+        figure labels, titles, etc. - only if a 'pretty' name is defined in xga.utils.
+
+        :return: The 'pretty' version of the telescope name if available, the usual
+            form of the telescope name if not, and None if no telescope name is set.
+        :rtype: Union[str, None]
+        """
+        if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
+            pretty_name = PRETTY_TELESCOPE_NAMES[self.telescope]
+        elif (self.telescope is not None and
+              self.telescope not in PRETTY_TELESCOPE_NAMES):
+            pretty_name = self.telescope
+        else:
+            pretty_name = None
+
+        return pretty_name
+
+    @property
+    def obs_id(self) -> str:
+        """
+        Property getter for the ObsID of the observation that this product was derived from.
+
+        :return: The ObsID of this product.
+        :rtype: str
+        """
+        return self._obs_id
+
+    @property
+    def instrument(self) -> str:
+        """
+        Property getter for the name of the instrument that this product was derived from.
+
+        :return: The instrument name of this product.
+        :rtype: str
+        """
+        return self._inst
+
+    @property
+    def type(self) -> str:
+        """
+        Property getter for the string identifier for the type of product this object is, mostly useful for
+        internal methods of source objects.
+
+        :return: The string identifier for this type of object.
+        :rtype: str
+        """
+        return self._prod_type
+
+    @property
+    def errors(self) -> List[str]:
+        """
+        Property getter for non-parsed errors detected during the generation of a product.
+
+        :return: A list of errors that haven't been successfully linked to a generation process specific to a
+            telescope.
+        :rtype: List[str]
+        """
+        return self._other_error
+
+    @property
+    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
+        """
+        Getter method for the energy_bounds property, which returns the rest frame energy band that this
+        product was generated in.
+
+        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
+        :rtype: Tuple[Quantity, Quantity]
+        """
+        return self._energy_bounds
+
+    @property
+    def src_name(self) -> str:
+        """
+        Method to return the name of the object a product is associated with. The product becomes
+        aware of this once it is added to a source object.
+
+        :return: The name of the source object this product is associated with.
+        :rtype: str
+        """
+        return self._src_name
+
+    @src_name.setter
+    def src_name(self, name: str):
+        """
+        Property setter for the src_name attribute of a product, should only really be called by a source object,
+        not by a user.
+
+        :param str name: The name of the source object associated with this product.
+        """
+        self._src_name = name
+
+    @property
+    def not_usable_reasons(self) -> List:
+        """
+        Whenever the usable flag of a product is set to False (indicating you shouldn't use the product), a string
+        indicating the reason is added to a list, which this property returns.
+
+        :return: A list of reasons why this product is unusable.
+        :rtype: List
+        """
+        return self._why_unusable
+
+    # This needs a setter, as this property only becomes not-None when the product is added to a source object.
+    @property
+    def sas_command(self) -> str:
+        """
+        A property that returns the original SAS command used to generate this object.
+
+        :return: String containing the command.
+        :rtype: str
+        """
+        return self._og_cmd
+
+    # --------- Define internal functions ---------
+
+    # --------- Define external functions ---------
     def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
@@ -521,26 +671,6 @@ class BaseProduct:
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
-    @property
-    def gen_errors(self) -> List[str]:
-        """
-        Property getter for the confirmed generation errors associated with a product.
-
-        :return: The list of confirmed generation errors.
-        :rtype: List[str]
-        """
-        return self._gen_error
-
-    @property
-    def gen_warnings(self) -> List[Dict]:
-        """
-        Property getter for the confirmed generation warnings associated with a product.
-
-        :return: The list of confirmed generation warnings.
-        :rtype: List[Dict]
-        """
-        return self._gen_warn
-
     def raise_errors(self):
         """
         Method to raise the errors parsed from std_err string.
@@ -553,132 +683,6 @@ class BaseProduct:
             if "warning" not in error:
                 raise UnknownCommandlineError("{}".format(error))
 
-    @property
-    def telescope(self) -> str:
-        """
-        Property getter for the name of the telescope that this product was derived from.
-
-        :return: The telescope name.
-        :rtype: str
-        """
-        return self._tele
-
-    @property
-    def pretty_telescope_name(self) -> Union[str, None]:
-        """
-        Property getter for a 'pretty' version of a telescope name, for inclusion in
-        figure labels, titles, etc. - only if a 'pretty' name is defined in xga.utils.
-
-        :return: The 'pretty' version of the telescope name if available, the usual
-            form of the telescope name if not, and None if no telescope name is set.
-        :rtype: Union[str, None]
-        """
-        if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
-            pretty_name = PRETTY_TELESCOPE_NAMES[self.telescope]
-        elif (self.telescope is not None and
-              self.telescope not in PRETTY_TELESCOPE_NAMES):
-            pretty_name = self.telescope
-        else:
-            pretty_name = None
-
-        return pretty_name
-
-    @property
-    def obs_id(self) -> str:
-        """
-        Property getter for the ObsID of the observation that this product was derived from.
-
-        :return: The ObsID of this product.
-        :rtype: str
-        """
-        return self._obs_id
-
-    @property
-    def instrument(self) -> str:
-        """
-        Property getter for the name of the instrument that this product was derived from.
-
-        :return: The instrument name of this product.
-        :rtype: str
-        """
-        return self._inst
-
-    @property
-    def type(self) -> str:
-        """
-        Property getter for the string identifier for the type of product this object is, mostly useful for
-        internal methods of source objects.
-
-        :return: The string identifier for this type of object.
-        :rtype: str
-        """
-        return self._prod_type
-
-    @property
-    def errors(self) -> List[str]:
-        """
-        Property getter for non-parsed errors detected during the generation of a product.
-
-        :return: A list of errors that haven't been successfully linked to a generation process specific to a
-            telescope.
-        :rtype: List[str]
-        """
-        return self._other_error
-
-    # This is a fundamental property of the generated product, so I won't allow it be changed.
-    @property
-    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
-        """
-        Getter method for the energy_bounds property, which returns the rest frame energy band that this
-        product was generated in.
-
-        :return: Tuple containing the lower and upper energy limits as Astropy quantities.
-        :rtype: Tuple[Quantity, Quantity]
-        """
-        return self._energy_bounds
-
-    @property
-    def src_name(self) -> str:
-        """
-        Method to return the name of the object a product is associated with. The product becomes
-        aware of this once it is added to a source object.
-
-        :return: The name of the source object this product is associated with.
-        :rtype: str
-        """
-        return self._src_name
-
-    # This needs a setter, as this property only becomes not-None when the product is added to a source object.
-    @src_name.setter
-    def src_name(self, name: str):
-        """
-        Property setter for the src_name attribute of a product, should only really be called by a source object,
-        not by a user.
-
-        :param str name: The name of the source object associated with this product.
-        """
-        self._src_name = name
-
-    @property
-    def not_usable_reasons(self) -> List:
-        """
-        Whenever the usable flag of a product is set to False (indicating you shouldn't use the product), a string
-        indicating the reason is added to a list, which this property returns.
-
-        :return: A list of reasons why this product is unusable.
-        :rtype: List
-        """
-        return self._why_unusable
-
-    @property
-    def sas_command(self) -> str:
-        """
-        A property that returns the original SAS command used to generate this object.
-
-        :return: String containing the command.
-        :rtype: str
-        """
-        return self._og_cmd
 
 
 class BaseAggregateProduct:
