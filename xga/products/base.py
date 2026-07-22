@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 10:25 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 11:41 AM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -399,6 +399,25 @@ class BaseProduct:
         :rtype: str
         """
         return self._og_cmd
+
+    @property
+    def radec_sys(self) -> str:
+        """
+        For products that handle RA-DEC spatial information, this property returns the name of the
+        RA-DEC system within which the WCS is defined; e.g. FK4, FK5, or ICRS.
+
+        If the product does not deal with spatial information, an attribute error will be raised.
+
+        :return: The name of the RADEC system (e.g. FK4, FK5, or ICRS) associated with this product.
+        :rtype: str
+        """
+        if hasattr(self, 'radec_sky_wcs'):
+            return self.radec_sky_wcs.wcs.radesys
+        elif hasattr(self, 'radec_wcs'):
+            return self.radec_wcs.wcs.radesys
+        else:
+            raise AttributeError(f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                                 f"or 'radec_wcs' property to retrieve the RA-DEC system from.")
 
     # --------- Define internal functions ---------
 
