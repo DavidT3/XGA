@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 3:19 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 4:13 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -236,8 +236,8 @@ class EventList(BaseProduct):
         # Most missions call the table that contains event information "EVENTS", but it isn't a given - ROSAT, for
         #  instance, calls it STDEVT - obviously very important that we get this right
         if self._rel_miss_db is None:
-            warn(f"The {self.telescope} telescope cannot be found in the XSELECT mission database file, so "
-                 f"the name of the table containing event information is assumed to be 'EVENTS'.", stacklevel=2)
+            # warn(f"The {self.telescope} telescope cannot be found in the XSELECT mission database file, so "
+            #      f"the name of the table containing event information is assumed to be 'EVENTS'.", stacklevel=2)
             self._evt_tab_name = "EVENTS"
 
         # In cases where individual instruments have entries for this, we'll use them
