@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:21 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:38 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -144,6 +144,19 @@ class TestEventListImageGeneration(unittest.TestCase):
         evt.unload()
         if 'img' in locals():
             img.unload()
+
+    def test_image_save_fits(self):
+        """Test that the EventList image generation function can write the image to a FITS file."""
+        # Set the approximate eV/chan of XMM PN
+
+        test_out_dir = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_dir, exist_ok=True)
+
+        test_out_path = os.path.join(test_out_dir, f"{self.test_evt_name}_image.fits")
+
+        cur_test_im = self.evt.generate_image(save_path=test_out_path)
+        self.assertIsInstance(cur_test_im, Image)
+        self.assertGreater(cur_test_im.data.sum(), 0, f"Generated image for {self.test_evt_name} has no counts.")
 
     def test_image_gen_en_bounds(self):
         """Test the generation of an image within specified energy bounds."""
