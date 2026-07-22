@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:36 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -173,6 +173,32 @@ class TestEventListImageGeneration(unittest.TestCase):
         with self.assertRaises(NotImplementedError,
                        msg=f"Energy bounded image generation should have failed for EventList with no energy-per-channel information."):
             self.evt.generate_image(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2., 'keV'))
+
+    def test_image_gen_angular_binsize(self):
+        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)"""
+        ang_bin_size = Quantity(4.35, 'arcsec')
+
+        expec_size = 512
+        acc_pix_diff = 5
+
+        cur_test_im = self.evt.generate_image(bin_size=ang_bin_size)
+
+        self.assertIsInstance(cur_test_im, Image)
+
+        self.assertAlmostEqual(cur_test_im.shape[0], expec_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_size}) .")
+        self.assertAlmostEqual(cur_test_im.shape[1], expec_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_size}) .")
+
+        self.assertGreater(cur_test_im.data.sum(), 0, f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has no counts.")
+
+        # Saving the generated image as a PNG following the pattern in TestProfileView
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+        cur_test_im.save_view(os.path.join(test_out_path, f"{self.test_evt_name}_binsize{ang_bin_size.value}arcsec.png"))
+
+        print(cur_test_im.header)
+
+        # self.assertIn("LO_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a LO_EN header entry.")
+        # self.assertIn("HI_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a HI_EN header entry.")
 
     def test_donor_image_generation(self):
         """Tests generating an image using another image as a donor for the WCS grid."""
