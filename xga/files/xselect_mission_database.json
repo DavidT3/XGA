@@ -1028,7 +1028,7 @@
       }
     }
   },
-  "AXAF": {
+  "CHANDRA": {
     "submkey": "GRATING",
     "instkey": "INSTRUME",
     "dmodekey": "DATAMODE",
@@ -1037,8 +1037,8 @@
     "time": "TIME",
     "tunits": "s",
     "binsize": 16.0,
-    "x": "X",
-    "y": "Y",
+    "x": "x",
+    "y": "y",
     "xsiz": "TLMAX",
     "ysiz": "TLMAX",
     "detx": "DETX",
@@ -1060,7 +1060,7 @@
     "fbin": 4,
     "hbin": 8,
     "spbn": 1,
-    "ecol": "PI",
+    "ecol": "pi",
     "ccol": "CCD_ID",
     "gcol": "GRADE",
     "imagecoord": "SKY",
@@ -1163,7 +1163,7 @@
     "rawysiz": "TLMAX",
     "phamax": "PHACHANS",
     "gti": "ALLGTI",
-    "events": "PHOTON_LIST",
+    "events": "EVENTS",
     "timeorder": "no",
     "instruments": "AO-B4",
     "imagecoord": "SKY",
@@ -1475,6 +1475,38 @@
         "SRCCNT"
       ]
     }
+  },
+  "EROSITA": {
+    "submkey": null,
+    "instkey": "INSTRUME",
+    "dmodekey": "DATAMODE",
+    "time": "TIME",
+    "tunits": "s",
+    "binsize": 16.0,
+    "x": "X",
+    "y": "Y",
+    "xsiz": "TLMAX",
+    "ysiz": "TLMAX",
+    "rawx": "RAWX",
+    "rawy": "RAWY",
+    "rawxsiz": "TLMAX",
+    "rawysiz": "TLMAX",
+    "phamax": "TLMAX",
+    "events": "EVENTS",
+    "instruments": [
+      "MERGED",
+      "TM1",
+      "TM2",
+      "TM3",
+      "TM4",
+      "TM5",
+      "TM6",
+      "TM7"
+    ],
+    "ecol": "PI",
+    "ccol": "CCDNR",
+    "gcol": "PATTERN",
+    "imagecoord": "SKY"
   },
   "EXOSAT": {
     "submkey": null,

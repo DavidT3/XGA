@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/13/26, 5:24 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:22 PM. Copyright (c) The Contributors.
 
 
 from typing import Tuple, List, Union
@@ -323,6 +323,19 @@ def find_all_wcs(hdr: FITSHDR) -> List[WCS]:
         w.wcs.cdelt = [hdr["CDELT1{}".format(key)], hdr["CDELT2{}".format(key)]]
         w.wcs.crval = [hdr["CRVAL1{}".format(key)], hdr["CRVAL2{}".format(key)]]
         w.wcs.ctype = [hdr["CTYPE1{}".format(key)], hdr["CTYPE2{}".format(key)]]
+
+        # We also ensure that the equinox and coordinate system information is captured, so that
+        #  transformations (e.g. for donor image projection) are frame-aware.
+        if 'EQUINOX' in hdr:
+            w.wcs.equinox = hdr['EQUINOX']
+        elif 'EPOCH' in hdr:
+            w.wcs.equinox = hdr['EPOCH']
+
+        if 'RADECSYS' in hdr:
+            w.wcs.radesys = hdr['RADECSYS']
+        elif 'RADESYS' in hdr:
+            w.wcs.radesys = hdr['RADESYS']
+
         wcses.append(w)
 
     return wcses

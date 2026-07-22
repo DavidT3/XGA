@@ -9,10 +9,10 @@ products.base module
    :undoc-members:
    :show-inheritance:
 
-products.misc module
---------------------
+products.events module
+----------------------
 
-.. automodule:: xga.products.misc
+.. automodule:: xga.products.events
    :members:
    :undoc-members:
    :show-inheritance:

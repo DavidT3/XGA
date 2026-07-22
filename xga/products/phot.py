@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 9:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:23 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -26,7 +26,7 @@ from scipy.signal import fftconvolve
 
 from . import BaseProduct, BaseAggregateProduct
 from ..exceptions import FailedProductError, RateMapPairError, NotPSFCorrectedError, IncompatibleProductError, \
-    ProductNotUsableError, XGADeveloperError
+    ProductNotUsableError
 from ..sourcetools import ang_to_rad
 from ..utils import ALLOWED_INST, PRETTY_TELESCOPE_NAMES
 
@@ -72,7 +72,7 @@ class Image(BaseProduct):
     :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
         left as they are, if False (the default) then they are set to zero.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
-        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        path's existence. Default is True, in which case a check will be performed, but if declaring
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
@@ -114,7 +114,7 @@ class Image(BaseProduct):
         :param bool allow_negative_vals: Controls how negative values in data are treated. If True then they will be
             left as they are, if False (the default) then they are set to zero.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
-            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            path's existence. Default is True, in which case a check will be performed, but if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
@@ -151,7 +151,7 @@ class Image(BaseProduct):
             elif isinstance(path, list):
                 self._data = path[0]
                 self._wcs_radec = path[1]
-                self._header = path[3]
+                self._header = path[2]
             else:
                 raise TypeError("The 'path' argument must be a string path, a dictionary with 'data', 'wcs', and "
                                 "'header' keys, or a list containing a numpy array, an Astropy WCS object, and a "
@@ -1373,8 +1373,10 @@ class Image(BaseProduct):
         else:
             ident = "{o} {i}".format(o=self.obs_id, i=self.instrument.upper())
 
-        if self.telescope is not None:
-            ident = PRETTY_TELESCOPE_NAMES[self.telescope] + ' ' + ident
+        if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
+            ident = f"{PRETTY_TELESCOPE_NAMES[self.telescope]} {ident}"
+        elif self.telescope is not None:
+            ident = f"{self.telescope} {ident}"
 
         # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
         #  title - otherwise we use the custom title and don't add anything to it
@@ -2739,7 +2741,7 @@ class ExpMap(Image):
         ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
-        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        path's existence. Default is True, in which case a check will be performed, but if declaring
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
@@ -2762,7 +2764,7 @@ class ExpMap(Image):
             ['0404910601', 'mos2'], ['0201901401', 'pn'], ['0201901401', 'mos1'], ['0201901401', 'mos2']].
         :param str telescope: The telescope that this product is derived from. Default is None.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
-            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            path's existence. Default is True, in which case a check will be performed, but if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
@@ -3613,7 +3615,7 @@ class PSF(Image):
     :param str gen_cmd: The command used to generate the product.
     :param str telescope: The telescope that this product is derived from. Default is None.
     :param bool check_exists: Controls whether the product instantiation process checks for the file
-        path's existence or not. Default is True, in which case a check will be performed, but if declaring
+        path's existence. Default is True, in which case a check will be performed, but if declaring
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
@@ -3631,7 +3633,7 @@ class PSF(Image):
         :param str gen_cmd: The command used to generate the product.
         :param str telescope: The telescope that this product is derived from. Default is None.
         :param bool check_exists: Controls whether the product instantiation process checks for the file
-            path's existence or not. Default is True, in which case a check will be performed, but if declaring
+            path's existence. Default is True, in which case a check will be performed, but if declaring
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """

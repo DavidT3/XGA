@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 10:31 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 9:08 AM. Copyright (c) The Contributors.
 import os
 
 import numpy as np
@@ -12,6 +12,9 @@ from .source_info import SRC_INFO, SUPP_SRC_INFO, EXPECTED_ERO_OBS, EXPECTED_XMM
 
 MISC_OUTPUT_TESTS = os.path.join(OUTPUT, "test_figures")
 os.makedirs(MISC_OUTPUT_TESTS, exist_ok=True)
+
+EXTERNAL_TEST_DATA_PATH = os.path.join(OUTPUT, "test_data", "external_data")
+os.makedirs(EXTERNAL_TEST_DATA_PATH, exist_ok=True)
 
 # Making a df to make a sample from
 column_names = ['name', 'ra', 'dec', 'z', 'r500']

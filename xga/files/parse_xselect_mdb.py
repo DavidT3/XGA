@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 7/20/26, 9:50 AM. Copyright (c) The Contributors.
 """
 This script parses the XSELECT mission database into a Python dictionary.
 
@@ -9,8 +10,6 @@ is converted into a nested dictionary, with the top-level keys being the telesco
 mission names. The script accounts for the initial comment block and begins
 parsing data from line 79 onwards, as specified.
 """
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 25/09/2025, 17:22. Copyright (c) The Contributors
 
 import json
 import os
