@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 10:15 AM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -1499,39 +1499,41 @@ class EventList(BaseProduct):
         # --------------------------------------------------------------------------
 
         # -------------- Setting up XGA Image and saving if requested --------------
-        new_header = [{'name': 'SIMPLE', 'value': 'T'},
-                      {'name': 'BITPIX', 'value': binned_data.dtype.itemsize * 8},
-                      {'name': 'NAXIS', 'value': 2},
-                      {'name': 'NAXIS1', 'value': binned_data.shape[1]},
-                      {'name': 'NAXIS2', 'value': binned_data.shape[0]},
-                      {'name': 'TELESCOP', 'value': self.telescope},
-                      {'name': 'INSTRUME', 'value': self.instrument},
-                      {'name': 'OBS_ID', 'value': self.obs_id}]
+        # Setting up the header that we'll feed into the HDU that will become the image file - the WCS
+        #  is the most important part of that
+        new_hdr_init = [('SIMPLE', 'T'),
+                        ('BITPIX', binned_data.dtype.itemsize * 8),
+                        ('NAXIS', 2),
+                        ('NAXIS1', binned_data.shape[1]),
+                        ('NAXIS2', binned_data.shape[0]),
+                        ('TELESCOP', self.telescope),
+                        ('INSTRUME', self.instrument),
+                        ('OBS_ID', self.obs_id)]
+        new_hdr = fits.Header(new_hdr_init)
+
+        # Convert the new WCS to a header
+        wcs_hdr = im_wcs.to_header()
+        # Then whack it on the end of the initial header we constructed
+        new_hdr.extend(wcs_hdr)
 
         if lo_en is not None:
-            new_header.append({'name': 'LO_EN', 'value': lo_en.to('keV').value, 'comment': 'Lower energy bound in keV'})
-            new_header.append({'name': 'HI_EN', 'value': hi_en.to('keV').value, 'comment': 'Upper energy bound in keV'})
+            new_hdr.append(('LO_EN', lo_en.to('keV').value, 'Lower energy bound in keV'))
+            new_hdr.append(('HI_EN', hi_en.to('keV').value, 'Upper energy bound in keV'))
 
+        # TODO THIS MIGHT BE WRONG IF FILTERING HAS BEEN APPLIED
         # We also try to grab the exposure time from the original headers
-        exposure = self.event_header.get('EXPOSURE', self.header.get('EXPOSURE', None))
-        if exposure is not None:
-            new_header.append({'name': 'EXPOSURE', 'value': float(exposure), 'comment': 'Exposure time in seconds'})
+        evt_exp = self.event_header.get('EXPOSURE', self.header.get('EXPOSURE', None))
+        if evt_exp is not None:
+            new_hdr.append(('EXPOSURE', float(evt_exp)))
 
-        new_im = Image({'data': binned_data, 'wcs': im_wcs, 'header': new_header}, self.obs_id,
+        new_im = Image({'data': binned_data, 'wcs': im_wcs, 'header': new_hdr}, self.obs_id,
                        self.instrument, "", "", "",
                        lo_en=lo_en, hi_en=hi_en, telescope=self.telescope)
 
         # We validated the 'save_path' argument earlier, so we'll just get on and save the file
         if save_path is not None:
-            # Setting up the header that we'll feed into the HDU that will become the image file - the WCS
-            #  is the most important part of that
-            im_hdr = im_wcs.to_header()
-            # We add our custom keywords to the FITS header
-            for entry in new_header:
-                im_hdr[entry['name']] = (entry['value'], entry.get('comment', ''))
-
             # Create a single-HDU fits file, just containing the image
-            im_hdu = PrimaryHDU(binned_data, im_hdr)
+            im_hdu = PrimaryHDU(binned_data, new_hdr)
             hdu_list = HDUList([im_hdu])
             hdu_list.writeto(save_path, overwrite=True)
         # --------------------------------------------------------------------------
