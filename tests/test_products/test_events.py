@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:56 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -10,7 +10,7 @@ from astropy.io import fits
 from astropy.units import Quantity
 from astropy.wcs import WCS
 
-from xga.exceptions import ProductGenerationError
+from xga.exceptions import ProductGenerationError, ProductNotUsableError
 from xga.products.events import EventList
 from xga.products.phot import Image
 from .. import MISC_OUTPUT_TESTS, EXTERNAL_TEST_DATA_PATH
@@ -420,11 +420,54 @@ class TestEventListFunctionality(unittest.TestCase):
 
 class TestEventListRemoteProtocols(unittest.TestCase):
     """Verifies support for different protocols on a subset."""
+
     def test_https_access(self):
+        """Checks that an event list can be loaded from a remote location specified by a HTTPS URL."""
         info = TEST_EVTS["Chandra_ACIS"]
         evt = EventList(HTTPS_ROOT + info['path'])
         self.assertEqual(evt.telescope.lower(), 'chandra')
 
+
+class TestEventListLocalLoad(unittest.TestCase):
+    """Verifies that EventList behaviours with local files."""
+
+    @classmethod
+    def setUpClass(cls):
+        rel_info = TEST_EVTS["Suzaku_HXD_PIN"]
+        rel_url = os.path.join(HTTPS_ROOT, rel_info['path'])
+
+        # We download and decompress the Einstein image to a local file first, as XGA's Image class
+        #  does not currently support streaming compressed remote files directly.
+        test_ext_data_dir = os.path.join(EXTERNAL_TEST_DATA_PATH, cls.id())
+        os.makedirs(test_ext_data_dir, exist_ok=True)
+
+        cls.loc_evt_path = os.path.join(test_ext_data_dir, os.path.basename(rel_url))
+        if not os.path.exists(cls.loc_evt_path):
+            with fits.open(rel_url) as hxdo:
+                hxdo.writeto(cls.loc_evt_path)
+
+    def test_local_load(self):
+        """Simply tests that a locally stored FITS event list can be loaded."""
+        cur_test_evt = EventList(self.loc_evt_path)
+        self.assertEqual(cur_test_evt.telescope.lower(), 'suzaku')
+        self.assertEqual(cur_test_evt.instrument.lower(), 'hxd')
+
+        self.assertGreater(len(cur_test_evt.data), 1)
+
+    def test_wrong_path_local_load(self):
+        """Checks that an EventList notices when the file path it has been pointed at does not exist."""
+
+        # Grab the real file path
+        cur_test_path = self.loc_evt_path
+        # Break the real file path
+        cur_test_path += ".notrealextension"
+
+        # Set up the EventList, with default `check_exists=True`
+        with self.assertRaises(ProductNotUsableError, msg="EventList does not raise ProductNotUsableError when the file path does not exist."):
+            cur_test_evt = EventList(cur_test_path, check_exists=True)
+
+        # self.assertEqual(cur_test_evt.usable, False, msg="EventList does not have .usable set to False when the file path does not exist.")
+        # self.assertEqual(cur_test_evt.not_usable_reasons, ["ProductPathDoesNotExist"], msg="EventList does not have .not_usable_reasons set to ['ProductPathDoesNotExist'] when the file path does not exist.")
 
 if __name__ == "__main__":
     unittest.main()
