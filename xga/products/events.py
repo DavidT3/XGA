@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 10:18 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 12:57 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -434,10 +434,13 @@ class EventList(BaseProduct):
     @property
     def ev_per_channel(self) -> Quantity:
         """
-        The mapping between channel values in the energy column of the notebook, and an absolute energy
+        The mapping between channel values in the energy column of the event list, and an absolute energy
         value in eV. This is used in the construction of images and lightcurves from event lists.
 
-        :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
+        Can be set by passing an Astropy quantity (with units convertible to eV/chan) to the 'ev_per_channel'
+        property (e.g. <EventList variable name>.property = Quantity(1, 'eV/chan').
+
+        :param Quantity/None new_val: Passed to the ev_per_channel property setter, the new energy-channel
             mapping value in the form of an astropy quantity in units of eV/chan.
         :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
         :rtype: Quantity
@@ -487,24 +490,25 @@ class EventList(BaseProduct):
         return self._ev_per_channel
 
     @ev_per_channel.setter
-    def ev_per_channel(self, new_val: Quantity):
+    def ev_per_channel(self, new_val: Union[Quantity, None]):
         """
-        The mapping between channel values in the energy column of the notebook, and an absolute energy
+        The mapping between channel values in the energy column of the event list and an absolute energy
         value in eV. This is used in the construction of images and lightcurves from event lists.
 
-        :param Quantity new_val: Passed to the ev_per_channel property setter, the new energy-channel
+        :param Quantity/None new_val: Passed to the ev_per_channel property setter, the new energy-channel
             mapping value in the form of an astropy quantity in units of eV/chan.
-        :return: An astropy quantity, in units of eV/chan, representing the mapping between channel and energy.
-        :rtype: Quantity
         """
         # Validity checks on the input
-        if not isinstance(new_val, Quantity):
+        if new_val is not None and not isinstance(new_val, Quantity):
             raise ValueError("The 'new_val' argument must be an Astropy quantity.")
-        elif not new_val.unit.is_equivalent('eV/chan'):
+        elif new_val is not None and not new_val.unit.is_equivalent('eV/chan'):
             raise UnitConversionError("The 'new_val' argument must be convertible to units of 'eV/chan'.")
-
-        # Converting to the expected units
-        self._ev_per_channel = new_val.to('eV/chan')
+        # If the input is a quantity, it gets converted to ev/chan and written to the attribute.
+        elif new_val is not None:
+            # Converting to the expected units
+            self._ev_per_channel = new_val.to('eV/chan')
+        else:
+            self._ev_per_channel = None
 
     @property
     def sky_x_col(self) -> str:
