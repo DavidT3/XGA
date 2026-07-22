@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 12:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:25 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -1321,10 +1321,11 @@ class EventList(BaseProduct):
         # --------------------------------------------------------
 
         # --------- Setting up x and y coordinate limits ---------
-        # Parsing the user-specified data limits
-        if x_lims is not None and x_lims.diff() <= 0:
+        # Parsing the user-specified data limits. We only require that the second element
+        #  be greater than the first for non-degree coordinates
+        if x_lims is not None and not x_lims.unit.is_equivalent('deg') and x_lims.diff() <= 0:
             raise ValueError("The second element of 'x_lims' must be greater than the first.")
-        elif x_lims is not None and (x_lims.unit.is_equivalent('deg')):
+        elif x_lims is not None and x_lims.unit.is_equivalent('deg'):
             mid_pos = self.radec_sky_wcs.all_pix2world(*Quantity([self.sky_pix_lims[0].mean(),
                                                         self.sky_pix_lims[1].mean()]).value, 1)
             low_x_lim = self.radec_sky_wcs.all_world2pix(x_lims[0].value, mid_pos[1], 1)[0]
@@ -1343,7 +1344,7 @@ class EventList(BaseProduct):
         #
         x_lims = x_lims.astype(int)
 
-        if y_lims is not None and y_lims.diff() <= 0:
+        if y_lims is not None and not y_lims.unit.is_equivalent('deg') and y_lims.diff() <= 0:
             raise ValueError("The second element of 'y_lims' must be greater than the first.")
         elif y_lims is not None and (y_lims.unit.is_equivalent('deg')):
             mid_pos = self.radec_sky_wcs.all_pix2world(*Quantity([self.sky_pix_lims[0].mean(),
