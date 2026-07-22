@@ -1,17 +1,13 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/17/26, 3:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 5:59 PM. Copyright (c) The Contributors.
 
-import os
-from random import randint
 from typing import Union, Optional
 
 import numpy as np
-import pandas as pd
 from astropy.convolution import Kernel, convolve, convolve_fft
-from fitsio import FITS
 
-from exceptions import ProductGenerationError
 from xga import OUTPUT
+from xga.exceptions import ProductGenerationError, XGADeveloperError
 from xga.products import Image, RateMap, ExpMap
 
 
@@ -27,10 +23,10 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     :param Image/RateMap prod: The XGA Image/RateMap to be smoothed. If you pass a RateMap, please see the 'sm_im'
         argument for extra options.
     :param Kernel kernel: The kernel with which to smooth the input data. Should be an instance of an Astropy Kernel.
-    :param np.ndarray mask: A mask to apply to the data while smoothing (removing point source interlopers for
+    :param np.ndarray mask: A mask to apply to the data while smoothing (removing point source contaminants, for
         instance). The default is None, which means no mask is applied. This function expects a mask with 1s where
         the data you wish to keep is, and 0s where the data you wish to remove is - the style of mask produced by XGA.
-    :param bool fft: Should a fast fourier transform method be used for convolution, default is False.
+    :param bool fft: Should a fast fourier transform method be used for convolution. The default is False.
     :param bool norm_kernel: Whether to normalize the kernel to have a sum of one.
     :param bool sm_im: If a RateMap is passed, should the image component be smoothed rather than the actual
         RateMap. Default is True, where the Image will be smoothed and divided by the original ExpMap. If set
@@ -42,33 +38,19 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     """
     # First off, we check the type of the product that has been passed in for smoothing
     if not isinstance(prod, Image) or type(prod) == ExpMap:
-        raise TypeError("This function can only smooth data if input in the form of an XGA Image/RateMap.")
+        raise TypeError("Only an XGA Image or RateMap instance can be passed to the 'prod' argument.")
 
     # Also need to check that the kernel has the right number of dimensions
     if len(kernel.shape) != 2:
-        raise ValueError("The smoothing kernel needs to be two-dimensional for application to "
-                         "XGA Image or RateMap instances data - e.g. an astropy.convolution.Gaussian2DKernel "
-                         "instance.")
+        raise ValueError("The smoothing kernel must be two-dimensional, e.g. an "
+                         "astropy.convolution.Gaussian2DKernel instance.")
 
-    # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately
+    # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately,
     #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
     if mask is not None:
         mask[mask == 0] = -1
         mask[mask == 1] = 0
         mask[mask == -1] = 1
-
-    # Read in the inventory of products relevant to the input image/ratemap
-    # inven = pd.read_csv(OUTPUT + "{}/inventory.csv".format(prod.obs_id), dtype=str)
-
-    inp_stor_key = prod.storage_key
-
-    # TODO I DON'T UNDERSTAND WHY I DID THIS ORIGINALLY, AND HAVE COMMENTED IT OUT FOR
-    #  NOW
-    # This is what the Image storage_key method does, but I want to do it here so I can just read in an
-    #  existing image if possible, and not waste time convolving over again
-    # if prod.psf_corrected:
-    #     key += "_" + prod.psf_model + "_" + str(prod.psf_bins) + "_" + prod.psf_algorithm + \
-    #            str(prod.psf_iterations)
 
     # By default, we raise an error if the input product has already been smoothed, but
     #  we do also include an argument that allows the user to override the
@@ -78,124 +60,74 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
                                      "will not be smoothed again. To override this check you may pass "
                                      "`force_resmooth=True`.")
 
-    # Finally we add our information from the input kernel to the key, as the parse_smoothing method of Image is
-    #  static we can just make use of that
+    # We implemented the capability to parse an Astropy smoothing kernel into the information
+    #  we want to add to XGA Image class properties into a static method of the Image class.
+    # So we can just call the parse_smoothing method and pull the name and parameters of the
+    # kernel out
     smooth_name, smooth_pars = Image.parse_smoothing(kernel)
     smooth_pars_str = "_".join([str(k) + str(v) for k, v in smooth_pars.items()])
 
-    inp_stor_key = f"{inp_stor_key}_sm{smooth_name}_sp{smooth_pars_str}"
-
-    # rel_inven = inven[(inven['type'] == 'image')]
-    # This narrows down the inventory to images that have the exact same info key (with smoothing information in), as
-    #  the one we would create for the smoothed image we're making in this function. We'd only expect anything left
-    #  in rel_inven if someone has already run this exact smoothing on this exact image, in which case we'll just
-    #  retrieve that file
-    rel_inven = inven[(inven['info_key'] == key) & (inven['type'] == 'image')]
-
-    # Grabs certain information from the input product, primarily about what type it is, so we can infer where it
-    #  should live in the XGA storage directory structure
-    if prod.instrument == 'combined' or prod.obs_id == 'combined':
-        # The ObsID-Instrument string combinations in the input product
-        ois = [o + i for o in prod.obs_ids for i in prod.instruments[o]]
-
-        # Where the smoothed image will live/lives
-        final_dest = OUTPUT + "combined/"
-
-        # I want to check whether a file of this particular smoothing already exists, slightly more complicated
-        #  for combined images - its an ugly solution but I can't be bothered to make it nicer right now
-        # This variable describes if the file already exists
-        existing = False
-        # This is where a new file would live, but will be overwritten if a matching image can be found
-        final_name = "{{ri}}_{l}-{u}keVmerged_img.fits".format(l=lo_en.to('keV').value, u=hi_en.to('keV').value)
-        for row_ind, row in rel_inven.iterrows():
-            split_insts = row['insts'].split('/')
-            combo = [o + split_insts[o_ind] for o_ind, o in enumerate(row['obs_ids'].split('/'))]
-            if set(combo) == set(ois):
-                existing = True
-                final_name = row['file_name']
-                break
-    else:
-        final_dest = OUTPUT + prod.obs_id + "/"
-
-        # The filename of the expected smoothed image, it will be overwritten if one already exists
-        final_name = "{o}_{i}_{{ri}}_{l}-{u}keV_img.fits".format(l=lo_en.to('keV').value, u=hi_en.to('keV').value,
-                                                                 o=prod.obs_id, i=prod.instrument)
-
-        # Easier to check for existing matching files than for combined images
-        f_names = rel_inven[(rel_inven['obs_id'] == prod.obs_id) & (rel_inven['inst'] == prod.instrument)]['file_name']
-
-        if len(f_names) != 0:
-            final_name = f_names.values[0]
-            existing = True
-        else:
-            existing = False
-
-    # Now to get into it properly, if its an XGA product then we need to retrieve the data as an array. Only check
-    #  whether its an instance of Image as that is the superclass for RateMap as well.
-    if not existing and type(prod) == Image:
-        data = prod.data.copy()
-    elif not existing and type(prod) == RateMap and not sm_im:
-        raise NotImplementedError("I haven't yet made sure that the rest of XGA will like this.")
-        data = prod.data.copy()
-    elif not existing and type(prod) == RateMap and sm_im:
-        data = prod.image.data.copy()
-
-    # Now we see which type of convolution the user has requested - entirely down to their discretion
-    if not existing and not fft:
-        sm_data = convolve(data, kernel, normalize_kernel=norm_kernel, mask=mask)
-    elif not existing and fft:
-        sm_data = convolve_fft(data, kernel, normalize_kernel=norm_kernel, mask=mask)
-
-    # Now that Astropy has done the heavy lifting part of the smoothing, we save the image as an actual file, then
-    #  assemble the output XGA product
+    # Now we figure out what exactly needs to be smoothed.
+    # If the input product is an Image, then it is very straightforward - we just copy
+    #  the data array, and will apply smoothing to that
     if type(prod) == Image:
-        new_path = final_dest + final_name
-        # If the file didn't already exist, we need to actually save the smoothed array, otherwise we'll just read
-        #  the file in later
-        if not existing:
-            rand_ident = str(randint(0, int(100_000_000)))
-            # Makes absolutely sure that the random integer hasn't already been used
-            while any([str(rand_ident) in f for f in os.listdir(final_dest)]):
-                rand_ident = str(randint(0, int(100_000_000)))
+        data_to_smth = prod.data.copy()
 
-            # The final name of the new image file
-            final_name = final_name.format(ri=rand_ident)
-            new_path = final_dest + final_name
-
-            # Writes out the smoothed data to the fits file
-            with FITS(new_path, 'rw', clobber=True) as immo:
-                immo.write(sm_data, header=prod.header)
-
-        # Sets up the XGA product, regardless of whether its just been generated or it already
-        #  existed, the process is the same
-        sm_prod = Image(new_path, prod.obs_id, prod.instrument, "", "", "", prod.energy_bounds[0],
-                        prod.energy_bounds[1], "", smoothed=True, smoothed_info=kernel)
-
+    # In this case the user has passed a RateMap for smoothing and also requested that we
+    #  directly smooth the count-rate array (as opposed to extracting the image array, smoothing
+    #  that, then re-dividing by the exposure map).
     elif type(prod) == RateMap and not sm_im:
-        raise NotImplementedError("I haven't yet made sure that the rest of XGA will like this.")
+        raise NotImplementedError("XGA RateMaps can currently only be constructed from separate "
+                                  "Image and ExpMap instances, and as such a new RateMap cannot"
+                                  "yet be created from a smoothed count-rate array.")
+        data_to_smth = prod.data.copy()
+
+    # In this instance the user has passed a RateMap, but specified that we should smooth
+    #  the IMAGE data, then create a new RateMap by dividing the smoothed image by the
+    #  original exposure map.
     elif type(prod) == RateMap and sm_im:
-        raise NotImplementedError("I haven't yet made sure that the rest of XGA will like this.")
+        data_to_smth = prod.image.data.copy()
 
-    # Make sure the smoothed product source name is the same as the passed in product's
-    sm_prod.src_name = prod.src_name
-    # Generate a new inventory line from the smoothed product
-    new_line = sm_prod.inventory_entry
+    # Catch all else statement, meant to raise a vaguely useful error if the user
+    #  has passed some sub-class of Image that we don't directly support here.
+    else:
+        raise XGADeveloperError("Only Image and RateMap instances are directly supported, contact "
+                                "the developers if you wish for us to support a sub-class of the Image class.")
 
-    # Add the new product to the inventory, even if it already existed
-    inven = pd.concat([inven, new_line.to_frame().T], ignore_index=True)
-    # Drop any duplicates in the inventory, which corrects the extra added in the last step if the file
-    #  already existed
-    inven = inven.drop_duplicates(subset='file_name', keep='first', ignore_index=True)
-    # And save it
-    inven.to_csv(OUTPUT + "{}/inventory.csv".format(prod.obs_id), index=False)
+
+    # We now apply the Astropy smoothing kernel to the data, using FFT or non-FFT methods depending
+    #  on what the user specified in their call to this function
+    if fft:
+        sm_data = convolve_fft(data_to_smth, kernel, normalize_kernel=norm_kernel, mask=mask)
+    else:
+        sm_data = convolve(data_to_smth, kernel, normalize_kernel=norm_kernel, mask=mask)
+
+    # Now we construct the new XGA product instance that houses the smoothed data
+    #  In the case of an Image being passed in, we make an image to send back out
+    if type(prod) == Image:
+        sm_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
+                        prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
+                        hi_en=prod.energy_bounds[1], telescope=prod.telescope, check_exists=False,
+                        smoothed=True, smoothed_info=kernel)
+
+    # User requested that the count-rate array of a RateMap be smoothed
+    elif type(prod) == RateMap and not sm_im:
+        raise NotImplementedError("XGA RateMaps can't yet be constructed from a single count-rate array.")
+
+    # User requested that the Image of a RateMap be smoothed, and a new RateMap constructed using
+    #  the original exposure map.
+    elif type(prod) == RateMap and sm_im:
+        # Construct the Image instance
+        sm_im_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
+                           prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
+                           hi_en=prod.energy_bounds[1], telescope=prod.telescope, check_exists=False,
+                           smoothed=True, smoothed_info=kernel)
+
+        # Now we make a new RateMap instance using that smoothed image
+        sm_prod = RateMap(sm_im_prod, prod.expmap)
+
+    else:
+        raise XGADeveloperError("Only Image and RateMap instances are directly supported, contact "
+                                "the developers if you wish for us to support a sub-class of the Image class.")
 
     return sm_prod
-
-
-
-
-
-
-
-
-
