@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 9:22 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 9:37 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -230,7 +230,10 @@ class TestEventListFunctionality(unittest.TestCase):
 
         # We download and decompress the Einstein image to a local file first, as XGA's Image class
         #  does not currently support streaming compressed remote files directly.
-        loc_einstein_img_path = os.path.join(EXTERNAL_TEST_DATA_PATH, self.id(), "h0039n40-xia.fits")
+        test_ext_data_dir = os.path.join(EXTERNAL_TEST_DATA_PATH, self.id())
+        os.makedirs(test_ext_data_dir, exist_ok=True)
+
+        loc_einstein_img_path = os.path.join(test_ext_data_dir, "h0039n40-xia.fits")
         with fits.open(einstein_img_path) as einsteino:
             einsteino.writeto(loc_einstein_img_path)
 
