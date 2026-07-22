@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:36 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:01 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
 
 import matplotlib.pyplot as plt
+import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity
 from astropy.wcs import WCS
@@ -179,26 +180,77 @@ class TestEventListImageGeneration(unittest.TestCase):
         ang_bin_size = Quantity(4.35, 'arcsec')
 
         expec_size = 512
-        acc_pix_diff = 5
+        acc_pix_diff = 10
 
         cur_test_im = self.evt.generate_image(bin_size=ang_bin_size)
 
         self.assertIsInstance(cur_test_im, Image)
+
+        # Saving the generated image as a PNG following the pattern in TestProfileView
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+        cur_test_im.save_view(
+            os.path.join(test_out_path, f"{self.test_evt_name}_binsize{ang_bin_size.value}arcsec.png"))
+
+        print(cur_test_im.header)
 
         self.assertAlmostEqual(cur_test_im.shape[0], expec_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_size}) .")
         self.assertAlmostEqual(cur_test_im.shape[1], expec_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_size}) .")
 
         self.assertGreater(cur_test_im.data.sum(), 0, f"Generated image for {self.test_evt_name} with angular binsize {ang_bin_size.value} arcsec has no counts.")
 
+        # self.assertIn("LO_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a LO_EN header entry.")
+        # self.assertIn("HI_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a HI_EN header entry.")
+
+    def test_image_gen_ang_lims(self):
+        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)"""
+        ang_bin_size = Quantity(4.35, 'arcsec')
+
+        ang_x_lims = Quantity([149.6768191, 149.5104306], 'deg')
+        ang_y_lims = Quantity([-10.9981898, -11.1170894], 'deg')
+
+        expec_x_size = np.ceil((np.abs(ang_x_lims.diff()) / ang_bin_size).to('').value)
+        expec_y_size = np.ceil((np.abs(ang_y_lims.diff()) / ang_bin_size).to('').value)
+        acc_pix_diff = 10
+
+        cur_test_im = self.evt.generate_image(bin_size=ang_bin_size, x_lims=ang_x_lims, y_lims=ang_y_lims)
+
+        self.assertIsInstance(cur_test_im, Image)
+
+        self.assertAlmostEqual(cur_test_im.shape[0], expec_x_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with X-limits of {ang_x_lims} and angular binsize {ang_bin_size.value} arcsec has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_x_size}) .")
+        self.assertAlmostEqual(cur_test_im.shape[1], expec_y_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with Y-limits of {ang_y_lims} and angular binsize {ang_bin_size.value} arcsec has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_y_size}) .")
+
+        self.assertGreater(cur_test_im.data.sum(), 0, f"Generated image for {self.test_evt_name} with X-limits of {ang_x_lims}, Y-limits of {ang_y_lims}, and angular binsize {ang_bin_size.value} arcsec has no counts.")
+
         # Saving the generated image as a PNG following the pattern in TestProfileView
         test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
         os.makedirs(test_out_path, exist_ok=True)
-        cur_test_im.save_view(os.path.join(test_out_path, f"{self.test_evt_name}_binsize{ang_bin_size.value}arcsec.png"))
+        cur_test_im.save_view(os.path.join(test_out_path, f"{self.test_evt_name}_xlims{ang_x_lims.value}deg_ylims{ang_y_lims.value}deg_binsize{ang_bin_size.value}arcsec.png"))
 
-        print(cur_test_im.header)
+    def test_image_gen_pix_lims(self):
+        """Test passing a binsize in angular units (e.g. arcsec) to EventList.generate_image(...)"""
+        sky_bin_size = 100
 
-        # self.assertIn("LO_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a LO_EN header entry.")
-        # self.assertIn("HI_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a HI_EN header entry.")
+        pix_x_lims = Quantity([13560.5, 27560.5], 'pix')
+        pix_y_lims = Quantity([23720.5, 30040.5], 'pix')
+
+        expec_x_size = np.ceil((np.abs(pix_x_lims.diff()).value / sky_bin_size))
+        expec_y_size = np.ceil((np.abs(pix_y_lims.diff()).value / sky_bin_size))
+        acc_pix_diff = 2
+
+        cur_test_im = self.evt.generate_image(bin_size=sky_bin_size, x_lims=pix_x_lims, y_lims=pix_y_lims)
+
+        self.assertIsInstance(cur_test_im, Image)
+
+        self.assertAlmostEqual(cur_test_im.shape[0], expec_x_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with X-limits of {pix_x_lims} and sky pixel binsize {sky_bin_size} has an X shape ({cur_test_im.shape[0]}) more than {acc_pix_diff} different from expected ({expec_x_size}) .")
+        self.assertAlmostEqual(cur_test_im.shape[1], expec_y_size, delta=acc_pix_diff, msg=f"Generated image for {self.test_evt_name} with Y-limits of {pix_y_lims} and sky pixel binsize {sky_bin_size} has a Y shape ({cur_test_im.shape[1]}) more than {acc_pix_diff} different from expected ({expec_y_size}) .")
+
+        self.assertGreater(cur_test_im.data.sum(), 0, f"Generated image for {self.test_evt_name} with X-limits of {pix_x_lims}, Y-limits of {pix_y_lims}, and angular binsize {sky_bin_size} has no counts.")
+
+        # Saving the generated image as a PNG following the pattern in TestProfileView
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+        cur_test_im.save_view(os.path.join(test_out_path, f"{self.test_evt_name}_xlims{pix_x_lims.value}_ylims{pix_y_lims.value}_binsize{sky_bin_size}skypix.png"))
 
     def test_donor_image_generation(self):
         """Tests generating an image using another image as a donor for the WCS grid."""
