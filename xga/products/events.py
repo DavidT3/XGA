@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 2:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 3:19 PM. Copyright (c) The Contributors.
 
 import os.path
 from typing import List, Tuple, Optional, Union
@@ -264,14 +264,14 @@ class EventList(BaseProduct):
                 #  is present in the overall file header - if yes then we'll break and
                 #  move on with the rest of the init.
                 if cur_oi_key_name in self.header:
-                    self._obs_id = self.header[cur_oi_key_name]
+                    self._obs_id = str(self.header[cur_oi_key_name])
                     break
 
                 # If we couldn't find the ObsID key name in the primary header, we'll try
                 #  the event table header. If that then fails the loop will continue
                 #  to the next possible ObsID key name.
                 elif cur_oi_key_name in self.event_header:
-                    self._obs_id = self.event_header[cur_oi_key_name]
+                    self._obs_id = str(self.event_header[cur_oi_key_name])
                     break
 
         # Checking the formatting of the obs_ids argument
