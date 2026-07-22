@@ -1,17 +1,18 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:50 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 9:09 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
 
 import matplotlib.pyplot as plt
+from astropy.io import fits
 from astropy.units import Quantity
 from astropy.wcs import WCS
 
 from xga.exceptions import ProductGenerationError
 from xga.products.events import EventList
 from xga.products.phot import Image
-from .. import MISC_OUTPUT_TESTS
+from .. import MISC_OUTPUT_TESTS, EXTERNAL_TEST_DATA_PATH
 
 # These are a selection of event lists, with expected telescope/instrument, to test with
 TEST_EVTS = {
@@ -228,11 +229,12 @@ class TestEventListFunctionality(unittest.TestCase):
         xmm_evt_path = os.path.join(S3_ROOT, "xmm/data/rev0/0727960401/PPS/P0727960401PNS003PIEVLI0000.FTZ")
 
         # We download and decompress the Einstein image to a local file first, as XGA's Image class
-        # does not currently support streaming compressed remote files directly.
-        from astropy.utils.data import download_file
-        local_einstein_path = download_file(einstein_img_path, cache=True)
+        #  does not currently support streaming compressed remote files directly.
+        loc_einstein_img_path = os.path.join(EXTERNAL_TEST_DATA_PATH, self.id(), "h0039n40.xia.Z")
+        with fits.open(einstein_img_path) as einsteino:
+            einsteino.writeto(loc_einstein_img_path)
 
-        einstein_img = Image(local_einstein_path, "h0039n40", "HRI", "", "", "", Quantity(0.5, 'keV'),
+        einstein_img = Image(loc_einstein_img_path, "h0039n40", "HRI", "", "", "", Quantity(0.5, 'keV'),
                              Quantity(2.0, 'keV'), telescope='einstein')
         xmm_evt = EventList(xmm_evt_path)
 
