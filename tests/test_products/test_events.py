@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 9:47 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 12:31 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -161,8 +161,8 @@ class TestEventListFunctionality(unittest.TestCase):
         info = TEST_EVTS["XMM_PN"]
         cls.evt = EventList(S3_ROOT + info['path'])
 
-    def test_get_filtered_data(self):
-        """Tests both string and callable filtering logic."""
+    def test_get_filtered_data_str(self):
+        """Tests string events filtering logic."""
         times = self.evt.get_columns_from_data(['TIME'])['TIME']
         t_start, t_end = float(times.min()), float(times.min() + 100)
 
@@ -172,6 +172,16 @@ class TestEventListFunctionality(unittest.TestCase):
 
         self.assertTrue(all(filtered['TIME'] > t_start))
         self.assertTrue(all(filtered['TIME'] < t_end))
+        self.assertIn('X', filtered.columns)
+
+    def test_get_filtered_data_callable(self):
+        """Tests callable events filtering logic."""
+        filt_ops = {"X": lambda x: x > 100, "Y": lambda y: y < 200}
+        # We need to explicitly convert back to pandas for the check
+        filtered = self.evt.get_filtered_data(['TIME', 'X', 'Y'], filt_ops)
+
+        self.assertTrue(all(filtered['X'] > 100))
+        self.assertTrue(all(filtered['Y'] < 200))
         self.assertIn('X', filtered.columns)
 
     def test_memory_management(self):
