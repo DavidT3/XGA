@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:14 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -174,70 +174,6 @@ class TestEventListImageGeneration(unittest.TestCase):
                        msg=f"Energy bounded image generation should have failed for EventList with no energy-per-channel information."):
             self.evt.generate_image(lo_en=Quantity(0.5, 'keV'), hi_en=Quantity(2., 'keV'))
 
-
-# Dynamically attach init and generation tests for every mission
-# This avoids manual repetition while providing granular results for each mission
-for mission_name in TEST_EVTS:
-    # All the tests that check that an EventList can be declared
-    init_method = f"test_init_{mission_name}"
-    def create_init_test(m_name):
-        return lambda self: self.check_mission_init(m_name)
-    setattr(TestEventListInitialization, init_method, create_init_test(mission_name))
-
-    # And all the generic generation of image tests
-    gen_method = f"test_gen_{mission_name}"
-    def create_gen_test(m_name):
-        return lambda self: self.check_missions_image_gen(m_name)
-    setattr(TestEventListImageGeneration, gen_method, create_gen_test(mission_name))
-
-
-class TestEventListFunctionality(unittest.TestCase):
-    """General functionality tests using XMM PN as a representative standard spectro-imaging mission."""
-    @classmethod
-    def setUpClass(cls):
-        info = TEST_EVTS["XMM_PN"]
-        cls.evt = EventList(S3_ROOT + info['path'])
-
-    def test_get_filtered_data_str(self):
-        """Tests string events filtering logic."""
-        times = self.evt.get_columns_from_data(['TIME'])['TIME']
-        t_start, t_end = float(times.min()), float(times.min() + 100)
-
-        filt_ops = {'TIME': [f'> {t_start}', f'< {t_end}']}
-        # We need to explicitly convert back to pandas for the check
-        filtered = self.evt.get_filtered_data(['TIME', 'X', 'Y'], filt_ops)
-
-        self.assertTrue(all(filtered['TIME'] > t_start))
-        self.assertTrue(all(filtered['TIME'] < t_end))
-        self.assertIn('X', filtered.columns)
-
-    def test_get_filtered_data_callable(self):
-        """Tests callable events filtering logic."""
-        filt_ops = {"X": lambda x: x > 100, "Y": lambda y: y < 200}
-        # We need to explicitly convert back to pandas for the check
-        filtered = self.evt.get_filtered_data(['TIME', 'X', 'Y'], filt_ops)
-
-        self.assertTrue(all(filtered['X'] > 100))
-        self.assertTrue(all(filtered['Y'] < 200))
-        self.assertIn('X', filtered.columns)
-
-    def test_memory_management(self):
-        """Tests lazy loading and explicit unloading."""
-        # Force a state where data is loaded
-        _ = self.evt.data
-        self.assertIsNotNone(self.evt._data)
-
-        # Unload data only
-        self.evt.unload(unload_data=True, unload_header=False)
-        self.assertIsNone(self.evt._data)
-        self.assertIsNotNone(self.evt._header)
-
-    def test_wcs_construction(self):
-        """Tests that a valid WCS is built from remote headers."""
-        w = self.evt.radec_sky_wcs
-        self.assertIsInstance(w, WCS)
-        self.assertTrue(w.has_celestial)
-
     def test_donor_image_generation(self):
         """Tests generating an image using another image as a donor for the WCS grid."""
         rosat_path = os.path.join(S3_ROOT, "rosat/data/pspc/processed_data/900000/rp900029a02/rp900029a02_bas.fits.Z")
@@ -316,6 +252,69 @@ class TestEventListFunctionality(unittest.TestCase):
         xmm_evt.unload()
         einstein_img.unload()
         xmm_img.unload()
+
+# Dynamically attach init and generation tests for every mission
+# This avoids manual repetition while providing granular results for each mission
+for mission_name in TEST_EVTS:
+    # All the tests that check that an EventList can be declared
+    init_method = f"test_init_{mission_name}"
+    def create_init_test(m_name):
+        return lambda self: self.check_mission_init(m_name)
+    setattr(TestEventListInitialization, init_method, create_init_test(mission_name))
+
+    # And all the generic generation of image tests
+    gen_method = f"test_gen_{mission_name}"
+    def create_gen_test(m_name):
+        return lambda self: self.check_missions_image_gen(m_name)
+    setattr(TestEventListImageGeneration, gen_method, create_gen_test(mission_name))
+
+
+class TestEventListFunctionality(unittest.TestCase):
+    """General functionality tests using XMM PN as a representative standard spectro-imaging mission."""
+    @classmethod
+    def setUpClass(cls):
+        info = TEST_EVTS["XMM_PN"]
+        cls.evt = EventList(S3_ROOT + info['path'])
+
+    def test_get_filtered_data_str(self):
+        """Tests string events filtering logic."""
+        times = self.evt.get_columns_from_data(['TIME'])['TIME']
+        t_start, t_end = float(times.min()), float(times.min() + 100)
+
+        filt_ops = {'TIME': [f'> {t_start}', f'< {t_end}']}
+        # We need to explicitly convert back to pandas for the check
+        filtered = self.evt.get_filtered_data(['TIME', 'X', 'Y'], filt_ops)
+
+        self.assertTrue(all(filtered['TIME'] > t_start))
+        self.assertTrue(all(filtered['TIME'] < t_end))
+        self.assertIn('X', filtered.columns)
+
+    def test_get_filtered_data_callable(self):
+        """Tests callable events filtering logic."""
+        filt_ops = {"X": lambda x: x > 100, "Y": lambda y: y < 200}
+        # We need to explicitly convert back to pandas for the check
+        filtered = self.evt.get_filtered_data(['TIME', 'X', 'Y'], filt_ops)
+
+        self.assertTrue(all(filtered['X'] > 100))
+        self.assertTrue(all(filtered['Y'] < 200))
+        self.assertIn('X', filtered.columns)
+
+    def test_memory_management(self):
+        """Tests lazy loading and explicit unloading."""
+        # Force a state where data is loaded
+        _ = self.evt.data
+        self.assertIsNotNone(self.evt._data)
+
+        # Unload data only
+        self.evt.unload(unload_data=True, unload_header=False)
+        self.assertIsNone(self.evt._data)
+        self.assertIsNotNone(self.evt._header)
+
+    def test_wcs_construction(self):
+        """Tests that a valid WCS is built from remote headers."""
+        w = self.evt.radec_sky_wcs
+        self.assertIsInstance(w, WCS)
+        self.assertTrue(w.has_celestial)
 
 
 class TestEventListRemoteProtocols(unittest.TestCase):
