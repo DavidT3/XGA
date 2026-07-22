@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 12:31 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:06 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -103,7 +103,14 @@ class TestEventListImageGeneration(unittest.TestCase):
     Granular tests for image generation across all defined event lists.
     Asserts success for imaging missions and failure for non-imaging missions.
     """
-    def check_mission_gen(self, name):
+    @classmethod
+    def setUpClass(cls):
+        # Event list to use for the more specific image tests.
+        xmm_pn_test_info = TEST_EVTS["XMM_PN"]
+        cls.evt = EventList(S3_ROOT + xmm_pn_test_info['path'])
+        cls.test_evt_name = "XMM_PN"
+
+    def check_missions_image_gen(self, name):
         cur_info = TEST_EVTS[name]
         evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
 
@@ -137,25 +144,48 @@ class TestEventListImageGeneration(unittest.TestCase):
         if 'img' in locals():
             img.unload()
 
+    def check_image_gen_en_bounds(self):
+        """Test the generation of an image within specified energy bounds."""
+        # Set the approximate eV/chan of XMM PN
+        self.evt.ev_per_channel = Quantity(1, 'eV/chan')
+
+        lo_en = Quantity(0.5, 'keV')
+        hi_en = Quantity(2., 'keV')
+
+        cur_test_im = self.evt.generate_image(lo_en=lo_en, hi_en=hi_en)
+        self.assertIsInstance(cur_test_im, Image)
+        self.assertGreater(cur_test_im.data.sum(), 0, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV has no counts.")
+
+        # Saving the generated image as a PNG following the pattern in TestProfileView
+        test_out_path = os.path.join(MISC_OUTPUT_TESTS, self.id())
+        os.makedirs(test_out_path, exist_ok=True)
+        cur_test_im.save_view(os.path.join(test_out_path, f"{self.test_evt_name}_lo_en{lo_en.value}-lo_en{hi_en.value}keV.png"))
+
+        self.assertIn("LO_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a LO_EN header entry.")
+        self.assertIn("HI_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a HI_EN header entry.")
+
+    # def check_image_gen_en_bounds_failure(self):
+    #     """Check"""
+
 
 # Dynamically attach init and generation tests for every mission
 # This avoids manual repetition while providing granular results for each mission
 for mission_name in TEST_EVTS:
-    # 1. Initialization tests
+    # All the tests that check that an EventList can be declared
     init_method = f"test_init_{mission_name}"
     def create_init_test(m_name):
         return lambda self: self.check_mission_init(m_name)
     setattr(TestEventListInitialization, init_method, create_init_test(mission_name))
 
-    # 2. Generation tests
+    # And all the generic generation of image tests
     gen_method = f"test_gen_{mission_name}"
     def create_gen_test(m_name):
-        return lambda self: self.check_mission_gen(m_name)
+        return lambda self: self.check_missions_image_gen(m_name)
     setattr(TestEventListImageGeneration, gen_method, create_gen_test(mission_name))
 
 
 class TestEventListFunctionality(unittest.TestCase):
-    """General functionality tests using XMM PN as a representative standard imaging mission."""
+    """General functionality tests using XMM PN as a representative standard spectro-imaging mission."""
     @classmethod
     def setUpClass(cls):
         info = TEST_EVTS["XMM_PN"]
