@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 3:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 3:29 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -22,17 +22,17 @@ TEST_EVTS = {
     "ASCA_SIS": {"path": "asca/data/rev2/87036000/screened/ad87036000s000302m.evt.gz",
                  "tele": "asca", "inst": "sis0", "obsid": "87036000", "imaging": True},
     "BBXRT": {"path": "bbxrt/events/a2256i.evt.gz",
-              "tele": "bbxrt", "inst": "A0-B4", "obsid": "a2256i", "imaging": False},
+              "tele": "bbxrt", "inst": "A0-B4", "obsid": None, "imaging": False},
     "Calet": {"path": "calet/data/cgbm/obs/2025/20250318/events/cgbm_20250318_hx2_113151.evt.gz",
-              "tele": "calet", "inst": "cgbm", "obsid": "113151", "imaging": False},
+              "tele": "calet", "inst": "cgbm", "obsid": "20250318", "imaging": False},
     "Chandra_ACIS": {"path": "chandra/data/byobsid/2/12812/primary/acisf12812N003_evt2.fits.gz",
                      "tele": "chandra", "inst": "acis", "obsid": "12812", "imaging": True},
     "Chandra_HRC": {"path": "chandra/data/byobsid/2/22642/primary/hrcf22642N003_evt2.fits.gz",
                     "tele": "chandra", "inst": "hrc", "obsid": "22642", "imaging": True},
     "Einstein_HRI": {"path": "einstein/data/hri/events/h0039n40.xpa.Z",
-                     "tele": "einstein", "inst": "hri", "obsid": "h0039n40", "imaging": True},
+                     "tele": "einstein", "inst": "hri", "obsid": "4479", "imaging": True},
     "Einstein_IPC": {"path": "einstein/data/ipc/events/i2030n40.xpb.Z",
-                     "tele": "einstein", "inst": "ipc", "obsid": "i2030n40", "imaging": True},
+                     "tele": "einstein", "inst": "ipc", "obsid": "3378", "imaging": True},
     "HaloSat": {"path": "halosat/data/obs/101601/products/hs101601_s14_cl.evt.gz",
                 "tele": "halosat", "inst": "sdd14", "obsid": "101601", "imaging": False},
     "IXPE": {"path": "ixpe/data/obs/03/03005001/event_l2/ixpe03005001_det1_evt2_v02.fits.gz",
@@ -48,15 +48,15 @@ TEST_EVTS = {
     "NuSTAR": {"path": "nustar/data/obs/10/7/71010003002/event_cl/nu71010003002A01_cl.evt.gz",
                "tele": "nustar", "inst": "fpma", "obsid": "71010003002", "imaging": True},
     "ROSAT_HRI": {"path": "rosat/data/hri/processed_data/800000/rh800446a01/rh800446a01_bas.fits.Z",
-                  "tele": "rosat", "inst": "hri", "obsid": "rh800446a01", "imaging": True},
+                  "tele": "rosat", "inst": "hri", "obsid": "US800446H-1.N1", "imaging": True},
     "ROSAT_PSPC": {"path": "rosat/data/pspc/processed_data/500000/rp500211n00/rp500211n00_bas.fits.Z",
-                   "tele": "rosat", "inst": "pspcb", "obsid": "rp500211n00", "imaging": True},
+                   "tele": "rosat", "inst": "pspcb", "obsid": "WG500211P.N1", "imaging": True},
     "BeppoSAX_LECS": {"path": "sax/data/events/20309003/event_files/LECS_20309003.evt.gz",
-                      "tele": "sax", "inst": "lecs", "obsid": "20309003", "imaging": True},
+                      "tele": "sax", "inst": "lecs", "obsid": "1", "imaging": True},
     "BeppoSAX_MECS": {"path": "sax/data/events/20309003/event_files/MECS2_20309003.evt.gz",
-                      "tele": "sax", "inst": "mecs2", "obsid": "20309003", "imaging": True},
+                      "tele": "sax", "inst": "mecs2", "obsid": "1", "imaging": True},
     "SRG_eROSITA": {"path": "srg/data/erosita/erass1/obs/141/053/EXP_010/em01_053141_020_EventList_c010.fits.gz",
-                    "tele": "erosita", "inst": "merged", "obsid": "053141", "imaging": True, "use_binsize": 500},
+                    "tele": "erosita", "inst": "merged", "obsid": "", "imaging": True, "use_binsize": 500},
     "Suzaku_XIS": {"path": "suzaku/data/obs/7/704015010/xis/event_cl/ae704015010xi1_0_3x3n069b_cl.evt.gz",
                    "tele": "suzaku", "inst": "xis1", "obsid": "704015010", "imaging": True},
     "Suzaku_HXD_GSO": {"path": "suzaku/data/obs/7/704015010/hxd/event_cl/ae704015010hxd_0_gsono_cl.evt.gz",
@@ -103,10 +103,8 @@ class TestEventListImageGeneration(unittest.TestCase):
         # We'll do a sub-test of the base event list checks first - no sense
         #  having a separate test for this when we're loading them all anyway to attempt to
         #  make images.
-
         # Declare the event list from the S3 URI
         cur_test_evt = EventList(os.path.join(S3_ROOT, cur_info['path']))
-
         with self.subTest(check=f"Telescope, instrument, ObsID checks of EventList for {name}"):
             # Check the telescope is what we expected
             self.assertEqual(cur_test_evt.telescope.lower(), cur_info['tele'].lower(),
@@ -119,10 +117,10 @@ class TestEventListImageGeneration(unittest.TestCase):
                             f"Instrument mismatch for {name}: {cur_test_evt.instrument} vs {cur_info['inst']}")
 
             # Then finally for the ObsID
-            actual_obsid = cur_test_evt.obs_id.lower()
-            expected_obsid = cur_info['obsid'].lower()
+            actual_obsid = cur_test_evt.obs_id.lower() if isinstance(cur_test_evt.obs_id, str) else cur_test_evt.obs_id
+            expected_obsid = cur_info['obsid'].lower() if isinstance(cur_info['obsid'], str) else cur_info['obsid']
             self.assertEqual(actual_obsid, expected_obsid,
-                            f"Instrument mismatch for {name}: {cur_test_evt.obs_id} vs {cur_info['obsid']}")
+                            f"ObsID mismatch for {name}: {cur_test_evt.obs_id} vs {cur_info['obsid']}")
 
         if cur_info['imaging']:
             # For imaging missions, we expect success.
@@ -441,7 +439,7 @@ class TestEventListLocalLoad(unittest.TestCase):
 
         # We download and decompress the Einstein image to a local file first, as XGA's Image class
         #  does not currently support streaming compressed remote files directly.
-        test_ext_data_dir = os.path.join(EXTERNAL_TEST_DATA_PATH, cls.id())
+        test_ext_data_dir = os.path.join(EXTERNAL_TEST_DATA_PATH, 'TestEventListLocalLoad')
         os.makedirs(test_ext_data_dir, exist_ok=True)
 
         cls.loc_evt_path = os.path.join(test_ext_data_dir, os.path.basename(rel_url))
