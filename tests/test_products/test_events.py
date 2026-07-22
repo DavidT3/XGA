@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 1:25 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -144,7 +144,7 @@ class TestEventListImageGeneration(unittest.TestCase):
         if 'img' in locals():
             img.unload()
 
-    def check_image_gen_en_bounds(self):
+    def test_image_gen_en_bounds(self):
         """Test the generation of an image within specified energy bounds."""
         # Set the approximate eV/chan of XMM PN
         self.evt.ev_per_channel = Quantity(1, 'eV/chan')
@@ -164,7 +164,7 @@ class TestEventListImageGeneration(unittest.TestCase):
         self.assertIn("LO_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a LO_EN header entry.")
         self.assertIn("HI_EN", cur_test_im.header, f"Generated image for {self.test_evt_name} within {lo_en.value}{hi_en.value} keV does not have a HI_EN header entry.")
 
-    def check_image_gen_en_bounds_failure(self):
+    def test_image_gen_en_bounds_failure(self):
         """Check that EventList image generation fails when energy bounds are specified, but ev_per_channel is not set."""
         # Make sure the ev_per_channel property is set to None (another test can modify this).
         self.evt.ev_per_channel = None
