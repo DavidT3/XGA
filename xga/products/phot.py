@@ -1,9 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 5:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:08 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
-from typing import Tuple, List, Union, Dict
+from typing import Tuple, List, Union, Dict, Optional
 from warnings import warn
 
 import numpy as np
@@ -1282,16 +1282,20 @@ class Image(BaseProduct):
 
         return peak_conv, None
 
-    def get_view(self, ax: Axes, cross_hair: Quantity = None, mask: np.ndarray = None,
-                 chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, zoom_in: bool = False,
-                 manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
-                 radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
+    def get_view(self, ax: Axes, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
+                 chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
+                 zoom_in: bool = False, manual_zoom_xlims: Optional[Tuple[float, float]] = None,
+                 manual_zoom_ylims: Optional[Tuple[float, float]] = None,
+                 radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: Optional[np.ndarray] = None,
                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                 ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None,
-                 custom_title: str = None) -> Axes:
+                 ch_thickness: Union[float, int] = 0.8, low_val_lim: Optional[Union[float, int]] = None,
+                 upp_val_lim: Optional[Union[float, int]] = None, custom_title: Optional[str] = None,
+                 color_map: str = 'gnuplot2') -> Axes:
         """
-        The method that creates and populates the view axes, separate from actual view so outside methods
-        can add a view to other matplotlib axes.
+        This method creates and populates the standard axes for the view() and save_view() methods.
+
+        Direct use of this method is encouraged in situations where you wish to modify standard
+        XGA Image/RateMap/ExpMap/etc. visualizations without recreating them from scratch.
 
         :param Axes ax: The matplotlib axes on which to show the image.
         :param Quantity cross_hair: An optional parameter that can be used to plot a cross hair at
@@ -1322,18 +1326,21 @@ class Image(BaseProduct):
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
-        :param bool view_regions: If regions have been associated with this object (either on init or using
-            the 'regions' property setter, should they be displayed. Default is False.
-        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
-            certain circumstances. Default is 0.8.
+        :param bool view_regions: Controls whether regions are plotted on top of the visualization. Though only if
+            regions have been associated with this object (either on init or using the 'regions' property setter).
+            Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s). It can be useful to increase this to
+            improve visibility. Default is 0.8.
         :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
-            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
-            not None, upp_val_lim must be as well.
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, in which case
+            the value will be automatically set to the minimum pixel value of the data array.
         :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
-            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
-            not None, low_val_lim must be as well.
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, in which case
+            the value will be automatically set to the maximum pixel value of the data array.
         :param str custom_title: If set, this will overwrite the automatically generated title for this
             visualisation. Default is None.
+        :param str color_map: The name of the matplotlib colormap to use when visualizing the
+            Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         :return: A populated figure displaying the view of the data.
         :rtype: Axes
         """
@@ -1346,16 +1353,13 @@ class Image(BaseProduct):
         else:
             plot_data = self.data
 
-        # We check that the values that set manual value limits are legal, otherwise we throw an error
-        check_lim_arg = [low_val_lim is None, upp_val_lim is None]
-        if any(check_lim_arg) and not all(check_lim_arg):
-            raise ValueError("Either 'low_val_lim' and 'upp_val_lim' are both None, or both have values.")
-        elif not all(check_lim_arg) and low_val_lim >= upp_val_lim:
-            raise ValueError("The 'low_val_lim' argument must be lower than 'upp_val_lim'.")
-        elif not all(check_lim_arg):
-            interval = ManualInterval(low_val_lim, upp_val_lim)
-        else:
-            interval = MinMaxInterval()
+        if (low_val_lim is not None and upp_val_lim is not None) and low_val_lim >= upp_val_lim:
+            raise ValueError("If 'low_val_lim' and 'upp_val_lim' are passed, the 'low_val_lim' argument "
+                             "must be smaller than 'upp_val_lim'.")
+
+        # Define the internal - this essentially defaults to the MinMaxInterval if both low_val_lim
+        #  and upp_val_lim are set to None.
+        interval = ManualInterval(low_val_lim, upp_val_lim)
 
         # If we're showing a RateMap, then we're gonna apply an edge mask to remove all the artificially brightened
         #  pixels that we can - it makes the view look better
@@ -1378,7 +1382,7 @@ class Image(BaseProduct):
         elif self.telescope is not None:
             ident = f"{self.telescope} {ident}"
 
-        # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None then we auto generate a
+        # Ugly nested if statement but oh well I'm in a hurry - if the custom title is None, then we auto generate a
         #  title - otherwise we use the custom title and don't add anything to it
         if custom_title is None:
             # Being slightly more permissive with not setting energy bounds; this approach makes sure we don't
@@ -1392,7 +1396,7 @@ class Image(BaseProduct):
             else:
                 title = "{i} {l}-{u}keV {t}".format(i=ident, l=lo_en_str, u=hi_en_str, t=self.type)
 
-            # Its helpful to be able to distinguish PSF corrected image/ratemaps from the title
+            # It's helpful to be able to distinguish PSF corrected image/ratemaps from the title
             if self.psf_corrected:
                 title += ' - PSF Corrected'
 
@@ -1405,11 +1409,10 @@ class Image(BaseProduct):
         ax.set_title(title)
 
         # As this is a very quick view method, users will not be offered a choice of scaling
-        #  There will be a more in depth way of viewing cluster data eventually
+        #  There will be a more in-depth way of viewing cluster data eventually
         norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
-        # I normalize with a log stretch, and use gnuplot2 colormap (pretty decent for clusters imo)
 
-        # If we want to plot point clusters on the image, then we go here
+        # If we want to plot point clusters on the image
         if chosen_points is not None:
             # Add the point cluster points
             ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")
@@ -1424,7 +1427,7 @@ class Image(BaseProduct):
             # For the case of a single coordinate
             if cross_hair.shape == (2,):
                 # Converts from whatever input coordinate to pixels
-                pix_coord = self.coord_conv(cross_hair, pix).value
+                pix_coord = self.coord_conv(cross_hair, 'pix').value
                 # Drawing the horizontal and vertical lines
                 ax.axvline(pix_coord[0], color="white", linewidth=ch_thickness)
                 ax.axhline(pix_coord[1], color="white", linewidth=ch_thickness)
@@ -1432,7 +1435,7 @@ class Image(BaseProduct):
             # For the case of two coordinate pairs
             elif cross_hair.shape == (2, 2):
                 # Converts from whatever input coordinate to pixels
-                pix_coord = self.coord_conv(cross_hair, pix).value
+                pix_coord = self.coord_conv(cross_hair, 'pix').value
 
                 # This draws the first crosshair
                 ax.axvline(pix_coord[0, 0], color="white", linewidth=ch_thickness)
@@ -1471,7 +1474,7 @@ class Image(BaseProduct):
                     ax.add_artist(out_artist)
 
         # Adds the actual image to the axis.
-        ax.imshow(plot_data, norm=norm, origin="lower", cmap="gnuplot2")
+        ax.imshow(plot_data, norm=norm, origin="lower", cmap=color_map)
 
         # If the user wants regions on the image, this is where they get added
         if view_regions:
@@ -1487,27 +1490,32 @@ class Image(BaseProduct):
 
         # This sets the limits of the figure depending on the options that have been passed in
         if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
-            # I don't like doing local imports, but this is the easiest way
+            # An unfortunate local import
             from xga.imagetools import data_limits
+
+            # Uses an XGA function to find the x and y limits of where there are
+            #  non-zero entries in the current data array.
             x_lims, y_lims = data_limits(plot_data)
             ax.set_xlim(x_lims)
             ax.set_ylim(y_lims)
-        elif zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is not None:
+
+        # Here the user has passed manual x-limits, so we apply them
+        if zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
             ax.set_xlim(manual_zoom_xlims)
-            ax.set_ylim(manual_zoom_ylims)
-        elif zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
-            ax.set_xlim(manual_zoom_xlims)
-        elif zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
+        # Same here but for manual y-limits
+        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
             ax.set_ylim(manual_zoom_ylims)
 
         return ax
 
-    def view(self, cross_hair: Quantity = None, mask: np.ndarray = None, chosen_points: np.ndarray = None,
-             other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8), zoom_in: bool = False,
-             manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
-             radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-             stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-             ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None, custom_title: str = None):
+    def view(self, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
+             chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
+             figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
+             manual_zoom_ylims: Optional[tuple] = None, radial_bins_pix: np.ndarray = np.array([]),
+             back_bin_pix: Optional[np.ndarray] = None, stretch: BaseStretch = LogStretch(),
+             mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
+             low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
+             custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
         """
         Powerful method to view this Image/RateMap/Expmap, with different options that can be used for eyeballing
         and producing figures for publication.
@@ -1532,25 +1540,30 @@ class Image(BaseProduct):
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified and contains only one coordinate.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
+            specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
-        :param bool view_regions: If regions have been associated with this object (either on init or using
-            the 'regions' property setter, should they be displayed. Default is False.
-        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
-            certain circumstances. Default is 0.8.
+        :param bool view_regions: Controls whether regions are plotted on top of the visualization. Though only if
+            regions have been associated with this object (either on init or using the 'regions' property setter).
+            Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s). It can be useful to increase this to
+            improve visibility. Default is 0.8.
         :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
-            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
-            not None, upp_val_lim must be as well.
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, in which case
+            the value will be automatically set to the minimum pixel value of the data array.
         :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
-            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
-            not None, low_val_lim must be as well.
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, in which case
+            the value will be automatically set to the maximum pixel value of the data array.
         :param str custom_title: If set, this will overwrite the automatically generated title for this
             visualisation. Default is None.
+        :param str color_map: The name of the matplotlib colormap to use when visualizing the
+            Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         """
 
         # Create figure object
@@ -1559,7 +1572,7 @@ class Image(BaseProduct):
         ax = plt.gca()
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness, low_val_lim, upp_val_lim, custom_title)
+                           ch_thickness, low_val_lim, upp_val_lim, custom_title, color_map)
         cbar = plt.colorbar(ax.images[0])
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
@@ -1570,13 +1583,14 @@ class Image(BaseProduct):
         # Wipe the figure
         plt.close("all")
 
-    def save_view(self, save_path: str, cross_hair: Quantity = None, mask: np.ndarray = None,
-                  chosen_points: np.ndarray = None, other_points: List[np.ndarray] = None, figsize: Tuple = (10, 8),
-                  zoom_in: bool = False, manual_zoom_xlims: tuple = None, manual_zoom_ylims: tuple = None,
-                  radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: np.ndarray = None,
-                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
-                  ch_thickness: float = 0.8, low_val_lim: float = None, upp_val_lim: float = None,
-                  custom_title: str = None):
+    def save_view(self, save_path: str, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
+                  chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
+                  figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
+                  manual_zoom_ylims: Optional[tuple] = None, radial_bins_pix: np.ndarray = np.array([]),
+                  back_bin_pix: Optional[np.ndarray] = None, stretch: BaseStretch = LogStretch(),
+                  mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
+                  low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
+                  custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
         """
         This is entirely equivalent to the view() method, but instead of displaying the view it will save it to
         a path of your choosing.
@@ -1602,25 +1616,30 @@ class Image(BaseProduct):
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
         :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified and contains only one coordinate.
+            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+            of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
         :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is
-            also specified and contains only one coordinate.
+            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+            specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
+            specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
         :param bool mask_edges: If viewing a RateMap, this variable will control whether the chip edges are masked
             to remove artificially bright pixels, default is True.
-        :param bool view_regions: If regions have been associated with this object (either on init or using
-            the 'regions' property setter, should they be displayed. Default is False.
-        :param float ch_thickness: The desired linewidth of the crosshair(s), can be useful to increase this in
-            certain circumstances. Default is 0.8.
+        :param bool view_regions: Controls whether regions are plotted on top of the visualization. Though only if
+            regions have been associated with this object (either on init or using the 'regions' property setter).
+            Default is False.
+        :param float ch_thickness: The desired linewidth of the crosshair(s). It can be useful to increase this to
+            improve visibility. Default is 0.8.
         :param float low_val_lim: This can be used to set a lower limit for the value range across which an image
-            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if low_val_lim is
-            not None, upp_val_lim must be as well.
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, in which case
+            the value will be automatically set to the minimum pixel value of the data array.
         :param float upp_val_lim: This can be used to set an upper limit for the value range across which an image
-            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, and if upp_val_lim is
-            not None, low_val_lim must be as well.
+            is scaled and normalised (i.e. a ManualInterval from Astropy). The default is None, in which case
+            the value will be automatically set to the maximum pixel value of the data array.
         :param str custom_title: If set, this will overwrite the automatically generated title for this
             visualisation. Default is None.
+        :param str color_map: The name of the matplotlib colormap to use when visualizing the
+            Image/RateMap/ExpMap/etc. data. The default value is 'gnuplot2'.
         """
 
         # Create figure object
@@ -1631,7 +1650,7 @@ class Image(BaseProduct):
 
         ax = self.get_view(ax, cross_hair, mask, chosen_points, other_points, zoom_in, manual_zoom_xlims,
                            manual_zoom_ylims, radial_bins_pix, back_bin_pix, stretch, mask_edges, view_regions,
-                           ch_thickness, low_val_lim, upp_val_lim, custom_title)
+                           ch_thickness, low_val_lim, upp_val_lim, custom_title, color_map)
         cbar = plt.colorbar(ax.images[0], label=self.data_unit.to_string('latex'))
         cbar.ax.set_ylabel(self.data_unit.to_string('latex'), fontsize=15)
         plt.tight_layout()
@@ -2848,7 +2867,7 @@ class RateMap(Image):
             property. Default is None.
         """
         if type(xga_image) != Image or type(xga_expmap) != ExpMap:
-            raise TypeError("xga_image must be an XGA Image object, and xga_expmap must be an "
+            raise TypeError("'xga_image' must be an XGA Image object, and 'xga_expmap' must be an "
                             "XGA ExpMap object.")
 
         if xga_image.obs_id != xga_expmap.obs_id:
@@ -2861,7 +2880,12 @@ class RateMap(Image):
             raise RateMapPairError("The energy bounds of xga_image ({0}) and xga_expmap ({1}) "
                                    "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
 
-        super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
+        # This path nonsense is to support the smoothing of RateMaps with general_smooth(..., ratemap_smooth_im=True) and
+        #  will become unnecessary once the RateMap/wider 2D data product redesign is implemented.
+        pass_path = xga_image.path if xga_image.path is not None else xga_expmap.path
+
+        # Call the superclass's init.
+        super().__init__(pass_path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
                          telescope=xga_image.telescope, check_exists=False)
         self._prod_type = "ratemap"
@@ -3595,7 +3619,7 @@ class RateMap(Image):
         self._matched_regions = self._process_matched_regions(new_reg)
 
         # This is the only part that's different from the implementation in the superclass. Here we make sure that
-        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
+        #  the same attribute is set for the Image, so if the user was to access the image from the RateMap
         #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
         #  is what you're getting right now because I am exhausted
         self._im_obj.matched_regions = new_reg

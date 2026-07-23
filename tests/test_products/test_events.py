@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 3:29 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 1:26 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -100,7 +100,7 @@ class TestEventListImageGeneration(unittest.TestCase):
     def check_missions_evt_init_image_gen(self, name):
         cur_info = TEST_EVTS[name]
 
-        # We'll do a sub-test of the base event list checks first - no sense
+        # We'll do a subtest of the base event list checks first - no sense
         #  having a separate test for this when we're loading them all anyway to attempt to
         #  make images.
         # Declare the event list from the S3 URI

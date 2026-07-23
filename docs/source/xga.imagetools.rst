@@ -25,4 +25,11 @@ imagetools.psf module
    :undoc-members:
    :show-inheritance:
 
+imagetools.smooth module
+---------------------
+
+.. automodule:: xga.imagetools.smooth
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
