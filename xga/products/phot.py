@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 10:58 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 11:14 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1411,9 +1411,8 @@ class Image(BaseProduct):
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in-depth way of viewing cluster data eventually
         norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
-        # I normalize with a log stretch and use gnuplot2 colormap
 
-        # If we want to plot point clusters on the image, then we go here
+        # If we want to plot point clusters on the image
         if chosen_points is not None:
             # Add the point cluster points
             ax.plot(chosen_points[:, 0], chosen_points[:, 1], '+', color='black', label="Chosen Point Cluster")

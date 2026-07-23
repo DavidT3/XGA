@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 5:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 11:46 AM. Copyright (c) The Contributors.
 
 from typing import Union, Optional
 
@@ -14,11 +14,14 @@ from xga.products import Image, RateMap, ExpMap
 def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[np.ndarray] = None, fft: bool = False,
                    norm_kernel: bool = True, sm_im: bool = True, force_resmooth: bool = False) -> Union[Image, RateMap]:
     """
-    Simple function to apply (in theory) any Astropy smoothing to an XGA Image/RateMap and create a new smoothed
-    XGA data product. This general function will produce XGA Image and RateMap
-    objects from any instance of an Astropy Kernel, and if a RateMap is passed as the input then you may choose
-    whether to smooth the image component or the image/expmap (using sm_im); if you choose the former then the final
-    smoothed RateMap will be produced by dividing the smoothed Image by the original ExpMap.
+    Applies Astropy's smoothing kernels to instances of the XGA Image and RateMap classes, returning a new
+    instance of the same class with smoothing applied. If the input is a RateMap instance, then you may choose
+    whether to smooth the image component or the image/expmap (using sm_im); if you choose the former, then the
+    final smoothed RateMap will be produced by dividing the smoothed Image by the original ExpMap.
+
+    Note that, as this function acts directly on XGA data products rather than on XGA sources or samples, the
+    new XGA product instances it produces are NOT added to the storage structure of a source.The returned product
+    instance can be manually added to a source by calling the <source instance>.update_products(<return from this function>) method.
 
     :param Image/RateMap prod: The XGA Image/RateMap to be smoothed. If you pass a RateMap, please see the 'sm_im'
         argument for extra options.
@@ -26,7 +29,8 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     :param np.ndarray mask: A mask to apply to the data while smoothing (removing point source contaminants, for
         instance). The default is None, which means no mask is applied. This function expects a mask with 1s where
         the data you wish to keep is, and 0s where the data you wish to remove is - the style of mask produced by XGA.
-    :param bool fft: Should a fast fourier transform method be used for convolution. The default is False.
+    :param bool fft: If set to True, then a fast fourier transform method will be used for kernel convolution.
+        The default is False.
     :param bool norm_kernel: Whether to normalize the kernel to have a sum of one.
     :param bool sm_im: If a RateMap is passed, should the image component be smoothed rather than the actual
         RateMap. Default is True, where the Image will be smoothed and divided by the original ExpMap. If set
@@ -59,13 +63,6 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
         raise ProductGenerationError("Input XGA Image or RateMap has already been smoothed, and "
                                      "will not be smoothed again. To override this check you may pass "
                                      "`force_resmooth=True`.")
-
-    # We implemented the capability to parse an Astropy smoothing kernel into the information
-    #  we want to add to XGA Image class properties into a static method of the Image class.
-    # So we can just call the parse_smoothing method and pull the name and parameters of the
-    # kernel out
-    smooth_name, smooth_pars = Image.parse_smoothing(kernel)
-    smooth_pars_str = "_".join([str(k) + str(v) for k, v in smooth_pars.items()])
 
     # Now we figure out what exactly needs to be smoothed.
     # If the input product is an Image, then it is very straightforward - we just copy
