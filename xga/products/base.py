@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 11:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 4:53 PM. Copyright (c) The Contributors.
 
 import inspect
 import os
@@ -9,7 +9,6 @@ from random import randint
 from typing import Tuple, List, Dict, Union, Optional
 from warnings import warn
 
-import corner
 import emcee as em
 import numpy as np
 from astropy.units import Quantity, UnitConversionError, Unit, deg
@@ -26,7 +25,7 @@ from ..exceptions import ProductGenerationError, UnknownCommandlineError, XGAFit
     ModelNotAssociatedError
 from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT, PRETTY_TELESCOPE_NAMES
+from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT, PRETTY_TELESCOPE_NAMES, _deprecated
 
 
 class BaseProduct:
@@ -1901,36 +1900,9 @@ class BaseProfile1D:
         plt.tight_layout()
         plt.show()
 
-    def view_corner(self, model: str, figsize: Tuple = (8, 8)):
+    def view_corner(self, model: str, settings: Optional[dict] = None, figsize: tuple = (10, 10)):
         """
-        A convenient view method to examine the corner plot of the parameter posterior distributions.
-
-        :param str model: The name of the model for which to view the corner plot.
-        :param Tuple figsize: The desired figure size.
-        """
-        flat_chains = self.get_chains(model, flatten=True)
-        model_obj = self.get_model_fit(model, 'mcmc')
-
-        frac_conf_lev = [(50 - 34.1) / 100, 0.5, (50 + 34.1) / 100]
-
-        # If any of the median parameter values are above 1e+4 we get corner to format them in scientific
-        #  notation, to avoid super long numbers spilling over the edge of the corner plot. I will say that
-        #  scientific notation in titles in corner doesn't look that great either, but its better than the
-        #  alternative
-        if np.any(np.median(flat_chains, axis=0) > 1e+4):
-            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
-                                quantiles=frac_conf_lev, show_titles=True, title_fmt=".2e")
-        else:
-            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
-                                quantiles=frac_conf_lev, show_titles=True)
-        t = self._y_axis_name
-        plt.suptitle("{m} - {s} {t} Profile".format(m=model_obj.publication_name, s=self.src_name, t=t),
-                     fontsize=14, y=1.02)
-        plt.show()
-
-    def view_getdist_corner(self, model: str, settings: Optional[dict] = None, figsize: tuple = (10, 10)):
-        """
-        A view method to see a corner plot generated with the getdist module, using flattened chains with
+        A view method to show a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
 
         :param str model: The name of the model for which to view the corner plot.
@@ -1963,6 +1935,17 @@ class BaseProfile1D:
         g = plots.get_subplot_plotter(width_inch=figsize[0])
         g.triangle_plot([gd_samp], filled=True)
         plt.show()
+
+    @_deprecated("The legacy `view_corner()` code has been replaced with getdist; `view_getdist_corner() "
+                 "is now redundant, and will be removed in a future version of XGA.")
+    def view_getdist_corner(self, model: str, settings: Optional[dict] = None, figsize: tuple = (10, 10)):
+        """
+        Thin wrapper over the view_corner method, which now uses getdist rather than the old 'corner'
+        module. This 'view_getdist_corner' remains to maintain compatibility with the old interface, but
+        will be removed in a future version of XGA - please call `view_corner` directly.
+        """
+
+        self.view_corner(model, settings, figsize)
 
     def generate_data_realisations(self, num_real: int, truncate_zero: bool = False) -> Quantity:
         """
