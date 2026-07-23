@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 11:14 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:08 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -2880,7 +2880,12 @@ class RateMap(Image):
             raise RateMapPairError("The energy bounds of xga_image ({0}) and xga_expmap ({1}) "
                                    "do not match".format(xga_image.energy_bounds, xga_expmap.energy_bounds))
 
-        super().__init__(xga_image.path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
+        # This path nonsense is to support the smoothing of RateMaps with general_smooth(..., ratemap_smooth_im=True) and
+        #  will become unnecessary once the RateMap/wider 2D data product redesign is implemented.
+        pass_path = xga_image.path if xga_image.path is not None else xga_expmap.path
+
+        # Call the superclass's init.
+        super().__init__(pass_path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
                          telescope=xga_image.telescope, check_exists=False)
         self._prod_type = "ratemap"
@@ -3614,7 +3619,7 @@ class RateMap(Image):
         self._matched_regions = self._process_matched_regions(new_reg)
 
         # This is the only part that's different from the implementation in the superclass. Here we make sure that
-        #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
+        #  the same attribute is set for the Image, so if the user was to access the image from the RateMap
         #  they would still see any regions that have been added. No doubt there is a more elegant solution but this
         #  is what you're getting right now because I am exhausted
         self._im_obj.matched_regions = new_reg

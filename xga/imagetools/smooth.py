@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 1:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:08 PM. Copyright (c) The Contributors.
 
 from typing import Union, Optional
 
@@ -12,7 +12,7 @@ from xga.products import Image, RateMap, ExpMap
 
 
 def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[np.ndarray] = None, fft: bool = False,
-                   sm_im: bool = True, force_resmooth: bool = False, norm_kernel: bool = True, boundary: Union[str, None] = 'fill',
+                   ratemap_smooth_im: bool = True, force_resmooth: bool = False, norm_kernel: bool = True, boundary: Union[str, None] = 'fill',
                    fill_value: Union[int, float] = 0.0, nan_treatment: str = 'interpolate', preserve_nan: bool = False,
                    normalization_zero_tol: Union[float, int] = 1e-8) -> Union[Image, RateMap]:
     """
@@ -33,7 +33,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
         the data you wish to keep is, and 0s where the data you wish to remove is - the style of mask produced by XGA.
     :param bool fft: If set to True, then a fast fourier transform method will be used for kernel convolution.
         The default is False.
-    :param bool sm_im: If a RateMap is passed, should the image component be smoothed rather than the actual
+    :param bool ratemap_smooth_im: If a RateMap is passed, should the image component be smoothed rather than the actual
         RateMap. Default is True, where the Image will be smoothed and divided by the original ExpMap. If set
         to False, the resulting RateMap will be bodged, with the ExpMap all 1s on the sensor.
     :param bool force_resmooth: Force a second smoothing convolution on an already-smoothed Image/RateMap.
@@ -92,7 +92,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     # In this case the user has passed a RateMap for smoothing and also requested that we
     #  directly smooth the count-rate array (as opposed to extracting the image array, smoothing
     #  that, then re-dividing by the exposure map).
-    elif type(prod) == RateMap and not sm_im:
+    elif type(prod) == RateMap and not ratemap_smooth_im:
         raise NotImplementedError("XGA RateMaps can currently only be constructed from separate "
                                   "Image and ExpMap instances, and as such a new RateMap cannot"
                                   "yet be created from a smoothed count-rate array.")
@@ -101,7 +101,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     # In this instance the user has passed a RateMap, but specified that we should smooth
     #  the IMAGE data, then create a new RateMap by dividing the smoothed image by the
     #  original exposure map.
-    elif type(prod) == RateMap and sm_im:
+    elif type(prod) == RateMap and ratemap_smooth_im:
         data_to_smth = prod.image.data.copy()
 
     # Catch all else statement, meant to raise a vaguely useful error if the user
@@ -131,12 +131,12 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
                         smoothed=True, smoothed_info=kernel)
 
     # User requested that the count-rate array of a RateMap be smoothed
-    elif type(prod) == RateMap and not sm_im:
+    elif type(prod) == RateMap and not ratemap_smooth_im:
         raise NotImplementedError("XGA RateMaps can't yet be constructed from a single count-rate array.")
 
     # User requested that the Image of a RateMap be smoothed, and a new RateMap constructed using
     #  the original exposure map.
-    elif type(prod) == RateMap and sm_im:
+    elif type(prod) == RateMap and ratemap_smooth_im:
         # Construct the Image instance
         sm_im_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
                            prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
