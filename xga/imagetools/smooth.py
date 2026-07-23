@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 11:46 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 1:25 PM. Copyright (c) The Contributors.
 
 from typing import Union, Optional
 
@@ -12,7 +12,9 @@ from xga.products import Image, RateMap, ExpMap
 
 
 def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[np.ndarray] = None, fft: bool = False,
-                   norm_kernel: bool = True, sm_im: bool = True, force_resmooth: bool = False) -> Union[Image, RateMap]:
+                   sm_im: bool = True, force_resmooth: bool = False, norm_kernel: bool = True, boundary: Union[str, None] = 'fill',
+                   fill_value: Union[int, float] = 0.0, nan_treatment: str = 'interpolate', preserve_nan: bool = False,
+                   normalization_zero_tol: Union[float, int] = 1e-8) -> Union[Image, RateMap]:
     """
     Applies Astropy's smoothing kernels to instances of the XGA Image and RateMap classes, returning a new
     instance of the same class with smoothing applied. If the input is a RateMap instance, then you may choose
@@ -31,15 +33,32 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
         the data you wish to keep is, and 0s where the data you wish to remove is - the style of mask produced by XGA.
     :param bool fft: If set to True, then a fast fourier transform method will be used for kernel convolution.
         The default is False.
-    :param bool norm_kernel: Whether to normalize the kernel to have a sum of one.
     :param bool sm_im: If a RateMap is passed, should the image component be smoothed rather than the actual
         RateMap. Default is True, where the Image will be smoothed and divided by the original ExpMap. If set
         to False, the resulting RateMap will be bodged, with the ExpMap all 1s on the sensor.
     :param bool force_resmooth: Force a second smoothing convolution on an already-smoothed Image/RateMap.
         Default is False, in which case an error will be raised if the `prod` input is already smoothed.
+    :param bool norm_kernel: Whether to normalize the kernel to have a sum of one, passed to the Astropy convolution
+        function's `norm_kernel` argument. Default is True.
+    :param Any boundary: A flag indicating how to handle boundaries, passed through to the Astropy convolution
+        function's `boundary` argument, see Astropy documentation. The default value is 'fill'.
+    :param float/int fill_value: The value to use outside the array when using` boundary='fill'`, passed through
+        to the Astropy convolution function's `fill_value` argument. The default value is 0.0.
+    :param str nan_treatment: The method that Astropy uses to handle NaNs in the input array, passed through
+        to the Astropy convolution function's `nan_treatment` argument, see Astropy documentation. The default value is 'interpolate'.
+    :param bool preserve_nan: After performing convolution, should pixels that were originally NaN again become NaN?
+        Pass through to the Astropy convolution function's `preserve_nan` argument. The default is False.
+    :param float/int normalization_zero_tol: The absolute tolerance on whether the kernel is different from zero. If
+        the kernel sums to zero to within this precision, it cannot be normalized. Passed through to the Astropy
+        convolution function's `normalization_zero_tol` argument. The default is 1e-8.
     :return: An XGA product with the smoothed Image or RateMap.
     :rtype: Image/RateMap
     """
+    # Yes, we know we could/should have used kwargs to pass through Astropy smoothing function
+    #  configuration. However, in this case we would rather have the docstring entries present in our
+    #  docstring, rather than not mentioning them or appending the convolution function's docstring
+    #  to ours at run time.
+
     # First off, we check the type of the product that has been passed in for smoothing
     if not isinstance(prod, Image) or type(prod) == ExpMap:
         raise TypeError("Only an XGA Image or RateMap instance can be passed to the 'prod' argument.")
@@ -95,9 +114,13 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     # We now apply the Astropy smoothing kernel to the data, using FFT or non-FFT methods depending
     #  on what the user specified in their call to this function
     if fft:
-        sm_data = convolve_fft(data_to_smth, kernel, normalize_kernel=norm_kernel, mask=mask)
+        sm_data = convolve_fft(data_to_smth, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+                           fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
+                           normalization_zero_tol=normalization_zero_tol)
     else:
-        sm_data = convolve(data_to_smth, kernel, normalize_kernel=norm_kernel, mask=mask)
+        sm_data = convolve(data_to_smth, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+                           fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
+                           normalization_zero_tol=normalization_zero_tol)
 
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
