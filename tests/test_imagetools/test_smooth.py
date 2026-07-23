@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 12:47 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 12:57 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -73,8 +73,8 @@ class TestGeneralSmoothFunction(unittest.TestCase):
 
         # Applying a mask and smoothing
         with self.subTest(check="Masked smoothing"):
-            mask = np.zeros(self.demo_im.data.shape, dtype=bool)
-            mask[100:200, 100:200] = True
+            mask = np.zeros(self.demo_im.data.shape, dtype=int)
+            mask[270:378, 270:378] = 1
             masked_smth_im = general_smooth(self.demo_im, cur_kern, mask=mask)
             masked_smth_im.save_view(os.path.join(test_out_path, "masked_smooth.png"))
 
