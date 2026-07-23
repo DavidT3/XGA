@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:08 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:17 PM. Copyright (c) The Contributors.
 
 from typing import Union, Optional
 
@@ -12,8 +12,9 @@ from xga.products import Image, RateMap, ExpMap
 
 
 def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[np.ndarray] = None, fft: bool = False,
-                   ratemap_smooth_im: bool = True, force_resmooth: bool = False, norm_kernel: bool = True, boundary: Union[str, None] = 'fill',
-                   fill_value: Union[int, float] = 0.0, nan_treatment: str = 'interpolate', preserve_nan: bool = False,
+                   ratemap_smooth_im: bool = True, force_resmooth: bool = False, norm_kernel: bool = True,
+                   boundary: Union[str, None] = 'fill', fill_value: Union[int, float] = 0.0,
+                   nan_treatment: str = 'interpolate', preserve_nan: bool = False,
                    normalization_zero_tol: Union[float, int] = 1e-8) -> Union[Image, RateMap]:
     """
     Applies Astropy's smoothing kernels to instances of the XGA Image and RateMap classes, returning a new
