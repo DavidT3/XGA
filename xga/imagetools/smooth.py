@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 1:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 1:26 PM. Copyright (c) The Contributors.
 
 from typing import Union, Optional
 
@@ -85,7 +85,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
 
     # Now we figure out what exactly needs to be smoothed.
     # If the input product is an Image, then it is very straightforward - we just copy
-    #  the data array, and will apply smoothing to that
+    #  the data array and will apply smoothing to that
     if type(prod) == Image:
         data_to_smth = prod.data.copy()
 

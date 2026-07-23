@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 12:57 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 1:27 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -14,6 +14,7 @@ from .. import MISC_OUTPUT_TESTS
 
 
 class TestGeneralSmoothFunction(unittest.TestCase):
+    """A set of tests of XGA's `general_smooth` imagetools function."""
 
     @classmethod
     def setUpClass(cls):
