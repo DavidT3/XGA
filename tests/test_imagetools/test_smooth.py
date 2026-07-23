@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 12:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 12:47 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -38,7 +38,6 @@ class TestGeneralSmoothFunction(unittest.TestCase):
         with self.assertRaises(ValueError, msg="The 'general_smooth' function failed to "
                                                "raise an exception when passed a 1D kernel."):
             general_smooth(self.demo_im, cur_kern)
-
 
     def test_smooth_image(self):
         """Checks the general_smooth function by running on the demo image with various configurations."""
