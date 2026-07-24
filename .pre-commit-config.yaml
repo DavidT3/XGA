@@ -10,17 +10,20 @@ repos:
     -   id: check-ast
     -   id: check-toml
 
--   repo: https://github.com/psf/black
-    rev: 26.5.1
-    hooks:
-    -   id: black
-        args: [--line-length=120, --check, --diff]
-
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.0
     hooks:
-    -   id: ruff
-        args: [ --check ]
+      # Runs the linter and avoids ipynb files. Also, lints the pyproject toml.
+      - id: ruff-check
+        types_or: [ python, pyi, pyproject ]
+        # Commenting this out would mean the ruff-check linter would just
+        #  look for issues, but not fix them.
+        args: [ --fix ]
+      # Run the formatter.
+      - id: ruff-format
+        types_or: [ python, pyi ]
+        # This would just check the formatting, without modifying any files
+        # args: [ --check ]
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.3.0
