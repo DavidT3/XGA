@@ -151,7 +151,7 @@ module = [
     "matplotlib.*",
     "regions.*",
     "tqdm.*",
-    "pyabel.*",
+    "abel.*",
     "emcee.*",
     "getdist.*"
 ]
