@@ -122,6 +122,10 @@ known-first-party = ["xga"]
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
 
+[tool.ruff.lint.flake8-bugbear]
+# Allow default arguments like, e.g., `lo_en: Quantity = Quantity(0.5, 'keV')`.
+extend-immutable-calls = ["astropy.units.Quantity"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
