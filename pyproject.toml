@@ -165,7 +165,9 @@ targets = ["xga"]
 #  as we aren't doing any cryptography in this module
 # Disable B404 because it just tells us to contemplate the security implications of using
 #  subprocess at all, which is not useful.
+# B403 gives the same useless warning for pickle.
 skips = [
     "B311",
-    "B404"
+    "B404",
+    "B403"
 ]
