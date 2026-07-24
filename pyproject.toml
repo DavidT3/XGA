@@ -51,8 +51,7 @@ all = [
 [dependency-groups]
 dev = [
     "pre-commit>=4.5.0",
-    "black>=24.10.0",
-    "ruff>=0.9.0",
+    "ruff>=0.16.0",
     "mypy>=1.11.0",
     "bandit>=1.8.0",
     "pandas-stubs>=2.3.3.260113",
@@ -84,17 +83,20 @@ include-package-data = true
 [tool.setuptools_scm]
 write_to = "xga/_version.py"
 
-[tool.black]
-line-length = 120
-target-version = ['py310']
-
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+src = ["xga"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"
+docstring-code-format = true
 
 [tool.ruff.lint]
 # Select specific rule sets
-# E, W: pycodestyle (Black compatible)
+# E, W: pycodestyle
 # F: Pyflakes
 # I: isort (Import sorting)
 # N: pep8-naming
@@ -104,13 +106,18 @@ target-version = "py310"
 # ANN: flake8-annotations (Type hints)
 select = ["E", "W", "F", "I", "N", "D", "UP", "B", "ANN"]
 
-# Ignore rules that conflict with Black or are too noisy
+# Ignore rules that are too noisy or conflict with ruff format
 ignore = [
     "D203", # one-blank-line-before-class
     "D213", # multi-line-summary-second-line
     "ANN101", # Missing type annotation for self
     "ANN102", # Missing type annotation for cls
+    "COM812", # Missing trailing comma (handled by formatter)
+    "ISC001", # Implicit string concatenation (handled by formatter)
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["xga"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
@@ -120,6 +127,8 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
 
 [[tool.mypy.overrides]]
 module = [
