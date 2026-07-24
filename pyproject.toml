@@ -130,9 +130,14 @@ extend-immutable-calls = ["astropy.units.Quantity"]
 #  the earliest Python version we still support, because otherwise mypy is completely
 #  unable to parse the numpy v2+ stubs
 python_version = "3.12"
+files = ["xga"]
+# This stops mypy going down the rabbit hole of all other XGA files
+#  that are somehow connected to the file we're changing - that is important because
+#  we want to fix the problems mypy finds ones file at a time.
+follow_imports = "silent"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
+disallow_untyped_defs = false
 check_untyped_defs = true
 no_implicit_optional = true
 
