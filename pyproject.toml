@@ -110,6 +110,7 @@ select = ["E", "W", "F", "I", "N", "D", "UP", "B", "ANN"]
 ignore = [
     "D203", # one-blank-line-before-class
     "D213", # multi-line-summary-second-line
+    "D401", # Docstring imperative mood (e.g. 'Generate images...', not 'Generates images...').
     "ANN101", # Missing type annotation for self
     "ANN102", # Missing type annotation for cls
     "COM812", # Missing trailing comma (handled by formatter)
