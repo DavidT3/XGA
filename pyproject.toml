@@ -149,3 +149,9 @@ ignore_missing_imports = true
 [tool.bandit]
 exclude_dirs = ["tests"]
 targets = ["xga"]
+# We were going to disable bandit's check for the use of random
+#  (https://bandit.readthedocs.io/en/latest/blacklists/blacklist_calls.html#b311-random)
+#  as we aren't doing any cryptography in this module, but actually we'll put #nosec comments on the end
+#  of any call, as if we do start having to handle cryptography (not sure what for though) then
+#  we probably wouldn't remember to renable this check.
+# skips = ["B311"]
