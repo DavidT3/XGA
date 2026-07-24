@@ -163,4 +163,9 @@ targets = ["xga"]
 # We are going to disable bandit's check for the use of random
 #  (https://bandit.readthedocs.io/en/latest/blacklists/blacklist_calls.html#b311-random)
 #  as we aren't doing any cryptography in this module
-skips = ["B311"]
+# Disable B404 because it just tells us to contemplate the security implications of using
+#  subprocess at all, which is not useful.
+skips = [
+    "B311",
+    "B404"
+]
