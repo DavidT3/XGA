@@ -111,6 +111,7 @@ ignore = [
     "D203", # one-blank-line-before-class
     "D213", # multi-line-summary-second-line
     "D401", # Docstring imperative mood (e.g. 'Generate images...', not 'Generates images...').
+    "D205", # Requires single line description in a docstring, then blank space, and then more (don't like this)
     "COM812", # Missing trailing comma (handled by formatter)
     "ISC001", # Implicit string concatenation (handled by formatter)
 ]
