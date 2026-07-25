@@ -116,6 +116,11 @@ ignore = [
     "ISC001", # Implicit string concatenation (handled by formatter)
 ]
 
+# We add to the list of fixes that Ruff's check is allowed to make.
+extend-safe-fixes = [
+    "ANN201",  # This allows Ruff to add a return type to a public function if one is missing
+]
+
 [tool.ruff.lint.isort]
 known-first-party = ["xga"]
 
