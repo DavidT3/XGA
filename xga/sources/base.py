@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:42 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:45 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -5696,10 +5696,10 @@ class BaseSource:
         return self._dof[telescope][storage_key][model][fit_conf]
 
     def get_luminosities(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
-                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = None,
-                         hi_en: Quantity = None, group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                         over_sample: float = None, stacked_spectra: bool = False,
-                         fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
+                         inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity | None = None,
+                         hi_en: Quantity | None = None, group_spec: bool = True, min_counts: int = 5, min_sn: float | None = None,
+                         over_sample: float | None = None, stacked_spectra: bool = False,
+                         fit_conf: Union[str, dict, None] = None) -> Union[dict, Quantity]:
         """
         Get method for luminosities calculated from model fits to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
