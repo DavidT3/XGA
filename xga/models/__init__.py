@@ -1,10 +1,20 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 5:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:08 PM. Copyright (c) The Contributors.
+"""
+The __init__ of the xga.models submodule. Sets up the dictionaries used by other parts of the module
+to check model names and access their functions.
+"""
+# ruff: noqa
 
 import inspect
 from types import FunctionType
+from typing import Any
 
-# Doing star imports just because its more convenient, and there won't ever be enough code in these that
+# We explicitly import numpy here, even though it will be imported through the star imports below, to
+#  make the code linters of the world happy.
+import numpy as np
+
+# Doing star imports just because it's more convenient, and there won't ever be enough code in these that
 #  it becomes a big inefficiency
 from .density import *
 from .entropy import *
@@ -16,20 +26,39 @@ from .temperature import *
 
 # This dictionary is meant to provide pretty versions of model/function names to go in plots
 # This method of merging dictionaries only works in Python 3.5+, but that should be fine
-MODEL_PUBLICATION_NAMES = {**DENS_MODELS_PUB_NAMES, **MISC_MODELS_PUB_NAMES, **SB_MODELS_PUB_NAMES,
-                           **TEMP_MODELS_PUB_NAMES, **ENTROPY_MODELS_PUB_NAMES, **MASS_MODELS_PUB_NAMES,
-                           **PRESSURE_MODELS_PUB_NAMES}
-MODEL_PUBLICATION_PAR_NAMES = {**DENS_MODELS_PAR_NAMES, **MISC_MODELS_PAR_NAMES, **SB_MODELS_PAR_NAMES,
-                               **TEMP_MODELS_PAR_NAMES, **ENTROPY_MODELS_PAR_NAMES, **MASS_MODELS_PAR_NAMES,
-                               **PRESSURE_MODELS_PAR_NAMES}
+MODEL_PUBLICATION_NAMES = {
+    **DENS_MODELS_PUB_NAMES,
+    **MISC_MODELS_PUB_NAMES,
+    **SB_MODELS_PUB_NAMES,
+    **TEMP_MODELS_PUB_NAMES,
+    **ENTROPY_MODELS_PUB_NAMES,
+    **MASS_MODELS_PUB_NAMES,
+    **PRESSURE_MODELS_PUB_NAMES,
+}
+MODEL_PUBLICATION_PAR_NAMES = {
+    **DENS_MODELS_PAR_NAMES,
+    **MISC_MODELS_PAR_NAMES,
+    **SB_MODELS_PAR_NAMES,
+    **TEMP_MODELS_PAR_NAMES,
+    **ENTROPY_MODELS_PAR_NAMES,
+    **MASS_MODELS_PAR_NAMES,
+    **PRESSURE_MODELS_PAR_NAMES,
+}
 # These dictionaries tell the profile fitting function what models, start pars, and priors are allowed
-PROF_TYPE_MODELS = {"brightness": SB_MODELS, "gas_density": DENS_MODELS, "gas_temperature": TEMP_MODELS,
-                    '1d_proj_temperature': TEMP_MODELS, 'specific_entropy': ENTROPY_MODELS,
-                    'hydrostatic_mass': MASS_MODELS, 'thermal_pressure': PRESSURE_MODELS}
+PROF_TYPE_MODELS: dict[str, dict[str, Any]] = {
+    "brightness": SB_MODELS,
+    "gas_density": DENS_MODELS,
+    "gas_temperature": TEMP_MODELS,
+    "1d_proj_temperature": TEMP_MODELS,
+    "specific_entropy": ENTROPY_MODELS,
+    "hydrostatic_mass": MASS_MODELS,
+    "thermal_pressure": PRESSURE_MODELS,
+}
 
 
-def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β', new_data_name: str = 'x_values') \
-        -> FunctionType:
+def convert_to_odr_compatible(
+    model_func: FunctionType, new_par_name: str = "β", new_data_name: str = "x_values"
+) -> FunctionType:
     """
     This is a bit of a weird one; its meant to convert model functions from the standard XGA setup
     (i.e. pass x values, then parameters as individual variables), into the form expected by Scipy's ODR.
@@ -45,7 +74,7 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
     # This is not at all perfect, but its a bodge that will do for now. If type hints are included in
     #  the signature (as they should be in all XGA models), then np.ndarray will be numpy.ndarray in the
     #  signature I extract. This dictionary will be used to swap that out, along with any similar problems I encounter
-    common_conversions = {'numpy': 'np'}
+    common_conversions = {"numpy": "np"}
 
     # This reads out the function signature - which should be structured as x_values, par1, par2, par3 etc.
     mod_sig = inspect.signature(model_func)
@@ -58,7 +87,7 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
 
     # For ODR I've decided that β is the name of the new fit parameter array, and x_values the name of the
     #  x data. This will replace the current signature of the function.
-    new_mod_sig = '({np}, {nd})'.format(np=new_par_name, nd=new_data_name)
+    new_mod_sig = f"({new_par_name}, {new_data_name})"
     # I find the current names of the parameters in the signature, excluding the x value name in the original function
     #  and reading that into a separate variable
     mod_sig_pars = list(mod_sig.parameters.keys())
@@ -73,13 +102,13 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
 
     # And now I know the exact form of the whole def line I can define that as a variable and then temporarily
     #  remove it from the source code
-    known_def = 'def {mn}'.format(mn=model_func.__name__) + new_mod_sig + ':'
-    new_mod_code = new_mod_code.replace(known_def, '')
+    known_def = f"def {model_func.__name__}" + new_mod_sig + ":"
+    new_mod_code = new_mod_code.replace(known_def, "")
 
     # Then I swing through all the original parameter names and replace them with accessing elements of our
     #  new beta parameter list/array.
     for par_ind, par_name in enumerate(par_names):
-        new_mod_code = new_mod_code.replace(par_name, '{np}[{i}]'.format(np=new_par_name, i=par_ind))
+        new_mod_code = new_mod_code.replace(par_name, f"{new_par_name}[{par_ind}]")
 
     # Then I do the same thing for the new x data variable name
     new_mod_code = new_mod_code.replace(data_name, new_data_name)
@@ -88,7 +117,7 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
     new_mod_code = known_def + new_mod_code
 
     # This compiles the code and creates a new function
-    new_model_func_code = compile(new_mod_code, '<string>', 'exec')
+    new_model_func_code = compile(new_mod_code, "<string>", "exec")
     new_model_func = FunctionType(new_model_func_code.co_consts[0], globals(), model_func.__name__)
 
     return new_model_func
@@ -130,7 +159,8 @@ def convert_to_odr_compatible(model_func: FunctionType, new_par_name: str = 'β'
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # ==============================================================================
 
-def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args: tuple= (), order: int = 3):
+
+def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args: tuple = (), order: int = 3):
     """
     Find the nth derivative of a function at a point.
 
@@ -159,20 +189,17 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
         If weights are in the vector w, then
         derivative is w[0] * f(x-ho*dx) + ... + w[-1] * f(x+h0*dx)
         """
-
         if Np < ndiv + 1:
-            raise ValueError(
-                "Number of points must be at least the derivative order + 1."
-            )
+            raise ValueError("Number of points must be at least the derivative order + 1.")
         if Np % 2 == 0:
             raise ValueError("The number of points must be odd.")
 
         ho = Np >> 1
         x = np.arange(-ho, ho + 1.0)
         x = x[:, np.newaxis]
-        X = x ** 0.0
+        X = x**0.0
         for k in range(1, Np):
-            X = np.hstack([X, x ** k])
+            X = np.hstack([X, x**k])
         w = np.prod(np.arange(1, ndiv + 1), axis=0) * np.linalg.inv(X)[ndiv]
         return w
 
@@ -182,10 +209,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
             "must be at least the derivative order 'n' + 1."
         )
     if order % 2 == 0:
-        raise ValueError(
-            "'order' (the number of points used to compute the derivative) "
-            "must be odd."
-        )
+        raise ValueError("'order' (the number of points used to compute the derivative) must be odd.")
         # pre-computed for n=1 and 2 and low-order for speed.
     if n == 1:
         if order == 3:
@@ -206,10 +230,7 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
         elif order == 7:
             weights = np.array([2, -27, 270, -490, 270, -27, 2]) / 180.0
         elif order == 9:
-            weights = (
-                    np.array([-9, 128, -1008, 8064, -14350, 8064, -1008, 128, -9])
-                    / 5040.0
-            )
+            weights = np.array([-9, 128, -1008, 8064, -14350, 8064, -1008, 128, -9]) / 5040.0
         else:
             weights = _central_diff_weights(order, 2)
     else:
@@ -219,7 +240,3 @@ def derivative(func: FunctionType, x0: float, dx: float = 1.0, n: int = 1, args:
     for k in range(order):
         val += weights[k] * func(x0 + (k - ho) * dx, *args)
     return val / np.prod((dx,) * n, axis=0)
-
-
-
-
