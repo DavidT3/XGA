@@ -129,7 +129,7 @@ convention = "pep257"
 
 [tool.ruff.lint.flake8-bugbear]
 # Allow default arguments like, e.g., `lo_en: Quantity = Quantity(0.5, 'keV')`.
-extend-immutable-calls = ["astropy.units.Quantity"]
+extend-immutable-calls = ["astropy.units.Quantity", "astropy.units.Unit"]
 
 [tool.mypy]
 # Setting this to 3.12, despite us aiming for 3.10 in the rest of the pyproject, as it is
