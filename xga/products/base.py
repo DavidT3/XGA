@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:33 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -2799,13 +2799,13 @@ class BaseProfile1D:
         # Wipe the figure
         plt.close("all")
 
-    def save(self, save_path: str = None) -> None:
+    def save(self, save_path: str | None = None) -> None:
         """
         This method pickles and saves the profile object. This will be called automatically when the profile
-        is initialised, and when changes are made to the profile (such as when a model is fitted). The save
+        is initialised and when changes are made to the profile (such as when a model is fitted). The save
         file is a pickled version of this object.
 
-        :param str save_path: The path where this profile should be saved. By default this is None, which means
+        :param str save_path: The path where this profile should be saved. By default, this is None, which means
             this method will use the save_path attribute of the profile.
         """
         #  Checks to see if the user has supplied their own custom save path.
