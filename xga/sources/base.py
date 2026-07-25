@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:36 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -5350,9 +5350,9 @@ class BaseSource:
         self._failed_fits[telescope][spec_storage_key][model].append(fit_conf)
 
     def get_results(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
-                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str = None,
-                    group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                    stacked_spectra: bool = False, fit_conf: Union[str, dict] = None) -> Union[dict, Quantity]:
+                    inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), par: str | None = None,
+                    group_spec: bool = True, min_counts: int = 5, min_sn: float | None = None, over_sample: float | None = None,
+                    stacked_spectra: bool = False, fit_conf: Union[str, dict, None] = None) -> Union[dict, Quantity]:
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination or for all of them. If a specific parameter is requested,
