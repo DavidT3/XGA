@@ -1,14 +1,14 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 14/07/2025, 08:55. Copyright (c) The Contributors
-
-from typing import Tuple, Dict, Union, List
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 3:54 PM. Copyright (c) The Contributors.
+"""This module defines XGA source classes that represent specific point-like astrophysical sources (e.g. Star)."""
 
 import numpy as np
 from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitConversionError
 
+from xga import DEFAULT_COSMO
+
 from .general import PointSource
-from .. import DEFAULT_COSMO
 
 
 class Star(PointSource):
@@ -66,15 +66,31 @@ class Star(PointSource):
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
-    def __init__(self, ra: float, dec: float, distance: Quantity = None, name: str = None,
-                 proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
-                 match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
-                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
-                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
-                 clean_obs: bool = True, clean_obs_threshold: float = 0.9, regen_merged: bool = True,
-                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+
+    def __init__(
+        self,
+        ra: float,
+        dec: float,
+        distance: Quantity | None = None,
+        name: str | None = None,
+        proper_motion: Quantity | None = None,
+        point_radius: Quantity = Quantity(30, "arcsec"),
+        match_radius: Quantity = Quantity(10, "arcsec"),
+        use_peak: bool = False,
+        peak_lo_en: Quantity = Quantity(0.5, "keV"),
+        peak_hi_en: Quantity = Quantity(2.0, "keV"),
+        back_inn_rad_factor: float = 1.05,
+        back_out_rad_factor: float = 1.5,
+        cosmology: Cosmology = DEFAULT_COSMO,
+        load_products: bool = True,
+        load_fits: bool = False,
+        clean_obs: bool = True,
+        clean_obs_threshold: float = 0.9,
+        regen_merged: bool = True,
+        in_sample: bool = False,
+        telescope: str | list[str] | None = None,
+        search_distance: Quantity | dict | None = None,
+    ) -> None:
         """
         An init of the XGA Star source class.
 
@@ -111,8 +127,8 @@ class Star(PointSource):
             True. This option is here so that sample objects can regenerate all merged products at once, which is
             more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
-            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
-            is False. User should only set to True to remove warnings.
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress
+            bar. Default is False. User should only set to True to remove warnings.
         :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
             set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
             default is None, in which case all available telescopes will be used. The user can pass a single name
@@ -124,34 +140,52 @@ class Star(PointSource):
             telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
             specified in a distance dictionary, the default XGA values will be used for any that are missing.
         """
-
         # This is before the super init call so that the changed _source_type_match method has a matching radius
         #  attribute to use
         # Check that the matching radius argument is acceptable, in terms of its units
-        if isinstance(match_radius, Quantity) and not match_radius.unit.is_equivalent('arcsec'):
+        if isinstance(match_radius, Quantity) and not match_radius.unit.is_equivalent("arcsec"):
             raise UnitConversionError("The match_radius argument must be in units that can be converted to arcseconds.")
         elif not isinstance(match_radius, Quantity):
             raise TypeError("The match_radius must be an astropy quantity that can be converted to arcseconds.")
         else:
-            match_radius = match_radius.to('arcsec')
+            match_radius = match_radius.to("arcsec")
 
         # Storing the match radius in an attribute
         self._match_radius = match_radius
 
         # Run the init of the PointSource superclass
-        super().__init__(ra, dec, None, name, point_radius, use_peak, peak_lo_en, peak_hi_en, back_inn_rad_factor,
-                         back_out_rad_factor, cosmology, load_products, load_fits, clean_obs, clean_obs_threshold,
-                         regen_merged, in_sample, telescope, search_distance)
+        super().__init__(
+            ra,
+            dec,
+            None,
+            name,
+            point_radius,
+            use_peak,
+            peak_lo_en,
+            peak_hi_en,
+            back_inn_rad_factor,
+            back_out_rad_factor,
+            cosmology,
+            load_products,
+            load_fits,
+            clean_obs,
+            clean_obs_threshold,
+            regen_merged,
+            in_sample,
+            telescope,
+            search_distance,
+        )
 
         # Checking that the distance argument (as redshift isn't really valid for objects within our galaxy) is
         #  in a unit that we understand and approve of
-        if isinstance(distance, Quantity) and not distance.unit.is_equivalent('pc'):
+        if isinstance(distance, Quantity) and not distance.unit.is_equivalent("pc"):
             raise UnitConversionError("The distance argument cannot be converted to pc.")
         elif not isinstance(distance, Quantity) and distance is not None:
-            raise TypeError("The distance argument must be an astropy quantity that can be converted to parsecs, "
-                            "or None.")
+            raise TypeError(
+                "The distance argument must be an astropy quantity that can be converted to parsecs, or None."
+            )
         elif distance is not None:
-            distance = distance.to('pc')
+            distance = distance.to("pc")
 
         # Checks the proper motion passed is acceptable
         self._check_proper_motion(proper_motion)
@@ -163,7 +197,7 @@ class Star(PointSource):
         self._distance = distance
         self._proper_motion = proper_motion
 
-    def _source_type_match(self, source_type: str) -> Tuple[Dict, Dict, Dict]:
+    def _source_type_match(self, source_type: str) -> tuple[dict, dict, dict]:
         """
         A function to override the _source_type_match method of the BaseSource class, containing a slightly more
         complex version of the point source matching criteria that the PointSource class uses. Here point source
@@ -177,10 +211,9 @@ class Star(PointSource):
             and a final dictionary with sources that aren't the target, or in the 2nd dictionary.
         :rtype: Tuple[Dict, Dict, Dict]
         """
-
         # The original _source_type_match is run first, as it is still useful I just wish to refine the matches
         #  a bit afterwards by accepting other regions within a certain radius.
-        results_dict, alt_match_dict, anti_results_dict = super()._source_type_match('pnt')
+        results_dict, alt_match_dict, anti_results_dict = super()._source_type_match("pnt")
 
         # Then I run through the anti-results dictionary (no idea why I called it that originally but
         #  I'm running with it), here is where the extra checks occur. This for loop iterates through the
@@ -188,12 +221,11 @@ class Star(PointSource):
         for tel in anti_results_dict:
             for k, v in anti_results_dict[tel].items():
                 # We only want to check regions that are point sources, so in this instance we select red ones
-                recheck = [r for r in v if r.visual['edgecolor'] == 'red']
+                recheck = [r for r in v if r.visual["edgecolor"] == "red"]
                 # Then we use the handy function I wrote ages ago to find if any of those regions lie within
                 #  match_radius of the ra_dec of the source. This will return regions that have ANY PART of
                 #  themselves within our search radius.
-                within = self.regions_within_radii(Quantity(0, 'arcsec'), self._match_radius, tel, self.ra_dec,
-                                                   recheck)
+                within = self.regions_within_radii(Quantity(0, "arcsec"), self._match_radius, tel, self.ra_dec, recheck)
 
                 # Make a copy of the current ObsID's non matched regions
                 reg_copy = np.array(v).copy()
@@ -243,24 +275,26 @@ class Star(PointSource):
         return self._proper_motion
 
     @proper_motion.setter
-    def proper_motion(self, new_val: Quantity):
-        # Runs the checks on proper motion, if it fails an exception is raised
+    def proper_motion(self, new_val: Quantity) -> None:
+        # Runs the checks on proper motion, if it fails, an exception will be raised.
         self._check_proper_motion(new_val)
 
         self._proper_motion = new_val
 
     @staticmethod
-    def _check_proper_motion(prop_mot: Quantity):
+    def _check_proper_motion(prop_mot: Quantity) -> None:
         """
-        Just checks that proper motion is passed in a way that the source will accept and understand.
+        Just checks that the proper motion is passed in a way that the source will accept and understand.
 
         :param Quantity prop_mot: The proper motion quantity.
         """
         # Checking that the proper motion argument information is correctly formatted and in an appropriate
-        #  unit. I think it tends to be measured in arcseconds / yr, and of course its a vector
-        if isinstance(prop_mot, Quantity) and not prop_mot.unit.is_equivalent('arcsec/yr'):
-            raise UnitConversionError("Proper motion value cannot be converted to arcsec/yr, please give proper"
-                                      "motion in different units.")
+        #  unit. I think it tends to be measured in arcseconds / yr, and of course it's a vector
+        if isinstance(prop_mot, Quantity) and not prop_mot.unit.is_equivalent("arcsec/yr"):
+            raise UnitConversionError(
+                "Proper motion value cannot be converted to arcsec/yr, please give proper motion in different units."
+            )
         elif isinstance(prop_mot, Quantity) and not prop_mot.isscalar and len(prop_mot) > 2:
-            raise ValueError("Proper motion may have one or two components (for absolute value and "
-                             "vector respectively), no more.")
+            raise ValueError(
+                "Proper motion may have one or two components (for absolute value and vector respectively), no more."
+            )
