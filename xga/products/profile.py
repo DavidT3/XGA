@@ -1,25 +1,39 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 10:10 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:28 PM. Copyright (c) The Contributors.
+"""This module defines specific (i.e. non-BaseProfile1D) XGA profile classes.
+
+Profile classes are used to store and interact with 1D radial profile information, with some classes
+also implementing analysis techniques that make use of their specific contents.
+"""
+
+from __future__ import annotations
 
 from copy import copy
-from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
-from astropy.constants import k_B, G, m_p
+from astropy.constants import G, k_B, m_p
 from astropy.cosmology import Cosmology
-from astropy.units import Quantity, UnitConversionError, Unit
+from astropy.units import Quantity, Unit, UnitConversionError
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.interpolate import interp1d
 
-from .. import NHC, ABUND_TABLES, MEAN_MOL_WEIGHT
-from ..exceptions import ModelNotAssociatedError, XGAInvalidModelError, XGAFitError
-from ..models import PROF_TYPE_MODELS, BaseModel1D
-from ..products.base import BaseProfile1D
-from ..products.phot import RateMap
-from ..sourcetools.deproj import shell_ann_vol_intersect
-from ..sourcetools.misc import ang_to_rad
+from xga import ABUND_TABLES, MEAN_MOL_WEIGHT, NHC
+from xga.exceptions import (
+    ModelNotAssociatedError,
+    MultipleMatchError,
+    XGADeveloperError,
+    XGAFitError,
+    XGAInvalidModelError,
+)
+from xga.models import PROF_TYPE_MODELS, BaseModel1D
+from xga.products.base import BaseProfile1D
+from xga.products.phot import RateMap
+from xga.sources import GalaxyCluster
+from xga.sourcetools.deproj import shell_ann_vol_intersect
+from xga.sourcetools.misc import ang_to_rad
 
 
 class SurfaceBrightness1D(BaseProfile1D):
@@ -49,11 +63,26 @@ class SurfaceBrightness1D(BaseProfile1D):
     :param str telescope: The telescope that this profile is derived from. Default is None.
     """
 
-    def __init__(self, rt: RateMap, radii: Quantity, values: Quantity, centre: Quantity, pix_step: int, min_snr: float,
-                 outer_rad: Quantity, radii_err: Quantity = None, values_err: Quantity = None,
-                 background: Quantity = None, pixel_bins: np.ndarray = None, back_pixel_bin: np.ndarray = None,
-                 ann_areas: Quantity = None, deg_radii: Quantity = None, min_snr_succeeded: bool = True,
-                 auto_save: bool = False, telescope: str = None):
+    def __init__(
+        self,
+        rt: RateMap,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        pix_step: int,
+        min_snr: float,
+        outer_rad: Quantity,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        background: Quantity | None = None,
+        pixel_bins: np.ndarray | None = None,
+        back_pixel_bin: np.ndarray | None = None,
+        ann_areas: Quantity | None = None,
+        deg_radii: Quantity | None = None,
+        min_snr_succeeded: bool = True,
+        auto_save: bool = False,
+        telescope: str | None = None,
+    ) -> None:
         """
         A subclass of BaseProfile1D, designed to store and analyse surface brightness radial profiles
         of Galaxy Clusters. Allows for the viewing, fitting of the profile.
@@ -63,7 +92,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         :param Quantity values: The surface brightnesses that have been measured.
         :param Quantity centre: The central coordinate the profile was generated from.
         :param int pix_step: The width of each annulus in pixels used to generate this profile.
-        :param float min_snr: The minimum signal to noise imposed upon this profile.
+        :param float min_snr: The minimum signal-to-noise imposed upon this profile.
         :param Quantity outer_rad: The outer radius of this profile.
         :param Quantity radii_err: Uncertainties on the radii.
         :param Quantity values_err: Uncertainties on the values.
@@ -80,10 +109,21 @@ class SurfaceBrightness1D(BaseProfile1D):
             False, but all profiles generated through XGA processes acting on XGA sources will auto-save.
         :param str telescope: The telescope that this profile is derived from. Default is None.
         """
-        super().__init__(radii, values, centre, rt.src_name, rt.obs_id, rt.instrument, radii_err, values_err,
-                         deg_radii=deg_radii, auto_save=auto_save, telescope=telescope)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            rt.src_name,
+            rt.obs_id,
+            rt.instrument,
+            radii_err,
+            values_err,
+            deg_radii=deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+        )
 
-        if type(background) != Quantity:
+        if type(background) is not Quantity:
             raise TypeError("The background variables must be an astropy quantity.")
 
         # Saves the reference to the RateMap this profile was generated from - we make sure to unload the data
@@ -110,7 +150,7 @@ class SurfaceBrightness1D(BaseProfile1D):
 
         # This is the type of compromise I make when I am utterly exhausted, I am just going to require this be in
         #  degrees
-        if not outer_rad.unit.is_equivalent('deg'):
+        if not outer_rad.unit.is_equivalent("deg"):
             raise UnitConversionError("outer_rad must be convertible to degrees.")
         self._outer_rad = outer_rad
 
@@ -128,15 +168,14 @@ class SurfaceBrightness1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Surface Brightness"
 
-        en_key = "bound_{l}-{h}_".format(l=rt.energy_bounds[0].to('keV').value, h=rt.energy_bounds[1].to('keV').value)
+        en_key = "bound_{l}-{h}_".format(l=rt.energy_bounds[0].to("keV").value, h=rt.energy_bounds[1].to("keV").value)
         if rt.psf_corrected:
-            psf_key = rt.psf_model + "_" + str(rt.psf_bins) + "_" + rt.psf_algorithm + str(rt.psf_iterations) + "_"
+            psf_key = f"{rt.psf_model}_{rt.psf_bins}_{rt.psf_algorithm}_{rt.psf_iterations}_"
         else:
             psf_key = "_"
 
-        ro = outer_rad.to('deg').value
-        self._storage_key = en_key + psf_key + "st{ps}_minsn{ms}_ro{ro}_".format(ps=int(pix_step), ms=min_snr, ro=ro) \
-                            + self._storage_key
+        ro = outer_rad.to("deg").value
+        self._storage_key = en_key + psf_key + f"st{int(pix_step)}_minsn{min_snr}_ro{ro}_" + self._storage_key
 
     @property
     def pix_step(self) -> int:
@@ -172,7 +211,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         return self._ratemap.psf_corrected
 
     @property
-    def psf_algorithm(self) -> Union[str, None]:
+    def psf_algorithm(self) -> str | None:
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property gives
         the name of the algorithm used.
@@ -183,7 +222,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         return self._ratemap.psf_algorithm
 
     @property
-    def psf_bins(self) -> Union[int, None]:
+    def psf_bins(self) -> int | None:
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property
         gives the number of bins that the X and Y axes were divided into to generate the PSFGrid.
@@ -195,7 +234,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         return self._ratemap.psf_bins
 
     @property
-    def psf_iterations(self) -> Union[int, None]:
+    def psf_iterations(self) -> int | None:
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property gives
         the number of iterations that the algorithm went through.
@@ -207,7 +246,7 @@ class SurfaceBrightness1D(BaseProfile1D):
         return self._ratemap.psf_iterations
 
     @property
-    def psf_model(self) -> Union[str, None]:
+    def psf_model(self) -> str | None:
         """
         If the RateMap this brightness profile was generated from has been PSF corrected, this property gives the
         name of the PSF model used.
@@ -230,11 +269,11 @@ class SurfaceBrightness1D(BaseProfile1D):
         return self._succeeded
 
     @min_snr_succeeded.setter
-    def min_snr_succeeded(self, new_val: bool):
+    def min_snr_succeeded(self, new_val: bool) -> None:
         """
-        A setter for the minimum signal to noise re-binning success flag. If True then the minimum signal to noise
+        A setter for the minimum signal-to-noise re-binning success flag. If True, then the minimum signal-to-noise
         re-binning that can be applied to surface brightness profiles by some functions was successful, if False
-        then it failed and the profile with no re-binning is stored here.
+        then it failed, and the profile with no re-binning is stored here.
 
         :param bool new_val: The new value of the boolean flag describing whether re-binning was successful or not.
         """
@@ -246,33 +285,33 @@ class SurfaceBrightness1D(BaseProfile1D):
         self.save()
 
     @property
-    def pixel_bins(self) -> np.ndarray:
+    def pixel_bins(self) -> np.ndarray | None:
         """
         The annuli radii used to generate this profile, assuming they were passed on initialisation, otherwise None.
 
         :return: Numpy array containing the pixel bins used to measure this radial brightness profile.
-        :rtype: np.ndarray
+        :rtype: np.ndarray/None
         """
         return self._pix_bins
 
     @property
-    def back_pixel_bin(self) -> np.ndarray:
+    def back_pixel_bin(self) -> np.ndarray | None:
         """
         The annulus used to measure the background for this profile, assuming they were passed on
         initialisation, otherwise None.
 
         :return: Numpy array containing the pixel bin used to measure the background.
-        :rtype: np.ndarray
+        :rtype: np.ndarray/None
         """
         return self._back_pix_bin
 
     @property
-    def areas(self) -> Quantity:
+    def areas(self) -> Quantity | None:
         """
         Returns the areas of the annuli used to make this profile as an astropy Quantity.
 
         :return: Astropy non-scalar quantity containing the areas.
-        :rtype: Quantity
+        :rtype: Quantity/None
         """
         return self._areas
 
@@ -290,16 +329,21 @@ class SurfaceBrightness1D(BaseProfile1D):
         :rtype: bool
         """
         # Matching the passed RateMap to the internal RateMap is very powerful, as by definition it checks
-        #  all of the PSF related attributes. Don't need to directly compare the radii values either because
+        #  all PSF-related attributes. Don't need to directly compare the radii values either because
         #  they are a combination of the other parameters here.
-        if rt == self._ratemap and np.all(centre == self._centre) and pix_step == self._pix_step \
-                and min_snr == self._min_snr and outer_rad == self._outer_rad:
+        if (
+            rt == self._ratemap
+            and np.all(centre == self._centre)
+            and pix_step == self._pix_step
+            and min_snr == self._min_snr
+            and outer_rad == self._outer_rad
+        ):
             match = True
         else:
             match = False
         return match
 
-    def save(self, save_path: str = None):
+    def save(self, save_path: str | None = None) -> None:
         """
         This method pickles and saves the surface brightness profile object. This will be called automatically
         when the profile is initialised, and when changes are made to the profile (such as when a model is
@@ -346,9 +390,24 @@ class GasMass1D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 deg_radii: Quantity = None, auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        dens_method: str,
+        associated_prof: SurfaceBrightness1D | APECNormalisation1D,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         A subclass of BaseProfile1D, designed to store and analyse gas mass radial profiles of Galaxy
         Clusters.
@@ -378,8 +437,21 @@ class GasMass1D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, deg_radii=deg_radii,
-                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            deg_radii=deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
         self._prof_type = "gas_mass"
 
         # This is what the y-axis is labelled as during plotting
@@ -389,9 +461,16 @@ class GasMass1D(BaseProfile1D):
         self._gen_prof = associated_prof
 
         if isinstance(associated_prof, SurfaceBrightness1D):
+            # Make a copy of the brightness profile storage key, as we want to modify it
             br_key = copy(self._gen_prof.storage_key)
-            en_key = "bound_{l}-{u}_".format(l=associated_prof.energy_bounds[0].value,
-                                             u=associated_prof.energy_bounds[1].value)
+
+            # Read out the property to another variable so we can isinstance it, which in turn will make the
+            #  Mypy static type checker happy
+            sb_en_bnds = associated_prof.energy_bounds
+            if not (isinstance(sb_en_bnds[0], Quantity) and isinstance(sb_en_bnds[1], Quantity)):
+                raise TypeError("SurfaceBrightness1D energy bounds are expected to be Astropy Quantity objects.")
+
+            en_key = f"bound_{sb_en_bnds[0].value}-{sb_en_bnds[1].value}_"
             extra_info = "_" + br_key.split(en_key)[-1].split("_ra")[0] + "_"
         else:
             extra_info = "_"
@@ -457,10 +536,26 @@ class GasDensity3D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 dens_method: str, associated_prof, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
-                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        dens_method: str,
+        associated_prof: SurfaceBrightness1D | APECNormalisation1D,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         A subclass of BaseProfile1D, designed to store and analyse gas density radial profiles of Galaxy
         Clusters. Allows for the viewing, fitting of the profile, as well as measurement of gas masses,
@@ -501,32 +596,47 @@ class GasDensity3D(BaseProfile1D):
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
         else:
-            radii = radii.to('kpc')
+            radii = radii.to("kpc")
 
         # Densities are allowed to be either a mass or number density
         if not values.unit.is_equivalent("solMass / Mpc^3") and not values.unit.is_equivalent("1/cm^3"):
             raise UnitConversionError("Values unit cannot be converted to either solMass / Mpc3 or 1/cm^3")
         elif values.unit.is_equivalent("solMass / Mpc^3"):
-            values = values.to('solMass / Mpc^3')
+            values = values.to("solMass / Mpc^3")
             # As two different types of gas density are allowed I need to store which one we're dealing with
             self._sub_type = "mass_dens"
-            chosen_unit = Unit('solMass / Mpc^3')
+            chosen_unit = Unit("solMass / Mpc^3")
         elif values.unit.is_equivalent("1/cm^3"):
-            values = values.to('1/cm^3')
+            values = values.to("1/cm^3")
             self._sub_type = "num_dens"
             chosen_unit = Unit("1/cm^3")
 
         if values_err is not None:
             values_err = values_err.to(chosen_unit)
 
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         # Setting the type
         self._prof_type = "gas_density"
 
         # Setting up a dictionary to store gas mass results in.
-        self._gas_masses = {}
+        self._gas_masses: dict[str, dict] = {}
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Gas Density"
@@ -537,10 +647,17 @@ class GasDensity3D(BaseProfile1D):
         # The profile from which the densities here were inferred
         self._gen_prof = associated_prof
 
-        if isinstance(associated_prof, SurfaceBrightness1D):
+        if isinstance(self._gen_prof, SurfaceBrightness1D):
+            # Make a copy of the brightness profile storage key, as we want to modify it
             br_key = copy(self._gen_prof.storage_key)
-            en_key = "bound_{l}-{u}_".format(l=associated_prof.energy_bounds[0].value,
-                                             u=associated_prof.energy_bounds[1].value)
+
+            # Read out the property to another variable so we can isinstance it, which in turn will make the
+            #  Mypy static type checker happy
+            sb_en_bnds = self._gen_prof.energy_bounds
+            if not (isinstance(sb_en_bnds[0], Quantity) and isinstance(sb_en_bnds[1], Quantity)):
+                raise TypeError("SurfaceBrightness1D energy bounds are expected to be Astropy Quantity objects.")
+
+            en_key = f"bound_{sb_en_bnds[0].value}-{sb_en_bnds[1].value}_"
             extra_info = "_" + br_key.split(en_key)[-1].split("_ra")[0] + "_"
         else:
             extra_info = "_"
@@ -548,8 +665,15 @@ class GasDensity3D(BaseProfile1D):
         # The density class has an extra bit of information in the storage key, the method used to generate it
         self._storage_key = "me" + dens_method + extra_info + self._storage_key
 
-    def gas_mass(self, model: str, outer_rad: Quantity, inner_rad: Quantity = None, conf_level: float = 68.2,
-                 fit_method: str = 'mcmc', radius_err: Quantity = None) -> Tuple[Quantity, Quantity]:
+    def gas_mass(
+        self,
+        model: str | None,
+        outer_rad: Quantity,
+        inner_rad: Quantity | None = None,
+        conf_level: float = 68.2,
+        fit_method: str = "mcmc",
+        radius_err: Quantity | None = None,
+    ) -> tuple[Quantity, Quantity]:
         """
         A method to calculate and return the gas mass (with uncertainties). This method uses the model to generate
         a gas mass distribution (using the fit parameter distributions from the fit performed using the model), then
@@ -575,14 +699,15 @@ class GasDensity3D(BaseProfile1D):
         :rtype: Tuple[Quantity, Quantity]
         """
         if model is None:
-            raise NotImplementedError("Gas mass calculation without a fitted model is not yet implemented - see "
-                                      "issue #1271.")
+            raise NotImplementedError(
+                "Gas mass calculation without a fitted model is not yet implemented - see issue #1271."
+            )
 
-        # First of all we have to find the model that has been fit to this gas density profile.
+        # First of all, we have to find the model that has been fit to this gas density profile.
         if model not in PROF_TYPE_MODELS[self._prof_type]:
-            raise XGAInvalidModelError("{m} is not a valid model for a gas density profile".format(m=model))
+            raise XGAInvalidModelError(f"{model} is not a valid model for a gas density profile.")
         elif model not in self.good_model_fits:
-            raise ModelNotAssociatedError("{m} is valid model type, but no fit has been performed".format(m=model))
+            raise ModelNotAssociatedError(f"{model} is valid model type, but no fit has been performed.")
         else:
             model_obj = self.get_model_fit(model, fit_method)
 
@@ -590,44 +715,58 @@ class GasDensity3D(BaseProfile1D):
             raise ValueError("The fit to that model was not considered a success by the fit method, cannot proceed.")
 
         if not outer_rad.isscalar:
-            raise ValueError("Gas masses can only be calculated within one radii at a time, please pass a scalar "
-                             "value for outer_rad.")
+            raise ValueError(
+                "Gas masses can only be calculated within one radii at a time, please pass a scalar "
+                "value for outer_rad."
+            )
         elif inner_rad is not None and not inner_rad.isscalar:
-            raise ValueError("Gas masses can only be calculated within one radii at a time, please pass a scalar "
-                             "value for inner_rad.")
+            raise ValueError(
+                "Gas masses can only be calculated within one radii at a time, please pass a scalar "
+                "value for inner_rad."
+            )
 
         # This checks to see if inner radius is None (probably how it will be used most of the time), and if
         #  it is then creates a Quantity with the same units as outer_radius
         if inner_rad is None:
             inner_rad = Quantity(0, outer_rad.unit)
         elif inner_rad is not None and not inner_rad.unit.is_equivalent(outer_rad):
-            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
-                                      " as the outer_radius Quantity.")
+            raise UnitConversionError(
+                "If an inner_radius Quantity is supplied, then it must be in the same units"
+                " as the outer_radius Quantity."
+            )
 
         # Checking the input radius units
         if not outer_rad.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("The supplied outer radius cannot be converted to the radius unit"
-                                      " of this profile ({u})".format(u=self.radii_unit.to_string()))
-        else:
-            # This is for consistency, to make sure the same units as the profile radii are used for calculation
-            #  and for storage keys
-            outer_rad = outer_rad.to(self.radii_unit)
-            inner_rad = inner_rad.to(self.radii_unit)
+            raise UnitConversionError(
+                "The supplied outer radius cannot be converted to the radius unit"
+                f" of this profile ({self.radii_unit.to_string()})"
+            )
+
+        # This is for consistency, to make sure the same units as the profile radii are used for calculation
+        #  and for storage keys
+        outer_rad = outer_rad.to(self.radii_unit)
+        inner_rad = inner_rad.to(self.radii_unit)
 
         # When only an outer radius has been passed (i.e. inner radius is zero), then we can only allow one
         #  radius error to be passed
         if radius_err is not None and inner_rad == 0 and not radius_err.isscalar:
-            raise ValueError('You may only pass a two-element radius error quantity if you have also set inner_radius '
-                             'to a non-zero value.')
+            raise ValueError(
+                "You may only pass a two-element radius error quantity if you have also set inner_radius "
+                "to a non-zero value."
+            )
         # We know that there is no circumstance where more than two radius errors should be passed
         elif radius_err is not None and not radius_err.isscalar and len(radius_err) > 2:
-            raise ValueError("The 'radius_error' argument may have a maximum of two entries, a single value for both"
-                             "outer and inner radii, or separate entries for outer and inner radii.")
+            raise ValueError(
+                "The 'radius_error' argument may have a maximum of two entries, a single value for both"
+                "outer and inner radii, or separate entries for outer and inner radii."
+            )
         # Now we check to see whether the radius error unit is compatible with the radius units we're already
         #  working with
         elif radius_err is not None and not radius_err.unit.is_equivalent(outer_rad.unit):
-            raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
-                                      "of {}.".format(outer_rad.unit.to_string()))
+            raise UnitConversionError(
+                "The radius_err quantity must be in units that are equivalent to units "
+                f"of {outer_rad.unit.to_string()}."
+            )
 
         # Now we make absolutely sure that the radius error(s) are in the correct units
         if radius_err is not None:
@@ -636,8 +775,11 @@ class GasDensity3D(BaseProfile1D):
         # Doing an extra check to warn the user if the radius they supplied is outside the radii
         #  covered by the data
         if outer_rad >= self.radii[-1]:
-            warn("The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
-                 " you are effectively extrapolating using the model.", stacklevel=2)
+            warn(
+                "The outer radius you supplied is greater than or equal to the outer radius covered by the data, so"
+                " you are effectively extrapolating using the model.",
+                stacklevel=2,
+            )
 
         # The next step is setting up radius distributions, if the radius error is not None. The outer_rad
         #  and inner_rad (if applicable) variables will be overwritten with a distribution, which will be picked up
@@ -652,37 +794,44 @@ class GasDensity3D(BaseProfile1D):
             # The keys are defined first because 'outer_rad' is about to be turned into a radius distribution rather
             #  than a single value and we need the original values for string representations. Here the outer radius
             #  is uncertain and the size of the standard deviation becomes part of the storage key
-            out_stor_key = str(outer_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
+            out_stor_key = str(outer_rad.value) + "_" + str(radius_err.value) + " " + str(outer_rad.unit)
             inn_stor_key = str(inner_rad)
             # The length of one of the parameter distributions in the model is used to tell us how many samples to
             #  draw from our radius distribution, as we need it to be the same length for the volume integral.
-            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
-                                 radius_err.unit)
+            outer_rad = Quantity(
+                rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])), radius_err.unit
+            )
         elif radius_err is not None and radius_err.isscalar:
             # The keys are defined first because the radii variables are about to be turned into radius
             #  distributions rather than single values and we need the original values for string representations.
             #  Here the radii are uncertain (with the same st dev) and the size of the standard deviation becomes
             #  part of the storage key
-            out_stor_key = str(outer_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
-            inn_stor_key = str(inner_rad.value) + '_' + str(radius_err.value) + " " + str(outer_rad.unit)
-            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])),
-                                 radius_err.unit)
-            inner_rad = Quantity(rng.normal(inner_rad.value, radius_err.value, len(model_obj.par_dists[0])),
-                                 radius_err.unit)
+            out_stor_key = str(outer_rad.value) + "_" + str(radius_err.value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad.value) + "_" + str(radius_err.value) + " " + str(outer_rad.unit)
+            outer_rad = Quantity(
+                rng.normal(outer_rad.value, radius_err.value, len(model_obj.par_dists[0])), radius_err.unit
+            )
+            inner_rad = Quantity(
+                rng.normal(inner_rad.value, radius_err.value, len(model_obj.par_dists[0])), radius_err.unit
+            )
         elif radius_err is not None and len(radius_err) == 2:
             # The keys are defined first because the radii variables are about to be turned into radius
             #  distributions rather than single values and we need the original values for string representations.
             #  Here the radii are uncertain (with different st devs) and the size of the standard deviations become
             #  part of the storage keys
-            out_stor_key = str(outer_rad.value) + '_' + str(radius_err[0].value) + " " + str(outer_rad.unit)
-            inn_stor_key = str(inner_rad.value) + '_' + str(radius_err[1].value) + " " + str(outer_rad.unit)
-            outer_rad = Quantity(rng.normal(outer_rad.value, radius_err.value[0], len(model_obj.par_dists[0])),
-                                 radius_err.unit)
-            inner_rad = Quantity(rng.normal(inner_rad.value, radius_err.value[1], len(model_obj.par_dists[0])),
-                                 radius_err.unit)
+            out_stor_key = str(outer_rad.value) + "_" + str(radius_err[0].value) + " " + str(outer_rad.unit)
+            inn_stor_key = str(inner_rad.value) + "_" + str(radius_err[1].value) + " " + str(outer_rad.unit)
+            outer_rad = Quantity(
+                rng.normal(outer_rad.value, radius_err.value[0], len(model_obj.par_dists[0])), radius_err.unit
+            )
+            inner_rad = Quantity(
+                rng.normal(inner_rad.value, radius_err.value[1], len(model_obj.par_dists[0])), radius_err.unit
+            )
         else:
-            raise ValueError("Somehow you have passed a radius error with more than two entries and "
-                             "it hasn't been caught - contact the developer.")
+            raise ValueError(
+                "Somehow you have passed a radius error with more than two entries and "
+                "it hasn't been caught - contact the developer."
+            )
 
         # If we're using a radius distribution(s), then this part checks to ensure that none of the values are
         #  negative because that doesn't make any sense! In such cases the offending radii are set to zero, so really
@@ -700,21 +849,23 @@ class GasDensity3D(BaseProfile1D):
             self._gas_masses[str(model_obj)][out_stor_key] = {}
 
         # This runs the volume integral on the density profile, using the built-in integral method in the model.
-        if inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and \
-                out_stor_key != str(Quantity(0, outer_rad.unit)):
+        if inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and out_stor_key != str(
+            Quantity(0, outer_rad.unit)
+        ):
             mass_dist = model_obj.volume_integral(outer_rad, inner_rad, use_par_dist=True)
             # Converts to an actual mass rather than a total number of particles
-            if self._sub_type == 'num_dens':
-                mass_dist *= (MEAN_MOL_WEIGHT * m_p)
+            if self._sub_type == "num_dens":
+                mass_dist *= MEAN_MOL_WEIGHT * m_p
             # Converts to solar masses and stores inside the current profile for future reference
-            mass_dist = mass_dist.to('Msun')
+            mass_dist = mass_dist.to("Msun")
             self._gas_masses[str(model_obj)][out_stor_key][inn_stor_key] = mass_dist
 
         # Obviously the mass contained within a zero radius bin is zero, but the integral can fall over sometimes when
         #  this is requested so I put in this special case
-        elif inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and \
-                (outer_rad.isscalar and outer_rad == 0):
-            mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), 'Msun')
+        elif inn_stor_key not in self._gas_masses[str(model_obj)][out_stor_key] and (
+            outer_rad.isscalar and outer_rad == 0
+        ):
+            mass_dist = Quantity(np.zeros(len(model_obj.par_dists[0])), "Msun")
             self._gas_masses[str(model_obj)][out_stor_key][inn_stor_key] = mass_dist
 
         else:
@@ -743,7 +894,7 @@ class GasDensity3D(BaseProfile1D):
         return self._gen_method
 
     @property
-    def generation_profile(self) -> BaseProfile1D:
+    def generation_profile(self) -> SurfaceBrightness1D | APECNormalisation1D:
         """
         Provides the profile from which this density profile was measured. Either a surface brightness profile
         if measured using SB methods, or an APEC normalisation profile if inferred from annular spectra.
@@ -753,8 +904,16 @@ class GasDensity3D(BaseProfile1D):
         """
         return self._gen_prof
 
-    def view_gas_mass_dist(self, model: str, outer_rad: Quantity, conf_level: float = 68.2, figsize=(8, 8),
-                           bins: Union[str, int] = 'auto', colour: str = "lightseagreen", fit_method: str = 'mcmc'):
+    def view_gas_mass_dist(
+        self,
+        model: str,
+        outer_rad: Quantity,
+        conf_level: float = 68.2,
+        figsize: tuple[float, float] = (8, 8),
+        bins: str | int = "auto",
+        colour: str = "lightseagreen",
+        fit_method: str = "mcmc",
+    ) -> None:
         """
         A method which will generate a histogram of the gas mass distribution that resulted from the gas mass
         calculation at the supplied radius. If the mass for the passed radius has already been measured it, and the
@@ -771,34 +930,44 @@ class GasDensity3D(BaseProfile1D):
         :param str fit_method: The method that was used to fit the model, default is 'mcmc'.
         """
         if not outer_rad.isscalar:
-            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
-                             "arrays of radii are not supported.")
+            raise ValueError(
+                "Unfortunately this method can only display a distribution for one radius, so "
+                "arrays of radii are not supported."
+            )
 
         gas_mass, gas_mass_dist = self.gas_mass(model, outer_rad, conf_level=conf_level, fit_method=fit_method)
 
         plt.figure(figsize=figsize)
         ax = plt.gca()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
         ax.yaxis.set_ticklabels([])
 
         plt.hist(gas_mass_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
         plt.xlabel(r"Gas Mass \left[M$_{\odot}\right]$", fontsize=14)
-        plt.title("Gas Mass Distribution at {}".format(outer_rad.to_string()))
+        plt.title(f"Gas Mass Distribution at {outer_rad.to_string()}")
 
         mass_label = gas_mass.to("10^13Msun")
-        vals_label = str(mass_label[0].round(2).value) + "^{+" + str(mass_label[2].round(2).value) + "}" + \
-                     "_{-" + str(mass_label[1].round(2).value) + "}"
+        vals_label = (
+            str(mass_label[0].round(2).value)
+            + "^{+"
+            + str(mass_label[2].round(2).value)
+            + "}"
+            + "_{-"
+            + str(mass_label[1].round(2).value)
+            + "}"
+        )
         res_label = r"$\rm{M_{gas}} = " + vals_label + r"10^{13}M_{\odot}$"
 
-        plt.axvline(gas_mass[0].value, color='red', label=res_label)
-        plt.axvline(gas_mass[0].value - gas_mass[1].value, color='red', linestyle='dashed')
-        plt.axvline(gas_mass[0].value + gas_mass[2].value, color='red', linestyle='dashed')
-        plt.legend(loc='best', prop={'size': 12})
+        plt.axvline(gas_mass[0].value, color="red", label=res_label)
+        plt.axvline(gas_mass[0].value - gas_mass[1].value, color="red", linestyle="dashed")
+        plt.axvline(gas_mass[0].value + gas_mass[2].value, color="red", linestyle="dashed")
+        plt.legend(loc="best", prop={"size": 12})
         plt.tight_layout()
         plt.show()
 
-    def gas_mass_profile(self, model: str, radii: Quantity = None, deg_radii: Quantity = None,
-                         fit_method: str = 'mcmc') -> GasMass1D:
+    def gas_mass_profile(
+        self, model: str, radii: Quantity | None = None, deg_radii: Quantity | None = None, fit_method: str = "mcmc"
+    ) -> GasMass1D:
         """
         A method to calculate and return a gas mass profile.
 
@@ -818,12 +987,12 @@ class GasDensity3D(BaseProfile1D):
             radii = self.radii
             deg_radii = self.deg_radii
         elif radii is not None and not radii.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("The custom radii passed to this method cannot be converted to "
-                                      "{}".format(self.radii_unit.to_string()))
+            raise UnitConversionError(
+                f"The custom radii passed to this method cannot be converted to {self.radii_unit.to_string()}"
+            )
 
         if radii is not None and deg_radii is None:
-            raise ValueError('If a custom set of radii is passed then their equivalents in degrees must '
-                             'also be passed')
+            raise ValueError("If a custom set of radii is passed then their equivalents in degrees must also be passed")
 
         mass_vals = []
         mass_errs = []
@@ -832,11 +1001,21 @@ class GasDensity3D(BaseProfile1D):
             mass_vals.append(gas_mass.value[0])
             mass_errs.append(gas_mass[1:].max().value)
 
-        mass_vals = Quantity(mass_vals, 'Msun')
-        mass_errs = Quantity(mass_errs, 'Msun')
-        gm_prof = GasMass1D(radii, mass_vals, self.centre, self.src_name, self.obs_id, self.instrument,
-                            self._gen_method, self._gen_prof, values_err=mass_errs, deg_radii=deg_radii,
-                            auto_save=self.auto_save)
+        mass_vals = Quantity(mass_vals, "Msun")
+        mass_errs = Quantity(mass_errs, "Msun")
+        gm_prof = GasMass1D(
+            radii,
+            mass_vals,
+            self.centre,
+            self.src_name,
+            self.obs_id,
+            self.instrument,
+            self._gen_method,
+            self.generation_profile,
+            values_err=mass_errs,
+            deg_radii=deg_radii,
+            auto_save=self.auto_save,
+        )
 
         return gm_prof
 
@@ -872,10 +1051,24 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected temperature profile. This profile
         will be considered unusable if a temperature value of greater than 30keV is present in the profile, or if a
@@ -906,8 +1099,23 @@ class ProjectedGasTemperature1D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -922,13 +1130,13 @@ class ProjectedGasTemperature1D(BaseProfile1D):
         self._y_axis_name = "Projected Temperature"
 
         # This sets the profile to unusable if there is a problem with the data
-        if self._values_err is not None and np.any((self._values + self._values_err) > Quantity(30, 'keV')):
+        if self._values_err is not None and np.any((self._values + self._values_err) > Quantity(30, "keV")):
             self._usable = False
-        elif self._values_err is None and np.any(self._values > Quantity(30, 'keV')):
+        elif self._values_err is None and np.any(self._values > Quantity(30, "keV")):
             self._usable = False
 
         # And this does the same but if there is a problem with the uncertainties
-        if self._values_err is not None and np.any(self._values_err < Quantity(0, 'keV')):
+        if self._values_err is not None and np.any(self._values_err < Quantity(0, "keV")):
             self._usable = False
 
 
@@ -964,10 +1172,24 @@ class APECNormalisation1D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of a subclass of BaseProfile1D which will hold a 1D APEC normalisation profile.
 
@@ -996,8 +1218,23 @@ class APECNormalisation1D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1011,11 +1248,12 @@ class APECNormalisation1D(BaseProfile1D):
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "APEC Normalisation"
 
-    def _gen_profile_setup(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr') \
-            -> Tuple[Quantity, Quantity, float]:
+    def _gen_profile_setup(
+        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr"
+    ) -> tuple[Quantity, Quantity, float]:
         """
         There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
-        put some of the common setup steps in this internal function
+        put some of the common setup steps in this internal function.
 
         :param float redshift: The redshift of the source that this profile was generated from.
         :param cosmo: The chosen cosmology.
@@ -1027,28 +1265,34 @@ class APECNormalisation1D(BaseProfile1D):
         # We need radii errors so that BaseProfile init can calculate the annular radii. The only possible time
         #  this would be triggered is if a user defines their own normalisation profile.
         if self.radii_err is None:
-            raise ValueError("There are no radii uncertainties available for this APEC normalisation profile, they"
-                             " are required to generate a profile.")
+            raise ValueError(
+                "There are no radii uncertainties available for this APEC normalisation profile, they"
+                " are required to generate a profile."
+            )
 
         # This just checks that the input abundance table is legal
         if abund_table in NHC and abund_table in ABUND_TABLES:
             e_to_p_ratio = NHC[abund_table]
         elif abund_table in ABUND_TABLES and abund_table not in NHC:
             avail_nhc = ", ".join(list(NHC.keys()))
-            raise ValueError(
-                "{a} is a valid choice of XSPEC abundance table, but XGA doesn't have an electron to hydrogen "
-                "ratio for that table yet, this is the developers fault so please remind him if you see this "
-                "error. Please select from one of these in the meantime; {av}".format(a=abund_table, av=avail_nhc))
+            # Have to add a comment to stop the Bandit security tool thinking this is SQL
+            #  for no apparent reason.
+            raise XGADeveloperError(
+                f"{abund_table} is a valid choice of XSPEC abundance, but XGA doesn't include a matching "
+                f"electron to proton ratio yet. Please contact the developers and "
+                f"select from one of these in the meantime; {avail_nhc}"  # nosec B608
+            )
         elif abund_table not in ABUND_TABLES:
             avail_abund = ", ".join(ABUND_TABLES)
-            raise ValueError("{a} is not a valid abundance table choice, please use one of the "
-                             "following; {av}".format(a=abund_table, av=avail_abund))
+            raise ValueError(
+                f"{abund_table} is not a valid abundance table choice, please use one of the following; {avail_abund}."
+            )
 
         # Converts the radii to cm so that the volume intersections are in the right units.
-        if self.annulus_bounds.unit.is_equivalent('kpc'):
-            cur_rads = self.annulus_bounds.to('cm')
-        elif self.annulus_bounds.unit.is_equivalent('deg'):
-            cur_rads = ang_to_rad(self.annulus_bounds.to('deg'), redshift, cosmo).to('cm')
+        if self.annulus_bounds.unit.is_equivalent("kpc"):
+            cur_rads = self.annulus_bounds.to("cm")
+        elif self.annulus_bounds.unit.is_equivalent("deg"):
+            cur_rads = ang_to_rad(self.annulus_bounds.to("deg"), redshift, cosmo).to("cm")
         else:
             raise UnitConversionError("Somehow you have an unrecognised distance unit for the radii of this profile")
 
@@ -1058,8 +1302,15 @@ class APECNormalisation1D(BaseProfile1D):
 
         return cur_rads, ang_dist, e_to_p_ratio
 
-    def gas_density_profile(self, redshift: float, cosmo: Quantity, abund_table: str = 'angr', num_real: int = 10000,
-                            sigma: int = 1, num_dens: bool = True) -> GasDensity3D:
+    def gas_density_profile(
+        self,
+        redshift: float,
+        cosmo: Quantity,
+        abund_table: str = "angr",
+        num_real: int = 10000,
+        sigma: int = 1,
+        num_dens: bool = True,
+    ) -> GasDensity3D:
         """
         A method to calculate the gas density profile from the APEC normalisation profile, which in turn was
         measured from XSPEC fits of an AnnularSpectra. This method supports the generation of both number density
@@ -1087,8 +1338,8 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (e_to_p_ratio * 10 ** -14)
-        num_gas_scale = (1 + e_to_p_ratio)
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (e_to_p_ratio * 10**-14)
+        num_gas_scale = 1 + e_to_p_ratio
         conv_mass = MEAN_MOL_WEIGHT * m_p
 
         # Generating random normalisation profile realisations from DATA
@@ -1102,11 +1353,13 @@ class APECNormalisation1D(BaseProfile1D):
         # Using a loop here is ugly and relatively slow, but it should be okay
         for i in range(0, num_real):
             if num_dens:
-                gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @
-                                               norm_real[i, :] * conv_factor) * num_gas_scale
+                gas_dens_reals[i, :] = (
+                    np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * num_gas_scale
+                )
             else:
-                gas_dens_reals[i, :] = np.sqrt(np.linalg.inv(vol_intersects.T) @
-                                               norm_real[i, :] * conv_factor) * num_gas_scale * conv_mass
+                gas_dens_reals[i, :] = (
+                    np.sqrt(np.linalg.inv(vol_intersects.T) @ norm_real[i, :] * conv_factor) * num_gas_scale * conv_mass
+                )
 
         if not num_dens:
             # Convert the realisations to the correct unit
@@ -1117,14 +1370,28 @@ class APECNormalisation1D(BaseProfile1D):
         dens_sigma = np.nanstd(gas_dens_reals, axis=0) * sigma
 
         # Set up the actual profile object and return it
-        dens_prof = GasDensity3D(self.radii, med_dens, self.centre, self.src_name, self.obs_id, self.instrument,
-                                 'spec', self, self.radii_err, dens_sigma, self.set_ident,
-                                 self.associated_set_storage_key, self.deg_radii, auto_save=self.auto_save,
-                                 telescope=self.telescope)
+        dens_prof = GasDensity3D(
+            self.radii,
+            med_dens,
+            self.centre,
+            self.src_name,
+            self.obs_id,
+            self.instrument,
+            "spec",
+            self,
+            self.radii_err,
+            dens_sigma,
+            self.set_ident,
+            self.associated_set_storage_key,
+            self.deg_radii,
+            auto_save=self.auto_save,
+            telescope=self.telescope,
+        )
         return dens_prof
 
-    def emission_measure_profile(self, redshift: float, cosmo: Cosmology, abund_table: str = 'angr',
-                                 num_real: int = 100, sigma: int = 2):
+    def emission_measure_profile(
+        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr", num_real: int = 100, sigma: int = 2
+    ) -> EmissionMeasure1D:
         """
         A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was
         measured from XSPEC fits of an AnnularSpectra.
@@ -1143,7 +1410,7 @@ class APECNormalisation1D(BaseProfile1D):
         # This is essentially the constants bit of the XSPEC APEC normalisation
         # Angular diameter distance is calculated using the cosmology which was associated with the cluster
         #  at definition
-        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (10 ** -14)
+        conv_factor = (4 * np.pi * (ang_dist * (1 + redshift)) ** 2) / (10**-14)
         em_meas = self.values * conv_factor
 
         norm_real = self.generate_data_realisations(num_real, truncate_zero=True)
@@ -1153,9 +1420,21 @@ class APECNormalisation1D(BaseProfile1D):
         em_meas_sigma = np.std(em_meas_reals, axis=0) * sigma
 
         # Set up the actual profile object and return it
-        em_meas_prof = EmissionMeasure1D(self.radii, em_meas, self.centre, self.src_name, self.obs_id, self.instrument,
-                                         self.radii_err, em_meas_sigma, self.set_ident, self.associated_set_storage_key,
-                                         self.deg_radii, auto_save=True, telescope=self.telescope)
+        em_meas_prof = EmissionMeasure1D(
+            self.radii,
+            em_meas,
+            self.centre,
+            self.src_name,
+            self.obs_id,
+            self.instrument,
+            self.radii_err,
+            em_meas_sigma,
+            self.set_ident,
+            self.associated_set_storage_key,
+            self.deg_radii,
+            auto_save=True,
+            telescope=self.telescope,
+        )
         return em_meas_prof
 
 
@@ -1189,10 +1468,24 @@ class EmissionMeasure1D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of a subclass of BaseProfile1D which will hold a radial emission measure profile.
 
@@ -1221,8 +1514,23 @@ class EmissionMeasure1D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
 
@@ -1267,10 +1575,24 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of a subclass of BaseProfile1D which will hold a 1D projected metallicity/abundance profile.
 
@@ -1300,8 +1622,23 @@ class ProjectedGasMetallicity1D(BaseProfile1D):
             are generated from annular spectra, default is None.
         """
         #
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         # Actually imposing limits on what units are allowed for the radii and values for this - just
         #  to make things like the gas mass integration easier and more reliable. Also this is for mass
@@ -1350,10 +1687,24 @@ class GasTemperature3D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of a subclass of BaseProfile1D which will hold a radial 3D temperature profile.
 
@@ -1382,8 +1733,23 @@ class GasTemperature3D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1430,10 +1796,24 @@ class BaryonFraction(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None,  associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, auto_save: bool = False,
-                 telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of a subclass of BaseProfile1D which will hold a radial baryon fraction profile.
 
@@ -1462,8 +1842,23 @@ class BaryonFraction(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
@@ -1544,13 +1939,29 @@ class HydrostaticMass(BaseProfile1D):
         are generated from annular spectra, default is None.
 
     """
-    def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
-                 density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
-                 density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
-                 deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
+
+    def __init__(
+        self,
+        temperature_profile: GasTemperature3D | ProjectedGasTemperature1D,
+        density_profile: GasDensity3D,
+        temperature_model: str | BaseModel1D | None = None,
+        density_model: str | BaseModel1D | None = None,
+        radii: Quantity | None = None,
+        radii_err: Quantity | None = None,
+        deg_radii: Quantity | None = None,
+        fit_method: str = "mcmc",
+        num_walkers: int = 20,
+        num_steps: int | list[int] = 20000,
+        num_samples: int = 10000,
+        show_warn: bool = True,
+        progress: bool = True,
+        interp_data: bool = False,
+        allow_unphysical: bool = False,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         A profile product which uses input temperature and density profiles to calculate a cumulative hydrostatic mass
         profile - used in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2024arXiv240307982T/abstract
@@ -1621,22 +2032,27 @@ class HydrostaticMass(BaseProfile1D):
 
         # We check whether the temperature profile passed is actually the type of profile we need
         if not isinstance(temperature_profile, (GasTemperature3D, ProjectedGasTemperature1D)):
-            raise TypeError("The {} class is not an accepted input for 'temperature_profile'; only a GasTemperature3D "
-                            "or ProjectedGasTemperature1D instance may be "
-                            "passed.".format(str(type(temperature_profile))))
+            raise TypeError(
+                f"The {type(temperature_profile)} class is not an accepted input for 'temperature_profile'; "
+                f"only a GasTemperature3D or ProjectedGasTemperature1D instance may be passed."
+            )
 
         # We repeat this process with the density profile
         # TODO Add a check for projected density, if I ever implement such a thing
         if not isinstance(density_profile, GasDensity3D):
-            raise TypeError("The {} class is not an accepted input for 'density_profile'; only a GasDensity3D "
-                            "instance may be passed.".format(str(type(density_profile))))
+            raise TypeError(
+                f"The {type(density_profile)} class is not an accepted input for 'density_profile'; "
+                f"only a GasDensity3D instance may be passed."
+            )
 
         # We also need to check that someone hasn't done something dumb like pass profiles from two different
         #  clusters, so we'll compare source names.
         if temperature_profile.src_name != density_profile.src_name:
-            raise ValueError("You have passed temperature and density profiles from two different "
-                             "sources, any resulting hydrostatic mass measurements would not be valid, so this is not "
-                             "allowed.")
+            raise ValueError(
+                "You have passed temperature and density profiles from two different "
+                "sources, any resulting hydrostatic mass measurements would not be valid, so this is not "
+                "allowed."
+            )
         # And check they were generated with the same central coordinate, otherwise they may not be valid. I
         #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
         elif np.any(temperature_profile.centre != density_profile.centre):
@@ -1649,38 +2065,51 @@ class HydrostaticMass(BaseProfile1D):
 
         # Now we check whether the right combination of information has been passed depending on whether we are
         #  going to be using model fits or not (we need passed radii if a model is to be used).
-        if ((temperature_model is not None or density_model is not None) and
-                (radii is None or radii_err is None or deg_radii is None)):
-            raise ValueError("Radii at which to calculate hydrostatic mass (the 'radii', 'radii_err', and "
-                             "'deg_radii' arguments) must be passed if 'temperature_model' or 'density_model' is set.")
+        if (temperature_model is not None or density_model is not None) and (
+            radii is None or radii_err is None or deg_radii is None
+        ):
+            raise ValueError(
+                "Radii at which to calculate hydrostatic mass (the 'radii', 'radii_err', and "
+                "'deg_radii' arguments) must be passed if 'temperature_model' or 'density_model' is set."
+            )
         else:
             if len(temperature_profile) > len(density_profile):
                 # We restrict the radii to being within the bounds of the other profile if we are not interpolating
                 if not interp_data:
-                    within_bnds = np.where((temperature_profile.radii >= density_profile.annulus_bounds.min()) &
-                                           (temperature_profile.radii <= density_profile.annulus_bounds.max()))[0]
+                    within_bnds = np.where(
+                        (temperature_profile.radii >= density_profile.annulus_bounds.min())
+                        & (temperature_profile.radii <= density_profile.annulus_bounds.max())
+                    )[0]
                 else:
                     within_bnds = np.arange(0, len(temperature_profile.radii))
 
                 if len(within_bnds) != len(temperature_profile.radii):
-                    warn("The radii extracted from the temperature profile for the creation of the hydrostatic mass "
-                         "profile have been truncated to match the radius range of the density "
-                         "profile.", stacklevel=2)
+                    warn(
+                        "The radii extracted from the temperature profile for the creation of the hydrostatic mass "
+                        "profile have been truncated to match the radius range of the density "
+                        "profile.",
+                        stacklevel=2,
+                    )
                 radii = temperature_profile.radii[within_bnds]
                 radii_err = temperature_profile.radii_err[within_bnds]
                 deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
                 # We restrict the radii to being within the bounds of the other profile if we are not interpolating
                 if not interp_data:
-                    within_bnds = np.where((density_profile.radii >= temperature_profile.annulus_bounds.min()) &
-                                           (density_profile.radii <= temperature_profile.annulus_bounds.max()))[0]
+                    within_bnds = np.where(
+                        (density_profile.radii >= temperature_profile.annulus_bounds.min())
+                        & (density_profile.radii <= temperature_profile.annulus_bounds.max())
+                    )[0]
                 else:
                     within_bnds = np.arange(0, len(density_profile.radii))
 
                 if len(within_bnds) != len(density_profile.radii):
-                    warn("The radii extracted from the density profile for the creation of the hydrostatic mass "
-                         "profile have been truncated to match the radius range of the temperature "
-                         "profile.", stacklevel=2)
+                    warn(
+                        "The radii extracted from the density profile for the creation of the hydrostatic mass "
+                        "profile have been truncated to match the radius range of the temperature "
+                        "profile.",
+                        stacklevel=2,
+                    )
 
                 radii = density_profile.radii[within_bnds]
                 radii_err = density_profile.radii_err[within_bnds]
@@ -1702,8 +2131,11 @@ class HydrostaticMass(BaseProfile1D):
             set_store = temperature_profile.associated_set_storage_key
         elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
             if temperature_profile.set_ident != density_profile.set_ident:
-                warn("The temperature and density profile you passed were generated from different sets of annular"
-                     " spectra, the hydrostatic mass profile's associated set ident will be set to None.", stacklevel=2)
+                warn(
+                    "The temperature and density profile you passed were generated from different sets of annular"
+                    " spectra, the hydrostatic mass profile's associated set ident will be set to None.",
+                    stacklevel=2,
+                )
                 set_id = None
                 set_store = None
             else:
@@ -1716,8 +2148,8 @@ class HydrostaticMass(BaseProfile1D):
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
         else:
-            radii = radii.to('kpc')
-            radii_err = radii_err.to('kpc')
+            radii = radii.to("kpc")
+            radii_err = radii_err.to("kpc")
         # This will be overwritten by the super() init call, but it allows rad_check to work
         self._radii = radii
 
@@ -1733,8 +2165,10 @@ class HydrostaticMass(BaseProfile1D):
             temp_steps = num_steps[0]
             dens_steps = num_steps[1]
         else:
-            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
-                             "temperature profile fit and the second for the density profile fit.")
+            raise ValueError(
+                "If a list is passed for num_steps then it must have two entries, the first for the "
+                "temperature profile fit and the second for the density profile fit."
+            )
 
         # If models are passed then we're going to make sure that they're fit here - starting with temperature. We'll
         #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
@@ -1747,19 +2181,36 @@ class HydrostaticMass(BaseProfile1D):
             in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
 
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
-                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                            num_walkers, progress, show_warn, force_refit=True)
+                temperature_model = temperature_profile.fit(
+                    temperature_model,
+                    fit_method,
+                    num_samples,
+                    temp_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=True,
+                )
             elif in_mod_names:
                 temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
-                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                            num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=t_mn)
+                temperature_model = temperature_profile.fit(
+                    temperature_model,
+                    fit_method,
+                    num_samples,
+                    temp_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=False,
+                )
+            key_temp_mod_part = f"tm{t_mn}"
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
-                raise XGAFitError("The fit to the temperature was unsuccessful, cannot define hydrostatic mass "
-                                  "profile.")
+                raise XGAFitError(
+                    "The fit to the temperature was unsuccessful, cannot define hydrostatic mass profile."
+                )
         elif interp_data:
             key_temp_mod_part = "tmdatainterp"
         else:
@@ -1772,15 +2223,31 @@ class HydrostaticMass(BaseProfile1D):
             #  aren't the same then the fit will have to be re-run
             in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
-                                                    num_walkers, progress, show_warn, force_refit=True)
+                density_model = density_profile.fit(
+                    density_model,
+                    fit_method,
+                    num_samples,
+                    dens_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=True,
+                )
             elif in_mod_names:
                 density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
-                                                    num_walkers, progress, show_warn, force_refit=False)
+                density_model = density_profile.fit(
+                    density_model,
+                    fit_method,
+                    num_samples,
+                    dens_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=False,
+                )
 
-            key_dens_mod_part = "dm{d}".format(d=d_mn)
+            key_dens_mod_part = f"dm{d_mn}"
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -1806,19 +2273,32 @@ class HydrostaticMass(BaseProfile1D):
         mass_vals = mass[0, :]
         mass_errs = np.mean(mass[1:, :], axis=0)
 
-        super().__init__(radii, mass_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, mass_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            mass_vals,
+            self._temp_prof.centre,
+            self._temp_prof.src_name,
+            self._temp_prof.obs_id,
+            self._temp_prof.instrument,
+            radii_err,
+            mass_errs,
+            set_id,
+            set_store,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
         #  the form used by HydrostaticMass profiles.
-        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
-        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        dens_part = f"dprof_{self._dens_prof.storage_key}"
+        temp_part = f"tprof_{self._temp_prof.storage_key}"
         cur_part = self.storage_key
 
-        whole_new = "{ntm}_{ndm}_{c}_{t}_{d}".format(ntm=key_temp_mod_part, ndm=key_dens_mod_part, c=cur_part,
-                                                     t=temp_part, d=dens_part)
+        whole_new = f"{key_temp_mod_part}_{key_dens_mod_part}_{cur_part}_{temp_part}_{dens_part}"
         self._storage_key = whole_new
 
         # Setting the type
@@ -1828,10 +2308,11 @@ class HydrostaticMass(BaseProfile1D):
         self._y_axis_name = r"M$_{\rm{hydro}}$"
 
         # Setting up a dictionary to store mass results in.
-        self._masses = {}
+        self._masses: dict[str, Quantity] = {}
 
-    def mass(self, radius: Quantity, conf_level: float = 68.2,
-             radius_err: Quantity = None) -> Union[Quantity, Quantity]:
+    def mass(
+        self, radius: Quantity, conf_level: float = 68.2, radius_err: Quantity | None = None
+    ) -> Quantity | Quantity:
         """
         A method which will measure a hydrostatic mass and hydrostatic mass uncertainty within the given
         radius/radii. No corrections are applied to the values calculated by this method, it is just the vanilla
@@ -1865,9 +2346,11 @@ class HydrostaticMass(BaseProfile1D):
         #  to predict a mass for a generic radius that most likely will not match any of the data points we have. In
         #  that case we'll encourage them to fit a model and use that to predict the mass
         if (radius.isscalar or len(radius) == 1) and self._temp_model is None and not self._interp_data:
-            raise ValueError("Cannot measure a mass distribution for a custom radius when the hydrostatic mass "
-                             "profile is set to use non-interpolated temperature and density data points - instead "
-                             "please fit a mass model and use that to predict a mass.")
+            raise ValueError(
+                "Cannot measure a mass distribution for a custom radius when the hydrostatic mass "
+                "profile is set to use non-interpolated temperature and density data points - instead "
+                "please fit a mass model and use that to predict a mass."
+            )
         # These will be useful further down, to help properly setup the if-elif-else statements that decide how
         #  exactly the temp/dens profile data are treated
         elif radius.isscalar or len(radius) == 1:
@@ -1878,16 +2361,21 @@ class HydrostaticMass(BaseProfile1D):
         # We need check that, if the user has passed uncertainty information on radii, it is how we expect it to be.
         #  First off, are there the right number of entries?
         if not radius.isscalar and radius_err is not None and (radius_err.isscalar or len(radius) != len(radius_err)):
-            raise ValueError("If a set of radii are passed, and radius uncertainty information is provided, the "
-                             "'radius_err' argument must contain the same number of entries as the 'radius' argument.")
+            raise ValueError(
+                "If a set of radii are passed, and radius uncertainty information is provided, the "
+                "'radius_err' argument must contain the same number of entries as the 'radius' argument."
+            )
         # Same deal here, if only one radius is passed, only one error may be passed
         elif radius.isscalar and radius_err is not None and not radius_err.isscalar:
-            raise ValueError("When a radius uncertainty ('radius_err') is passed for a single radius value, "
-                             "'radius_err' must be scalar.")
+            raise ValueError(
+                "When a radius uncertainty ('radius_err') is passed for a single radius value, "
+                "'radius_err' must be scalar."
+            )
         # Now we check that the units of the radius and radius error quantities are compatible
         elif radius_err is not None and not radius_err.unit.is_equivalent(radius.unit):
-            raise UnitConversionError("The radius_err quantity must be in units that are equivalent to units "
-                                      "of {}.".format(radius.unit.to_string()))
+            raise UnitConversionError(
+                f"The radius_err quantity must be in units that are equivalent to units of {radius.unit.to_string()}."
+            )
 
         # Now we make absolutely sure that the radius error(s) are in the correct units
         if radius_err is not None:
@@ -1897,10 +2385,8 @@ class HydrostaticMass(BaseProfile1D):
         if radius.isscalar and radius_err is None:
             stor_key = str(radius.value) + " " + str(radius.unit)
         elif radius.isscalar and radius_err is not None:
-            stor_key = str(radius.value) + '_' + str(radius_err.value) + " " + str(radius.unit)
-        # In this case, as the radius is not scalar, the masses won't be stored so we don't need a storage key
-        else:
-            stor_key = None
+            stor_key = str(radius.value) + "_" + str(radius_err.value) + " " + str(radius.unit)
+        # In other cases, as the radius is not scalar, the masses won't be stored so we don't need a storage key
 
         # If a particular radius+radius error (if passed) already has a result in the profiles storage structure
         #  then we'll just grab that rather than redoing a calculation unnecessarily.
@@ -1913,7 +2399,7 @@ class HydrostaticMass(BaseProfile1D):
         # If we have to do any numerical differentiation, which we will if we're not using smooth models that have
         #  analytical solutions to their first order derivative, then we need a 'dx' value. We'll choose a very
         #  small one, dividing the outermost radius of this profile be 1e+6
-        dx = self.radii.max() / 1e+6
+        dx = self.radii.max() / 1e6
 
         # Here we prepare the radius uncertainties for use (if they've been passed) - the goal here is to end up
         #  with a set of radius samples (either just the one, or M if there are M radii passed) that can be used for
@@ -1929,15 +2415,15 @@ class HydrostaticMass(BaseProfile1D):
                 #  sure that it is in a (1, N) shaped array as some downstream tasks in model classes, such as
                 #  get_realisations and derivative, want radius DISTRIBUTIONS to be 2dim arrays, and multiple radius
                 #  VALUES (e.g. [1, 2, 3, 4]) to be 1dim arrays
-                calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (1, self._num_samples)),
-                                    radius_err.unit)
+                calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (1, self._num_samples)), radius_err.unit)
             # In this case multiple radius values have been passed, each with an uncertainty
             elif not radius.isscalar and radius_err is not None:
                 # So here we're setting up M radius distributions, where M is the number of input radii. So this radius
                 #  array ends up being shape (M, N), where M is the number of radii, and M is the number of samples in
                 #  the model posterior distributions
-                calc_rad = Quantity(rng.normal(radius.value, radius_err.value, (self._num_samples, len(radius))),
-                                    radius_err.unit).T
+                calc_rad = Quantity(
+                    rng.normal(radius.value, radius_err.value, (self._num_samples, len(radius))), radius_err.unit
+                ).T
             # This is the simplest case, just a radius (or a set of radii) with no uncertainty information
             #  has been passed
             else:
@@ -1946,7 +2432,9 @@ class HydrostaticMass(BaseProfile1D):
         # This is ugly and inelegant, but want to make sure that the passed radius is an array (even just with
         #  length one)
         if one_rad:
-            radius = radius.reshape(1, )
+            radius = radius.reshape(
+                1,
+            )
 
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
@@ -1955,17 +2443,23 @@ class HydrostaticMass(BaseProfile1D):
         if not already_run and self.density_model is not None:
             # If the density model fit didn't work then we give up and throw an error
             if not self.density_model.success:
-                raise XGAFitError("The density model fit was not successful, as such we cannot calculate "
-                                  "hydrostatic mass using a smooth density model.")
+                raise XGAFitError(
+                    "The density model fit was not successful, as such we cannot calculate "
+                    "hydrostatic mass using a smooth density model."
+                )
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model) - the radii errors are included if supplied.
-            dens = self._dens_model.get_realisations(calc_rad)
-            dens_der = self._dens_model.derivative(calc_rad, dx, True)
+            dens = self.density_model.get_realisations(calc_rad)
+            dens_der = self.density_model.derivative(calc_rad, dx, True)
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we just get
         #  some realizations
-        elif (not already_run and not one_rad and (len(self.density_profile) == len(self.temperature_profile)) and
-              (self.density_profile.radii == self.temperature_profile.radii).all()):
+        elif (
+            not already_run
+            and not one_rad
+            and (len(self.density_profile) == len(self.temperature_profile))
+            and (self.density_profile.radii == self.temperature_profile.radii).all()
+        ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
             dens_der = np.gradient(dens, self.radii, axis=0)
 
@@ -1978,16 +2472,28 @@ class HydrostaticMass(BaseProfile1D):
             #  scipy interpolation methods (see issue #1168) but cubic splines don't seem to behave amazingly well
             #  for temperature profiles with larger uncertainties on then outskirts, so we're doing this for now
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
-            dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
-                                   fill_value='extrapolate', bounds_error=False)
+            dens_interp = interp1d(
+                self.density_profile.radii,
+                dens_data_real,
+                axis=1,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(radius).T, self.density_profile.values_unit)
 
-            dens_der_interp = interp1d(self.density_profile.radii,
-                                       np.gradient(dens_data_real, self.density_profile.radii, axis=1).T, axis=0,
-                                       assume_sorted=True, fill_value='extrapolate', bounds_error=False)
-            dens_der = Quantity(dens_der_interp(radius).T,
-                                self.density_profile.values_unit / self.density_profile.radii_unit).T
+            dens_der_interp = interp1d(
+                self.density_profile.radii,
+                np.gradient(dens_data_real, self.density_profile.radii, axis=1).T,
+                axis=0,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
+            dens_der = Quantity(
+                dens_der_interp(radius).T, self.density_profile.values_unit / self.density_profile.radii_unit
+            ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -1997,8 +2503,7 @@ class HydrostaticMass(BaseProfile1D):
             dens_der = np.gradient(dens, self.radii, axis=0)
 
         else:
-            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
-                                self.density_profile.annulus_bounds[1:]]).T
+            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
             d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
 
@@ -2009,7 +2514,7 @@ class HydrostaticMass(BaseProfile1D):
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit (also their 1st
         #  derivatives).
-        if not already_run and not dens.unit.is_equivalent('1/cm^3'):
+        if not already_run and not dens.unit.is_equivalent("1/cm^3"):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
             dens_der = dens_der / (MEAN_MOL_WEIGHT * m_p)
 
@@ -2020,16 +2525,22 @@ class HydrostaticMass(BaseProfile1D):
         #  interpolating from data points
         if not already_run and self.temperature_model is not None:
             if not self.temperature_model.success:
-                raise XGAFitError("The temperature model fit was not successful, as such we cannot calculate entropy "
-                                  "using a smooth temperature model.")
+                raise XGAFitError(
+                    "The temperature model fit was not successful, as such we cannot calculate entropy "
+                    "using a smooth temperature model."
+                )
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            temp = self._temp_model.get_realisations(calc_rad)
-            temp_der = self._temp_model.derivative(calc_rad, dx, True)
+            temp = self.temperature_model.get_realisations(calc_rad)
+            temp_der = self.temperature_model.derivative(calc_rad, dx, True)
 
         # In this rare case temperature and density profiles are identical, and so we just get some realizations
-        elif (not already_run and not one_rad and (len(self.density_profile) == len(self.temperature_profile)) and
-              (self.density_profile.radii == self.temperature_profile.radii).all()):
+        elif (
+            not already_run
+            and not one_rad
+            and (len(self.density_profile) == len(self.temperature_profile))
+            and (self.density_profile.radii == self.temperature_profile.radii).all()
+        ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
             temp_der = np.gradient(temp, self.radii, axis=0)
 
@@ -2037,15 +2548,27 @@ class HydrostaticMass(BaseProfile1D):
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realizations of the
             #  data points - we'll use this to create N realizations of the interpolations as well
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
-            temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
-                                   fill_value='extrapolate', bounds_error=False)
+            temp_interp = interp1d(
+                self.temperature_profile.radii,
+                temp_data_real,
+                axis=1,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
             temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
 
-            temp_der_interp = interp1d(self.temperature_profile.radii,
-                                       np.gradient(temp_data_real, self.temperature_profile.radii, axis=1).T, axis=0,
-                                       assume_sorted=True, fill_value='extrapolate', bounds_error=False)
-            temp_der = Quantity(temp_der_interp(radius).T,
-                                self.temperature_profile.values_unit / self.temperature_profile.radii_unit).T
+            temp_der_interp = interp1d(
+                self.temperature_profile.radii,
+                np.gradient(temp_data_real, self.temperature_profile.radii, axis=1).T,
+                axis=0,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
+            temp_der = Quantity(
+                temp_der_interp(radius).T, self.temperature_profile.values_unit / self.temperature_profile.radii_unit
+            ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
@@ -2057,8 +2580,9 @@ class HydrostaticMass(BaseProfile1D):
         #  temperature value - in practise this means that each density will be paired with the temperature
         #  realizations whose radial coverage they fall within.
         else:
-            t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
-                                self.temperature_profile.annulus_bounds[1:]]).T
+            t_bnds = np.vstack(
+                [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
+            ).T
 
             t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
 
@@ -2069,25 +2593,25 @@ class HydrostaticMass(BaseProfile1D):
 
         # We ensure the temperatures are in the right unit - we want Kelvin for this, as compared to the entropy
         #  profile where the 'custom' is to do it in keV
-        if not already_run and temp.unit.is_equivalent('keV'):
-            temp = (temp / k_B).to('K')
-            temp_der = (temp_der / k_B).to(Unit('K') / self._temp_prof.radii_unit)
+        if not already_run and temp.unit.is_equivalent("keV"):
+            temp = (temp / k_B).to("K")
+            temp_der = (temp_der / k_B).to(Unit("K") / self._temp_prof.radii_unit)
 
         # And now we do the actual mass calculation
         if not already_run:
-
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
             #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
             #  quantities that way.
-            mass_dist = (((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G))
-                         * ((dens * temp_der) + (temp * dens_der)))
+            mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G)) * (
+                (dens * temp_der) + (temp * dens_der)
+            )
 
             # Returning to the expected shape of array for single radii passed in
             if one_rad:
                 mass_dist = mass_dist[0]
 
             # Just converts the mass/masses to the unit we normally use for them
-            mass_dist = mass_dist.to('Msun').T
+            mass_dist = mass_dist.to("Msun").T
 
             # Storing the result if it is for a single radius
             if radius.isscalar:
@@ -2105,12 +2629,14 @@ class HydrostaticMass(BaseProfile1D):
         # We check to see if any of the upper limits (i.e. measured value plus +ve error) are below zero, and if so
         #  then we throw an exception up (if the profile is set to do that - it is the default behaviour).
         if not self._allow_unphysical and np.any((mass_res[0] + mass_res[1]) < 0):
-            raise ValueError("A mass upper limit (i.e. measured value plus +ve error) of less than zero has been "
-                             "measured, which is not physical.")
+            raise ValueError(
+                "A mass upper limit (i.e. measured value plus +ve error) of less than zero has been "
+                "measured, which is not physical."
+            )
 
         return mass_res, mass_dist
 
-    def annular_mass(self, outer_radius: Quantity, inner_radius: Quantity, conf_level: float = 68.2):
+    def annular_mass(self, outer_radius: Quantity, inner_radius: Quantity, conf_level: float = 68.2) -> Quantity:
         """
         Calculate the hydrostatic mass contained within a specific 3D annulus, bounded by the outer and inner radius
         supplied to this method. Annular mass is calculated by measuring the mass within the inner and outer
@@ -2134,13 +2660,13 @@ class HydrostaticMass(BaseProfile1D):
         # Perform some checks to make sure that the user has passed inner and outer radii quantities that are valid
         #  and won't break any of the calculations that will be happening in this method
         if outer_radius.isscalar != inner_radius.isscalar:
-            raise ValueError("The outer_radius and inner_radius Quantities must both be scalar, or both "
-                             "be non-scalar.")
-        elif (not inner_radius.isscalar and inner_radius.ndim != 1) or \
-                (not outer_radius.isscalar and outer_radius.ndim != 1):
-            raise ValueError('Non-scalar radius Quantities must have only one dimension')
+            raise ValueError("The outer_radius and inner_radius Quantities must both be scalar, or both be non-scalar.")
+        elif (not inner_radius.isscalar and inner_radius.ndim != 1) or (
+            not outer_radius.isscalar and outer_radius.ndim != 1
+        ):
+            raise ValueError("Non-scalar radius Quantities must have only one dimension")
         elif not outer_radius.isscalar and not inner_radius.isscalar and outer_radius.shape != inner_radius.shape:
-            raise ValueError('The outer_radius and inner_radius Quantities must be the same shape.')
+            raise ValueError("The outer_radius and inner_radius Quantities must be the same shape.")
 
         # This just measures the masses within two radii, the outer and the inner supplied by the user. The mass()
         #  method will automatically deal with the input of multiple entries for each radius
@@ -2150,8 +2676,14 @@ class HydrostaticMass(BaseProfile1D):
         # This PROBABLY NOT AT ALL valid because they're just posterior distributions of mass
         return outer_mass_dist - inner_mass_dist
 
-    def view_mass_dist(self, radius: Quantity, conf_level: float = 68.2, figsize: Tuple[float, float] = (8, 8),
-                       bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
+    def view_mass_dist(
+        self,
+        radius: Quantity,
+        conf_level: float = 68.2,
+        figsize: tuple[float, float] = (8, 8),
+        bins: str | int = "auto",
+        colour: str = "lightseagreen",
+    ) -> None:
         """
         A method which will generate a histogram of the mass distribution that resulted from the mass calculation
         at the supplied radius. If the mass for the passed radius has already been measured it, and the mass
@@ -2166,8 +2698,10 @@ class HydrostaticMass(BaseProfile1D):
         :param Tuple[float, float] figsize: The desired size of the histogram figure.
         """
         if not radius.isscalar:
-            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
-                             "arrays of radii are not supported.")
+            raise ValueError(
+                "Unfortunately this method can only display a distribution for one radius, so "
+                "arrays of radii are not supported."
+            )
 
         # Grabbing out the mass distribution, as well as the single result that describes the mass distribution.
         hy_mass, hy_dist = self.mass(radius, conf_level)
@@ -2175,29 +2709,36 @@ class HydrostaticMass(BaseProfile1D):
         plt.figure(figsize=figsize)
         ax = plt.gca()
         # Includes nicer ticks
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
         # And removing the yaxis tick labels as its just a number of values per bin
         ax.yaxis.set_ticklabels([])
 
         # Plot the histogram and set up labels
         plt.hist(hy_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
         plt.xlabel(self._y_axis_name + r" $\left[\rm{M}_{\odot}\right]$", fontsize=14)
-        plt.title("Mass Distribution at {}".format(radius.to_string()))
+        plt.title(f"Mass Distribution at {radius.to_string()}")
 
         lab_hy_mass = hy_mass.to("10^14Msun")
-        vals_label = str(lab_hy_mass[0].round(2).value) + "^{+" + str(lab_hy_mass[2].round(2).value) + "}" + \
-                     "_{-" + str(lab_hy_mass[1].round(2).value) + "}"
+        vals_label = (
+            str(lab_hy_mass[0].round(2).value)
+            + "^{+"
+            + str(lab_hy_mass[2].round(2).value)
+            + "}"
+            + "_{-"
+            + str(lab_hy_mass[1].round(2).value)
+            + "}"
+        )
         res_label = r"$\rm{M_{hydro}} = " + vals_label + r"\times 10^{14}M_{\odot}$"
 
         # And this just plots the 'result' on the distribution as a series of vertical lines
-        plt.axvline(hy_mass[0].value, color='red', label=res_label)
-        plt.axvline(hy_mass[0].value - hy_mass[1].value, color='red', linestyle='dashed')
-        plt.axvline(hy_mass[0].value + hy_mass[2].value, color='red', linestyle='dashed')
-        plt.legend(loc='best', prop={'size': 12})
+        plt.axvline(hy_mass[0].value, color="red", label=res_label)
+        plt.axvline(hy_mass[0].value - hy_mass[1].value, color="red", linestyle="dashed")
+        plt.axvline(hy_mass[0].value + hy_mass[2].value, color="red", linestyle="dashed")
+        plt.legend(loc="best", prop={"size": 12})
         plt.tight_layout()
         plt.show()
 
-    def baryon_fraction(self, radius: Quantity, conf_level: float = 68.2) -> Tuple[Quantity, Quantity]:
+    def baryon_fraction(self, radius: Quantity, conf_level: float = 68.2) -> tuple[Quantity, Quantity]:
         """
         A method to use the hydrostatic mass information of this profile, and the gas density information of the
         input gas density profile, to calculate a baryon fraction within the given radius.
@@ -2213,8 +2754,10 @@ class HydrostaticMass(BaseProfile1D):
         lower = 50 - (conf_level / 2)
 
         if not radius.isscalar:
-            raise ValueError("Unfortunately this method can only calculate the baryon fraction within one "
-                             "radius, multiple radii are not supported.")
+            raise ValueError(
+                "Unfortunately this method can only calculate the baryon fraction within one "
+                "radius, multiple radii are not supported."
+            )
 
         # Grab out the hydrostatic mass distribution, and the gas mass distribution
         hy_mass, hy_mass_dist = self.mass(radius, conf_level)
@@ -2225,8 +2768,9 @@ class HydrostaticMass(BaseProfile1D):
         #  have to make a distinction.
         if self._dens_model is not None:
             # The case where we have used a density profile model
-            gas_mass, gas_mass_dist = self._dens_prof.gas_mass(self._dens_model.name, radius, conf_level=conf_level,
-                                                               fit_method=self._dens_model.fit_method)
+            gas_mass, gas_mass_dist = self._dens_prof.gas_mass(
+                self._dens_model.name, radius, conf_level=conf_level, fit_method=self._dens_model.fit_method
+            )
         else:
             # The case where we are data-driven
             gas_mass, gas_mass_dist = self._dens_prof.gas_mass(model=None, outer_rad=radius, conf_level=conf_level)
@@ -2234,9 +2778,9 @@ class HydrostaticMass(BaseProfile1D):
         # If the distributions don't have the same number of entries (though as far I can recall they always should),
         #  then we just make sure we have two equal length distributions to divide
         if len(hy_mass_dist) < len(gas_mass_dist):
-            bar_frac_dist = gas_mass_dist[:len(hy_mass_dist)] / hy_mass_dist
+            bar_frac_dist = gas_mass_dist[: len(hy_mass_dist)] / hy_mass_dist
         elif len(hy_mass_dist) > len(gas_mass_dist):
-            bar_frac_dist = gas_mass_dist / hy_mass_dist[:len(gas_mass_dist)]
+            bar_frac_dist = gas_mass_dist / hy_mass_dist[: len(gas_mass_dist)]
         else:
             bar_frac_dist = gas_mass_dist / hy_mass_dist
 
@@ -2247,9 +2791,14 @@ class HydrostaticMass(BaseProfile1D):
 
         return bar_frac_res, bar_frac_dist
 
-    def view_baryon_fraction_dist(self, radius: Quantity, conf_level: float = 68.2,
-                                  figsize: Tuple[float, float] = (8, 8), bins: Union[str, int] = 'auto',
-                                  colour: str = "lightseagreen"):
+    def view_baryon_fraction_dist(
+        self,
+        radius: Quantity,
+        conf_level: float = 68.2,
+        figsize: tuple[float, float] = (8, 8),
+        bins: str | int = "auto",
+        colour: str = "lightseagreen",
+    ) -> None:
         """
         A method which will generate a histogram of the baryon fraction distribution that resulted from the mass
         calculation at the supplied radius. If the baryon fraction for the passed radius has already been
@@ -2265,32 +2814,43 @@ class HydrostaticMass(BaseProfile1D):
         :param str colour: The desired colour of the histogram.
         """
         if not radius.isscalar:
-            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
-                             "arrays of radii are not supported.")
+            raise ValueError(
+                "Unfortunately this method can only display a distribution for one radius, so "
+                "arrays of radii are not supported."
+            )
 
         bar_frac, bar_frac_dist = self.baryon_fraction(radius, conf_level)
         plt.figure(figsize=figsize)
         ax = plt.gca()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
         ax.yaxis.set_ticklabels([])
 
         plt.hist(bar_frac_dist.value, bins=bins, color=colour, alpha=0.7)
         plt.xlabel("Baryon Fraction", fontsize=14)
-        plt.title("Baryon Fraction Distribution at {}".format(radius.to_string()))
+        plt.title(f"Baryon Fraction Distribution at {radius.to_string()}")
 
-        vals_label = str(bar_frac[0].round(2).value) + "^{+" + str(bar_frac[2].round(2).value) + "}" + \
-                     "_{-" + str(bar_frac[1].round(2).value) + "}"
+        vals_label = (
+            str(bar_frac[0].round(2).value)
+            + "^{+"
+            + str(bar_frac[2].round(2).value)
+            + "}"
+            + "_{-"
+            + str(bar_frac[1].round(2).value)
+            + "}"
+        )
         res_label = r"$\rm{f_{gas}} = " + vals_label + "$"
 
-        plt.axvline(bar_frac[0].value, color='red', label=res_label)
-        plt.axvline(bar_frac[0].value - bar_frac[1].value, color='red', linestyle='dashed')
-        plt.axvline(bar_frac[0].value + bar_frac[2].value, color='red', linestyle='dashed')
-        plt.legend(loc='best', prop={'size': 12})
+        plt.axvline(bar_frac[0].value, color="red", label=res_label)
+        plt.axvline(bar_frac[0].value - bar_frac[1].value, color="red", linestyle="dashed")
+        plt.axvline(bar_frac[0].value + bar_frac[2].value, color="red", linestyle="dashed")
+        plt.legend(loc="best", prop={"size": 12})
         plt.xlim(0)
         plt.tight_layout()
         plt.show()
 
-    def baryon_fraction_profile(self, radii: Quantity = None, deg_radii: Quantity = None) -> BaryonFraction:
+    def baryon_fraction_profile(
+        self, radii: Quantity | None = None, deg_radii: Quantity | None = None
+    ) -> BaryonFraction:
         """
         A method which uses the baryon_fraction method to construct a baryon fraction profile - either at the radii
         of this HydrostaticMass profile or at custom radii. The uncertainties on the baryon fraction are calculated
@@ -2308,8 +2868,10 @@ class HydrostaticMass(BaseProfile1D):
             radii_err = self.radii_err
             deg_radii = self.deg_radii
         elif radii is not None and deg_radii is None:
-            raise ValueError("If the 'radii' argument is passed, then the 'deg_radii' argument must be populated "
-                             "with equivalent values.")
+            raise ValueError(
+                "If the 'radii' argument is passed, then the 'deg_radii' argument must be populated "
+                "with equivalent values."
+            )
         else:
             self.rad_check(radii)
             radii_err = None
@@ -2327,16 +2889,35 @@ class HydrostaticMass(BaseProfile1D):
             frac_err.append(b_frac[1:].mean())
 
         # Makes them unit-less quantities, as baryon fraction is mass/mass
-        frac = Quantity(frac, '')
-        frac_err = Quantity(frac_err, '')
+        frac = Quantity(frac, "")
+        frac_err = Quantity(frac_err, "")
 
-        return BaryonFraction(radii, frac, self.centre, self.src_name, self.obs_id, self.instrument,
-                              radii_err, frac_err, self.set_ident, self.associated_set_storage_key,
-                              deg_radii, auto_save=self.auto_save, telescope=self.telescope)
+        return BaryonFraction(
+            radii,
+            frac,
+            self.centre,
+            self.src_name,
+            self.obs_id,
+            self.instrument,
+            radii_err,
+            frac_err,
+            self.set_ident,
+            self.associated_set_storage_key,
+            deg_radii,
+            auto_save=self.auto_save,
+            telescope=self.telescope,
+        )
 
-    def overdensity_radius(self, delta: int, redshift: float, cosmo, init_lo_rad: Quantity = Quantity(100, 'kpc'),
-                           init_hi_rad: Quantity = Quantity(3500, 'kpc'), init_step: Quantity = Quantity(100, 'kpc'),
-                           out_unit: Union[Unit, str] = Unit('kpc')) -> Quantity:
+    def overdensity_radius(
+        self,
+        delta: int,
+        redshift: float,
+        cosmo: Cosmology,
+        init_lo_rad: Quantity = Quantity(100, "kpc"),
+        init_hi_rad: Quantity = Quantity(3500, "kpc"),
+        init_step: Quantity = Quantity(100, "kpc"),
+        out_unit: Unit | str = Unit("kpc"),
+    ) -> Quantity:
         """
         This method uses the mass profile to find the radius that corresponds to the user-supplied
         overdensity - common choices for cluster analysis are Δ=2500, 500, and 200. Overdensity radii are
@@ -2387,20 +2968,21 @@ class HydrostaticMass(BaseProfile1D):
 
             # This sets up a range of radii within which to calculate masses, which in turn are used to find the
             #  closest value to the Delta*critical density we're looking for
-            rads = Quantity(np.arange(*brackets.value, step_size.value), 'kpc')
+            rads = Quantity(np.arange(brackets.value[0], brackets.value[1], step_size.value), "kpc")
             # The masses contained within the test radii, the transpose is just there because the array output
             #  by that function is weirdly ordered - there is an issue open that will remind to eventually change that
             rad_masses = self.mass(rads)[0].T
             # Calculating the density from those masses - uses the radii that the masses were measured within
-            rad_dens = rad_masses[:, 0] / (4 * np.pi * (rads ** 3) / 3)
+            rad_dens = rad_masses[:, 0] / (4 * np.pi * (rads**3) / 3)
             # Finds the difference between the density array calculated above and the requested
             #  overdensity (i.e. Delta * the critical density of the Universe at the source redshift).
             rad_dens_diffs = rad_dens - (delta * z_crit_dens)
 
             if np.all(rad_dens_diffs.value > 0) or np.all(rad_dens_diffs.value < 0):
-                raise ValueError("The passed lower ({l}) and upper ({u}) radii don't appear to bracket the "
-                                 "requested overdensity (Delta={d}) radius.".format(l=brackets[0], u=brackets[1],
-                                                                                    d=delta))
+                raise ValueError(
+                    f"The passed lower ({brackets[0]}) and upper ({brackets[1]}) radii don't appear to bracket the "
+                    f"requested overdensity (Delta={delta}) radius."
+                )
 
             # This finds the index of the radius where the turnover between the density difference being
             #  positive and negative happens. The radius of that index, and the index before it, bracket
@@ -2412,7 +2994,7 @@ class HydrostaticMass(BaseProfile1D):
 
         # First perform some sanity checks to make sure that the user hasn't passed anything silly
         # Check that the overdensity is a positive, non-zero (because that wouldn't make sense) integer.
-        if not type(delta) == int or delta <= 0:
+        if type(delta) is not int or delta <= 0:
             raise ValueError("The overdensity must be a positive, non-zero, integer.")
 
         # The user is allowed to pass either a unit instance or a string, we make sure the out_unit is consistently
@@ -2420,15 +3002,19 @@ class HydrostaticMass(BaseProfile1D):
         if isinstance(out_unit, str):
             out_unit = Unit(out_unit)
         elif not isinstance(out_unit, Unit):
-            raise ValueError("The out_unit argument must be either an astropy Unit instance, or a string "
-                             "representing an astropy unit.")
+            raise ValueError(
+                "The out_unit argument must be either an astropy Unit instance, or a string "
+                "representing an astropy unit."
+            )
 
         # We know that if we have arrived here then the out_unit variable is a Unit instance, so we just check
         #  that it's a distance unit that makes sense. I haven't allowed degrees, arcmins etc. because it would
         #  entail a little extra work, and I don't care enough right now.
-        if not out_unit.is_equivalent('kpc'):
-            raise UnitConversionError("The out_unit argument must be supplied with a unit that is convertible "
-                                      "to kpc. Angular units such as deg are not currently supported.")
+        if not out_unit.is_equivalent("kpc"):
+            raise UnitConversionError(
+                "The out_unit argument must be supplied with a unit that is convertible "
+                "to kpc. Angular units such as deg are not currently supported."
+            )
 
         # Obviously redshift can't be negative, and I won't allow zero redshift because it doesn't
         #  make sense for clusters and completely changes how distance calculations are done.
@@ -2440,72 +3026,81 @@ class HydrostaticMass(BaseProfile1D):
         z_crit_dens = cosmo.critical_density(redshift)
 
         wide_bracket = turning_point(Quantity([init_lo_rad, init_hi_rad]), init_step)
-        if init_step != Quantity(1, 'kpc'):
+        if init_step != Quantity(1, "kpc"):
             # In this case I buffer the wide bracket (subtract 5 kpc from the lower bracket and add 5 kpc to the upper
             #  bracket) - this is a fix to help avoid errors when the turning point is equal to the upper or lower
             #  bracket
-            buffered_wide_bracket = wide_bracket + Quantity([-5, 5], 'kpc')
-            tight_bracket = turning_point(buffered_wide_bracket, Quantity(1, 'kpc'))
+            buffered_wide_bracket = wide_bracket + Quantity([-5, 5], "kpc")
+            tight_bracket = turning_point(buffered_wide_bracket, Quantity(1, "kpc"))
         else:
             tight_bracket = wide_bracket
 
         return ((tight_bracket[0] + tight_bracket[1]) / 2).to(out_unit)
 
-    def _diag_view_prep(self, src) -> Tuple[int, RateMap, SurfaceBrightness1D]:
+    def _diag_view_prep(self, src: GalaxyCluster | None) -> tuple[int, RateMap | None, SurfaceBrightness1D | None]:
         """
         This internal function just serves to grab the relevant photometric products (if available) and check to
         see how many plots will be in the diagnostic view. The maximum is five; mass profile, temperature profile,
         density profile, surface brightness profile, and ratemap.
 
-        :param GalaxyCluster src: The source object for which this hydrostatic mass profile was created
+        :param GalaxyCluster/None src: The source object for which this hydrostatic mass profile was created.
         :return: The number of plots, a RateMap (if src was pass, otherwise None), and a SB profile (if the
             density profile was created with the SB method, otherwise None).
-        :rtype: Tuple[int, RateMap, SurfaceBrightness1D]
+        :rtype: Tuple[int, RateMap | None, SurfaceBrightness1D | None]
         """
-
         # This checks to make sure that the source is a galaxy cluster, I do it this way (with strings) to avoid
         #  annoying circular import errors. The source MUST be a galaxy cluster because you can only calculate
         #  hydrostatic mass profiles for galaxy clusters.
-        if src is not None and type(src).__name__ != 'GalaxyCluster':
+        if src is not None and type(src).__name__ != "GalaxyCluster":
             raise TypeError("The src argument must be a GalaxyCluster object.")
 
         # This just checks to make sure that the name of the passed source is the same as the stored source name
         #  of this profile. Maybe in the future this won't be necessary because a reference to the source
         #  will be stored IN the profile.
         if src is not None and src.name != self.src_name:
-            raise ValueError("The passed source has a different name to the source that was used to generate"
-                             " this HydrostaticMass profile.")
+            raise ValueError(
+                "The passed source has a different name to the source that was used to generate"
+                " this HydrostaticMass profile."
+            )
 
-        # If the hydrostatic mass profile was created using combined data then I grab a combined image
-        if self.obs_id == 'combined' and src is not None:
-            rt = src.get_combined_ratemaps(src.peak_lo_en, src.peak_hi_en)
+        # If the hydrostatic mass profile was created using combined data, then we grab a combined image
+        if self.obs_id == "combined" and src is not None:
+            rt = src.get_combined_ratemaps(src.peak_lo_en, src.peak_hi_en, telescope=self.telescope)
         # Otherwise we grab the specific relevant image
-        elif self.obs_id != 'combined' and src is not None:
-            rt = src.get_ratemaps(self.obs_id, self.instrument, src.peak_lo_en, src.peak_hi_en)
+        elif self.obs_id != "combined" and src is not None:
+            rt = src.get_ratemaps(
+                self.obs_id, self.instrument, src.peak_lo_en, src.peak_hi_en, telescope=self.telescope
+            )
         # If there is no source passed, then we don't get a ratemap
         else:
             rt = None
 
+        # We also need to check that the 'rt' variable isn't a list of RateMaps
+        if isinstance(rt, list):
+            raise MultipleMatchError("Multiple RateMaps were retrieved from the source, contact the developers.")
+
         # Checks to see whether the generation profile of the density profile is a surface brightness
         #  profile. The other option is that it's an apec normalisation profile if generated from the spectra method
-        if type(self.density_profile.generation_profile) == SurfaceBrightness1D:
+        if type(self.density_profile.generation_profile) is SurfaceBrightness1D:
             sb = self.density_profile.generation_profile
         # Otherwise there is no SB profile
         else:
             sb = None
 
-        # Maximum number of plots is five, this just figures out how many there are going to be based on what the
-        #  ratemap and surface  brightness profile values are
+        # Maximum number of plots is five. This just figures out how many there are going to be based on what the
+        #  ratemap and surface brightness profile values are
         num_plots = 5 - sum([rt is None, sb is None])
 
         return num_plots, rt, sb
 
-    def _gen_diag_view(self, fig: Figure, src, num_plots: int, rt: RateMap, sb: SurfaceBrightness1D):
+    def _gen_diag_view(
+        self, fig: Figure, src: GalaxyCluster | None, num_plots: int, rt: RateMap | None, sb: SurfaceBrightness1D | None
+    ) -> Axes:
         """
         This populates the diagnostic plot figure, grabbing axes from various classes of profile product.
 
         :param Figure fig: The figure instance being populated.
-        :param GalaxyCluster src: The galaxy cluster source that this hydrostatic mass profile was created for.
+        :param GalaxyCluster | None src: The galaxy cluster source that this hydrostatic mass profile was created for.
         :param int num_plots: The number of plots in this diagnostic view.
         :param RateMap rt: A RateMap to add to this diagnostic view.
         :param SurfaceBrightness1D sb: A surface brightness profile to add to this diagnostic view.
@@ -2519,7 +3114,7 @@ class HydrostaticMass(BaseProfile1D):
 
         # If a RateMap has been passed then we need to get the view, calculate some things, and then add it to our
         #  diagnostic plot
-        if rt is not None:
+        if rt is not None and src is not None:
             # As the RateMap is the first plot, and is not guaranteed to be present, I use the offset parameter
             #  later in this function to shift the other plots across by 1 if it is present.
             offset = 1
@@ -2529,14 +3124,16 @@ class HydrostaticMass(BaseProfile1D):
                 # I also grab the annulus boundaries from the temperature profile used to create this
                 #  HydrostaticMass profile, then convert to pixels. That does depend on there being a source, but
                 #  we know that we wouldn't have a RateMap at this point if the user hadn't passed a source
-                pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.peak, src.redshift,
-                                               src.cosmo)
+                pix_rads = physical_rad_to_pix(
+                    rt, self.temperature_profile.annulus_bounds, src.peak, src.redshift, src.cosmo
+                )
 
             else:
                 # No peak means we just use the original user-passed RA-Dec
                 ch = src.ra_dec
-                pix_rads = physical_rad_to_pix(rt, self.temperature_profile.annulus_bounds, src.ra_dec, src.redshift,
-                                               src.cosmo)
+                pix_rads = physical_rad_to_pix(
+                    rt, self.temperature_profile.annulus_bounds, src.ra_dec, src.redshift, src.cosmo
+                )
 
             # This gets the nicely setup view from the RateMap object and adds it to our array of matplotlib axes
             ax_arr[0] = rt.get_view(ax_arr[0], ch, radial_bins_pix=pix_rads.value)
@@ -2546,21 +3143,24 @@ class HydrostaticMass(BaseProfile1D):
 
         # These simply plot the mass, temperature, and density profiles with legends turned off, residuals turned
         #  off, and no title
-        ax_arr[0 + offset] = self.get_view(fig, ax_arr[0 + offset], show_legend=False, custom_title='',
-                                           show_residual_ax=False)[0]
-        ax_arr[1 + offset] = \
-        self.temperature_profile.get_view(fig, ax_arr[1 + offset], show_legend=False, custom_title='',
-                                          show_residual_ax=False)[0]
-        ax_arr[2 + offset] = self.density_profile.get_view(fig, ax_arr[2 + offset], show_legend=False, custom_title='',
-                                                           show_residual_ax=False)[0]
+        ax_arr[0 + offset] = self.get_view(
+            fig, ax_arr[0 + offset], show_legend=False, custom_title="", show_residual_ax=False
+        )[0]
+        ax_arr[1 + offset] = self.temperature_profile.get_view(
+            fig, ax_arr[1 + offset], show_legend=False, custom_title="", show_residual_ax=False
+        )[0]
+        ax_arr[2 + offset] = self.density_profile.get_view(
+            fig, ax_arr[2 + offset], show_legend=False, custom_title="", show_residual_ax=False
+        )[0]
         # Then if there is a surface brightness profile thats added too
         if sb is not None:
-            ax_arr[3 + offset] = sb.get_view(fig, ax_arr[3 + offset], show_legend=False, custom_title='',
-                                             show_residual_ax=False)[0]
+            ax_arr[3 + offset] = sb.get_view(
+                fig, ax_arr[3 + offset], show_legend=False, custom_title="", show_residual_ax=False
+            )[0]
 
         return ax_arr
 
-    def diagnostic_view(self, src=None, figsize: Tuple[float, float] = None):
+    def diagnostic_view(self, src: GalaxyCluster | None = None, figsize: tuple[float, float] | None = None) -> None:
         """
         This method produces a figure with the most important products that went into the creation of this
         HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
@@ -2572,7 +3172,6 @@ class HydrostaticMass(BaseProfile1D):
         :param Tuple[float, float] figsize: A tuple that sets the size of the diagnostic plot, default is None in
             which case it is set automatically.
         """
-
         # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
         #  some common sense checks if a source has been passed.
         num_plots, rt, sb = self._diag_view_prep(src)
@@ -2584,15 +3183,17 @@ class HydrostaticMass(BaseProfile1D):
         # Set up the figure
         fig = plt.figure(figsize=figsize)
         # Set up and populate the axes with plots
-        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+        self._gen_diag_view(fig, src, num_plots, rt, sb)
 
         # And show the figure
         plt.tight_layout()
         plt.show()
 
-        plt.close('all')
+        plt.close("all")
 
-    def save_diagnostic_view(self, save_path: str, src=None, figsize: Tuple[float, float] = None):
+    def save_diagnostic_view(
+        self, save_path: str, src: GalaxyCluster | None = None, figsize: tuple[float, float] | None = None
+    ) -> None:
         """
         This method saves a figure (without displaying) with the most important products that went into the creation
         of this HydrostaticMass profile, for the purposes of quickly checking that everything looks sensible. The
@@ -2602,7 +3203,7 @@ class HydrostaticMass(BaseProfile1D):
 
         :param str save_path: The path and filename where the diagnostic figure should be saved.
         :param GalaxyCluster src: The GalaxyCluster source that this HydrostaticMass profile was generated from.
-        :param Tuple[float, float] figsize: A tuple that sets the size of the diagnostic plot, default is None
+        :param Tuple[float, float]/None figsize: A tuple that sets the size of the diagnostic plot, default is None
             in which case it is set automatically.
         """
         # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
@@ -2616,16 +3217,16 @@ class HydrostaticMass(BaseProfile1D):
         # Set up the figure
         fig = plt.figure(figsize=figsize)
         # Set up and populate the axes with plots
-        ax_arr = self._gen_diag_view(fig, src, num_plots, rt, sb)
+        self._gen_diag_view(fig, src, num_plots, rt, sb)
 
         # And show the figure
         plt.tight_layout()
         plt.savefig(save_path)
 
-        plt.close('all')
+        plt.close("all")
 
     @property
-    def temperature_profile(self) -> Union[GasTemperature3D, ProjectedGasTemperature1D]:
+    def temperature_profile(self) -> GasTemperature3D | ProjectedGasTemperature1D:
         """
         A method to provide access to the 3D or projected temperature profile used to generate this
         hydrostatic mass profile.
@@ -2646,9 +3247,10 @@ class HydrostaticMass(BaseProfile1D):
         return self._dens_prof
 
     @property
-    def temperature_model(self) -> BaseModel1D:
+    def temperature_model(self) -> BaseModel1D | None:
         """
-        A method to provide access to the model that may have been fit to the temperature profile.
+        A method to provide access to the model that may have been fit to the temperature profile. If
+        no model was specified on initialization then this will be None.
 
         :return: The fit temperature model.
         :rtype: BaseModel1D
@@ -2656,16 +3258,17 @@ class HydrostaticMass(BaseProfile1D):
         return self._temp_model
 
     @property
-    def density_model(self) -> BaseModel1D:
+    def density_model(self) -> BaseModel1D | None:
         """
-        A method to provide access to the model that may have been fit to the density profile.
+        A method to provide access to the model that may have been fit to the density profile. If
+        no model was specified on initialization then this will be None.
 
         :return: The fit density profile.
         :rtype: BaseModel1D
         """
         return self._dens_model
 
-    def rad_check(self, rad: Quantity):
+    def rad_check(self, rad: Quantity) -> None:
         """
         Very simple method that prints a warning if the radius is outside the range of data covered by the
         density or temperature profiles - will actually throw an error if the hydrostatic mass profile was set up
@@ -2674,23 +3277,30 @@ class HydrostaticMass(BaseProfile1D):
         :param Quantity rad: The radius to check.
         """
         if not rad.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("You can only check radii in units convertible to the radius units of "
-                                      "the profile ({}).".format(self.radii_unit.to_string()))
+            raise UnitConversionError(
+                "You can only check radii in units convertible to the radius units of "
+                f"the profile ({self.radii_unit.to_string()})."
+            )
 
-        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
-                or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
-
+        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) or (
+            self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
+        ):
             # If we're using smooth fitted models for temperature and density then this is allowable, but still
             #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
             #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
             if self._temp_model is None:
-                raise ValueError("Some radii are outside the radius range covered by the temperature or density "
-                                 "profiles, and it is not possible to extrapolate when using a data-point driven "
-                                 "mass profile; please fit a mass model and extrapolate that, or set up a mass profile "
-                                 "that uses temperature and density model fits.")
+                raise ValueError(
+                    "Some radii are outside the radius range covered by the temperature or density "
+                    "profiles, and it is not possible to extrapolate when using a data-point driven "
+                    "mass profile; please fit a mass model and extrapolate that, or set up a mass profile "
+                    "that uses temperature and density model fits."
+                )
             else:
-                warn("Some radii are outside the radius range covered by the temperature or density profiles, as such "
-                     "you will be extrapolating based on the model fits.", stacklevel=2)
+                warn(
+                    "Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                    "you will be extrapolating based on the model fits.",
+                    stacklevel=2,
+                )
 
 
 class SpecificEntropy(BaseProfile1D):
@@ -2757,13 +3367,28 @@ class SpecificEntropy(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
-                 density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
-                 density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
-                 deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        temperature_profile: GasTemperature3D | ProjectedGasTemperature1D,
+        density_profile: GasDensity3D,
+        temperature_model: str | BaseModel1D | None = None,
+        density_model: str | BaseModel1D | None = None,
+        radii: Quantity | None = None,
+        radii_err: Quantity | None = None,
+        deg_radii: Quantity | None = None,
+        fit_method: str = "mcmc",
+        num_walkers: int = 20,
+        num_steps: int | list[int] = 20000,
+        num_samples: int = 10000,
+        show_warn: bool = True,
+        progress: bool = True,
+        interp_data: bool = False,
+        allow_unphysical: bool = False,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         A profile product which uses input temperature and density profiles to calculate a specific entropy profile of
         the kind often uses in galaxy cluster analyses (https://ui.adsabs.harvard.edu/abs/2009ApJS..182...12C/abstract
@@ -2831,22 +3456,27 @@ class SpecificEntropy(BaseProfile1D):
 
         # We check whether the temperature profile passed is actually the type of profile we need
         if not isinstance(temperature_profile, (GasTemperature3D, ProjectedGasTemperature1D)):
-            raise TypeError("The {} class is not an accepted input for 'temperature_profile'; only a GasTemperature3D "
-                            "or ProjectedGasTemperature1D instance may be "
-                            "passed.".format(str(type(temperature_profile))))
+            raise TypeError(
+                f"The {type(temperature_profile)} class is not an accepted input for 'temperature_profile'; "
+                f"only a GasTemperature3D or ProjectedGasTemperature1D instance may be passed."
+            )
 
         # We repeat this process with the density profile
         # TODO Add a check for projected density, if I ever implement such a thing
         if not isinstance(density_profile, GasDensity3D):
-            raise TypeError("The {} class is not an accepted input for 'density_profile'; only a GasDensity3D "
-                            "instance may be passed.".format(str(type(density_profile))))
+            raise TypeError(
+                f"The {type(density_profile)} class is not an accepted input for 'density_profile'; "
+                f"only a GasDensity3D instance may be passed."
+            )
 
         # We also need to check that someone hasn't done something dumb like pass profiles from two different
         #  clusters, so we'll compare source names.
         if temperature_profile.src_name != density_profile.src_name:
-            raise ValueError("You have passed temperature and density profiles from two different "
-                             "sources, any resulting entropy measurements would not be valid, so this is not "
-                             "allowed.")
+            raise ValueError(
+                "You have passed temperature and density profiles from two different "
+                "sources, any resulting entropy measurements would not be valid, so this is not "
+                "allowed."
+            )
         # And check they were generated with the same central coordinate, otherwise they may not be valid. I
         #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
         elif np.any(temperature_profile.centre != density_profile.centre):
@@ -2859,38 +3489,51 @@ class SpecificEntropy(BaseProfile1D):
 
         # Now we check whether the right combination of information has been passed depending on whether we are
         #  going to be using model fits or not (we need passed radii if a model is to be used).
-        if ((temperature_model is not None or density_model is not None) and
-                (radii is None or radii_err is None or deg_radii is None)):
-            raise ValueError("Radii at which to calculate entropy (the 'radii', 'radii_err', and 'deg_radii' "
-                             "arguments) must be passed if 'temperature_model' or 'density_model' is set.")
+        if (temperature_model is not None or density_model is not None) and (
+            radii is None or radii_err is None or deg_radii is None
+        ):
+            raise ValueError(
+                "Radii at which to calculate entropy (the 'radii', 'radii_err', and 'deg_radii' "
+                "arguments) must be passed if 'temperature_model' or 'density_model' is set."
+            )
         else:
             if len(temperature_profile) > len(density_profile):
                 # We restrict the radii to being within the bounds of the other profile if we are not interpolating
                 if not interp_data:
-                    within_bnds = np.where((temperature_profile.radii >= density_profile.annulus_bounds.min()) &
-                                           (temperature_profile.radii <= density_profile.annulus_bounds.max()))[0]
+                    within_bnds = np.where(
+                        (temperature_profile.radii >= density_profile.annulus_bounds.min())
+                        & (temperature_profile.radii <= density_profile.annulus_bounds.max())
+                    )[0]
                 else:
                     within_bnds = np.arange(0, len(temperature_profile.radii))
 
                 if len(within_bnds) != len(temperature_profile.radii):
-                    warn("The radii extracted from the temperature profile for the creation of the specific entropy "
-                         "profile have been truncated to match the radius range of the density "
-                         "profile.", stacklevel=2)
+                    warn(
+                        "The radii extracted from the temperature profile for the creation of the specific entropy "
+                        "profile have been truncated to match the radius range of the density "
+                        "profile.",
+                        stacklevel=2,
+                    )
                 radii = temperature_profile.radii[within_bnds]
                 radii_err = temperature_profile.radii_err[within_bnds]
                 deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
                 # We restrict the radii to being within the bounds of the other profile if we are not interpolating
                 if not interp_data:
-                    within_bnds = np.where((density_profile.radii >= temperature_profile.annulus_bounds.min()) &
-                                           (density_profile.radii <= temperature_profile.annulus_bounds.max()))[0]
+                    within_bnds = np.where(
+                        (density_profile.radii >= temperature_profile.annulus_bounds.min())
+                        & (density_profile.radii <= temperature_profile.annulus_bounds.max())
+                    )[0]
                 else:
                     within_bnds = np.arange(0, len(density_profile.radii))
 
                 if len(within_bnds) != len(density_profile.radii):
-                    warn("The radii extracted from the density profile for the creation of the specific entropy "
-                         "profile have been truncated to match the radius range of the temperature "
-                         "profile.", stacklevel=2)
+                    warn(
+                        "The radii extracted from the density profile for the creation of the specific entropy "
+                        "profile have been truncated to match the radius range of the temperature "
+                        "profile.",
+                        stacklevel=2,
+                    )
 
                 radii = density_profile.radii[within_bnds]
                 radii_err = density_profile.radii_err[within_bnds]
@@ -2912,8 +3555,11 @@ class SpecificEntropy(BaseProfile1D):
             set_store = temperature_profile.associated_set_storage_key
         elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
             if temperature_profile.set_ident != density_profile.set_ident:
-                warn("The temperature and density profile you passed were generated from different sets of annular"
-                     " spectra, the entropy profile's associated set ident will be set to None.", stacklevel=2)
+                warn(
+                    "The temperature and density profile you passed were generated from different sets of annular"
+                    " spectra, the entropy profile's associated set ident will be set to None.",
+                    stacklevel=2,
+                )
                 set_id = None
                 set_store = None
             else:
@@ -2926,8 +3572,8 @@ class SpecificEntropy(BaseProfile1D):
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
         else:
-            radii = radii.to('kpc')
-            radii_err = radii_err.to('kpc')
+            radii = radii.to("kpc")
+            radii_err = radii_err.to("kpc")
         # This will be overwritten by the super() init call, but it allows rad_check to work
         self._radii = radii
 
@@ -2943,8 +3589,10 @@ class SpecificEntropy(BaseProfile1D):
             temp_steps = num_steps[0]
             dens_steps = num_steps[1]
         else:
-            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
-                             "temperature profile fit and the second for the density profile fit")
+            raise ValueError(
+                "If a list is passed for num_steps then it must have two entries, the first for the "
+                "temperature profile fit and the second for the density profile fit"
+            )
 
         # If models are passed then we're going to make sure that they're fit here - starting with temperature. We'll
         #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
@@ -2957,14 +3605,30 @@ class SpecificEntropy(BaseProfile1D):
             in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
 
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
-                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                            num_walkers, progress, show_warn, force_refit=True)
+                temperature_model = temperature_profile.fit(
+                    temperature_model,
+                    fit_method,
+                    num_samples,
+                    temp_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=True,
+                )
             elif in_mod_names:
                 temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
-                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                            num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=t_mn)
+                temperature_model = temperature_profile.fit(
+                    temperature_model,
+                    fit_method,
+                    num_samples,
+                    temp_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=False,
+                )
+            key_temp_mod_part = f"tm{t_mn}"
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
@@ -2981,14 +3645,30 @@ class SpecificEntropy(BaseProfile1D):
             #  aren't the same then the fit will have to be re-run
             in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
-                                                    num_walkers, progress, show_warn, force_refit=True)
+                density_model = density_profile.fit(
+                    density_model,
+                    fit_method,
+                    num_samples,
+                    dens_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=True,
+                )
             elif in_mod_names:
                 density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
-                                                    num_walkers, progress, show_warn, force_refit=False)
-            key_dens_mod_part = "dm{d}".format(d=d_mn)
+                density_model = density_profile.fit(
+                    density_model,
+                    fit_method,
+                    num_samples,
+                    dens_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=False,
+                )
+            key_dens_mod_part = f"dm{d_mn}"
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -3014,19 +3694,32 @@ class SpecificEntropy(BaseProfile1D):
         ent_vals = ent[0, :]
         ent_errs = np.mean(ent[1:, :], axis=0)
 
-        super().__init__(radii, ent_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, ent_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            ent_vals,
+            self._temp_prof.centre,
+            self._temp_prof.src_name,
+            self._temp_prof.obs_id,
+            self._temp_prof.instrument,
+            radii_err,
+            ent_errs,
+            set_id,
+            set_store,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         # Need a custom storage key for this entropy profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models - identical to
         #  the form used by HydrostaticMass profiles.
-        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
-        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        dens_part = f"dprof_{self._dens_prof.storage_key}"
+        temp_part = f"tprof_{self._temp_prof.storage_key}"
         cur_part = self.storage_key
 
-        whole_new = "{ntm}_{ndm}_{c}_{t}_{d}".format(ntm=key_temp_mod_part, ndm=key_dens_mod_part, c=cur_part,
-                                                     t=temp_part, d=dens_part)
+        whole_new = f"{key_temp_mod_part}_{key_dens_mod_part}_{cur_part}_{temp_part}_{dens_part}"
         self._storage_key = whole_new
 
         # Setting the type
@@ -3036,9 +3729,9 @@ class SpecificEntropy(BaseProfile1D):
         self._y_axis_name = r"K$_{\rm{X}}$"
 
         # Setting up a dictionary to store entropy results in.
-        self._entropies = {}
+        self._entropies: dict[Quantity, Quantity] = {}
 
-    def entropy(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
+    def entropy(self, radius: Quantity, conf_level: float = 68.2) -> tuple[Quantity, Quantity]:
         """
         A method which will measure a specific entropy and specific entropy uncertainty within the given
         radius/radii.
@@ -3048,7 +3741,7 @@ class SpecificEntropy(BaseProfile1D):
         :param float conf_level: The confidence level for the entropy uncertainties, the default is 68.2% (~1σ).
         :return: An astropy quantity containing the entropy/entropies, lower and upper uncertainties, and another
             containing the entropy realisation distribution.
-        :rtype: Union[Quantity, Quantity]
+        :rtype: Tuple[Quantity, Quantity]
         """
         # Setting the upper and lower confidence limits
         upper = 50 + (conf_level / 2)
@@ -3072,16 +3765,21 @@ class SpecificEntropy(BaseProfile1D):
         if not already_run and self.density_model is not None:
             # If the density model fit didn't work then we give up and throw an error
             if not self.density_model.success:
-                raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
-                                  "using a smooth density model.")
+                raise XGAFitError(
+                    "The density model fit was not successful, as such we cannot calculate entropy "
+                    "using a smooth density model."
+                )
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            dens = self._dens_model.get_realisations(radius)
+            dens = self.density_model.get_realisations(radius)
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
-        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
-              (self.density_profile.radii == self.temperature_profile.radii).all()):
+        elif (
+            not already_run
+            and (len(self.density_profile) == len(self.temperature_profile))
+            and (self.density_profile.radii == self.temperature_profile.radii).all()
+        ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
@@ -3093,8 +3791,14 @@ class SpecificEntropy(BaseProfile1D):
             #  scipy interpolation methods (see issue #1168) but cubic splines don't seem to behave amazingly well
             #  for temperature profiles with larger uncertainties on then outskirts, so we're doing this for now
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
-            dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
-                                   fill_value='extrapolate', bounds_error=False)
+            dens_interp = interp1d(
+                self.density_profile.radii,
+                dens_data_real,
+                axis=1,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
             # Restore the interpolated density profile realisations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
 
@@ -3104,8 +3808,7 @@ class SpecificEntropy(BaseProfile1D):
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
         else:
-            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
-                                self.density_profile.annulus_bounds[1:]]).T
+            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
             d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
 
@@ -3113,7 +3816,7 @@ class SpecificEntropy(BaseProfile1D):
             dens = dens_data_real[:, d_inds].T
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
-        if not already_run and not dens.unit.is_equivalent('1/cm^3'):
+        if not already_run and not dens.unit.is_equivalent("1/cm^3"):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
 
         # We now essentially repeat the process we just did with the density profiles, constructing the temperature
@@ -3121,24 +3824,35 @@ class SpecificEntropy(BaseProfile1D):
         #  from data points
         if not already_run and self.temperature_model is not None:
             if not self.temperature_model.success:
-                raise XGAFitError("The temperature model fit was not successful, as such we cannot calculate entropy "
-                                  "using a smooth temperature model.")
+                raise XGAFitError(
+                    "The temperature model fit was not successful, as such we cannot calculate entropy "
+                    "using a smooth temperature model."
+                )
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            temp = self._temp_model.get_realisations(radius)
+            temp = self.temperature_model.get_realisations(radius)
 
         # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
         #  temperature and density profiles are identical, and so we just get some realisations
-        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
-              (self.density_profile.radii == self.temperature_profile.radii).all()):
+        elif (
+            not already_run
+            and (len(self.density_profile) == len(self.temperature_profile))
+            and (self.density_profile.radii == self.temperature_profile.radii).all()
+        ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realisations of the interpolations as well
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
-            temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
-                                   fill_value='extrapolate', bounds_error=False)
+            temp_interp = interp1d(
+                self.temperature_profile.radii,
+                temp_data_real,
+                axis=1,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
 
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
@@ -3151,8 +3865,9 @@ class SpecificEntropy(BaseProfile1D):
         #  temperature value - in practise this means that each density will be paired with the temperature
         #  realisations whose radial coverage they fall within.
         else:
-            t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
-                                self.temperature_profile.annulus_bounds[1:]]).T
+            t_bnds = np.vstack(
+                [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
+            ).T
 
             t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
 
@@ -3160,8 +3875,8 @@ class SpecificEntropy(BaseProfile1D):
             temp = temp_data_real[:, t_inds].T
 
         # We ensure the temperatures are in the right unit
-        if not already_run and not temp.unit.is_equivalent('keV'):
-            temp = (temp * k_B).to('keV')
+        if not already_run and not temp.unit.is_equivalent("keV"):
+            temp = (temp * k_B).to("keV")
 
         # And now we do the actual entropy calculation
         if not already_run:
@@ -3184,8 +3899,14 @@ class SpecificEntropy(BaseProfile1D):
 
         return ent_res, ent_dist
 
-    def view_entropy_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
-                          bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
+    def view_entropy_dist(
+        self,
+        radius: Quantity,
+        conf_level: float = 68.2,
+        figsize: tuple[float, float] = (8, 8),
+        bins: str | int = "auto",
+        colour: str = "lightseagreen",
+    ) -> None:
         """
         A method which will generate a histogram of the entropy distribution that resulted from the entropy calculation
         at the supplied radius. If the entropy for the passed radius has already been measured it, and the entropy
@@ -3200,8 +3921,10 @@ class SpecificEntropy(BaseProfile1D):
         :param tuple figsize: The desired size of the histogram figure.
         """
         if not radius.isscalar:
-            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
-                             "arrays of radii are not supported.")
+            raise ValueError(
+                "Unfortunately this method can only display a distribution for one radius, so "
+                "arrays of radii are not supported."
+            )
 
         # Grabbing out the entropy distribution, as well as the single result that describes the entropy distribution.
         ent, ent_dist = self.entropy(radius, conf_level)
@@ -3209,29 +3932,37 @@ class SpecificEntropy(BaseProfile1D):
         plt.figure(figsize=figsize)
         ax = plt.gca()
         # Includes nicer ticks
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
         # And removing the yaxis tick labels as it's just a number of values per bin
         ax.yaxis.set_ticklabels([])
 
         # Plot the histogram and set up labels
         plt.hist(ent_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string('latex') + ']', fontsize=14)
-        plt.title("Entropy Distribution at {}".format(radius.to_string()))
+        plt.xlabel(self._y_axis_name + "[" + self.values_unit.to_string("latex") + "]", fontsize=14)
+        plt.title(f"Entropy Distribution at {radius.to_string()}")
 
-        vals_label = '$' + str(ent[0].round(2).value) + "^{+" + str(ent[2].round(2).value) + "}" + \
-                     "_{-" + str(ent[1].round(2).value) + "}$"
-        res_label = r"$K_{\rm{X}}$ = " + vals_label + '[' + self.values_unit.to_string('latex') + ']'
+        vals_label = (
+            "$"
+            + str(ent[0].round(2).value)
+            + "^{+"
+            + str(ent[2].round(2).value)
+            + "}"
+            + "_{-"
+            + str(ent[1].round(2).value)
+            + "}$"
+        )
+        res_label = r"$K_{\rm{X}}$ = " + vals_label + "[" + self.values_unit.to_string("latex") + "]"
 
         # And this just plots the 'result' on the distribution as a series of vertical lines
-        plt.axvline(ent[0].value, color='red', label=res_label)
-        plt.axvline(ent[0].value - ent[1].value, color='red', linestyle='dashed')
-        plt.axvline(ent[0].value + ent[2].value, color='red', linestyle='dashed')
-        plt.legend(loc='best', prop={'size': 12})
+        plt.axvline(ent[0].value, color="red", label=res_label)
+        plt.axvline(ent[0].value - ent[1].value, color="red", linestyle="dashed")
+        plt.axvline(ent[0].value + ent[2].value, color="red", linestyle="dashed")
+        plt.legend(loc="best", prop={"size": 12})
         plt.tight_layout()
         plt.show()
 
     @property
-    def temperature_profile(self) -> Union[GasTemperature3D, ProjectedGasTemperature1D]:
+    def temperature_profile(self) -> GasTemperature3D | ProjectedGasTemperature1D:
         """
         A method to provide access to the 3D or projected temperature profile used to generate this entropy profile.
 
@@ -3251,26 +3982,28 @@ class SpecificEntropy(BaseProfile1D):
         return self._dens_prof
 
     @property
-    def temperature_model(self) -> BaseModel1D:
+    def temperature_model(self) -> BaseModel1D | None:
         """
-        A method to provide access to the model that may have been fit to the temperature profile.
+        A property to provide access to the model that may have been fit to the temperature profile. If
+        no model was specified on initialization then this will be None.
 
         :return: The fit temperature model.
-        :rtype: BaseModel1D
+        :rtype: BaseModel1D/None
         """
         return self._temp_model
 
     @property
-    def density_model(self) -> BaseModel1D:
+    def density_model(self) -> BaseModel1D | None:
         """
-        A method to provide access to the model that may have been fit to the density profile.
+        A method to provide access to the model that may have been fit to the density profile. If
+        no model was specified on initialization then this will be None.
 
         :return: The fit density profile.
         :rtype: BaseModel1D
         """
         return self._dens_model
 
-    def rad_check(self, rad: Quantity):
+    def rad_check(self, rad: Quantity) -> None:
         """
         Very simple method that prints a warning if the radius is outside the range of data covered by the
         density or temperature profiles.
@@ -3278,23 +4011,31 @@ class SpecificEntropy(BaseProfile1D):
         :param Quantity rad: The radius to check.
         """
         if not rad.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError(f"You can only check radii in units convertible to the radius units of "
-                                      f"the profile ({self.radii_unit.to_string()}).")
+            raise UnitConversionError(
+                f"You can only check radii in units convertible to the radius units of "
+                f"the profile ({self.radii_unit.to_string()})."
+            )
 
-        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
-                or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
-
+        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) or (
+            self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
+        ):
             # If we're using smooth fitted models for temperature and density then this is allowable, but still
             #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
             #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
             if self._temp_model is None:
-                raise ValueError("Some radii are outside the radius range covered by the temperature or density "
-                                 "profiles, and it is not possible to extrapolate when using a data-point driven "
-                                 "entropy profile; please fit an entropy model and extrapolate that, or set up an "
-                                 "entropy profile that uses temperature and density model fits.")
+                raise ValueError(
+                    "Some radii are outside the radius range covered by the temperature or density "
+                    "profiles, and it is not possible to extrapolate when using a data-point driven "
+                    "entropy profile; please fit an entropy model and extrapolate that, or set up an "
+                    "entropy profile that uses temperature and density model fits."
+                )
             else:
-                warn("Some radii are outside the radius range covered by the temperature or density profiles, as such "
-                     "you will be extrapolating based on the model fits.", stacklevel=2)
+                warn(
+                    "Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                    "you will be extrapolating based on the model fits.",
+                    stacklevel=2,
+                )
+
 
 class ThermalPressure(BaseProfile1D):
     """
@@ -3360,13 +4101,28 @@ class ThermalPressure(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, temperature_profile: Union[GasTemperature3D, ProjectedGasTemperature1D],
-                 density_profile: GasDensity3D, temperature_model: Union[str, BaseModel1D] = None,
-                 density_model: Union[str, BaseModel1D] = None, radii: Quantity = None, radii_err: Quantity = None,
-                 deg_radii: Quantity = None, fit_method: str = "mcmc", num_walkers: int = 20,
-                 num_steps: Union[int, List[int]] = 20000, num_samples: int = 10000, show_warn: bool = True,
-                 progress: bool = True, interp_data: bool = False, allow_unphysical: bool = False,
-                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        temperature_profile: GasTemperature3D | ProjectedGasTemperature1D,
+        density_profile: GasDensity3D,
+        temperature_model: str | BaseModel1D | None = None,
+        density_model: str | BaseModel1D | None = None,
+        radii: Quantity | None = None,
+        radii_err: Quantity | None = None,
+        deg_radii: Quantity | None = None,
+        fit_method: str = "mcmc",
+        num_walkers: int = 20,
+        num_steps: int | list[int] = 20000,
+        num_samples: int = 10000,
+        show_warn: bool = True,
+        progress: bool = True,
+        interp_data: bool = False,
+        allow_unphysical: bool = False,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         A profile product which uses input temperature and density profiles to calculate a thermal pressure profile of
         the kind often used in galaxy cluster analyses. Very similar in function to the SpecificEntropy profile
@@ -3435,22 +4191,27 @@ class ThermalPressure(BaseProfile1D):
 
         # We check whether the temperature profile passed is actually the type of profile we need
         if not isinstance(temperature_profile, (GasTemperature3D, ProjectedGasTemperature1D)):
-            raise TypeError("The {} class is not an accepted input for 'temperature_profile'; only a GasTemperature3D "
-                            "or ProjectedGasTemperature1D instance may be "
-                            "passed.".format(str(type(temperature_profile))))
+            raise TypeError(
+                f"The {type(temperature_profile)} class is not an accepted input for 'temperature_profile'; "
+                f"only a GasTemperature3D or ProjectedGasTemperature1D instance may be passed."
+            )
 
         # We repeat this process with the density profile
         # TODO Add a check for projected density, if I ever implement such a thing
         if not isinstance(density_profile, GasDensity3D):
-            raise TypeError("The {} class is not an accepted input for 'density_profile'; only a GasDensity3D "
-                            "instance may be passed.".format(str(type(density_profile))))
+            raise TypeError(
+                f"The {type(density_profile)} class is not an accepted input for 'density_profile'; "
+                f"only a GasDensity3D instance may be passed."
+            )
 
         # We also need to check that someone hasn't done something dumb like pass profiles from two different
         #  clusters, so we'll compare source names.
         if temperature_profile.src_name != density_profile.src_name:
-            raise ValueError("You have passed temperature and density profiles from two different "
-                             "sources, any resulting thermal pressure measurements would not be valid, so this is not "
-                             "allowed.")
+            raise ValueError(
+                "You have passed temperature and density profiles from two different "
+                "sources, any resulting thermal pressure measurements would not be valid, so this is not "
+                "allowed."
+            )
         # And check they were generated with the same central coordinate, otherwise they may not be valid. I
         #  considered only raising a warning, but I need a consistent central coordinate to pass to the super init
         elif np.any(temperature_profile.centre != density_profile.centre):
@@ -3463,45 +4224,58 @@ class ThermalPressure(BaseProfile1D):
 
         # Now we check whether the right combination of information has been passed depending on whether we are
         #  going to be using model fits or not (we need passed radii if a model is to be used).
-        if ((temperature_model is not None or density_model is not None) and
-                (radii is None or radii_err is None or deg_radii is None)):
-            raise ValueError("Radii at which to calculate thermal pressure (the 'radii', 'radii_err', and 'deg_radii' "
-                             "arguments) must be passed if 'temperature_model' or 'density_model' is set.")
+        if (temperature_model is not None or density_model is not None) and (
+            radii is None or radii_err is None or deg_radii is None
+        ):
+            raise ValueError(
+                "Radii at which to calculate thermal pressure (the 'radii', 'radii_err', and 'deg_radii' "
+                "arguments) must be passed if 'temperature_model' or 'density_model' is set."
+            )
         else:
             if len(temperature_profile) > len(density_profile):
                 # We restrict the radii to being within the bounds of the other profile if we are not interpolating
                 if not interp_data:
-                    within_bnds = np.where((temperature_profile.radii >= density_profile.annulus_bounds.min()) &
-                                           (temperature_profile.radii <= density_profile.annulus_bounds.max()))[0]
+                    within_bnds = np.where(
+                        (temperature_profile.radii >= density_profile.annulus_bounds.min())
+                        & (temperature_profile.radii <= density_profile.annulus_bounds.max())
+                    )[0]
                 else:
                     within_bnds = np.arange(0, len(temperature_profile.radii))
 
                 if len(within_bnds) != len(temperature_profile.radii):
-                    warn("The radii extracted from the temperature profile for the creation of the thermal pressure "
-                         "profile have been truncated to match the radius range of the density "
-                         "profile.", stacklevel=2)
+                    warn(
+                        "The radii extracted from the temperature profile for the creation of the thermal pressure "
+                        "profile have been truncated to match the radius range of the density "
+                        "profile.",
+                        stacklevel=2,
+                    )
                 radii = temperature_profile.radii[within_bnds]
                 radii_err = temperature_profile.radii_err[within_bnds]
                 deg_radii = temperature_profile.deg_radii[within_bnds]
             else:
                 # We restrict the radii to being within the bounds of the other profile if we are not interpolating
                 if not interp_data:
-                    within_bnds = np.where((density_profile.radii >= temperature_profile.annulus_bounds.min()) &
-                                           (density_profile.radii <= temperature_profile.annulus_bounds.max()))[0]
+                    within_bnds = np.where(
+                        (density_profile.radii >= temperature_profile.annulus_bounds.min())
+                        & (density_profile.radii <= temperature_profile.annulus_bounds.max())
+                    )[0]
                 else:
                     within_bnds = np.arange(0, len(density_profile.radii))
 
                 if len(within_bnds) != len(density_profile.radii):
-                    warn("The radii extracted from the density profile for the creation of the thermal pressure "
-                         "profile have been truncated to match the radius range of the temperature "
-                         "profile.", stacklevel=2)
+                    warn(
+                        "The radii extracted from the density profile for the creation of the thermal pressure "
+                        "profile have been truncated to match the radius range of the temperature "
+                        "profile.",
+                        stacklevel=2,
+                    )
 
                 radii = density_profile.radii[within_bnds]
                 radii_err = density_profile.radii_err[within_bnds]
                 deg_radii = density_profile.deg_radii[within_bnds]
 
         # Set the attribute which lets the thermal pressure calculation method know whether to interpolate any
-        #  data points or not, if smooth fitted models are not going to be used
+        #  data points or not, if smooth-fitted models are not going to be used
         self._interp_data = interp_data
 
         # We see if either of the profiles have an associated spectrum
@@ -3516,9 +4290,11 @@ class ThermalPressure(BaseProfile1D):
             set_store = temperature_profile.associated_set_storage_key
         elif temperature_profile.set_ident is not None and density_profile.set_ident is not None:
             if temperature_profile.set_ident != density_profile.set_ident:
-                warn("The temperature and density profile you passed were generated from different sets of annular"
-                     " spectra, the thermal pressure profile's associated set ident will be set to "
-                     "None.", stacklevel=2)
+                warn(
+                    "The temperature and density profile you passed were generated from different sets of annular "
+                    "spectra, the thermal pressure profile's associated set ident will be set to None.",
+                    stacklevel=2,
+                )
                 set_id = None
                 set_store = None
             else:
@@ -3531,8 +4307,8 @@ class ThermalPressure(BaseProfile1D):
         if not radii.unit.is_equivalent("kpc"):
             raise UnitConversionError("Radii unit cannot be converted to kpc")
         else:
-            radii = radii.to('kpc')
-            radii_err = radii_err.to('kpc')
+            radii = radii.to("kpc")
+            radii_err = radii_err.to("kpc")
         # This will be overwritten by the super() init call, but it allows rad_check to work
         self._radii = radii
 
@@ -3548,8 +4324,10 @@ class ThermalPressure(BaseProfile1D):
             temp_steps = num_steps[0]
             dens_steps = num_steps[1]
         else:
-            raise ValueError("If a list is passed for num_steps then it must have two entries, the first for the "
-                             "temperature profile fit and the second for the density profile fit")
+            raise ValueError(
+                "If a list is passed for num_steps then it must have two entries, the first for the "
+                "temperature profile fit and the second for the density profile fit"
+            )
 
         # If models are passed then we're going to make sure that they're fit here - starting with temperature. We'll
         #  also retrieve the model object. The if statements are separate because we may allow for the fitting of
@@ -3562,19 +4340,36 @@ class ThermalPressure(BaseProfile1D):
             in_mod_names = t_mn in [m for m in temperature_profile._good_model_fits[fit_method]]
 
             if in_mod_names and len(temperature_profile.get_model_fit(t_mn, fit_method).par_dists[0]) != num_samples:
-                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                            num_walkers, progress, show_warn, force_refit=True)
+                temperature_model = temperature_profile.fit(
+                    temperature_model,
+                    fit_method,
+                    num_samples,
+                    temp_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=True,
+                )
             elif in_mod_names:
                 temperature_model = temperature_profile.get_model_fit(t_mn, fit_method)
             elif not in_mod_names:
-                temperature_model = temperature_profile.fit(temperature_model, fit_method, num_samples, temp_steps,
-                                                            num_walkers, progress, show_warn, force_refit=False)
-            key_temp_mod_part = "tm{t}".format(t=t_mn)
+                temperature_model = temperature_profile.fit(
+                    temperature_model,
+                    fit_method,
+                    num_samples,
+                    temp_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=False,
+                )
+            key_temp_mod_part = f"tm{t_mn}"
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not temperature_model.success:
-                raise XGAFitError("The fit to the temperature was unsuccessful, cannot define thermal pressure "
-                                  "profile.")
+                raise XGAFitError(
+                    "The fit to the temperature was unsuccessful, cannot define thermal pressure profile."
+                )
         elif interp_data:
             key_temp_mod_part = "tmdatainterp"
         else:
@@ -3582,19 +4377,35 @@ class ThermalPressure(BaseProfile1D):
 
         if density_model is not None:
             d_mn = density_model.name if isinstance(density_model, BaseModel1D) else density_model
-            # If the passed model has already been fit then yay! however, we make sure the number of samples is the
+            # If the passed model has already been fit, then yay! however, we make sure the number of samples is the
             #  same as what was passed to this class, as otherwise we're going to have some shape mismatches. If they
-            #  aren't the same then the fit will have to be re-run
+            #  aren't the same then the fit will have to be re-run.
             in_mod_names = d_mn in [m for m in density_profile._good_model_fits[fit_method]]
             if in_mod_names and len(density_profile.get_model_fit(d_mn, fit_method).par_dists[0]) != num_samples:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
-                                                    num_walkers, progress, show_warn, force_refit=True)
+                density_model = density_profile.fit(
+                    density_model,
+                    fit_method,
+                    num_samples,
+                    dens_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=True,
+                )
             elif in_mod_names:
                 density_model = density_profile.get_model_fit(d_mn, fit_method)
             elif not in_mod_names:
-                density_model = density_profile.fit(density_model, fit_method, num_samples, dens_steps,
-                                                    num_walkers, progress, show_warn, force_refit=False)
-            key_dens_mod_part = "dm{d}".format(d=d_mn)
+                density_model = density_profile.fit(
+                    density_model,
+                    fit_method,
+                    num_samples,
+                    dens_steps,
+                    num_walkers,
+                    progress,
+                    show_warn,
+                    force_refit=False,
+                )
+            key_dens_mod_part = f"dm{d_mn}"
             # Have to check whether the fits were actually successful, as the fit method will return a model instance
             #  either way
             if not density_model.success:
@@ -3620,18 +4431,31 @@ class ThermalPressure(BaseProfile1D):
         press_vals = press[0, :]
         press_errs = np.mean(press[1:, :], axis=0)
 
-        super().__init__(radii, press_vals, self._temp_prof.centre, self._temp_prof.src_name, self._temp_prof.obs_id,
-                         self._temp_prof.instrument, radii_err, press_errs, set_id, set_store, deg_radii,
-                         auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            press_vals,
+            self._temp_prof.centre,
+            self._temp_prof.src_name,
+            self._temp_prof.obs_id,
+            self._temp_prof.instrument,
+            radii_err,
+            press_errs,
+            set_id,
+            set_store,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
 
         # Need a custom storage key for this pressure profile, incorporating all the information we have about what
         #  went into it, density profile, temperature profile, radii, density and temperature models
-        dens_part = "dprof_{}".format(self._dens_prof.storage_key)
-        temp_part = "tprof_{}".format(self._temp_prof.storage_key)
+        dens_part = f"dprof_{self._dens_prof.storage_key}"
+        temp_part = f"tprof_{self._temp_prof.storage_key}"
         cur_part = self.storage_key
 
-        whole_new = "{ntm}_{ndm}_{c}_{t}_{d}".format(ntm=key_temp_mod_part, ndm=key_dens_mod_part, c=cur_part,
-                                                     t=temp_part, d=dens_part)
+        whole_new = f"{key_temp_mod_part}_{key_dens_mod_part}_{cur_part}_{temp_part}_{dens_part}"
         self._storage_key = whole_new
 
         # Setting the type
@@ -3641,11 +4465,11 @@ class ThermalPressure(BaseProfile1D):
         self._y_axis_name = r"P$_{\rm{X}}$"
 
         # Setting up a dictionary to store pressure results in.
-        self._pressures = {}
+        self._pressures: dict[Quantity, Quantity] = {}
 
-    def pressure(self, radius: Quantity, conf_level: float = 68.2) -> Union[Quantity, Quantity]:
+    def pressure(self, radius: Quantity, conf_level: float = 68.2) -> tuple[Quantity, Quantity]:
         """
-        A method which will measure a thermal pressure and thermal pressure uncertainty within the given
+        A method that measures thermal pressure and thermal pressure uncertainties within the given
         radius/radii.
 
         :param Quantity radius: An astropy quantity containing the radius/radii that you wish to calculate the
@@ -3654,7 +4478,7 @@ class ThermalPressure(BaseProfile1D):
             is 68.2% (~1σ).
         :return: An astropy quantity containing the thermal pressure(s), lower and upper uncertainties, and another
             containing the thermal pressure realization distribution.
-        :rtype: Union[Quantity, Quantity]
+        :rtype: Tuple[Quantity, Quantity]
         """
         # Setting the upper and lower confidence limits
         upper = 50 + (conf_level / 2)
@@ -3678,16 +4502,21 @@ class ThermalPressure(BaseProfile1D):
         if not already_run and self.density_model is not None:
             # If the density model fit didn't work then we give up and throw an error
             if not self.density_model.success:
-                raise XGAFitError("The density model fit was not successful, as such we cannot calculate entropy "
-                                  "using a smooth density model.")
+                raise XGAFitError(
+                    "The density model fit was not successful, as such we cannot calculate entropy "
+                    "using a smooth density model."
+                )
             # Getting a bunch of realizations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            dens = self._dens_model.get_realisations(radius)
+            dens = self.density_model.get_realisations(radius)
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we just
-        #  get some realisations
-        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
-              (self.density_profile.radii == self.temperature_profile.radii).all()):
+        #  get some realisations.
+        elif (
+            not already_run
+            and (len(self.density_profile) == len(self.temperature_profile))
+            and (self.density_profile.radii == self.temperature_profile.radii).all()
+        ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
@@ -3699,8 +4528,14 @@ class ThermalPressure(BaseProfile1D):
             #  scipy interpolation methods (see issue #1168) but cubic splines don't seem to behave amazingly well
             #  for temperature profiles with larger uncertainties on then outskirts, so we're doing this for now
             # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
-            dens_interp = interp1d(self.density_profile.radii, dens_data_real, axis=1, assume_sorted=True,
-                                   fill_value='extrapolate', bounds_error=False)
+            dens_interp = interp1d(
+                self.density_profile.radii,
+                dens_data_real,
+                axis=1,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
             # Restore the interpolated density profile realizations to an astropy quantity array
             dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
 
@@ -3710,8 +4545,7 @@ class ThermalPressure(BaseProfile1D):
         elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
         else:
-            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1],
-                                self.density_profile.annulus_bounds[1:]]).T
+            d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
             d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
 
@@ -3719,7 +4553,7 @@ class ThermalPressure(BaseProfile1D):
             dens = dens_data_real[:, d_inds].T
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
-        if not already_run and not dens.unit.is_equivalent('1/cm^3'):
+        if not already_run and not dens.unit.is_equivalent("1/cm^3"):
             dens = dens / (MEAN_MOL_WEIGHT * m_p)
 
         # We now essentially repeat the process we just did with the density profiles, constructing the temperature
@@ -3727,24 +4561,35 @@ class ThermalPressure(BaseProfile1D):
         #  from data points
         if not already_run and self.temperature_model is not None:
             if not self.temperature_model.success:
-                raise XGAFitError("The temperature model fit was not successful, as such we cannot calculate entropy "
-                                  "using a smooth temperature model.")
+                raise XGAFitError(
+                    "The temperature model fit was not successful, as such we cannot calculate entropy "
+                    "using a smooth temperature model."
+                )
             # Getting a bunch of realisations (with the number set by the 'num_samples' argument that was passed on
             #  the definition of this source of the model.
-            temp = self._temp_model.get_realisations(radius)
+            temp = self.temperature_model.get_realisations(radius)
 
         # In this rare case the radii for the temperature and density profiles are identical, and so we
         #  just get some realizations
-        elif (not already_run and (len(self.density_profile) == len(self.temperature_profile)) and
-              (self.density_profile.radii == self.temperature_profile.radii).all()):
+        elif (
+            not already_run
+            and (len(self.density_profile) == len(self.temperature_profile))
+            and (self.density_profile.radii == self.temperature_profile.radii).all()
+        ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
         elif not already_run and self._interp_data:
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realisations of the
             #  data points - we'll use this to create N realizations of the interpolations as well
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
-            temp_interp = interp1d(self.temperature_profile.radii, temp_data_real, axis=1, assume_sorted=True,
-                                   fill_value='extrapolate', bounds_error=False)
+            temp_interp = interp1d(
+                self.temperature_profile.radii,
+                temp_data_real,
+                axis=1,
+                assume_sorted=True,
+                fill_value="extrapolate",
+                bounds_error=False,
+            )
             temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
@@ -3756,8 +4601,9 @@ class ThermalPressure(BaseProfile1D):
         #  temperature value - in practise this means that each density will be paired with the temperature
         #  realizations whose radial coverage they fall within.
         else:
-            t_bnds = np.vstack([self.temperature_profile.annulus_bounds[0:-1],
-                                self.temperature_profile.annulus_bounds[1:]]).T
+            t_bnds = np.vstack(
+                [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
+            ).T
 
             t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
 
@@ -3765,8 +4611,8 @@ class ThermalPressure(BaseProfile1D):
             temp = temp_data_real[:, t_inds].T
 
         # We ensure the temperatures are in the right unit
-        if not already_run and not temp.unit.is_equivalent('keV'):
-            temp = (temp * k_B).to('keV')
+        if not already_run and not temp.unit.is_equivalent("keV"):
+            temp = (temp * k_B).to("keV")
 
         # And now we do the actual pressure calculation
         if not already_run:
@@ -3789,8 +4635,14 @@ class ThermalPressure(BaseProfile1D):
 
         return press_res, press_dist
 
-    def view_pressure_dist(self, radius: Quantity, conf_level: float = 68.2, figsize=(8, 8),
-                           bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
+    def view_pressure_dist(
+        self,
+        radius: Quantity,
+        conf_level: float = 68.2,
+        figsize: tuple[float, float] = (8, 8),
+        bins: str | int = "auto",
+        colour: str = "lightseagreen",
+    ) -> None:
         """
         A method which will generate a histogram of the thermal pressure distribution that resulted from the
         pressure calculation at the supplied radius. If the entropy for the passed radius has already been measured
@@ -3805,8 +4657,10 @@ class ThermalPressure(BaseProfile1D):
         :param tuple figsize: The desired size of the histogram figure.
         """
         if not radius.isscalar:
-            raise ValueError("Unfortunately this method can only display a distribution for one radius, so "
-                             "arrays of radii are not supported.")
+            raise ValueError(
+                "Unfortunately this method can only display a distribution for one radius, so "
+                "arrays of radii are not supported."
+            )
 
         # Grabbing out the pressure distribution, as well as the single result that describes the pressure distribution.
         press, press_dist = self.pressure(radius, conf_level)
@@ -3814,29 +4668,37 @@ class ThermalPressure(BaseProfile1D):
         plt.figure(figsize=figsize)
         ax = plt.gca()
         # Includes nicer ticks
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
         # And removing the yaxis tick labels as it's just a number of values per bin
         ax.yaxis.set_ticklabels([])
 
         # Plot the histogram and set up labels
         plt.hist(press_dist.value, bins=bins, color=colour, alpha=0.7, density=False)
-        plt.xlabel(self._y_axis_name + '[' + self.values_unit.to_string('latex') + ']', fontsize=14)
-        plt.title("Thermal Pressure Distribution at {}".format(radius.to_string()))
+        plt.xlabel(self._y_axis_name + "[" + self.values_unit.to_string("latex") + "]", fontsize=14)
+        plt.title(f"Thermal Pressure Distribution at {radius.to_string()}")
 
-        vals_label = '$' + str(press[0].round(2).value) + "^{+" + str(press[2].round(2).value) + "}" + \
-                     "_{-" + str(press[1].round(2).value) + "}$"
-        res_label = r"$P_{\rm{X}}$ = " + vals_label + '[' + self.values_unit.to_string('latex') + ']'
+        vals_label = (
+            "$"
+            + str(press[0].round(2).value)
+            + "^{+"
+            + str(press[2].round(2).value)
+            + "}"
+            + "_{-"
+            + str(press[1].round(2).value)
+            + "}$"
+        )
+        res_label = r"$P_{\rm{X}}$ = " + vals_label + "[" + self.values_unit.to_string("latex") + "]"
 
         # And this just plots the 'result' on the distribution as a series of vertical lines
-        plt.axvline(press[0].value, color='red', label=res_label)
-        plt.axvline(press[0].value - press[1].value, color='red', linestyle='dashed')
-        plt.axvline(press[0].value + press[2].value, color='red', linestyle='dashed')
-        plt.legend(loc='best', prop={'size': 12})
+        plt.axvline(press[0].value, color="red", label=res_label)
+        plt.axvline(press[0].value - press[1].value, color="red", linestyle="dashed")
+        plt.axvline(press[0].value + press[2].value, color="red", linestyle="dashed")
+        plt.legend(loc="best", prop={"size": 12})
         plt.tight_layout()
         plt.show()
 
     @property
-    def temperature_profile(self) -> Union[GasTemperature3D, ProjectedGasTemperature1D]:
+    def temperature_profile(self) -> GasTemperature3D | ProjectedGasTemperature1D:
         """
         A method to provide access to the 3D or projected temperature profile used to generate this pressure profile.
 
@@ -3856,26 +4718,26 @@ class ThermalPressure(BaseProfile1D):
         return self._dens_prof
 
     @property
-    def temperature_model(self) -> BaseModel1D:
+    def temperature_model(self) -> BaseModel1D | None:
         """
         A method to provide access to the model that may have been fit to the temperature profile.
 
         :return: The fit temperature model.
-        :rtype: BaseModel1D
+        :rtype: BaseModel1D/None
         """
         return self._temp_model
 
     @property
-    def density_model(self) -> BaseModel1D:
+    def density_model(self) -> BaseModel1D | None:
         """
         A method to provide access to the model that may have been fit to the density profile.
 
         :return: The fit density profile.
-        :rtype: BaseModel1D
+        :rtype: BaseModel1D/None
         """
         return self._dens_model
 
-    def rad_check(self, rad: Quantity):
+    def rad_check(self, rad: Quantity) -> None:
         """
         Very simple method that prints a warning if the radius is outside the range of data covered by the
         density or temperature profiles.
@@ -3883,23 +4745,30 @@ class ThermalPressure(BaseProfile1D):
         :param Quantity rad: The radius to check.
         """
         if not rad.unit.is_equivalent(self.radii_unit):
-            raise UnitConversionError("You can only check radii in units convertible to the radius units of "
-                                      "the profile ({}).".format(self.radii_unit.to_string()))
+            raise UnitConversionError(
+                "You can only check radii in units convertible to the radius units of "
+                f"the profile ({self.radii_unit.to_string()})."
+            )
 
-        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) \
-                or (self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()):
-
+        if (self._temp_prof.annulus_bounds is not None and (rad > self._temp_prof.annulus_bounds[-1]).any()) or (
+            self._dens_prof.annulus_bounds is not None and (rad > self._dens_prof.annulus_bounds[-1]).any()
+        ):
             # If we're using smooth fitted models for temperature and density then this is allowable, but still
             #  frowned upon - however if we're in a data-driven mode then no way are we going to let anyone
             #  extrapolate. If they want that then they can fit a model to the mass profile and extrapolate that.
             if self._temp_model is None:
-                raise ValueError("Some radii are outside the radius range covered by the temperature or density "
-                                 "profiles, and it is not possible to extrapolate when using a data-point driven "
-                                 "pressure profile; please fit an pressure model and extrapolate that, or set up an "
-                                 "pressure profile that uses temperature and density model fits.")
+                raise ValueError(
+                    "Some radii are outside the radius range covered by the temperature or density "
+                    "profiles, and it is not possible to extrapolate when using a data-point driven "
+                    "pressure profile; please fit an pressure model and extrapolate that, or set up an "
+                    "pressure profile that uses temperature and density model fits."
+                )
             else:
-                warn("Some radii are outside the radius range covered by the temperature or density profiles, as such "
-                     "you will be extrapolating based on the model fits.", stacklevel=2)
+                warn(
+                    "Some radii are outside the radius range covered by the temperature or density profiles, as such "
+                    "you will be extrapolating based on the model fits.",
+                    stacklevel=2,
+                )
 
 
 class Generic1D(BaseProfile1D):
@@ -3934,10 +4803,26 @@ class Generic1D(BaseProfile1D):
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 y_axis_label: str, prof_type: str, radii_err: Quantity = None, values_err: Quantity = None,
-                 associated_set_id: int = None, set_storage_key: str = None, deg_radii: Quantity = None,
-                 auto_save: bool = False, telescope: str = None, spec_model: str = None, fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        y_axis_label: str,
+        prof_type: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ) -> None:
         """
         The init of this subclass of BaseProfile1D, used by a dynamic XSPEC fitting process, or directly by a user,
         to set up an XGA profile with custom data.
@@ -3970,10 +4855,22 @@ class Generic1D(BaseProfile1D):
             spectra to measure the results that were then used to create this profile. Only relevant to profiles that
             are generated from annular spectra, default is None.
         """
-
-        super().__init__(radii, values, centre, source_name, obs_id, inst, radii_err, values_err, associated_set_id,
-                         set_storage_key, deg_radii, auto_save=auto_save, telescope=telescope, spec_model=spec_model, fit_conf=fit_conf)
+        super().__init__(
+            radii,
+            values,
+            centre,
+            source_name,
+            obs_id,
+            inst,
+            radii_err,
+            values_err,
+            associated_set_id,
+            set_storage_key,
+            deg_radii,
+            auto_save=auto_save,
+            telescope=telescope,
+            spec_model=spec_model,
+            fit_conf=fit_conf,
+        )
         self._prof_type = prof_type
         self._y_axis_name = y_axis_label
-
-

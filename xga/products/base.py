@@ -1,19 +1,21 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 11:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:33 PM. Copyright (c) The Contributors.
+"""
+This module implements the bases for most XGA product classes.
+"""
 
 import inspect
 import os
 import pickle
 from copy import deepcopy
 from random import randint
-from typing import Tuple, List, Dict, Union, Optional
+from typing import NoReturn
 from warnings import warn
 
-import corner
 import emcee as em
 import numpy as np
-from astropy.units import Quantity, UnitConversionError, Unit, deg
-from getdist import plots, MCSamples
+from astropy.units import Quantity, Unit, UnitConversionError, deg
+from getdist import MCSamples, plots
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -22,11 +24,16 @@ from scipy.optimize import curve_fit, minimize
 from scipy.stats import truncnorm
 from tabulate import tabulate
 
-from ..exceptions import ProductGenerationError, UnknownCommandlineError, XGAFitError, XGAInvalidModelError, \
-    ModelNotAssociatedError
-from ..models import PROF_TYPE_MODELS, BaseModel1D, MODEL_PUBLICATION_NAMES
+from ..exceptions import (
+    ModelNotAssociatedError,
+    ProductGenerationError,
+    UnknownCommandlineError,
+    XGAFitError,
+    XGAInvalidModelError,
+)
+from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, BaseModel1D
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import SASERROR_LIST, SASWARNING_LIST, OUTPUT, PRETTY_TELESCOPE_NAMES
+from ..utils import OUTPUT, PRETTY_TELESCOPE_NAMES, SASERROR_LIST, SASWARNING_LIST, _deprecated
 
 
 class BaseProduct:
@@ -55,9 +62,20 @@ class BaseProduct:
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
 
-    def __init__(self, path: str, obs_id: str, instrument: str, stdout_str: str, stderr_str: str, gen_cmd: str,
-                 extra_info: Optional[dict] = None, telescope: Optional[str] = None, force_remote: bool = False,
-                 fsspec_kwargs: Optional[dict] = None, check_exists: bool = True):
+    def __init__(
+        self,
+        path: str,
+        obs_id: str,
+        instrument: str,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        extra_info: dict | None = None,
+        telescope: str | None = None,
+        force_remote: bool = False,
+        fsspec_kwargs: dict | None = None,
+        check_exists: bool = True,
+    ):
         """
         The initialisation method for the BaseProduct class, the super class for all products in XGA. Stores
         relevant file path information, ObsID, instrument, and telescope. It can also parse the std_err output
@@ -83,7 +101,6 @@ class BaseProduct:
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-
         # It is now possible for some 'standard' products (like Image) to be set up using data/information that
         #  is in memory, rather than stored in a file. So we have to account for the possibility of non-string
         #  values being passed to 'path'.
@@ -93,7 +110,7 @@ class BaseProduct:
             if force_remote:
                 # Here the user has forced us to treat the path as remote
                 self._local_file = False
-                self._remote_type = 'unknown'
+                self._remote_type = "unknown"
             elif path.startswith("s3://") or path.startswith("gs://"):
                 # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
                 #  use with resources like the HEASARC open S3 bucket
@@ -243,7 +260,7 @@ class BaseProduct:
         return self._force_remote
 
     @property
-    def fsspec_kwargs(self) -> Union[dict, None]:
+    def fsspec_kwargs(self) -> dict | None:
         """
         Property getter for the attribute containing the fsspec keyword arguments passed to this
         product at instantiation. These are for passing configuration information such as credentials for
@@ -255,7 +272,7 @@ class BaseProduct:
         return self._fsspec_kwargs
 
     @property
-    def gen_errors(self) -> List[str]:
+    def gen_errors(self) -> list[str]:
         """
         Property getter for the confirmed generation errors associated with a product.
 
@@ -265,7 +282,7 @@ class BaseProduct:
         return self._gen_error
 
     @property
-    def gen_warnings(self) -> List[Dict]:
+    def gen_warnings(self) -> list[dict]:
         """
         Property getter for the confirmed generation warnings associated with a product.
 
@@ -285,7 +302,7 @@ class BaseProduct:
         return self._tele
 
     @property
-    def pretty_telescope_name(self) -> Union[str, None]:
+    def pretty_telescope_name(self) -> str | None:
         """
         Property getter for a 'pretty' version of a telescope name, for inclusion in
         figure labels, titles, etc. - only if a 'pretty' name is defined in xga.utils.
@@ -296,8 +313,7 @@ class BaseProduct:
         """
         if self.telescope is not None and self.telescope in PRETTY_TELESCOPE_NAMES:
             pretty_name = PRETTY_TELESCOPE_NAMES[self.telescope]
-        elif (self.telescope is not None and
-              self.telescope not in PRETTY_TELESCOPE_NAMES):
+        elif self.telescope is not None and self.telescope not in PRETTY_TELESCOPE_NAMES:
             pretty_name = self.telescope
         else:
             pretty_name = None
@@ -336,7 +352,7 @@ class BaseProduct:
         return self._prod_type
 
     @property
-    def errors(self) -> List[str]:
+    def errors(self) -> list[str]:
         """
         Property getter for non-parsed errors detected during the generation of a product.
 
@@ -347,7 +363,7 @@ class BaseProduct:
         return self._other_error
 
     @property
-    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
+    def energy_bounds(self) -> tuple[Quantity, Quantity]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
         product was generated in.
@@ -379,7 +395,7 @@ class BaseProduct:
         self._src_name = name
 
     @property
-    def not_usable_reasons(self) -> List:
+    def not_usable_reasons(self) -> list:
         """
         Whenever the usable flag of a product is set to False (indicating you shouldn't use the product), a string
         indicating the reason is added to a list, which this property returns.
@@ -411,13 +427,15 @@ class BaseProduct:
         :return: The name of the RA-DEC system (e.g. FK4, FK5, or ICRS) associated with this product.
         :rtype: str
         """
-        if hasattr(self, 'radec_sky_wcs'):
+        if hasattr(self, "radec_sky_wcs"):
             return self.radec_sky_wcs.wcs.radesys
-        elif hasattr(self, 'radec_wcs'):
+        elif hasattr(self, "radec_wcs"):
             return self.radec_wcs.wcs.radesys
         else:
-            raise AttributeError(f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
-                                 f"or 'radec_wcs' property to retrieve the RA-DEC system from.")
+            raise AttributeError(
+                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                f"or 'radec_wcs' property to retrieve the RA-DEC system from."
+            )
 
     @property
     def radec_equinox(self) -> str:
@@ -430,18 +448,20 @@ class BaseProduct:
         :return: The name of the RA-DEC equinox (e.g. 2000 or 1950) associated with this product.
         :rtype: str
         """
-        if hasattr(self, 'radec_sky_wcs'):
+        if hasattr(self, "radec_sky_wcs"):
             return self.radec_sky_wcs.wcs.equinox
-        elif hasattr(self, 'radec_wcs'):
+        elif hasattr(self, "radec_wcs"):
             return self.radec_wcs.wcs.equinox
         else:
-            raise AttributeError(f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
-                                 f"or 'radec_wcs' property to retrieve the RA-DEC equinox from.")
+            raise AttributeError(
+                f"XGA {self._prod_type} ({self.__name__} class) does not have an 'radec_sky_wcs' "
+                f"or 'radec_wcs' property to retrieve the RA-DEC equinox from."
+            )
 
     # --------- Define internal functions ---------
 
     # --------- Define external functions ---------
-    def parse_stderr(self) -> Tuple[List[str], List[Dict], List]:
+    def parse_stderr(self) -> tuple[list[str], list[dict], list]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
         come from a telescope-specific software package (e.g. SAS, or eSASS), and other unidentifiable errors. The
@@ -453,7 +473,7 @@ class BaseProduct:
         :rtype: Tuple[List[Dict], List[Dict], List]
         """
 
-        def find_sas(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+        def find_sas(split_stderr: list, err_type: str) -> tuple[list[dict], list[str]]:
             """
             Function to search for and parse SAS (XMM software) errors and warnings.
 
@@ -465,24 +485,22 @@ class BaseProduct:
             """
             parsed_sas = []
             # This is a crude way of looking for SAS error/warning strings ONLY
-            sas_lines = [line for line in split_stderr if "** " in line and ": {}".format(err_type) in line]
+            sas_lines = [line for line in split_stderr if "** " in line and f": {err_type}" in line]
             for err in sas_lines:
                 try:
                     # This tries to split out the SAS task that produced the error
                     originator = err.split("** ")[-1].split(":")[0]
                     # And this should split out the actual error name
-                    err_ident = err.split(": {} (".format(err_type))[-1].split(")")[0]
+                    err_ident = err.split(f": {err_type} (")[-1].split(")")[0]
                     # Actual error message
-                    err_body = err.split("({})".format(err_ident))[-1].strip("\n").strip(", ").strip(" ")
+                    err_body = err.split(f"({err_ident})")[-1].strip("\n").strip(", ").strip(" ")
 
                     if err_type == "error":
                         # Checking to see if the error identity is in the list of SAS errors
-                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower()
-                                         in sas_err.lower()]
+                        sas_err_match = [sas_err for sas_err in SASERROR_LIST if err_ident.lower() in sas_err.lower()]
                     elif err_type == "warning":
                         # Checking to see if the error identity is in the list of SAS warnings
-                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower()
-                                         in sas_err.lower()]
+                        sas_err_match = [sas_err for sas_err in SASWARNING_LIST if err_ident.lower() in sas_err.lower()]
 
                     if len(sas_err_match) != 1:
                         originator = ""
@@ -496,7 +514,7 @@ class BaseProduct:
                 parsed_sas.append({"originator": originator, "name": err_ident, "message": err_body})
             return parsed_sas, sas_lines
 
-        def find_esass(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+        def find_esass(split_stderr: list, err_type: str) -> tuple[list[dict], list[str]]:
             """
             Function to search for and parse eSASS (eROSITA software) errors and warnings.
 
@@ -509,7 +527,7 @@ class BaseProduct:
             # The substrings we're looking for are different depending on if we're searching for
             #  errors or warnings
             if err_type == "error":
-                indicators = np.array(["**ERROR", '**STOP', "Fortran runtime error", "NoSuchFile", 'syntax error'])
+                indicators = np.array(["**ERROR", "**STOP", "Fortran runtime error", "NoSuchFile", "syntax error"])
             else:
                 indicators = np.array(["**WARN"])
 
@@ -536,7 +554,7 @@ class BaseProduct:
 
                 try:
                     # More almost hard coding that makes me very uncomfortable
-                    if '**' in rel_indic:
+                    if "**" in rel_indic:
                         # This tries to split out the eSASS task that produced the error
                         originator = line.split(" **")[0].split(":")[0].replace(" ", "")
                         # The eROSITA errors don't seem to have specific names, so this will be the same for all
@@ -544,8 +562,8 @@ class BaseProduct:
                         # Actual error message
                         err_body = line.split(" **")[-1].split("** ")[-1]
 
-                    elif 'Fortran' in rel_indic:
-                        originator = 'fortran'
+                    elif "Fortran" in rel_indic:
+                        originator = "fortran"
                         err_ident = "eROSITAError"
                         err_body = line
 
@@ -563,7 +581,7 @@ class BaseProduct:
 
             return parsed_esass, rel_esass_lines
 
-        def find_ciao(split_stderr: list, err_type: str) -> Tuple[List[dict], List[str]]:
+        def find_ciao(split_stderr: list, err_type: str) -> tuple[list[dict], list[str]]:
             """
             Function to search for and parse CIAO (Chandra software) errors and warnings.
 
@@ -575,9 +593,9 @@ class BaseProduct:
             """
             parsed_ciao = []
             # This is a crude way of looking for CIAO error/warning strings ONLY
-            if err_type == 'error':
+            if err_type == "error":
                 ciao_lines = [line for line in split_stderr if "ERROR" in line]
-            elif err_type == 'warning':
+            elif err_type == "warning":
                 ciao_lines = [line for line in split_stderr if "WARNING" in line]
 
             for err in ciao_lines:
@@ -603,27 +621,34 @@ class BaseProduct:
         parsed_tel_warns = []
         other_err_lines = []
 
-        if self.telescope is None or self.telescope == 'xmm':
+        if self.telescope is None or self.telescope == "xmm":
             # err_str being "" is ideal, hopefully means that nothing has gone wrong
             if self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                err_lines = [e for e in self.unprocessed_stderr.split("\n") if e != ""]
                 # Fingers crossed each line is a separate error
                 parsed_sas_errs, sas_err_lines = find_sas(err_lines, "error")
                 parsed_tel_warns, sas_warn_lines = find_sas(err_lines, "warning")
 
-                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                                 for e in parsed_sas_errs]
+                tel_errs_msgs = [
+                    "{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                    for e in parsed_sas_errs
+                ]
 
                 # These are impossible to predict the form of, so they won't be parsed
-                other_err_lines = [line for line in err_lines if line not in sas_err_lines
-                                   and line not in sas_warn_lines and line != "" and "warn" not in line]
+                other_err_lines = [
+                    line
+                    for line in err_lines
+                    if line not in sas_err_lines and line not in sas_warn_lines and line != "" and "warn" not in line
+                ]
                 # Adding some advice
                 for e_ind, e in enumerate(other_err_lines):
-                    if 'seg' in e.lower() and 'fault' in e.lower():
-                        other_err_lines[e_ind] += ' - Try examining an image of the cluster with regions subtracted, ' \
-                                                  'and have a look at where your coordinate lies.'
+                    if "seg" in e.lower() and "fault" in e.lower():
+                        other_err_lines[e_ind] += (
+                            " - Try examining an image of the cluster with regions subtracted, "
+                            "and have a look at where your coordinate lies."
+                        )
 
             if len(tel_errs_msgs) > 0:
                 self._usable = False
@@ -632,7 +657,7 @@ class BaseProduct:
                 self._usable = False
                 self._why_unusable.append("OtherErrorPresent")
 
-        elif self.telescope in ['erosita', 'erass']:
+        elif self.telescope in ["erosita", "erass"]:
             # The eSASS software puts everything in the stdout for some reason - so we have to parse that rather
             #  than stderr err_str being "" is ideal, hopefully means that nothing has gone wrong. We also note
             #  that some of the software that eSASS calls DOES populate the stderr if something has gone wrong,
@@ -640,18 +665,21 @@ class BaseProduct:
             if self.unprocessed_stdout != "" or self.unprocessed_stderr != "":
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in (self.unprocessed_stdout + '\n' + self.unprocessed_stderr).split('\n') if
-                             e != '']
+                err_lines = [
+                    e for e in (self.unprocessed_stdout + "\n" + self.unprocessed_stderr).split("\n") if e != ""
+                ]
                 # Fingers crossed each line is a separate error
                 parsed_esass_errs, esass_err_lines = find_esass(err_lines, "error")
                 parsed_tel_warns, esass_warn_lines = find_esass(err_lines, "warning")
 
-                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                                 for e in parsed_esass_errs]
+                tel_errs_msgs = [
+                    "{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                    for e in parsed_esass_errs
+                ]
 
                 # There is a particular warning that should be raised as an error, and
                 #  so we have to double back on ourselves here slightly
-                tel_warns_arr = np.array([en['message'] for en in parsed_tel_warns], dtype=str)
+                tel_warns_arr = np.array([en["message"] for en in parsed_tel_warns], dtype=str)
 
                 # The warning that should be an error
                 no_evt_warn_str = "Zero length source GTIs"
@@ -663,8 +691,9 @@ class BaseProduct:
                 cont_no_evt_warn = np.argwhere(np.char.find(tel_warns_arr, no_evt_warn_str) != -1).flatten()
                 # Add those warnings to the error list
                 for warn_ind in cont_no_evt_warn:
-                    tel_errs_msgs.append("{e} raised by {t} - {b}".format(e="NoEventsError", t="eSASS",
-                                                                          b=tel_warns_arr[warn_ind]))
+                    tel_errs_msgs.append(
+                        "{e} raised by {t} - {b}".format(e="NoEventsError", t="eSASS", b=tel_warns_arr[warn_ind])
+                    )
 
                 # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
                 #  they should), it is incredibly difficult to search for non-eSASS errors - thus I do not right now
@@ -678,19 +707,19 @@ class BaseProduct:
                 self._why_unusable.append("OtherErrorPresent")
 
         # Now for Chandra error identification
-        elif self.telescope == 'chandra':
-
+        elif self.telescope == "chandra":
             if self.unprocessed_stderr != "":
-
                 # Errors will be added to the error summary, then raised later
                 # That way if people try except the error away the object will have been constructed properly
-                err_lines = [e for e in self.unprocessed_stderr.split('\n') if e != '']
+                err_lines = [e for e in self.unprocessed_stderr.split("\n") if e != ""]
                 # Fingers crossed each line is a separate error
                 parsed_ciao_errs, ciao_err_lines = find_ciao(err_lines, "error")
                 parsed_tel_warns, ciao_warn_lines = find_ciao(err_lines, "warning")
 
-                tel_errs_msgs = ["{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
-                                 for e in parsed_ciao_errs]
+                tel_errs_msgs = [
+                    "{e} raised by {t} - {b}".format(e=e["name"], t=e["originator"], b=e["message"])
+                    for e in parsed_ciao_errs
+                ]
 
                 other_err_lines = []
 
@@ -704,12 +733,15 @@ class BaseProduct:
         elif self.unprocessed_stderr != "":
             # This should only trigger if the telescope is not XMM/eROSITa/Chandra AND there was a non-empty
             #  string passed for the stderr
-            warn("We do not currently support checking {t}-specific backend software stderr for issues - feel free to "
-                 "contact the developer team and request this feature.".format(t=self.telescope), stacklevel=2)
+            warn(
+                f"We do not currently support checking {self.telescope}-specific backend software stderr for issues - feel free to "
+                "contact the developer team and request this feature.",
+                stacklevel=2,
+            )
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
-    def raise_errors(self):
+    def raise_errors(self) -> NoReturn:
         """
         Method to raise the errors parsed from std_err string.
         """
@@ -719,8 +751,7 @@ class BaseProduct:
         # This is for any unresolved errors.
         for error in self._other_error:
             if "warning" not in error:
-                raise UnknownCommandlineError("{}".format(error))
-
+                raise UnknownCommandlineError(f"{error}")
 
 
 class BaseAggregateProduct:
@@ -840,7 +871,7 @@ class BaseAggregateProduct:
         return self._all_usable
 
     @property
-    def energy_bounds(self) -> Tuple[Quantity, Quantity]:
+    def energy_bounds(self) -> tuple[Quantity, Quantity]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
         product was generated in, if relevant.
@@ -851,7 +882,7 @@ class BaseAggregateProduct:
         return self._energy_bounds
 
     @property
-    def gen_errors(self) -> List[List[str]]:
+    def gen_errors(self) -> list[list[str]]:
         """
         Equivelant to the BaseProduct gen_errors property, but reports any telescope software errors stored in the component products.
 
@@ -865,7 +896,7 @@ class BaseAggregateProduct:
         return tel_soft_err_list
 
     @property
-    def errors(self) -> List[List[str]]:
+    def errors(self) -> list[list[str]]:
         """
         Equivelant to the BaseProduct errors property, but reports any non-telescope software errors stored in the
         component products.
@@ -880,7 +911,7 @@ class BaseAggregateProduct:
         return err_list
 
     @property
-    def unprocessed_stderr(self) -> List:
+    def unprocessed_stderr(self) -> list:
         """
         Equivelant to the BaseProduct gen_errors unprocessed_stderr, but returns a list of all the unprocessed
         standard error outputs.
@@ -960,11 +991,26 @@ class BaseProfile1D:
         are generated from annular spectra, default is None.
     """
 
-    def __init__(self, radii: Quantity, values: Quantity, centre: Quantity, source_name: str, obs_id: str, inst: str,
-                 radii_err: Quantity = None, values_err: Quantity = None, associated_set_id: int = None,
-                 set_storage_key: str = None, deg_radii: Quantity = None, x_norm: Quantity = Quantity(1, ''),
-                 y_norm: Quantity = Quantity(1, ''), auto_save: bool = False, telescope: str = None, spec_model: str = None,
-                 fit_conf: str = None):
+    def __init__(
+        self,
+        radii: Quantity,
+        values: Quantity,
+        centre: Quantity,
+        source_name: str,
+        obs_id: str,
+        inst: str,
+        radii_err: Quantity | None = None,
+        values_err: Quantity | None = None,
+        associated_set_id: int | None = None,
+        set_storage_key: str | None = None,
+        deg_radii: Quantity | None = None,
+        x_norm: Quantity = Quantity(1, ""),
+        y_norm: Quantity = Quantity(1, ""),
+        auto_save: bool = False,
+        telescope: str | None = None,
+        spec_model: str | None = None,
+        fit_conf: str | None = None,
+    ):
         """
         The init of the superclass 1D profile product. Unlikely to ever be declared by a user, but the base
         of all other 1D profiles in XGA - contains many useful functions.
@@ -999,8 +1045,7 @@ class BaseProfile1D:
             are generated from annular spectra, default is None.
         """
         if type(radii) != Quantity or type(values) != Quantity:
-            raise TypeError("Both the radii and values passed into this object definition must "
-                            "be astropy quantities.")
+            raise TypeError("Both the radii and values passed into this object definition must be astropy quantities.")
         elif radii_err is not None and type(radii_err) != Quantity:
             raise TypeError("The radii_err variable must be an astropy Quantity, or None.")
         elif radii_err is not None and radii_err.unit != radii.unit:
@@ -1012,40 +1057,53 @@ class BaseProfile1D:
 
         # Check for one dimensionality
         if radii.ndim != 1 or values.ndim != 1:
-            raise ValueError("The radii and values arrays must be one-dimensional. The shape of radii is {0} "
-                             "and the shape of values is {1}".format(radii.shape, values.shape))
+            raise ValueError(
+                f"The radii and values arrays must be one-dimensional. The shape of radii is {radii.shape} "
+                f"and the shape of values is {values.shape}"
+            )
         elif (radii_err is not None and radii_err.ndim != 1) or (values_err is not None and values_err.ndim != 1):
-            raise ValueError("The radii_err and values_err arrays must be one-dimensional. The shape of "
-                             "radii_err is {0} and the shape of values_err is "
-                             "{1}".format(radii_err.shape, values_err.shape))
+            raise ValueError(
+                "The radii_err and values_err arrays must be one-dimensional. The shape of "
+                f"radii_err is {radii_err.shape} and the shape of values_err is "
+                f"{values_err.shape}"
+            )
         # Making sure the arrays have the same number of entries
         elif radii.shape != values.shape:
-            raise ValueError("The radii and values arrays must have the same shape. The shape of radii is {0} "
-                             "and the shape of values is {1}".format(radii.shape, values.shape))
-        elif (radii_err is not None and radii_err.shape != radii.shape) or \
-                (values_err is not None and values_err.shape != values.shape):
-            raise ValueError("radii_err must be the same shape as radii, and values_err must be the same shape "
-                             "as values. The shape of radii_err is {0} where radii is {1}, and the shape of "
-                             "values_err is {2} where values is {3}".format(radii_err.shape, radii.shape,
-                                                                            values_err.shape, values.shape))
+            raise ValueError(
+                f"The radii and values arrays must have the same shape. The shape of radii is {radii.shape} "
+                f"and the shape of values is {values.shape}"
+            )
+        elif (radii_err is not None and radii_err.shape != radii.shape) or (
+            values_err is not None and values_err.shape != values.shape
+        ):
+            raise ValueError(
+                "radii_err must be the same shape as radii, and values_err must be the same shape "
+                f"as values. The shape of radii_err is {radii_err.shape} where radii is {radii.shape}, and the shape of "
+                f"values_err is {values_err.shape} where values is {values.shape}"
+            )
 
         # I'm actually going to enforce that the central coordinates passed when declaring a profile must
         #  be RA and Dec, I need the storage keys to be predictable to make everything neater
         if centre.unit != deg:
-            raise UnitConversionError("The central coordinate value passed into a profile on declaration must be"
-                                      " in RA and Dec coordinates.")
+            raise UnitConversionError(
+                "The central coordinate value passed into a profile on declaration must be in RA and Dec coordinates."
+            )
 
         # I'm also going to require that the profiles have knowledge of radii in degree units, also so I can make
         #  predictable storage strings. I don't really like to do this as it feels bodgy, but oh well
-        if not radii.unit.is_equivalent('deg') and deg_radii is None and set_storage_key is None:
-            raise ValueError("If the 'radii' variable is not in units that are convertible to degrees, please pass "
-                             "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
-                             " to construct a storage key.")
-        elif not radii.unit.is_equivalent('deg') and set_storage_key is None and len(deg_radii) != len(radii):
-            raise ValueError("'deg_radii' is a different length to 'radii', they should be equivalent "
-                             "quantities, simply in different units.")
-        elif radii.unit.is_equivalent('deg') and set_storage_key is None:
-            deg_radii = radii.to('deg')
+        if not radii.unit.is_equivalent("deg") and deg_radii is None and set_storage_key is None:
+            raise ValueError(
+                "If the 'radii' variable is not in units that are convertible to degrees, please pass "
+                "radii in degrees to 'deg_radii', this profile needs knowledge of the radii in degrees"
+                " to construct a storage key."
+            )
+        elif not radii.unit.is_equivalent("deg") and set_storage_key is None and len(deg_radii) != len(radii):
+            raise ValueError(
+                "'deg_radii' is a different length to 'radii', they should be equivalent "
+                "quantities, simply in different units."
+            )
+        elif radii.unit.is_equivalent("deg") and set_storage_key is None:
+            deg_radii = radii.to("deg")
 
         if deg_radii is not None:
             deg_radii = deg_radii.to("deg")
@@ -1067,11 +1125,13 @@ class BaseProfile1D:
         # And now we will check that no uncertainty values are negative, as that does not make sense yet can
         #  happen sometimes when XSPEC cannot constrain a parameter (for instance).
         if radii_err is not None and (radii_err < 0).any():
-            raise ValueError("The radii_err quantity has negative values, which does not make sense "
-                             "for an uncertainty.")
+            raise ValueError(
+                "The radii_err quantity has negative values, which does not make sense for an uncertainty."
+            )
         if values_err is not None and (values_err < 0).any():
-            raise ValueError("The values_err quantity has negative values, which does not make sense "
-                             "for an uncertainty.")
+            raise ValueError(
+                "The values_err quantity has negative values, which does not make sense for an uncertainty."
+            )
 
         # Storing the key values in attributes
         self._radii = radii
@@ -1103,8 +1163,8 @@ class BaseProfile1D:
         self._prof_type = "base"
 
         # The currently implemented and allowed types of fitting for a profile
-        self._fit_methods = ['curve_fit', 'mcmc', 'odr']
-        self._nice_fit_methods = {'curve_fit': 'Curve Fit', 'mcmc': 'MCMC', 'odr': 'ODR'}
+        self._fit_methods = ["curve_fit", "mcmc", "odr"]
+        self._nice_fit_methods = {"curve_fit": "Curve Fit", "mcmc": "MCMC", "odr": "ODR"}
 
         # Here is where information about fitted models is stored (and any failed fit attempts)
         self._good_model_fits = {m: {} for m in self._fit_methods}
@@ -1119,8 +1179,9 @@ class BaseProfile1D:
         self._energy_bounds = (None, None)
 
         # Checking if associated_set_id is supplied, so is set_storage_key, and vice versa
-        if not all([associated_set_id is None, set_storage_key is None]) and \
-                not all([associated_set_id is not None, set_storage_key is not None]):
+        if not all([associated_set_id is None, set_storage_key is None]) and not all(
+            [associated_set_id is not None, set_storage_key is not None]
+        ):
             raise ValueError("Both associated_set_id and set_storage_key must be None, or both must be not None.")
 
         # Putting the associated set ID into an attribute, if this profile wasn't generated by an AnnularSpectra
@@ -1138,8 +1199,10 @@ class BaseProfile1D:
             raise ValueError("Both the 'fit_conf' and 'spec_model' arguments must be None, or both must be not None.")
         # Currently restrict the input of fit_conf - only the string version is allowed.
         elif fit_conf is not None and not isinstance(fit_conf, str):
-            raise TypeError("The 'fit_conf' argument must be the string-form of the spectral fit "
-                            "configuration, not the dictionary-form.")
+            raise TypeError(
+                "The 'fit_conf' argument must be the string-form of the spectral fit "
+                "configuration, not the dictionary-form."
+            )
 
         self._spec_fit_conf = fit_conf
         self._spec_model = spec_model
@@ -1161,12 +1224,12 @@ class BaseProfile1D:
                 # TODO I NEED TO ENSURE THAT THE SPEC FIT CONF PASSED TO THESE PROFILES IS THE STRING VERSION, NOT
                 #  THE DICTIONARY VERSION. TROUBLE IS I WROTE ALL OF THIS STUFF DEALING WITH DIFFERENT CONFIGURATIONS
                 #  OF THE SAME MODEL SO LONG AGO NOW THAT I HAVE FORGOTTEN HOW
-                self._storage_key += ("_" + self._spec_model + "_" + self._spec_fit_conf)
+                self._storage_key += "_" + self._spec_model + "_" + self._spec_fit_conf
         else:
             # Default storage key for profiles that don't implement their own storage key will include their radii
             #  and the central coordinate
             # Just being doubly sure its in degrees
-            cent_chunk = "ra{r}_dec{d}_r".format(r=centre.value[0], d=centre.value[1])
+            cent_chunk = f"ra{centre.value[0]}_dec{centre.value[1]}_r"
             rad_chunk = "_".join(self._deg_radii.value.astype(str))
             self._storage_key = cent_chunk + rad_chunk
 
@@ -1210,14 +1273,23 @@ class BaseProfile1D:
         :param BaseModel1D model: An instance of a BaseModel1D class (or subclass) to check.
         """
         if model.profile is not None and model.profile != self:
-            raise ModelNotAssociatedError("The passed model instance is already associated with another profile, and"
-                                          " as such cannot be fit to this one. Ensure that individual model instances"
-                                          " are declared for each profile you are fitting.")
+            raise ModelNotAssociatedError(
+                "The passed model instance is already associated with another profile, and"
+                " as such cannot be fit to this one. Ensure that individual model instances"
+                " are declared for each profile you are fitting."
+            )
         elif model.profile is None:
             model.profile = self
 
-    def emcee_fit(self, model: BaseModel1D, num_steps: int, num_walkers: int, progress_bar: bool, show_warn: bool,
-                  num_samples: int) -> Tuple[BaseModel1D, bool]:
+    def emcee_fit(
+        self,
+        model: BaseModel1D,
+        num_steps: int,
+        num_walkers: int,
+        progress_bar: bool,
+        show_warn: bool,
+        num_samples: int,
+    ) -> tuple[BaseModel1D, bool]:
         """
         A fitting function to fit an XGA model instance to the data in this profile using the emcee
         affine-invariant MCMC sampler, this should be called through .fit() for full functionality. An initial
@@ -1260,8 +1332,10 @@ class BaseProfile1D:
         #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
         #  allows either an instance or a model name.
         if not isinstance(model, BaseModel1D):
-            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
-                            "rather than a model name.")
+            raise TypeError(
+                "This fitting method requires that a model instance be passed for the model argument, "
+                "rather than a model name."
+            )
         # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
         #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
         else:
@@ -1279,10 +1353,12 @@ class BaseProfile1D:
         warning_str = ""
 
         for prior in model.par_priors:
-            if prior['type'] != 'uniform':
-                raise NotImplementedError("Non-uniform priors for profile fitting are not currently supported - please contact the developers if you need this feature.")
+            if prior["type"] != "uniform":
+                raise NotImplementedError(
+                    "Non-uniform priors for profile fitting are not currently supported - please contact the developers if you need this feature."
+                )
 
-        prior_list = [p['prior'].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
+        prior_list = [p["prior"].to(model.par_units[p_ind]).value for p_ind, p in enumerate(model.par_priors)]
         prior_arr = np.array(prior_list)
 
         # We can run a curve_fit fit to try and get start values for the model parameters, and if that fails
@@ -1297,8 +1373,11 @@ class BaseProfile1D:
             base_start_pars = np.array([p.value for p in curve_fit_model.model_pars])
         else:
             # This finds maximum likelihood parameter values for the model+data
-            max_like_res = minimize(lambda *args: -log_likelihood(*args, model.model), model.unitless_start_pars,
-                                    args=(rads, y_data, y_errs))
+            max_like_res = minimize(
+                lambda *args: -log_likelihood(*args, model.model),
+                model.unitless_start_pars,
+                args=(rads, y_data, y_errs),
+            )
             # I'm now adding this checking step, which will revert to the default start parameters of the model if the
             #  maximum likelihood estimate produced insane results.
             base_start_pars = max_like_res.x
@@ -1307,9 +1386,11 @@ class BaseProfile1D:
         #  start parameters of the model. This step may make the checks performed later for instances where all
         #  start positions for a parameter are outside the prior a bit pointless, but I'm leaving them in for safety.
         if find_to_replace(base_start_pars, prior_arr).any():
-            warn("Maximum likelihood estimator has produced at least one start parameter that is outside"
-                 " the allowed values defined by the prior, reverting to default start parameters for this model.",
-                 stacklevel=2)
+            warn(
+                "Maximum likelihood estimator has produced at least one start parameter that is outside"
+                " the allowed values defined by the prior, reverting to default start parameters for this model.",
+                stacklevel=2,
+            )
             base_start_pars = model.unitless_start_pars
 
         # This basically finds the order of magnitude of each parameter, so we know the scale on which we should
@@ -1335,9 +1416,12 @@ class BaseProfile1D:
         #  likelihood 'fit' to get the initial starting parameters is probably a bit crappy
         all_bad = np.all(to_replace, axis=0)
         if any(all_bad):
-            warn("All walker starting parameters for one or more of the model parameters are outside the priors, which"
-                 "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
-                 " drawn from the priors directly.", stacklevel=2)
+            warn(
+                "All walker starting parameters for one or more of the model parameters are outside the priors, which"
+                "probably indicates a bad initial fit (which is used to get initial start parameters). Values will be"
+                " drawn from the priors directly.",
+                stacklevel=2,
+            )
             # This replacement only affects those parameters for which ALL start positions are outside the
             #  prior range
             all_bad_inds = np.argwhere(all_bad).T[0]
@@ -1362,8 +1446,9 @@ class BaseProfile1D:
 
         # This instantiates an Ensemble sampler with the number of walkers specified by the user,
         #  with the log probability as defined in the functions above
-        sampler = em.EnsembleSampler(num_walkers, model.num_pars, log_prob, args=(rads, y_data, y_errs, model.model,
-                                                                                  prior_list))
+        sampler = em.EnsembleSampler(
+            num_walkers, model.num_pars, log_prob, args=(rads, y_data, y_errs, model.model, prior_list)
+        )
         try:
             # So now we start the sampler, running for the number of steps specified on function call, with
             #  the starting parameters defined in the if statement above this.
@@ -1448,7 +1533,7 @@ class BaseProfile1D:
 
         return model, success
 
-    def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> Tuple[BaseModel1D, bool]:
+    def nlls_fit(self, model: BaseModel1D, num_samples: int, show_warn: bool) -> tuple[BaseModel1D, bool]:
         """
         A function to fit an XGA model instance to the data in this profile using the non-linear least squares
         curve_fit routine from scipy, this should be called through .fit() for full functionality
@@ -1466,8 +1551,10 @@ class BaseProfile1D:
         #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
         #  allows either an instance or a model name.
         if not isinstance(model, BaseModel1D):
-            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
-                            "rather than a model name.")
+            raise TypeError(
+                "This fitting method requires that a model instance be passed for the model argument, "
+                "rather than a model name."
+            )
         # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
         #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
         else:
@@ -1486,8 +1573,8 @@ class BaseProfile1D:
         lower_bounds = []
         upper_bounds = []
         for prior_ind, prior in enumerate(model.par_priors):
-            if prior['type'] == 'uniform':
-                conv_prior = prior['prior'].to(model.par_units[prior_ind]).value
+            if prior["type"] == "uniform":
+                conv_prior = prior["prior"].to(model.par_units[prior_ind]).value
                 lower_bounds.append(conv_prior[0])
                 upper_bounds.append(conv_prior[1])
             else:
@@ -1496,8 +1583,15 @@ class BaseProfile1D:
 
         # Curve fit is a simple non-linear least squares implementation, its alright but fragile
         try:
-            fit_par, fit_cov = curve_fit(model.model, rads, y_data, p0=model.unitless_start_pars, sigma=y_errs,
-                                         absolute_sigma=True, bounds=(lower_bounds, upper_bounds))
+            fit_par, fit_cov = curve_fit(
+                model.model,
+                rads,
+                y_data,
+                p0=model.unitless_start_pars,
+                sigma=y_errs,
+                absolute_sigma=True,
+                bounds=(lower_bounds, upper_bounds),
+            )
 
             # If there is an infinite value in the covariance matrix, it means curve_fit was
             #  unable to estimate it properly
@@ -1512,13 +1606,13 @@ class BaseProfile1D:
                     warning_str = "Very large parameter uncertainties"
                     success = False
         except RuntimeError as r_err:
-            warn("{}, curve_fit has failed.".format(str(r_err)), stacklevel=2)
+            warn(f"{str(r_err)}, curve_fit has failed.", stacklevel=2)
             warning_str = str(r_err)
             success = False
             fit_par = np.full(len(model.model_pars), np.nan)
             fit_par_err = np.full(len(model.model_pars), np.nan)
         except ValueError as v_err:
-            warn("{}, curve_fit has failed.".format(str(v_err)), stacklevel=2)
+            warn(f"{str(v_err)}, curve_fit has failed.", stacklevel=2)
             warning_str = str(v_err)
             success = False
             fit_par = np.full(len(model.model_pars), np.nan)
@@ -1534,8 +1628,9 @@ class BaseProfile1D:
             ext_model_par_err = np.repeat(fit_par_err[..., None], num_samples, axis=1).T
             # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
             model_par_dists = rng.normal(ext_model_par, ext_model_par_err)
-            par_dists = [Quantity(model_par_dists[:, p_ind], model.par_units[p_ind])
-                         for p_ind in range(0, len(fit_par))]
+            par_dists = [
+                Quantity(model_par_dists[:, p_ind], model.par_units[p_ind]) for p_ind in range(0, len(fit_par))
+            ]
             model.par_dists = par_dists
 
         # Now we put the values BACK into quantities
@@ -1571,8 +1666,10 @@ class BaseProfile1D:
         #  expect this confusion could arise because the fit() method (which is what users should REALLY be using)
         #  allows either an instance or a model name.
         if not isinstance(model, BaseModel1D):
-            raise TypeError("This fitting method requires that a model instance be passed for the model argument, "
-                            "rather than a model name.")
+            raise TypeError(
+                "This fitting method requires that a model instance be passed for the model argument, "
+                "rather than a model name."
+            )
         # Then I check that the model instance hasn't already been fit to another profile - I would do this in the
         #  fit() method (because then I wouldn't have to it in every separate fitting method), but I can't
         else:
@@ -1582,9 +1679,17 @@ class BaseProfile1D:
         model.fit_method = "odr"
         raise NotImplementedError("This fitting method is still under construction!")
 
-    def fit(self, model: Union[str, BaseModel1D], method: str = "mcmc", num_samples: int = 10000,
-            num_steps: int = 30000, num_walkers: int = 20, progress_bar: bool = True,
-            show_warn: bool = True, force_refit: bool = False) -> BaseModel1D:
+    def fit(
+        self,
+        model: str | BaseModel1D,
+        method: str = "mcmc",
+        num_samples: int = 10000,
+        num_steps: int = 30000,
+        num_walkers: int = 20,
+        progress_bar: bool = True,
+        show_warn: bool = True,
+        force_refit: bool = False,
+    ) -> BaseModel1D:
         """
         Method to fit a model to this profile's data, then store the resulting model parameter results. Each
         profile can store one instance of a type of model per fit method. So for instance you could fit both
@@ -1621,20 +1726,25 @@ class BaseProfile1D:
             allowed = ""
 
         if self._prof_type == "base":
-            raise XGAFitError("A BaseProfile1D object currently cannot have a model fitted to it, as there"
-                              " is no physical context.")
+            raise XGAFitError(
+                "A BaseProfile1D object currently cannot have a model fitted to it, as there is no physical context."
+            )
         elif isinstance(model, str) and model.lower() not in PROF_TYPE_MODELS[self._prof_type]:
-            raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
-                                       "following models {a}".format(p=model, a=allowed))
+            raise XGAInvalidModelError(
+                f"{model} is not available for this type of profile, please use one of the following models {allowed}"
+            )
         elif isinstance(model, str):
             model = PROF_TYPE_MODELS[self._prof_type][model](self.radii_unit, self.values_unit)
         elif isinstance(model, BaseModel1D) and model.name not in PROF_TYPE_MODELS[self._prof_type]:
-            raise XGAInvalidModelError("{p} is not available for this type of profile, please use one of the "
-                                       "following models {a}".format(p=model, a=allowed))
+            raise XGAInvalidModelError(
+                f"{model} is not available for this type of profile, please use one of the following models {allowed}"
+            )
         elif isinstance(model, BaseModel1D) and (model.x_unit != self.radii_unit or model.y_unit != self.values_unit):
-            raise UnitConversionError("The model instance passed to the fit method has units that are incompatible, "
-                                      "with the data. This profile has an radius unit of {r} and a value unit of "
-                                      "{v}".format(r=self.radii_unit.to_string(), v=self.values_unit.to_string()))
+            raise UnitConversionError(
+                "The model instance passed to the fit method has units that are incompatible, "
+                f"with the data. This profile has an radius unit of {self.radii_unit.to_string()} and a value unit of "
+                f"{self.values_unit.to_string()}"
+            )
 
         # I don't think I'm going to allow any fits without value uncertainties - just seems daft
         if self._values_err is None:
@@ -1643,28 +1753,33 @@ class BaseProfile1D:
         # Checking that the method passed is valid
         if method not in self._fit_methods:
             allowed = ", ".join(self._fit_methods)
-            raise XGAFitError("{me} is not a valid fitting method, please use one of these; {a}".format(me=method,
-                                                                                                        a=allowed))
+            raise XGAFitError(f"{method} is not a valid fitting method, please use one of these; {allowed}")
 
         # Check whether a good fit result already exists for this model. We use the storage_key property that
         #  XGA model objects generate from their name and their start parameters
         if not force_refit and model.name in self._good_model_fits[method]:
-            warn("{m} already has a successful fit result for this profile using {me}, with those start "
-                 "parameters".format(m=model.name, me=method), stacklevel=2)
+            warn(
+                f"{model.name} already has a successful fit result for this profile using {method}, with those start "
+                "parameters",
+                stacklevel=2,
+            )
             already_done = True
         elif model.name in self._bad_model_fits[method]:
-            warn("{m} already has a failed fit result for this profile using {me} with those start "
-                 "parameters".format(m=model.name, me=method), stacklevel=2)
+            warn(
+                f"{model.name} already has a failed fit result for this profile using {method} with those start "
+                "parameters",
+                stacklevel=2,
+            )
             already_done = False
         else:
             already_done = False
 
         # Running the requested fitting method
-        if not already_done and method == 'mcmc':
+        if not already_done and method == "mcmc":
             model, success = self.emcee_fit(model, num_steps, num_walkers, progress_bar, show_warn, num_samples)
-        elif not already_done and method == 'curve_fit':
+        elif not already_done and method == "curve_fit":
             model, success = self.nlls_fit(model, num_samples, show_warn)
-        elif not already_done and method == 'odr':
+        elif not already_done and method == "odr":
             model, success = self._odr_fit(model, show_warn)
         else:
             model = self.get_model_fit(model.name, method)
@@ -1680,7 +1795,7 @@ class BaseProfile1D:
             self.save()
         return model
 
-    def allowed_models(self, table_format: str = 'fancy_grid'):
+    def allowed_models(self, table_format: str = "fancy_grid") -> None:
         """
         This is a convenience function to tell the user what models can be used to fit a profile
         of the current type, what parameters are expected, and what the defaults are.
@@ -1710,16 +1825,16 @@ class BaseProfile1D:
                 mod_inst = PROF_TYPE_MODELS[self._prof_type][m]()
                 for p_ind, p in enumerate(list(inspect.signature(mod_inst.model).parameters.values())[1:]):
                     if par_len > 35:
-                        exp_pars += ' \n'
+                        exp_pars += " \n"
                         par_len = 0
-                    next_par = '{}, '.format(p.name)
+                    next_par = f"{p.name}, "
                     par_len += len(next_par)
                     exp_pars += next_par
 
                     if def_len > 35:
-                        def_starts += ' \n'
+                        def_starts += " \n"
                         def_len = 0
-                    next_def = '{}, '.format(str(mod_inst.start_pars[p_ind]))
+                    next_def = f"{str(mod_inst.start_pars[p_ind])}, "
                     def_len += len(next_def)
                     def_starts += next_def
 
@@ -1730,8 +1845,9 @@ class BaseProfile1D:
 
             # Construct the table data and display it using tabulate module
             tab_dat = [[allowed[i], model_par_names[i], model_par_starts[i]] for i in range(0, len(allowed))]
-            print(tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"],
-                           tablefmt=table_format))
+            print(
+                tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"], tablefmt=table_format)
+            )
 
     def get_model_fit(self, model: str, method: str) -> BaseModel1D:
         """
@@ -1747,21 +1863,22 @@ class BaseProfile1D:
         if model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
             prof_name = self._y_axis_name.lower()
-            raise XGAInvalidModelError("{m} is not a valid model for a {p} profile, please choose from "
-                                       "one of these; {a}".format(m=model, a=", ".join(allowed), p=prof_name))
+            raise XGAInvalidModelError(
+                "{m} is not a valid model for a {p} profile, please choose from one of these; {a}".format(
+                    m=model, a=", ".join(allowed), p=prof_name
+                )
+            )
         elif model in self._bad_model_fits[method]:
-            warn("An attempt was made to fit {m} with {me} but it failed, so treat the model with "
-                 "suspicion".format(m=model, me=method))
+            warn(f"An attempt was made to fit {model} with {method} but it failed, so treat the model with suspicion")
             ret_model = self._bad_model_fits[method][model]
         elif model not in self._good_model_fits[method]:
-            raise ModelNotAssociatedError("{m} is valid for this profile, but hasn't been fit with {me} "
-                                          "yet".format(m=model, me=method))
+            raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit with {method} yet")
         else:
             ret_model = self._good_model_fits[method][model]
 
         return ret_model
 
-    def add_model_fit(self, model: BaseModel1D, method: str):
+    def add_model_fit(self, model: BaseModel1D, method: str) -> None:
         """
         There are rare circumstances where XGA processes might wish to add a model to a profile from the outside,
         which is what this method allows you to do.
@@ -1769,21 +1886,22 @@ class BaseProfile1D:
         :param BaseModel1D model: The XGA model object to add to the profile.
         :param str method: The method used to fit the model.
         """
-
         # Checking that the method passed is valid
         if method not in self._fit_methods:
             allowed = ", ".join(self._fit_methods)
-            raise XGAFitError("{me} is not a valid fitting method, please use one of these; {a}".format(me=method,
-                                                                                                        a=allowed))
+            raise XGAFitError(f"{method} is not a valid fitting method, please use one of these; {allowed}")
         # Checking that the model is valid for this particular profile
         allowed = ", ".join(PROF_TYPE_MODELS[self._prof_type])
         if model.name not in PROF_TYPE_MODELS[self._prof_type]:
-            raise XGAInvalidModelError("{p} is not valid for this type of profile, please use one of the "
-                                       "following models {a}".format(p=model.name, a=allowed))
+            raise XGAInvalidModelError(
+                f"{model.name} is not valid for this type of profile, please use one of the following models {allowed}"
+            )
         elif model.x_unit != self.radii_unit or model.y_unit != self.values_unit:
-            raise UnitConversionError("The model instance passed to the fit method has units that are incompatible, "
-                                      "with the data. This profile has an radius unit of {r} and a value unit of "
-                                      "{v}".format(r=self.radii_unit.to_string(), v=self.values_unit.to_string()))
+            raise UnitConversionError(
+                "The model instance passed to the fit method has units that are incompatible, "
+                f"with the data. This profile has an radius unit of {self.radii_unit.to_string()} and a value unit of "
+                f"{self.values_unit.to_string()}"
+            )
         elif not model.success:
             raise ValueError("Please only add successful models to this profile.")
         else:
@@ -1793,7 +1911,7 @@ class BaseProfile1D:
             # This method means that a change has happened to the model, so it should be re-saved
             self.save()
 
-    def remove_model_fit(self, model: Union[str, BaseModel1D], method: str):
+    def remove_model_fit(self, model: str | BaseModel1D, method: str) -> None:
         """
         This will remove an existing model fit for a particular fit method.
 
@@ -1806,18 +1924,17 @@ class BaseProfile1D:
 
         # Checking the input model is valid for this profile
         if model not in PROF_TYPE_MODELS[self._prof_type]:
-            raise XGAInvalidModelError("{m} is not a valid model for a {p} "
-                                       "profile.".format(m=model, p=self._y_axis_name.lower()))
+            raise XGAInvalidModelError(f"{model} is not a valid model for a {self._y_axis_name.lower()} profile.")
 
         # Checking that the method passed is valid
         if method not in self._fit_methods:
             allowed = ", ".join(self._fit_methods)
-            raise XGAFitError("{me} is not a valid fitting method, the following are allowed; "
-                              "{a}".format(me=method, a=allowed))
+            raise XGAFitError(f"{method} is not a valid fitting method, the following are allowed; {allowed}")
 
         if model not in self._good_model_fits[method]:
-            raise XGAInvalidModelError("{m} is valid for this profile, but cannot be removed as it has not been "
-                                       "fit.".format(m=model))
+            raise XGAInvalidModelError(
+                f"{model} is valid for this profile, but cannot be removed as it has not been fit."
+            )
         else:
             # Finally remove the model
             del self._good_model_fits[method][model]
@@ -1833,11 +1950,10 @@ class BaseProfile1D:
         :return: The Emcee sampler used to fit the user supplied model.
         :rtype: em.EnsembleSampler
         """
-        model = self.get_model_fit(model, 'mcmc')
+        model = self.get_model_fit(model, "mcmc")
         return model.emcee_sampler
 
-    def get_chains(self, model: str, discard: Union[bool, int] = True, flatten: bool = True,
-                   thin: int = 1) -> np.ndarray:
+    def get_chains(self, model: str, discard: bool | int = True, flatten: bool = True, thin: int = 1) -> np.ndarray:
         """
         Get method for the sampler chains of an MCMC fit to the user supplied model. get_sampler is
         called to retrieve the sampler object, as well as perform validity checks on the model name.
@@ -1852,7 +1968,7 @@ class BaseProfile1D:
         :return: The requested chains.
         :rtype: np.ndarray
         """
-        model = self.get_model_fit(model, 'mcmc')
+        model = self.get_model_fit(model, "mcmc")
 
         if isinstance(discard, bool) and discard:
             chains = model.emcee_sampler.get_chain(discard=model.cut_off, flat=flatten, thin=thin)
@@ -1863,7 +1979,7 @@ class BaseProfile1D:
 
         return chains
 
-    def view_chains(self, model: str, discard: Union[bool, int] = True, thin: int = 1, figsize: Tuple = None):
+    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple = None) -> None:
         """
         Simple view method to quickly look at the MCMC chains for a given model fit.
 
@@ -1876,18 +1992,18 @@ class BaseProfile1D:
         :param Tuple figsize: Desired size of the figure, if None will be set automatically.
         """
         chains = self.get_chains(model, discard, thin=thin, flatten=False)
-        model_obj = self.get_model_fit(model, 'mcmc')
+        model_obj = self.get_model_fit(model, "mcmc")
 
         if figsize is None:
-            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2 * model_obj.num_pars), sharex='col')
+            fig, axes = plt.subplots(nrows=model_obj.num_pars, figsize=(12, 2 * model_obj.num_pars), sharex="col")
         else:
-            fig, axes = plt.subplots(model_obj.num_pars, figsize=figsize, sharex='col')
+            fig, axes = plt.subplots(model_obj.num_pars, figsize=figsize, sharex="col")
 
-        plt.suptitle("{m} Parameter Chains".format(m=model_obj.publication_name), fontsize=14, y=1.02)
+        plt.suptitle(f"{model_obj.publication_name} Parameter Chains", fontsize=14, y=1.02)
 
         for i in range(model_obj.num_pars):
             cur_unit = model_obj.par_units[i]
-            if cur_unit == Unit(''):
+            if cur_unit == Unit(""):
                 par_unit_name = ""
             else:
                 par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
@@ -1901,36 +2017,9 @@ class BaseProfile1D:
         plt.tight_layout()
         plt.show()
 
-    def view_corner(self, model: str, figsize: Tuple = (8, 8)):
+    def view_corner(self, model: str, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
         """
-        A convenient view method to examine the corner plot of the parameter posterior distributions.
-
-        :param str model: The name of the model for which to view the corner plot.
-        :param Tuple figsize: The desired figure size.
-        """
-        flat_chains = self.get_chains(model, flatten=True)
-        model_obj = self.get_model_fit(model, 'mcmc')
-
-        frac_conf_lev = [(50 - 34.1) / 100, 0.5, (50 + 34.1) / 100]
-
-        # If any of the median parameter values are above 1e+4 we get corner to format them in scientific
-        #  notation, to avoid super long numbers spilling over the edge of the corner plot. I will say that
-        #  scientific notation in titles in corner doesn't look that great either, but its better than the
-        #  alternative
-        if np.any(np.median(flat_chains, axis=0) > 1e+4):
-            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
-                                quantiles=frac_conf_lev, show_titles=True, title_fmt=".2e")
-        else:
-            fig = corner.corner(flat_chains, labels=model_obj.par_publication_names, figsize=figsize,
-                                quantiles=frac_conf_lev, show_titles=True)
-        t = self._y_axis_name
-        plt.suptitle("{m} - {s} {t} Profile".format(m=model_obj.publication_name, s=self.src_name, t=t),
-                     fontsize=14, y=1.02)
-        plt.show()
-
-    def view_getdist_corner(self, model: str, settings: Optional[dict] = None, figsize: tuple = (10, 10)):
-        """
-        A view method to see a corner plot generated with the getdist module, using flattened chains with
+        A view method to show a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
 
         :param str model: The name of the model for which to view the corner plot.
@@ -1945,24 +2034,41 @@ class BaseProfile1D:
 
         # Grab the flattened chains
         flat_chains = self.get_chains(model, flatten=True)
-        model_obj = self.get_model_fit(model, 'mcmc')
+        model_obj = self.get_model_fit(model, "mcmc")
 
         # Setting up parameter label name and unit pairs - will strip them of '$' in the next line - didn't do it
         #  here to make it a little easier to read
-        labels = [[par_name, model_obj.par_units[par_ind].to_string('latex')] for par_ind, par_name
-                  in enumerate(model_obj.par_publication_names)]
+        labels = [
+            [par_name, model_obj.par_units[par_ind].to_string("latex")]
+            for par_ind, par_name in enumerate(model_obj.par_publication_names)
+        ]
 
         # Need to remove $ from the labels because getdist adds them itself
-        stripped_labels = [(lab_pair[0] + ((r"\: \left[" + lab_pair[1] + r'\right]')
-                            if lab_pair[1] != '$\\mathrm{}$' else '')).replace('$', '') for lab_pair in labels]
+        stripped_labels = [
+            (
+                lab_pair[0] + ((r"\: \left[" + lab_pair[1] + r"\right]") if lab_pair[1] != "$\\mathrm{}$" else "")
+            ).replace("$", "")
+            for lab_pair in labels
+        ]
         # Setup the getdist sample object
-        gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels,
-                            settings=settings)
+        gd_samp = MCSamples(samples=flat_chains, names=model_obj.par_names, labels=stripped_labels, settings=settings)
 
         # And generate the triangle plot
         g = plots.get_subplot_plotter(width_inch=figsize[0])
         g.triangle_plot([gd_samp], filled=True)
         plt.show()
+
+    @_deprecated(
+        "The legacy `view_corner()` code has been replaced with getdist; `view_getdist_corner() "
+        "is now redundant, and will be removed in a future version of XGA."
+    )
+    def view_getdist_corner(self, model: str, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
+        """
+        Thin wrapper over the view_corner method, which now uses getdist rather than the old 'corner'
+        module. This 'view_getdist_corner' remains to maintain compatibility with the old interface, but
+        will be removed in a future version of XGA - please call `view_corner` directly.
+        """
+        self.view_corner(model, settings, figsize)
 
     def generate_data_realisations(self, num_real: int, truncate_zero: bool = False) -> Quantity:
         """
@@ -1979,16 +2085,19 @@ class BaseProfile1D:
         """
         # If we have no error information on the profile y values, then we can hardly generate distributions from them
         if self.values_err is None:
-            raise ValueError("This profile has no y-error information, and as such you cannot generate random"
-                             " realisations of the data.")
+            raise ValueError(
+                "This profile has no y-error information, and as such you cannot generate random"
+                " realisations of the data."
+            )
 
         # The user can choose to ensure that the realisation distributions are truncated at zero, in which case we
         #  use a truncated normal distribution.
         if truncate_zero:
             # The truncnorm setup wants the limits in units of scale essentially
             trunc_lims = ((0 - self.values) / self.values_err, (np.inf - self.values) / self.values_err)
-            realisations = truncnorm(trunc_lims[0], trunc_lims[1], loc=self.values,
-                                     scale=self.values_err).rvs([num_real, len(self.values)])
+            realisations = truncnorm(trunc_lims[0], trunc_lims[1], loc=self.values, scale=self.values_err).rvs(
+                [num_real, len(self.values)]
+            )
         # But the default behaviour is to just use a normal distribution
         else:
             # Here I copy the values and value uncertainties N times, where N is the number of realisations
@@ -2004,13 +2113,32 @@ class BaseProfile1D:
 
         return realisations
 
-    def get_view(self, fig: Figure, main_ax: Axes, xscale: str = "log", yscale: str = "log", xlim: tuple = None,
-                 ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
-                 custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False,
-                 y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
-                 data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
-                 show_legend: bool = True, show_residual_ax: bool = True, draw_vals: Optional[dict] = None,
-                 auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
+    def get_view(
+        self,
+        fig: Figure,
+        main_ax: Axes,
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple = None,
+        ylim: tuple = None,
+        models: bool = True,
+        back_sub: bool = True,
+        just_models: bool = False,
+        custom_title: str = None,
+        draw_rads: dict | None = None,
+        x_norm: bool | Quantity = False,
+        y_norm: bool | Quantity = False,
+        x_label: str = None,
+        y_label: str = None,
+        data_colour: str = "black",
+        model_colour: str | list[str] = "seagreen",
+        show_legend: bool = True,
+        show_residual_ax: bool = True,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        joined_points: bool = False,
+        axis_formatters: dict = None,
+    ):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
         is that, whilst it is used by the view() method, it can also be called by external methods that wish to use
@@ -2074,19 +2202,24 @@ class BaseProfile1D:
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
-            raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
-                                      "{}".format(self.radii_unit.to_string()))
+            raise UnitConversionError(
+                f"All radii in draw_rad have to be in the same units as this profile, {self.radii_unit.to_string()}"
+            )
 
         # Checks that any extra y-axis values that have been passed are the correct units (i.e. the same as the
         #  y-value units used in this profile)
         if not all([v.unit == self.values_unit for v in draw_vals.values()]):
-            raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
-                                      "{}".format(self.values_unit.to_string()))
+            raise UnitConversionError(
+                f"All values in draw_vals have to be in the same units as this profile, {self.values_unit.to_string()}"
+            )
 
-        if axis_formatters is not None and \
-                not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
-            raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
-                           "ymajor, and yminor.")
+        if axis_formatters is not None and not all(
+            [k in ["xmajor", "xminor", "ymajor", "yminor"] for k in axis_formatters.keys()]
+        ):
+            raise KeyError(
+                "The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
+                "ymajor, and yminor."
+            )
 
         # Default is to show models, but that flag is set to False here if there are none, otherwise we get
         #  extra plotted stuff that doesn't make sense
@@ -2098,33 +2231,33 @@ class BaseProfile1D:
         #  if the user didn't set it initially then self.x_norm will also be 1
         if isinstance(x_norm, bool) and x_norm:
             x_norm = self.x_norm
-            if self.x_norm == Quantity(1, ''):
+            if self.x_norm == Quantity(1, ""):
                 warn("No normalisation value is stored for the x-axis", stacklevel=2)
         elif isinstance(x_norm, Quantity):
             x_norm = x_norm
         elif isinstance(x_norm, bool) and not x_norm:
             # Otherwise we set x_norm to a harmless values with no units and unity value
-            x_norm = Quantity(1, '')
+            x_norm = Quantity(1, "")
 
         if isinstance(y_norm, bool) and y_norm:
             y_norm = self.y_norm
-            if self.y_norm == Quantity(1, ''):
+            if self.y_norm == Quantity(1, ""):
                 warn("No normalisation value is stored for the y-axis", stacklevel=2)
         elif isinstance(y_norm, Quantity):
             y_norm = y_norm
         elif isinstance(y_norm, bool) and not y_norm:
-            y_norm = Quantity(1, '')
+            y_norm = Quantity(1, "")
 
         main_ax.minorticks_on()
         if models and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
-            res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            res_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
             # Adds a zero line for reference, as its ideally where residuals would be
             res_ax.axhline(0.0, color="black")
         # Setting some aesthetic parameters for the main plotting axis
-        main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        main_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         if self.type == "brightness_profile" and self.psf_corrected:
             leg_label = self.src_name + " PSF Corrected"
@@ -2143,25 +2276,41 @@ class BaseProfile1D:
         # Now the actual plotting of the data
         if self.radii_err is not None and self.values_err is None and not joined_points:
             x_errs = (self.radii_err.copy() / x_norm).value
-            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
-                                    label=leg_label, color=data_colour)
+            line = main_ax.errorbar(
+                rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2, label=leg_label, color=data_colour
+            )
         elif self.radii_err is None and self.values_err is not None and not joined_points:
             y_errs = (self.values_err.copy() / y_norm).value
-            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
-                                    label=leg_label, color=data_colour)
+            line = main_ax.errorbar(
+                rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2, label=leg_label, color=data_colour
+            )
         elif self.radii_err is not None and self.values_err is not None and not joined_points:
             x_errs = (self.radii_err.copy() / x_norm).value
             y_errs = (self.values_err.copy() / y_norm).value
-            line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2,
-                                    label=leg_label, color=data_colour)
+            line = main_ax.errorbar(
+                rad_vals.value,
+                plot_y_vals.value,
+                xerr=x_errs,
+                yerr=y_errs,
+                fmt="x",
+                capsize=2,
+                label=leg_label,
+                color=data_colour,
+            )
         elif joined_points:
             line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label, color=data_colour)
             if self.values_err is not None:
                 y_errs = (self.values_err.copy() / y_norm).value
-                main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
-                                     color=data_colour, linestyle='dashdot', alpha=0.7)
+                main_ax.fill_between(
+                    rad_vals.value,
+                    plot_y_vals.value - y_errs,
+                    plot_y_vals.value + y_errs,
+                    color=data_colour,
+                    linestyle="dashdot",
+                    alpha=0.7,
+                )
         else:
-            line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label, color=data_colour)
+            line = main_ax.plot(rad_vals.value, plot_y_vals.value, "x", label=leg_label, color=data_colour)
 
         if just_models and models:
             line[0].set_visible(False)
@@ -2171,8 +2320,9 @@ class BaseProfile1D:
                         art_obj.set_visible(False)
 
         if not back_sub and self.background.value != 0:
-            main_ax.axhline(self.background.value, label=leg_label + ' Background', linestyle='dashed',
-                            color=line[0].get_color())
+            main_ax.axhline(
+                self.background.value, label=leg_label + " Background", linestyle="dashed", color=line[0].get_color()
+            )
 
         if models:
             # Runs through the model fit methods, and the models fit with each method, and counts them - makes
@@ -2186,11 +2336,13 @@ class BaseProfile1D:
             if isinstance(model_colour, str) and num_to_plot == 1:
                 model_colour = [model_colour]
             elif isinstance(model_colour, str) and num_to_plot != 1:
-                model_colour = [None]*num_to_plot
+                model_colour = [None] * num_to_plot
             elif isinstance(model_colour, list) and len(model_colour) != num_to_plot:
-                raise ValueError("If the 'model_colour' argument is a list, it must have one entry per model-method "
-                                 "combination. The passed list has {p} entries, and there are {mm} model-method "
-                                 "combinations.".format(p=len(model_colour), mm=num_to_plot))
+                raise ValueError(
+                    "If the 'model_colour' argument is a list, it must have one entry per model-method "
+                    f"combination. The passed list has {len(model_colour)} entries, and there are {num_to_plot} model-method "
+                    "combinations."
+                )
 
             # We use the slightly-no-longer-useful fit_radii property (it is only useful if any of the radii values
             #  are at zero, which used to be the case for most of the profiles generated by XGA). In the case where
@@ -2215,18 +2367,36 @@ class BaseProfile1D:
                     upper_model = np.nanpercentile(mod_reals, 84.1, axis=1)
                     lower_model = np.nanpercentile(mod_reals, 15.9, axis=1)
 
-                    mod_lab = model_obj.publication_name + " - {}".format(self._nice_fit_methods[method])
-                    cur_line = main_ax.plot(mod_rads.value / x_norm.value, median_model.value / y_norm, label=mod_lab,
-                                 color=model_colour[mod_col_ind])
+                    mod_lab = model_obj.publication_name + f" - {self._nice_fit_methods[method]}"
+                    cur_line = main_ax.plot(
+                        mod_rads.value / x_norm.value,
+                        median_model.value / y_norm,
+                        label=mod_lab,
+                        color=model_colour[mod_col_ind],
+                    )
                     cur_color = cur_line[0].get_color()
 
-                    main_ax.fill_between(mod_rads.value / x_norm.value, lower_model.value / y_norm.value,
-                                         upper_model.value / y_norm.value, alpha=0.7, interpolate=True,
-                                         where=upper_model.value >= lower_model.value, facecolor=cur_color)
-                    main_ax.plot(mod_rads.value / x_norm.value, lower_model.value / y_norm.value, color=cur_color,
-                                 linestyle="dashed")
-                    main_ax.plot(mod_rads.value / x_norm.value, upper_model.value / y_norm.value, color=cur_color,
-                                 linestyle="dashed")
+                    main_ax.fill_between(
+                        mod_rads.value / x_norm.value,
+                        lower_model.value / y_norm.value,
+                        upper_model.value / y_norm.value,
+                        alpha=0.7,
+                        interpolate=True,
+                        where=upper_model.value >= lower_model.value,
+                        facecolor=cur_color,
+                    )
+                    main_ax.plot(
+                        mod_rads.value / x_norm.value,
+                        lower_model.value / y_norm.value,
+                        color=cur_color,
+                        linestyle="dashed",
+                    )
+                    main_ax.plot(
+                        mod_rads.value / x_norm.value,
+                        upper_model.value / y_norm.value,
+                        color=cur_color,
+                        linestyle="dashed",
+                    )
 
                     # I only want this to trigger if the user has decided they want a residual axis. I expect most
                     #  of the time that they will, but for things like the Hydrostatic mass diagnostic plots I want
@@ -2234,9 +2404,10 @@ class BaseProfile1D:
                     if show_residual_ax:
                         # This calculates and plots the residuals between the model and the data on the extra
                         #  axis we added near the beginning of this method
-                        res = np.nanpercentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) \
-                              - (plot_y_vals * y_norm)
-                        res_ax.plot(rad_vals.value, res.value, 'D', color=cur_color)
+                        res = np.nanpercentile(model_obj.get_realisations(self.fit_radii), 50, axis=1) - (
+                            plot_y_vals * y_norm
+                        )
+                        res_ax.plot(rad_vals.value, res.value, "D", color=cur_color)
 
                     # Move the colour on!
                     mod_col_ind += 1
@@ -2253,17 +2424,17 @@ class BaseProfile1D:
 
         if x_label is None:
             # Setting the main plot's x label
-            main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
+            main_ax.set_xlabel(f"Radius {x_unit}", fontsize=13)
         else:
-            main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
+            main_ax.set_xlabel(x_label + f" {x_unit}", fontsize=13)
 
         if y_label is None and (self._background.value == 0 or not back_sub):
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+            main_ax.set_ylabel(rf"{self._y_axis_name} {y_unit}", fontsize=13)
         elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+            main_ax.set_ylabel(rf"Background Subtracted {self._y_axis_name} {y_unit}", fontsize=13)
         elif y_label is not None:
-            main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
+            main_ax.set_ylabel(y_label + f" {y_unit}", fontsize=13)
 
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
@@ -2279,7 +2450,7 @@ class BaseProfile1D:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
-            res_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
+            res_ax.set_xlabel(f"Radius {x_unit}", fontsize=13)
             res_ax.set_xscale(xscale)
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
@@ -2290,11 +2461,11 @@ class BaseProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if models and custom_title is None and len(self.good_model_fits) == 1:
-            title_str = "{l} Profile - with model".format(l=self._y_axis_name)
+            title_str = f"{self._y_axis_name} Profile - with model"
         elif models and custom_title is None and len(self.good_model_fits) > 1:
-            title_str = "{l} Profile - with models".format(l=self._y_axis_name)
+            title_str = f"{self._y_axis_name} Profile - with models"
         elif not models and custom_title is None:
-            title_str = "{l} Profile".format(l=self._y_axis_name)
+            title_str = f"{self._y_axis_name} Profile"
         else:
             # If the user doesn't like my title, they can supply their own
             title_str = custom_title
@@ -2308,9 +2479,16 @@ class BaseProfile1D:
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
             d_rad = (draw_rads[r_name] / x_norm).value
-            main_ax.axvline(d_rad, linestyle='dashed', color='black')
-            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+            main_ax.axvline(d_rad, linestyle="dashed", color="black")
+            main_ax.annotate(
+                r_name,
+                (d_rad * 1.01, 0.9),
+                rotation=90,
+                verticalalignment="center",
+                color="black",
+                fontsize=14,
+                xycoords=("data", "axes fraction"),
+            )
 
         # Use the axis limits quite a lot in these next bits, so read them out into variables
         x_axis_lims = main_ax.get_xlim()
@@ -2320,18 +2498,17 @@ class BaseProfile1D:
         for v_name in draw_vals:
             d_val = (draw_vals[v_name] / y_norm).value
             if draw_vals[v_name].isscalar:
-                main_ax.axhline(d_val, linestyle='dashed', color=data_colour, alpha=0.8,
-                                label=v_name)
+                main_ax.axhline(d_val, linestyle="dashed", color=data_colour, alpha=0.8, label=v_name)
             elif len(d_val) == 2:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour,
-                                     alpha=0.5)
+                main_ax.axhline(d_val[0], linestyle="dashed", color=data_colour, alpha=0.8, label=v_name)
+                main_ax.fill_between(
+                    x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=data_colour, alpha=0.5
+                )
             elif len(d_val) == 3:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=data_colour, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour,
-                                     alpha=0.5)
+                main_ax.axhline(d_val[0], linestyle="dashed", color=data_colour, alpha=0.8, label=v_name)
+                main_ax.fill_between(
+                    x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=data_colour, alpha=0.5
+                )
 
             main_ax.set_xlim(x_axis_lims)
 
@@ -2353,48 +2530,67 @@ class BaseProfile1D:
         if axis_formatters is not None:
             # We specify which axes object needs formatters applied, depends on whether the residual ax is being
             #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
-            if show_residual_ax and 'res_ax' in locals():
+            if show_residual_ax and "res_ax" in locals():
                 form_ax = res_ax
             else:
                 form_ax = main_ax
             # Checks for and uses formatters that the user may have specified for the plot
-            if 'xminor' in axis_formatters:
-                form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
-            if 'xmajor' in axis_formatters:
-                form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+            if "xminor" in axis_formatters:
+                form_ax.xaxis.set_minor_formatter(axis_formatters["xminor"])
+            if "xmajor" in axis_formatters:
+                form_ax.xaxis.set_major_formatter(axis_formatters["xmajor"])
 
             # The y-axis formatters are applied to the main axis
-            if 'yminor' in axis_formatters:
-                main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
-            if 'ymajor' in axis_formatters:
-                main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+            if "yminor" in axis_formatters:
+                main_ax.yaxis.set_minor_formatter(axis_formatters["yminor"])
+            if "ymajor" in axis_formatters:
+                main_ax.yaxis.set_major_formatter(axis_formatters["ymajor"])
 
         else:
             # This dynamically changes how tick labels are formatted depending on the values displayed
             if max(x_axis_lims) < 100 and not models and min(x_axis_lims) > 0.1:
-                main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-                main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+                main_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
             elif max(x_axis_lims) < 100 and models and show_residual_ax:
-                res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-                res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                res_ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+                res_ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
 
             if max(y_axis_lims) < 100 and min(y_axis_lims) > 0.1:
-                main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.yaxis.set_minor_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
             elif max(y_axis_lims) < 100 and min(y_axis_lims) <= 0.1:
-                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                main_ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
 
         if models and show_residual_ax:
             return main_ax, res_ax
         else:
             return main_ax, None
 
-    def view(self, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None, ylim: tuple = None,
-             models: bool = True, back_sub: bool = True, just_models: bool = False, custom_title: str = None,
-             draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False, y_norm: Union[bool, Quantity] = False,
-             x_label: str = None, y_label: str = None, data_colour: str = 'black',
-             model_colour: Union[str, List[str]] = 'seagreen', show_legend: bool = True, show_residual_ax: bool = True,
-             draw_vals: Optional[dict] = None, auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
+    def view(
+        self,
+        figsize=(10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple = None,
+        ylim: tuple = None,
+        models: bool = True,
+        back_sub: bool = True,
+        just_models: bool = False,
+        custom_title: str = None,
+        draw_rads: dict | None = None,
+        x_norm: bool | Quantity = False,
+        y_norm: bool | Quantity = False,
+        x_label: str = None,
+        y_label: str = None,
+        data_colour: str = "black",
+        model_colour: str | list[str] = "seagreen",
+        show_legend: bool = True,
+        show_residual_ax: bool = True,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        joined_points: bool = False,
+        axis_formatters: dict = None,
+    ) -> None:
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
         and their residuals. The models are plotted by generating random model realisations from the parameter
@@ -2453,10 +2649,31 @@ class BaseProfile1D:
         # Grabbing the axis object and making sure the ticks are set up how we want
         main_ax = plt.gca()
 
-        main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
-                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
-                                        joined_points, axis_formatters)
+        main_ax, res_ax = self.get_view(
+            fig,
+            main_ax,
+            xscale,
+            yscale,
+            xlim,
+            ylim,
+            models,
+            back_sub,
+            just_models,
+            custom_title,
+            draw_rads,
+            x_norm,
+            y_norm,
+            x_label,
+            y_label,
+            data_colour,
+            model_colour,
+            show_legend,
+            show_residual_ax,
+            draw_vals,
+            auto_legend,
+            joined_points,
+            axis_formatters,
+        )
 
         # plt.tight_layout()
         plt.show()
@@ -2464,13 +2681,32 @@ class BaseProfile1D:
         # Wipe the figure
         plt.close("all")
 
-    def save_view(self, save_path: str, figsize=(10, 7), xscale: str = "log", yscale:str = "log", xlim: tuple = None,
-                  ylim: tuple = None, models: bool = True, back_sub: bool = True, just_models: bool = False,
-                  custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: Union[bool, Quantity] = False,
-                  y_norm: Union[bool, Quantity] = False, x_label: str = None, y_label: str = None,
-                  data_colour: str = 'black', model_colour: Union[str, List[str]] = 'seagreen',
-                  show_legend: bool = True, show_residual_ax: bool = True, draw_vals: Optional[dict] = None,
-                  auto_legend: bool = True, joined_points: bool = False, axis_formatters: dict = None):
+    def save_view(
+        self,
+        save_path: str,
+        figsize=(10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple = None,
+        ylim: tuple = None,
+        models: bool = True,
+        back_sub: bool = True,
+        just_models: bool = False,
+        custom_title: str = None,
+        draw_rads: dict | None = None,
+        x_norm: bool | Quantity = False,
+        y_norm: bool | Quantity = False,
+        x_label: str = None,
+        y_label: str = None,
+        data_colour: str = "black",
+        model_colour: str | list[str] = "seagreen",
+        show_legend: bool = True,
+        show_residual_ax: bool = True,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        joined_points: bool = False,
+        axis_formatters: dict = None,
+    ) -> None:
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
         fitted to it, and their residuals. The models are plotted by generating random model realisations from
@@ -2532,23 +2768,44 @@ class BaseProfile1D:
         # Grabbing the axis object and making sure the ticks are set up how we want
         main_ax = plt.gca()
 
-        main_ax, res_ax = self.get_view(fig, main_ax, xscale, yscale, xlim, ylim, models, back_sub, just_models,
-                                        custom_title, draw_rads, x_norm, y_norm, x_label, y_label, data_colour,
-                                        model_colour, show_legend, show_residual_ax, draw_vals, auto_legend,
-                                        joined_points, axis_formatters)
+        main_ax, res_ax = self.get_view(
+            fig,
+            main_ax,
+            xscale,
+            yscale,
+            xlim,
+            ylim,
+            models,
+            back_sub,
+            just_models,
+            custom_title,
+            draw_rads,
+            x_norm,
+            y_norm,
+            x_label,
+            y_label,
+            data_colour,
+            model_colour,
+            show_legend,
+            show_residual_ax,
+            draw_vals,
+            auto_legend,
+            joined_points,
+            axis_formatters,
+        )
 
-        fig.savefig(save_path, bbox_inches='tight')
+        fig.savefig(save_path, bbox_inches="tight")
 
         # Wipe the figure
         plt.close("all")
 
-    def save(self, save_path: str = None):
+    def save(self, save_path: str | None = None) -> None:
         """
         This method pickles and saves the profile object. This will be called automatically when the profile
-        is initialised, and when changes are made to the profile (such as when a model is fitted). The save
+        is initialised and when changes are made to the profile (such as when a model is fitted). The save
         file is a pickled version of this object.
 
-        :param str save_path: The path where this profile should be saved. By default this is None, which means
+        :param str save_path: The path where this profile should be saved. By default, this is None, which means
             this method will use the save_path attribute of the profile.
         """
         #  Checks to see if the user has supplied their own custom save path.
@@ -2558,7 +2815,7 @@ class BaseProfile1D:
             raise TypeError("Base profiles cannot be saved")
 
         # Pickles and saves this profile instance.
-        with open(save_path, 'wb') as picklo:
+        with open(save_path, "wb") as picklo:
             pickle.dump(self, picklo)
 
     @property
@@ -2572,13 +2829,14 @@ class BaseProfile1D:
         """
         if self._save_path is None and self._prof_type != "base" and self._tele is not None:
             temp_path = OUTPUT + "{t}/profiles/{sn}/{pt}_{sn}_{id}.xga"
-            rand_prof_id = randint(0, int(100_000_000))
+            rand_prof_id = randint(0, 100_000_000)
             while os.path.exists(temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)):
-                rand_prof_id = randint(0, int(100_000_000))
+                rand_prof_id = randint(0, 100_000_000)
             self._save_path = temp_path.format(pt=self.type, sn=self.src_name, id=rand_prof_id, t=self._tele)
         elif self._tele is None:
-            raise ValueError("Cannot create an XGA save path for this profile when it does not have "
-                             "telescope information.")
+            raise ValueError(
+                "Cannot create an XGA save path for this profile when it does not have telescope information."
+            )
 
         return self._save_path
 
@@ -2605,7 +2863,7 @@ class BaseProfile1D:
             raise TypeError("The 'auto_save' property must be set with a boolean variable.")
 
     @property
-    def good_model_fits(self) -> List:
+    def good_model_fits(self) -> list:
         """
         A list of the names of models that have been successfully fitted to the profile.
 
@@ -2657,12 +2915,12 @@ class BaseProfile1D:
         :rtype: Quantity
         """
         safe_rads = self._radii.copy()
-        if safe_rads[0] == 0 and self.radii_unit.is_equivalent('kpc'):
-            safe_rads[0] = Quantity(1, 'kpc').to(self.radii_unit)
-        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent('pix'):
-            safe_rads[0] = Quantity(1, 'pix')
-        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent('deg'):
-            safe_rads[0] = Quantity(1e-5, 'deg')
+        if safe_rads[0] == 0 and self.radii_unit.is_equivalent("kpc"):
+            safe_rads[0] = Quantity(1, "kpc").to(self.radii_unit)
+        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent("pix"):
+            safe_rads[0] = Quantity(1, "pix")
+        elif safe_rads[0] == 0 and self.radii_unit.is_equivalent("deg"):
+            safe_rads[0] = Quantity(1e-5, "deg")
 
         return safe_rads
 
@@ -2806,7 +3064,7 @@ class BaseProfile1D:
         return self._tele
 
     @property
-    def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
+    def energy_bounds(self) -> tuple[Quantity, Quantity] | tuple[None, None]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that this
         profile was generated from
@@ -2961,7 +3219,7 @@ class BaseProfile1D:
             self.save()
 
     @property
-    def fit_options(self) -> List[str]:
+    def fit_options(self) -> list[str]:
         """
         Returns the supported fit options for XGA profiles.
 
@@ -2971,7 +3229,7 @@ class BaseProfile1D:
         return self._fit_methods
 
     @property
-    def nice_fit_names(self) -> List[str]:
+    def nice_fit_names(self) -> list[str]:
         """
         Returns nicer looking names for the supported fit options of XGA profiles.
 
@@ -3032,8 +3290,9 @@ class BaseProfile1D:
         elif isinstance(other, BaseAggregateProfile1D):
             to_combine += other.profiles
         else:
-            raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
-                            " to this object.")
+            raise TypeError(
+                "You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles to this object."
+            )
         return BaseAggregateProfile1D(to_combine)
 
 
@@ -3045,13 +3304,12 @@ class BaseAggregateProfile1D:
     :param list profiles: A list of profile objects (of the same type) to include in this aggregate profile.
     """
 
-    def __init__(self, profiles: List[BaseProfile1D]):
+    def __init__(self, profiles: list[BaseProfile1D]):
         """
         The init for the BaseAggregateProfile1D class.
 
         :param List[BaseProfile1D] profiles: A list of profile objects (of the same type) to include in this aggregate profile.
         """
-
         # This checks that all profiles have the same x units - we used to explicitly check for Python instance
         #  type, but actually we do want profiles to be plottable on the same axis if they have the same units
         x_units = [p.radii_unit.to_string() for p in profiles]
@@ -3066,8 +3324,10 @@ class BaseAggregateProfile1D:
         # We check to see if all profiles either have a background, or not
         backs = [p.background.value != 0 for p in profiles]
         if len(set(backs)) != 1:
-            raise ValueError("All component profiles must have a background, or not have a "
-                             "background. You cannot profiles that do to profiles that don't.")
+            raise ValueError(
+                "All component profiles must have a background, or not have a "
+                "background. You cannot profiles that do to profiles that don't."
+            )
         elif backs[0]:
             # An attribute to tell us whether backgrounds are present in the component profiles
             self._back_avail = True
@@ -3079,8 +3339,10 @@ class BaseAggregateProfile1D:
         hi_bounds = [p.energy_bounds[1] for p in profiles]
 
         if len(set(lo_bounds)) != 1 or len(set(hi_bounds)) != 1:
-            raise ValueError("All component profiles must have been generate from the same energy range,"
-                             " otherwise they aren't directly comparable.")
+            raise ValueError(
+                "All component profiles must have been generate from the same energy range,"
+                " otherwise they aren't directly comparable."
+            )
 
         self._profiles = profiles
         self._radii_unit = x_units[0]
@@ -3130,7 +3392,7 @@ class BaseAggregateProfile1D:
         return self._prof_type
 
     @property
-    def profiles(self) -> List[BaseProfile1D]:
+    def profiles(self) -> list[BaseProfile1D]:
         """
         This property is for the constituent profiles that makes up this aggregate profile.
 
@@ -3140,7 +3402,7 @@ class BaseAggregateProfile1D:
         return self._profiles
 
     @property
-    def energy_bounds(self) -> Union[Tuple[Quantity, Quantity], Tuple[None, None]]:
+    def energy_bounds(self) -> tuple[Quantity, Quantity] | tuple[None, None]:
         """
         Getter method for the energy_bounds property, which returns the rest frame energy band that
         the component profiles of this object were generated from.
@@ -3151,7 +3413,7 @@ class BaseAggregateProfile1D:
         return self._energy_bounds
 
     @property
-    def x_norms(self) -> List[Quantity]:
+    def x_norms(self) -> list[Quantity]:
         """
         The collated x normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3161,7 +3423,7 @@ class BaseAggregateProfile1D:
         return self._x_norms
 
     @x_norms.setter
-    def x_norms(self, new_vals: List[Quantity]):
+    def x_norms(self, new_vals: list[Quantity]):
         """
         Setter for the collated x normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3171,11 +3433,10 @@ class BaseAggregateProfile1D:
         if len(new_vals) == len(self._x_norms):
             self._x_norms = new_vals
         else:
-            raise ValueError("The new list passed for x-axis normalisations must be the same length"
-                             " as the original.")
+            raise ValueError("The new list passed for x-axis normalisations must be the same length as the original.")
 
     @property
-    def y_norms(self) -> List[Quantity]:
+    def y_norms(self) -> list[Quantity]:
         """
         The collated y normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3185,7 +3446,7 @@ class BaseAggregateProfile1D:
         return self._y_norms
 
     @y_norms.setter
-    def y_norms(self, new_vals: List[Quantity]):
+    def y_norms(self, new_vals: list[Quantity]):
         """
         Setter for the collated y normalisation values for the constituent profiles of this aggregate profile.
 
@@ -3195,15 +3456,32 @@ class BaseAggregateProfile1D:
         if len(new_vals) == len(self._y_norms):
             self._y_norms = new_vals
         else:
-            raise ValueError("The new list passed for y-axis normalisations must be the same length"
-                             " as the original.")
+            raise ValueError("The new list passed for y-axis normalisations must be the same length as the original.")
 
-    def view(self, figsize: Tuple = (10, 7), xscale: str = "log", yscale: str = "log", xlim: Tuple = None,
-             ylim: Tuple = None, model: str = None, back_sub: bool = True, show_legend: bool = True,
-             just_model: bool = False, custom_title: str = None, draw_rads: Optional[dict] = None, x_norm: bool = False,
-             y_norm: bool = False, x_label: str = None, y_label: str = None, save_path: str = None,
-             draw_vals: Optional[dict] = None, auto_legend: bool = True, axis_formatters: dict = None,
-             show_residual_ax: bool = True, joined_points: bool = False):
+    def view(
+        self,
+        figsize: tuple = (10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple = None,
+        ylim: tuple = None,
+        model: str = None,
+        back_sub: bool = True,
+        show_legend: bool = True,
+        just_model: bool = False,
+        custom_title: str = None,
+        draw_rads: dict | None = None,
+        x_norm: bool = False,
+        y_norm: bool = False,
+        x_label: str = None,
+        y_label: str = None,
+        save_path: str = None,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        axis_formatters: dict = None,
+        show_residual_ax: bool = True,
+        joined_points: bool = False,
+    ) -> None:
         """
         A method that allows us to see all the profiles that make up this aggregate profile, plotted
         on the same figure.
@@ -3261,36 +3539,47 @@ class BaseAggregateProfile1D:
         # Checks that any extra radii that have been passed are the correct units (i.e. the same as the radius units
         #  used in this profile)
         if not all([r.unit == self.radii_unit for r in draw_rads.values()]):
-            raise UnitConversionError("All radii in draw_rad have to be in the same units as this profile, "
-                                      "{}".format(self.radii_unit.to_string()))
+            raise UnitConversionError(
+                f"All radii in draw_rad have to be in the same units as this profile, {self.radii_unit.to_string()}"
+            )
 
         # Checks that any entries in draw_vals are either quantities or lists
         if not all([isinstance(v, (Quantity, list)) for v in draw_vals.values()]):
-            raise TypeError("All values in draw_vals must either be an astropy quantity, or list with the first"
-                            "element being the astropy quantity, and the second being a string matplotlib colour.")
+            raise TypeError(
+                "All values in draw_vals must either be an astropy quantity, or list with the first"
+                "element being the astropy quantity, and the second being a string matplotlib colour."
+            )
 
         # Checks that any extra y-axis values that have been passed are the correct units (i.e. the same as the
         #  y-value units used in this profile)
-        if not all([v.unit == self.values_unit if isinstance(v, Quantity) else v[0].unit == self.values_unit
-                    for v in draw_vals.values()]):
-            raise UnitConversionError("All values in draw_vals have to be in the same units as this profile, "
-                                      "{}".format(self.values_unit.to_string()))
+        if not all(
+            [
+                v.unit == self.values_unit if isinstance(v, Quantity) else v[0].unit == self.values_unit
+                for v in draw_vals.values()
+            ]
+        ):
+            raise UnitConversionError(
+                f"All values in draw_vals have to be in the same units as this profile, {self.values_unit.to_string()}"
+            )
 
-        if axis_formatters is not None and \
-                not all([k in ['xmajor', 'xminor', 'ymajor', 'yminor'] for k in axis_formatters.keys()]):
-            raise KeyError("The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
-                           "ymajor, and yminor.")
+        if axis_formatters is not None and not all(
+            [k in ["xmajor", "xminor", "ymajor", "yminor"] for k in axis_formatters.keys()]
+        ):
+            raise KeyError(
+                "The axis_formatters dictionary may only contain the following keys; xmajor, xminor, "
+                "ymajor, and yminor."
+            )
 
         # Set up the x normalisation and y normalisation variables
         if x_norm:
             x_norms = self.x_norms
         else:
-            x_norms = [Quantity(1, '') for n in self.x_norms]
+            x_norms = [Quantity(1, "") for n in self.x_norms]
 
         if y_norm:
             y_norms = self.y_norms
         else:
-            y_norms = [Quantity(1, '') for n in self.y_norms]
+            y_norms = [Quantity(1, "") for n in self.y_norms]
 
         # Need to make sure that draw_rads, if set, is compatible with the normalisations. The problem is that
         #  if the profiles all have different normalisations then the draw_rads values can't be normalised
@@ -3309,19 +3598,18 @@ class BaseAggregateProfile1D:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
             res_ax = fig.add_axes((0.125, -0.075, 0.775, 0.2))
             res_ax.minorticks_on()
-            res_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+            res_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
             # Adds a zero line for reference, as its ideally where residuals would be
             res_ax.axhline(0.0, color="black")
         # Setting some aesthetic parameters for the main plotting axis
-        main_ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        main_ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         # Cycles through the component profiles of this aggregate profile, plotting them all
         for p_ind, p in enumerate(self._profiles):
-            if p.obs_id != 'combined':
-                p_name = p.src_name + " {t}-{o}-{i}".format(t=p.telescope, o=p.obs_id,
-                                                            i=p.instrument.upper())
+            if p.obs_id != "combined":
+                p_name = p.src_name + f" {p.telescope}-{p.obs_id}-{p.instrument.upper()}"
             else:
-                p_name = p.src_name + " {t}".format(t=p.telescope)
+                p_name = p.src_name + f" {p.telescope}"
 
             if p.type == "brightness_profile" and p.psf_corrected and p.custom_aggregate_label is None:
                 leg_label = p_name + " PSF Corrected"
@@ -3342,25 +3630,33 @@ class BaseAggregateProfile1D:
             # Now the actual plotting of the data
             if p.radii_err is not None and p.values_err is None and not joined_points:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
-                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2,
-                                        label=leg_label)
+                line = main_ax.errorbar(
+                    rad_vals.value, plot_y_vals.value, xerr=x_errs, fmt="x", capsize=2, label=leg_label
+                )
             elif p.radii_err is None and p.values_err is not None and not joined_points:
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
-                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2,
-                                        label=leg_label)
+                line = main_ax.errorbar(
+                    rad_vals.value, plot_y_vals.value, yerr=y_errs, fmt="x", capsize=2, label=leg_label
+                )
             elif p.radii_err is not None and p.values_err is not None and not joined_points:
                 x_errs = (p.radii_err.copy() / x_norms[p_ind]).value
                 y_errs = (p.values_err.copy() / y_norms[p_ind]).value
-                line = main_ax.errorbar(rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x",
-                                        capsize=2, label=leg_label)
+                line = main_ax.errorbar(
+                    rad_vals.value, plot_y_vals.value, xerr=x_errs, yerr=y_errs, fmt="x", capsize=2, label=leg_label
+                )
             elif joined_points:
                 line = main_ax.plot(rad_vals.value, plot_y_vals.value, label=leg_label)
                 if p.values_err is not None:
                     y_errs = (p.values_err.copy() / y_norms[p_ind]).value
-                    main_ax.fill_between(rad_vals.value, plot_y_vals.value - y_errs, plot_y_vals.value + y_errs,
-                                         linestyle='dashdot', alpha=0.7)
+                    main_ax.fill_between(
+                        rad_vals.value,
+                        plot_y_vals.value - y_errs,
+                        plot_y_vals.value + y_errs,
+                        linestyle="dashdot",
+                        alpha=0.7,
+                    )
             else:
-                line = main_ax.plot(rad_vals.value, plot_y_vals.value, 'x', label=leg_label)
+                line = main_ax.plot(rad_vals.value, plot_y_vals.value, "x", label=leg_label)
 
             # If the user only wants the models to be plotted, then this goes through the matplotlib
             #  artist objects that make up the line plot and hides them.
@@ -3374,14 +3670,15 @@ class BaseAggregateProfile1D:
                             art_obj.set_visible(False)
 
             if not back_sub and p.background.value != 0:
-                main_ax.axhline(p.background.value, label=leg_label + ' Background', linestyle='dashed',
-                                color=line[0].get_color())
+                main_ax.axhline(
+                    p.background.value, label=leg_label + " Background", linestyle="dashed", color=line[0].get_color()
+                )
 
             # If the user passes a model name, and that model has been fitted to the data, then that
             #  model will be plotted
             if model is not None:
                 # I've put them in this order because I would prefer mcmc over odr, and odr over curve_fit
-                for method in ['mcmc', 'odr', 'curve_fit']:
+                for method in ["mcmc", "odr", "curve_fit"]:
                     try:
                         model_obj = p.get_model_fit(model, method)
 
@@ -3402,25 +3699,40 @@ class BaseAggregateProfile1D:
 
                         colour = line[0].get_color()
 
-                        mod_lab = model_obj.publication_name + " - {}".format(p.nice_fit_names[method])
-                        mod_line = main_ax.plot(mod_rads.value / x_norms[p_ind].value,
-                                                median_model.value / y_norms[p_ind], color=colour)
+                        mod_lab = model_obj.publication_name + f" - {p.nice_fit_names[method]}"
+                        mod_line = main_ax.plot(
+                            mod_rads.value / x_norms[p_ind].value, median_model.value / y_norms[p_ind], color=colour
+                        )
 
-                        main_ax.fill_between(mod_rads.value / x_norms[p_ind].value,
-                                             lower_model.value / y_norms[p_ind].value,
-                                             upper_model.value / y_norms[p_ind].value, alpha=0.7, interpolate=True,
-                                             where=upper_model.value >= lower_model.value, facecolor=colour)
-                        main_ax.plot(mod_rads.value / x_norms[p_ind].value, lower_model.value / y_norms[p_ind].value,
-                                     color=colour, linestyle="dashed")
-                        main_ax.plot(mod_rads.value / x_norms[p_ind].value, upper_model.value / y_norms[p_ind].value,
-                                     color=colour, linestyle="dashed")
+                        main_ax.fill_between(
+                            mod_rads.value / x_norms[p_ind].value,
+                            lower_model.value / y_norms[p_ind].value,
+                            upper_model.value / y_norms[p_ind].value,
+                            alpha=0.7,
+                            interpolate=True,
+                            where=upper_model.value >= lower_model.value,
+                            facecolor=colour,
+                        )
+                        main_ax.plot(
+                            mod_rads.value / x_norms[p_ind].value,
+                            lower_model.value / y_norms[p_ind].value,
+                            color=colour,
+                            linestyle="dashed",
+                        )
+                        main_ax.plot(
+                            mod_rads.value / x_norms[p_ind].value,
+                            upper_model.value / y_norms[p_ind].value,
+                            color=colour,
+                            linestyle="dashed",
+                        )
 
                         if show_residual_ax:
                             # This calculates and plots the residuals between the model and the data on the extra
                             #  axis we added near the beginning of this method
-                            res = np.nanpercentile(model_obj.get_realisations(p.radii), 50, axis=1) - \
-                                  (plot_y_vals * y_norms[p_ind])
-                            res_ax.plot(rad_vals.value, res.value, 'D', color=colour)
+                            res = np.nanpercentile(model_obj.get_realisations(p.radii), 50, axis=1) - (
+                                plot_y_vals * y_norms[p_ind]
+                            )
+                            res_ax.plot(rad_vals.value, res.value, "D", color=colour)
 
                         break
                     except ModelNotAssociatedError:
@@ -3432,17 +3744,17 @@ class BaseAggregateProfile1D:
 
         if x_label is None:
             # Setting the main plot's x label
-            main_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
+            main_ax.set_xlabel(f"Radius {x_unit}", fontsize=13)
         else:
-            main_ax.set_xlabel(x_label + " {}".format(x_unit), fontsize=13)
+            main_ax.set_xlabel(x_label + f" {x_unit}", fontsize=13)
 
         if y_label is None and (not self._back_avail or not back_sub):
-            main_ax.set_ylabel(r"{l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+            main_ax.set_ylabel(rf"{self._y_axis_name} {y_unit}", fontsize=13)
         elif y_label is None:
             # If background has been subtracted it will be mentioned in the y axis label
-            main_ax.set_ylabel(r"Background Subtracted {l} {u}".format(l=self._y_axis_name, u=y_unit), fontsize=13)
+            main_ax.set_ylabel(rf"Background Subtracted {self._y_axis_name} {y_unit}", fontsize=13)
         elif y_label is not None:
-            main_ax.set_ylabel(y_label + ' {}'.format(y_unit), fontsize=13)
+            main_ax.set_ylabel(y_label + f" {y_unit}", fontsize=13)
 
         # If the user has manually set limits then we can use them, only on the main axis because
         #  we grab those limits from the axes object for the residual axis later
@@ -3458,7 +3770,7 @@ class BaseAggregateProfile1D:
             # We want the residual x axis limits to be identical to the main axis, as the
             # points should line up
             res_ax.set_xlim(main_ax.get_xlim())
-            res_ax.set_xlabel("Radius {}".format(x_unit), fontsize=13)
+            res_ax.set_xlabel(f"Radius {x_unit}", fontsize=13)
             res_ax.set_xscale(xscale)
             # Grabbing the automatically assigned y limits for the residual axis, then finding the maximum
             #  difference from zero, increasing it by 10%, then setting that value is the new -+ limits
@@ -3469,10 +3781,9 @@ class BaseAggregateProfile1D:
 
         # Adds a title to this figure, changes depending on whether model fits are plotted as well
         if model is not None and custom_title is None:
-            plt.suptitle("{l} Profiles - {m} fit".format(l=self._y_axis_name,
-                                                         m=MODEL_PUBLICATION_NAMES[model]), y=0.91)
+            plt.suptitle(f"{self._y_axis_name} Profiles - {MODEL_PUBLICATION_NAMES[model]} fit", y=0.91)
         elif model is None and custom_title is None:
-            plt.suptitle("{l} Profiles".format(l=self._y_axis_name), y=0.91)
+            plt.suptitle(f"{self._y_axis_name} Profiles", y=0.91)
         else:
             # If the user doesn't like my title, they can supply their own
             plt.suptitle(custom_title, y=0.91)
@@ -3480,9 +3791,16 @@ class BaseAggregateProfile1D:
         # If the user has passed radii to plot, then we plot them
         for r_name in draw_rads:
             d_rad = (draw_rads[r_name] / x_norms[0]).value
-            main_ax.axvline(d_rad, linestyle='dashed', color='black')
-            main_ax.annotate(r_name, (d_rad * 1.01, 0.9), rotation=90, verticalalignment='center',
-                             color='black', fontsize=14, xycoords=('data', 'axes fraction'))
+            main_ax.axvline(d_rad, linestyle="dashed", color="black")
+            main_ax.annotate(
+                r_name,
+                (d_rad * 1.01, 0.9),
+                rotation=90,
+                verticalalignment="center",
+                color="black",
+                fontsize=14,
+                xycoords=("data", "axes fraction"),
+            )
 
         # Reads out the axis limits of the plot thus far
         x_axis_lims = main_ax.get_xlim()
@@ -3498,18 +3816,13 @@ class BaseAggregateProfile1D:
                 is_scalar = draw_vals[v_name][0].isscalar
 
             if is_scalar:
-                main_ax.axhline(d_val, linestyle='dashed', color=cur_col, alpha=0.8,
-                                label=v_name)
+                main_ax.axhline(d_val, linestyle="dashed", color=cur_col, alpha=0.8, label=v_name)
             elif len(d_val) == 2:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col,
-                                     alpha=0.5)
+                main_ax.axhline(d_val[0], linestyle="dashed", color=cur_col, alpha=0.8, label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[1], color=cur_col, alpha=0.5)
             elif len(d_val) == 3:
-                main_ax.axhline(d_val[0], linestyle='dashed', color=cur_col, alpha=0.8,
-                                label=v_name)
-                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col,
-                                     alpha=0.5)
+                main_ax.axhline(d_val[0], linestyle="dashed", color=cur_col, alpha=0.8, label=v_name)
+                main_ax.fill_between(x_axis_lims, d_val[0] - d_val[1], d_val[0] + d_val[2], color=cur_col, alpha=0.5)
 
             main_ax.set_xlim(x_axis_lims)
 
@@ -3528,25 +3841,25 @@ class BaseAggregateProfile1D:
 
         # We specify which axes object needs formatters applied, depends on whether the residual ax is being
         #  shown or not - slightly dodgy way of checking for a local declaration of the residual axes
-        if show_residual_ax and 'res_ax' in locals():
+        if show_residual_ax and "res_ax" in locals():
             form_ax = res_ax
         else:
             form_ax = main_ax
         # Checks for and uses formatters that the user may have specified for the plot
-        if axis_formatters is not None and 'xminor' in axis_formatters:
-            form_ax.xaxis.set_minor_formatter(axis_formatters['xminor'])
-        if axis_formatters is not None and 'xmajor' in axis_formatters:
-            form_ax.xaxis.set_major_formatter(axis_formatters['xmajor'])
+        if axis_formatters is not None and "xminor" in axis_formatters:
+            form_ax.xaxis.set_minor_formatter(axis_formatters["xminor"])
+        if axis_formatters is not None and "xmajor" in axis_formatters:
+            form_ax.xaxis.set_major_formatter(axis_formatters["xmajor"])
 
         # The y-axis formatters are applied to the main axis
-        if axis_formatters is not None and 'yminor' in axis_formatters:
-            main_ax.yaxis.set_minor_formatter(axis_formatters['yminor'])
-        if axis_formatters is not None and 'ymajor' in axis_formatters:
-            main_ax.yaxis.set_major_formatter(axis_formatters['ymajor'])
+        if axis_formatters is not None and "yminor" in axis_formatters:
+            main_ax.yaxis.set_minor_formatter(axis_formatters["yminor"])
+        if axis_formatters is not None and "ymajor" in axis_formatters:
+            main_ax.yaxis.set_major_formatter(axis_formatters["ymajor"])
 
         # If the user passed a save_path value, then we assume they want to save the figure
         if save_path is not None:
-            fig.savefig(save_path, bbox_inches='tight')
+            fig.savefig(save_path, bbox_inches="tight")
         else:
             # Showing the figure
             plt.show()
@@ -3560,6 +3873,7 @@ class BaseAggregateProfile1D:
         elif isinstance(other, BaseAggregateProfile1D):
             to_combine += other.profiles
         else:
-            raise TypeError("You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles"
-                            " to this object.")
+            raise TypeError(
+                "You may only add 1D Profiles, 1D Aggregate Profiles, or a list of 1D profiles to this object."
+            )
         return BaseAggregateProfile1D(to_combine)

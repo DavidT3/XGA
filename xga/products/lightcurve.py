@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/21/26, 10:17 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:55 PM. Copyright (c) The Contributors.
 import re
 from datetime import datetime
 from typing import Union, List, Tuple, Dict
@@ -974,12 +974,12 @@ class AggregateLightCurve(BaseAggregateProduct):
         if len(obs_ids) == 1:
             obs_id_to_pass = obs_ids[0]
         else:
-            obs_id_to_pass = 'combined'
+            obs_id_to_pass = 'combined'  # nosec
 
         if len(insts) == 1:
             inst_to_pass = insts[0]
         else:
-            inst_to_pass = 'combined'
+            inst_to_pass = 'combined'  # nosec
 
         # This just sorts the lightcurves by their start time, for earliest to latest
         start_sort = np.argsort(Quantity([lc.start_time for lc in lightcurves]))
