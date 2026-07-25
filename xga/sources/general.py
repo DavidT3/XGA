@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/18/26, 4:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 3:55 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, List, Union
 from warnings import warn, simplefilter
@@ -485,14 +485,14 @@ class PointSource(BaseSource):
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
-    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
+    def __init__(self, ra: float, dec: float, redshift: float | None = None, name: str | None = None,
                  point_radius: Quantity = Quantity(30, 'arcsec'), use_peak: bool = False,
                  peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
                  back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True, load_fits: bool = False,
                  clean_obs: bool = True, clean_obs_threshold: float = 0.9, regen_merged: bool = True,
-                 in_sample: bool = False, telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+                 in_sample: bool = False, telescope: Union[str, List[str], None] = None,
+                 search_distance: Union[Quantity, dict, None] = None):
         """
         The init of the general XGA point source class.
 
