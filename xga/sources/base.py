@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/29/26, 12:53 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:32 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -2897,10 +2897,10 @@ class BaseSource:
 
         return final_matched_prods
 
-    def _get_prof_prod(self, search_key: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                       radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
-                       hi_en: Quantity = None, telescope: str = None, spec_model: str = None,
-                       spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+    def _get_prof_prod(self, search_key: str, obs_id: str | None = None, inst: str | None = None, central_coord: Quantity | None = None,
+                       radii: Quantity | None = None, annuli_bound_radii: Quantity | None = None, lo_en: Quantity | None = None,
+                       hi_en: Quantity | None = None, telescope: str | None = None, spec_model: str | None = None,
+                       spec_fit_conf: Union[str, dict, None] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         The internal method which is the guts of get_profiles and get_combined_profiles. It parses the input and
         searches for full and partial matches in this source's product storage structure.
