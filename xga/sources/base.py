@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:15 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:25 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -4030,10 +4030,10 @@ class BaseSource:
                                 psf_model=psf_model, psf_bins=psf_bins, psf_algo=psf_algo, psf_iter=psf_iter,
                                 telescope=telescope)
 
-    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str = None, inst: str = None,
+    def get_spectra(self, outer_radius: Union[str, Quantity], obs_id: str | None = None, inst: str | None = None,
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
-                    min_counts: int = 5, min_sn: float = None, over_sample: float = None,
-                    telescope: str = None) -> Union[Spectrum, List[Spectrum]]:
+                    min_counts: int = 5, min_sn: float | None = None, over_sample: float | None = None,
+                    telescope: str | None = None) -> Union[Spectrum, List[Spectrum]]:
         """
         A useful method that wraps the get_products function to allow you to easily retrieve XGA Spectrum objects.
         Simply pass the desired ObsID/instrument, and the same settings you used to generate the spectrum, and the
