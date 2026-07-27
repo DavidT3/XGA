@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 3:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 3:45 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -59,9 +59,9 @@ class Spectrum(BaseProduct):
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
     def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, central_coord: Quantity, inn_rad: Quantity,
-                 out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int, min_sn: float,
-                 over_sample: int, stdout_str: str, stderr_str: str, gen_cmd: str, region: bool = False,
-                 b_rmf_path: str = '', b_arf_path: str = '', telescope: str = None, check_exists: bool = True):
+                 out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int | None, min_sn: float | None,
+                 over_sample: int | None, stdout_str: str, stderr_str: str, gen_cmd: str, region: bool = False,
+                 b_rmf_path: str = '', b_arf_path: str = '', telescope: str | None = None, check_exists: bool = True):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
