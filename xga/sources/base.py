@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:45 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:15 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -547,11 +547,11 @@ class BaseSource:
         if not hasattr(self, "_radii"):
             self._radii = {}
         # Initialisation of cluster observables as None
-        self._richness: float | None = None
-        self._richness_err: float | None = None
+        self._richness: float | Quantity | None = None
+        self._richness_err: float | Quantity | None = None
 
-        self._wl_mass: float | None = None
-        self._wl_mass_err: float | None = None
+        self._wl_mass: Quantity | None = None
+        self._wl_mass_err: Quantity | None = None
 
         self._peak_lo_en = Quantity(0.5, 'keV')
         self._peak_hi_en = Quantity(2.0, 'keV')
