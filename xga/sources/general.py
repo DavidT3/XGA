@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:35 PM. Copyright (c) The Contributors.
 
 from warnings import simplefilter, warn
 
@@ -423,18 +423,18 @@ class ExtendedSource(BaseSource):
         outer_rad: Quantity | str,
         obs_id: str = "combined",
         inst: str = "combined",
-        central_coord: Quantity = None,
-        radii: Quantity = None,
-        lo_en: Quantity = None,
-        hi_en: Quantity = None,
+        central_coord: Quantity | None = None,
+        radii: Quantity | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
         pix_step: int = 1,
         min_snr: float | int = 0.0,
         psf_corr: bool = False,
-        psf_model: str = "ELLBETA",
-        psf_bins: int = 4,
-        psf_algo: str = "rl",
-        psf_iter: int = 15,
-        telescope: str = None,
+        psf_model: str | None = "ELLBETA",
+        psf_bins: int | None = 4,
+        psf_algo: str | None = "rl",
+        psf_iter: int | None = 15,
+        telescope: str | None = None,
     ):
         """
         A specific get method for 1D brightness profiles. Should provide a relatively simple way of retrieving
