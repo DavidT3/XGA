@@ -1,5 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:35 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 1:04 PM. Copyright (c) The Contributors.
+"""
+This module defines the generic PointSource and ExtendedSource classes, which are usable by themselves, but more
+importantly exist to be inherited by classes representing specific astrophysical objects (e.g. galaxy clusters).
+"""
 
 from warnings import simplefilter, warn
 
@@ -10,16 +14,18 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, UnitBase, UnitConversionError, deg
 from numpy import ndarray
 
-from .. import DEFAULT_COSMO
-from ..exceptions import (
+from xga import DEFAULT_COSMO
+from xga.exceptions import (
     NoProductAvailableError,
     NoRegionsError,
     NotAssociatedError,
     NoValidObservationsError,
     PeakConvergenceFailedError,
 )
-from ..products import RateMap
-from ..sourcetools import ang_to_rad, rad_to_ang
+from xga.products import RateMap
+from xga.sourcetools import ang_to_rad, rad_to_ang
+
+from ..products.profile import SurfaceBrightness1D
 from .base import BaseSource
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -97,7 +103,7 @@ class ExtendedSource(BaseSource):
         clean_obs_threshold: float = 0.3,
         regen_merged: bool = True,
         load_profiles: bool = False,
-    ):
+    ) -> None:
         """
         The init for the general extended source XGA class, takes information on the position (and optionally
         redshift) of source of interest, matches to extended regions, and optionally performs peak finding.
@@ -162,6 +168,14 @@ class ExtendedSource(BaseSource):
         self._custom_region_radius = None
         # Setting up the custom region radius attributes
         if custom_region_radius is not None and custom_region_radius.unit.is_equivalent("kpc"):
+            # Catch if the user didn't give us a way to convert kpc (or equivalent) radii to angular
+            #  radii. If we can't convert to angular units then we can't produce masks.
+            if self._redshift is None:
+                raise ValueError(
+                    "If a custom region radius is specified in proper radius units (e.g. kpc), then a "
+                    "redshift value must also be provided."
+                )
+
             rad = rad_to_ang(custom_region_radius, self._redshift, self._cosmo).to("deg")
             self._custom_region_radius = rad
             self._radii["custom"] = self._custom_region_radius
@@ -200,8 +214,8 @@ class ExtendedSource(BaseSource):
             for o in self._alt_match_regions[tel]:
                 if len(self._alt_match_regions[tel][o]) > 0:
                     warn_text = (
-                        f"There are {len(self._alt_match_regions[tel][o])} alternative matches for observation {tel}-{o}, associated with "
-                        f"source {self.name}"
+                        f"There are {len(self._alt_match_regions[tel][o])} alternative matches for observation "
+                        f"{tel}-{o}, associated with source {self.name}"
                     )
                     if not self._samp_member:
                         warn(warn_text, stacklevel=2)
@@ -296,13 +310,13 @@ class ExtendedSource(BaseSource):
         return self._custom_region_radius
 
     @property
-    def point_clusters(self) -> tuple[ndarray, list[ndarray]]:
+    def point_clusters(self) -> tuple[dict[str, ndarray], dict[str, list[ndarray]]]:
         """
         This allows you to retrieve the point cluster positions from the hierarchical clustering
         peak finding method run on the combined ratemap. This includes both the chosen cluster and
         all others that were found.
 
-        :return: A numpy array of the positions of points of the chosen cluster (not galaxy cluster,
+        :return: A numpy array of the positions of points of the chosen cluster (not 'galaxy cluster',
             a cluster of points). A list of numpy arrays with the same information for all the other clusters
             that were found
         :rtype: Tuple[ndarray, List[ndarray]]
@@ -330,8 +344,10 @@ class ExtendedSource(BaseSource):
         # TODO should this be devolved to the RateMap/Image class? - OR incorporated as an image tool?
         all_meth = ["hierarchical", "simple"]
         if method not in all_meth:
+            all_meth_str = ", ".join(all_meth)
             raise ValueError(
-                "{0} is not a recognised, use one of the following methods: {1}".format(method, ", ".join(all_meth))
+                f"The specified peak finding `method` ({method}) is not recognised. Pass one of the "
+                f"following: {all_meth_str}"
             )
         central_coords = SkyCoord(*self.ra_dec.to("deg"))
 
@@ -346,13 +362,13 @@ class ExtendedSource(BaseSource):
             if method == "hierarchical":
                 try:
                     peak, near_edge, chosen_coords, other_coords = rt.clustering_peak(aperture_mask, peak_unit)
-                except ValueError:
+                except ValueError as err:
                     raise PeakConvergenceFailedError(
                         "The hierarchical clustering peak finder does not have enough points to work with."
-                    )
+                    ) from err
             elif method == "simple":
                 peak, near_edge = rt.simple_peak(aperture_mask, peak_unit)
-                chosen_coords = []
+                chosen_coords = np.array([])
                 other_coords = []
 
             peak_deg = rt.coord_conv(peak, deg)
@@ -388,7 +404,7 @@ class ExtendedSource(BaseSource):
         return peak, near_edge, converged, chosen_coords, other_coords
 
     # TODO These get methods should be in BaseSource I think - maybe
-    def get_peaks(self, telescope: str, obs_id: str = None, inst: str = None) -> Quantity:
+    def get_peaks(self, telescope: str, obs_id: str | None = None, inst: str | None = None) -> Quantity:
         """
         A get method to return the peak of the X-ray emission of this ExtendedSource.
 
@@ -435,7 +451,7 @@ class ExtendedSource(BaseSource):
         psf_algo: str | None = "rl",
         psf_iter: int | None = 15,
         telescope: str | None = None,
-    ):
+    ) -> SurfaceBrightness1D | list[SurfaceBrightness1D]:
         """
         A specific get method for 1D brightness profiles. Should provide a relatively simple way of retrieving
         specific brightness profiles from XGA's storage system. Please note that there is not a separate get method
@@ -490,11 +506,20 @@ class ExtendedSource(BaseSource):
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object
-        if not isinstance(interim_prods, list):
-            interim_prods = [interim_prods]
+        interim_prods = [interim_prods] if not isinstance(interim_prods, list) else interim_prods
+
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of SurfaceBrightness1D instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_interim_prods = [en for en in interim_prods if isinstance(en, SurfaceBrightness1D)]
+        if len(filt_interim_prods) != len(interim_prods):
+            types_matched_prods = [type(en) for en in interim_prods]
+            raise TypeError(
+                f"Expected a list of SurfaceBrightness1D objects, instead there are {set(types_matched_prods)} entries."
+            )
 
         matched_prods = []
-        for p in interim_prods:
+        for p in filt_interim_prods:
             if (
                 not psf_corr
                 and p.outer_radius == outer_rad
@@ -516,12 +541,12 @@ class ExtendedSource(BaseSource):
             ):
                 matched_prods.append(p)
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        if len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any brightness profiles matching your input.")
-
-        return matched_prods
+        elif len(matched_prods) == 1:
+            return matched_prods[0]
+        else:
+            return matched_prods
 
 
 class PointSource(BaseSource):
@@ -593,7 +618,7 @@ class PointSource(BaseSource):
         in_sample: bool = False,
         telescope: str | list[str] | None = None,
         search_distance: Quantity | dict | None = None,
-    ):
+    ) -> None:
         """
         The init of the general XGA point source class.
 
@@ -626,8 +651,8 @@ class PointSource(BaseSource):
             True. This option is here so that sample objects can regenerate all merged products at once, which is
             more efficient as it can exploit parallelisation more fully - user probably doesn't need to touch this.
         :param bool in_sample: A boolean argument that tells the source whether it is part of a sample or not, setting
-            to True suppresses some warnings so that they can be displayed at the end of the sample progress bar. Default
-            is False. User should only set to True to remove warnings.
+            to True suppresses some warnings so that they can be displayed at the end of the sample progress
+            bar. Default is False. User should only set to True to remove warnings.
         :param str/List[str] telescope: The telescope(s) to be used in analyses of the source. If specified here, and
             set up with this installation of XGA, then relevant data (if it exists) will be located and used. The
             default is None, in which case all available telescopes will be used. The user can pass a single name
@@ -672,6 +697,11 @@ class PointSource(BaseSource):
             self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
 
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
+            if self._redshift is None:
+                raise ValueError(
+                    "If a point radius is specified in proper radius units (e.g. kpc), then a "
+                    "redshift value must also be provided."
+                )
             rad = rad_to_ang(point_radius, self._redshift, self._cosmo).to("deg")
             self._custom_region_radius = rad
             self._radii["point"] = self._custom_region_radius
