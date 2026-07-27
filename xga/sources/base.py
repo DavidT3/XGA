@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:52 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:54 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -508,7 +508,7 @@ class BaseSource:
         # after the SAS command has run
         self.queue_extra_info = None
         # Defining this here, although it won't be set to a boolean value in this superclass
-        self._detected = None
+        self._detected: dict = None
         # This block defines various dictionaries that are used in the sub source classes, when context allows
         # us to find matching source regions.
         self._regions: dict = None
