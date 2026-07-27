@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 11:53 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:05 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -3765,14 +3765,10 @@ class BaseSource:
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
     @overload
-    def get_products(self, p_type: str, obs_id: str | None = None, inst: str | None = None,
-                     extra_key: str | None = None, just_obj: Literal[True] = True,
-                     telescope: str | None = None) -> List[BaseProduct] | List[BaseProfile1D]: ...
+    def get_products(self, just_obj: Literal[True]) -> List[BaseProduct] | List[BaseProfile1D]: ...
 
     @overload
-    def get_products(self, p_type: str, obs_id: str | None = None, inst: str | None = None,
-                     extra_key: str | None = None, just_obj: Literal[False] = False,
-                     telescope: str | None = None) -> List[List[str | BaseProduct | BaseProfile1D]]: ...
+    def get_products(self, just_obj: Literal[False]) -> List[List[str | BaseProduct | BaseProfile1D]]: ...
 
     def get_products(self, p_type: str, obs_id: str | None = None, inst: str | None = None, extra_key: str | None = None,
                      just_obj: bool = True, telescope: str | None = None) -> List[Any]:
