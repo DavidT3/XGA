@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 1:52 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 2:20 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
@@ -477,7 +477,7 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
     return initial_results, final_obs_ids, all_indices, final_res, final_ra, final_dec, final_obs_id_srcs
 
 
-def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], dict] = None) -> Tuple[dict, dict]:
+def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict | None = None) -> Tuple[dict, dict]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
     telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
