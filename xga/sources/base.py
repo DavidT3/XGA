@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:13 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:48 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -110,11 +110,11 @@ class BaseSource:
         maps, and lightcurves will be loaded, but spectra will not. Default is True.
     :param bool load_profiles: Whether existing profiles should be loaded from disk.
     """
-    def __init__(self, ra: float, dec: float, redshift: float = None, name: str = None,
+    def __init__(self, ra: float, dec: float, redshift: float | None = None, name: str | None = None,
                  cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True,
                  load_fits: bool = False, in_sample: bool = False,
-                 telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None, sel_null_obs: List[str] = None,
+                 telescope: Union[str, List[str], None] = None,
+                 search_distance: Union[Quantity, dict, None] = None, sel_null_obs: List[str] | None = None,
                  null_load_products: bool = False, back_inn_rad_factor: float = 1.05,
                  back_out_rad_factor: float = 1.5, load_regions: bool = True,
                  load_spectra: bool = True, load_profiles: bool = True):
