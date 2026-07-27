@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:30 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:35 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -4281,9 +4281,9 @@ class BaseSource:
         return matched_prods
 
     def get_combined_profiles(self, profile_type: str, inst: str | None = None, central_coord: Quantity | None = None,
-                              radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
-                              hi_en: Quantity = None, telescope: str = None, spec_model: str = None,
-                              spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+                              radii: Quantity | None = None, annuli_bound_radii: Quantity | None = None, lo_en: Quantity | None = None,
+                              hi_en: Quantity | None = None, telescope: str | None = None, spec_model: str | None = None,
+                              spec_fit_conf: Union[str, dict, None] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         Convenience method to retrieve combined (multi-observation and/or multi-instrument) XGA profile objects.
         This is equivalent to calling get_profiles() with obs_id='combined' and/or inst='combined'.
