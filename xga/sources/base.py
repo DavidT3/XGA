@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:25 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 10:30 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -4123,9 +4123,9 @@ class BaseSource:
 
         return matched_prods
 
-    def get_annular_spectra(self, radii: Quantity = None, group_spec: bool = True, min_counts: int = 5,
-                            min_sn: float = None, over_sample: float = None, set_id: int = None,
-                            telescope: str = None) -> AnnularSpectra:
+    def get_annular_spectra(self, radii: Quantity | None = None, group_spec: bool = True, min_counts: int = 5,
+                            min_sn: float | None = None, over_sample: float | None = None, set_id: int | None = None,
+                            telescope: str | None = None) -> AnnularSpectra:
         """
         Another useful method that wraps the get_products function, though this one gets you AnnularSpectra.
         Pass the radii used to generate the annuli, and the same settings you used to generate the spectrum
@@ -4225,10 +4225,10 @@ class BaseSource:
 
         return final_matched_prods
 
-    def get_profiles(self, profile_type: str, obs_id: str = None, inst: str = None, central_coord: Quantity = None,
-                     radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                     telescope: str = None, spec_model: str = None,
-                     spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
+    def get_profiles(self, profile_type: str, obs_id: str | None = None, inst: str | None = None, central_coord: Quantity | None = None,
+                     radii: Quantity | None = None, annuli_bound_radii: Quantity | None = None, lo_en: Quantity | None = None, hi_en: Quantity | None = None,
+                     telescope: str | None = None, spec_model: str | None = None,
+                     spec_fit_conf: Union[str, dict, None] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
         """
         This is the generic get method for XGA profile objects stored in this source. You still must remember
         the profile type value to use it, but once entered it will return a list of all matching profiles (or a
@@ -4280,7 +4280,7 @@ class BaseSource:
 
         return matched_prods
 
-    def get_combined_profiles(self, profile_type: str, inst: str = None, central_coord: Quantity = None,
+    def get_combined_profiles(self, profile_type: str, inst: str | None = None, central_coord: Quantity | None = None,
                               radii: Quantity = None, annuli_bound_radii: Quantity = None, lo_en: Quantity = None,
                               hi_en: Quantity = None, telescope: str = None, spec_model: str = None,
                               spec_fit_conf: Union[str, dict] = None) -> Union[BaseProfile1D, List[BaseProfile1D]]:
