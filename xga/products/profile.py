@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:28 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 11:50 AM. Copyright (c) The Contributors.
 """This module defines specific (i.e. non-BaseProfile1D) XGA profile classes.
 
 Profile classes are used to store and interact with 1D radial profile information, with some classes
@@ -31,7 +31,6 @@ from xga.exceptions import (
 from xga.models import PROF_TYPE_MODELS, BaseModel1D
 from xga.products.base import BaseProfile1D
 from xga.products.phot import RateMap
-from xga.sources import GalaxyCluster
 from xga.sourcetools.deproj import shell_ann_vol_intersect
 from xga.sourcetools.misc import ang_to_rad
 

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 11:29 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 11:53 AM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -18,7 +18,7 @@ import pickle
 from copy import deepcopy
 from glob import glob
 from shutil import move, copyfile
-from typing import Tuple, List, Dict, Union, NamedTuple
+from typing import Tuple, List, Dict, Union, NamedTuple, overload, Literal, Any
 from warnings import warn, simplefilter
 
 import numpy as np
@@ -3764,11 +3764,21 @@ class BaseSource:
                     inven.drop_duplicates(subset=None, keep='first', inplace=True)
                     inven.to_csv(OUTPUT + "{t}/profiles/{n}/inventory.csv".format(t=tel, n=self.name), index=False)
 
+    @overload
+    def get_products(self, p_type: str, obs_id: str | None = None, inst: str | None = None,
+                     extra_key: str | None = None, just_obj: Literal[True] = True,
+                     telescope: str | None = None) -> List[BaseProduct] | List[BaseProfile1D]: ...
+
+    @overload
+    def get_products(self, p_type: str, obs_id: str | None = None, inst: str | None = None,
+                     extra_key: str | None = None, just_obj: Literal[False] = False,
+                     telescope: str | None = None) -> List[List[str | BaseProduct | BaseProfile1D]]: ...
+
     def get_products(self, p_type: str, obs_id: str | None = None, inst: str | None = None, extra_key: str | None = None,
-                     just_obj: bool = True, telescope: str | None = None) -> List[BaseProduct] | List[BaseProfile1D]:
+                     just_obj: bool = True, telescope: str | None = None) -> List[Any]:
         """
         This is the getter for the products data structure of Source objects. Passing a product type
-        such as 'events' or 'images' will return every matching entry in the products data structure.
+        such as 'events' or 'images' will return every matching entry in the product storage data structure.
 
         :param str p_type: Product type identifier. e.g. image or expmap.
         :param str obs_id: Optionally, a specific obs_id to search can be supplied.
