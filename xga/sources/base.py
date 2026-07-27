@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:48 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:52 PM. Copyright (c) The Contributors.
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -511,9 +511,9 @@ class BaseSource:
         self._detected = None
         # This block defines various dictionaries that are used in the sub source classes, when context allows
         # us to find matching source regions.
-        self._regions = None
-        self._other_regions = None
-        self._alt_match_regions = None
+        self._regions: dict = None
+        self._other_regions: dict = None
+        self._alt_match_regions: dict = None
         self._interloper_regions = {}
         # This dictionary is used to store the masks generated to remove contaminating sources from XGA images and
         #  ratemaps, in order to perform photometric analyses. We used to generate masks for all ObsIDs during
@@ -557,7 +557,7 @@ class BaseSource:
         self._peak_hi_en = Quantity(2.0, 'keV')
         # Peaks don't really have any meaning for the BaseSource class, so even though this is a boolean variable
         #  when populated properly I set it to None here
-        self._use_peak = None
+        self._use_peak: bool  = None
         # Here we set up storage structures for peak coordinates - though they may never be filled.
         self._peaks = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
         self._peaks_near_edge = {tel: {o: {} for o in self.obs_ids[tel]} for tel in self.telescopes}
