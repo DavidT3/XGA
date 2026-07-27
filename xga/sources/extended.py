@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 4:16 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:38 PM. Copyright (c) The Contributors.
 """This module defines XGA source classes representing specific extended astrophysical sources (e.g. GalaxyCluster)."""
 
 from warnings import simplefilter, warn
@@ -11,9 +11,10 @@ from astropy.units import Quantity, UnitConversionError, kpc
 from regions import Region
 
 from xga import COMBINED_INSTS, DEFAULT_COSMO
-from xga.exceptions import NoProductAvailableError, NoRegionsError
-from xga.imagetools import radial_brightness
-from xga.products import BaseProfile1D, Spectrum
+from xga.exceptions import NoProductAvailableError, NoRegionsError, XGADeveloperError
+from xga.imagetools.profile import radial_brightness
+from xga.products.base import BaseProfile1D
+from xga.products.phot import RateMap
 from xga.products.profile import (
     APECNormalisation1D,
     GasDensity3D,
@@ -24,6 +25,7 @@ from xga.products.profile import (
     SpecificEntropy,
     SurfaceBrightness1D,
 )
+from xga.products.spec import Spectrum
 from xga.sourcetools import ang_to_rad, rad_to_ang
 from xga.sourcetools.match import _dist_from_source
 
@@ -264,8 +266,8 @@ class GalaxyCluster(ExtendedSource):
     def _source_type_match(self, source_type: str) -> tuple[dict, dict, dict]:
         """
         A function to override the _source_type_match method of the BaseSource class, containing slightly
-        more complex matching criteria for galaxy clusters. Galaxy clusters having their own version of this
-        method was driven by issue #407, the problems I was having with low redshift clusters particularly.
+        more complex matching criteria for galaxy clusters. The GalaxyCluster class having its own version of this
+        method was driven by issue #407, and problems with low-redshift clusters particularly.
 
         Point sources within 0.15R500, 0.15*0.66*R200, or 0.15*2.25*R2500 (in order of descending priority, R200
         will only be used if R500 isn't available etc. - the extra factors for R200 and R2500 are meant to convert
@@ -273,7 +275,7 @@ class GalaxyCluster(ExtendedSource):
         to remain in the analysis, as they may well be cool-cores.
 
         This method also attempts to check for fragmentation of clusters by the source finder, which can cause
-        issues where low redshift clusters are split up into multiple extended sources. Any interloper sources which
+        issues where low-redshift clusters are split up into multiple extended sources. Any interloper sources which
         are extended and intersect with a source region that has been designated the actual source will NOT be
         removed from the analysis - in practise this may be more use in making sure regions which are not consistent
         across observations do not remove chunks of the cluster (see issue #407).
@@ -362,7 +364,7 @@ class GalaxyCluster(ExtendedSource):
                             Quantity(0, "deg"), rad, tel, centre, new_anti_results[tel][obs]
                         )
                         # Make sure to only select extended (green) sources
-                        within_width = [reg for reg in within_width if reg.visual["edgecolor"] == "green"]
+                        within_width = np.array([reg for reg in within_width if reg.visual["edgecolor"] == "green"])
 
                         # Then I repeat that process with the semiminor axis, and if a interloper intersects with both
                         #  then it would intersect with the ellipse of the current chosen region.
@@ -370,7 +372,7 @@ class GalaxyCluster(ExtendedSource):
                         within_height = self.regions_within_radii(
                             Quantity(0, "deg"), rad, tel, centre, new_anti_results[tel][obs]
                         )
-                        within_height = [reg for reg in within_height if reg.visual["edgecolor"] == "green"]
+                        within_height = np.array([reg for reg in within_height if reg.visual["edgecolor"] == "green"])
 
                         # This finds which regions are present in both lists and makes sure if they are in both
                         #  then they are NOT removed from the analysis- AS OF regions v0.9 THIS NO LONGER WORKS AS
@@ -547,7 +549,7 @@ class GalaxyCluster(ExtendedSource):
         telescope: str | None = None,
         spec_model: str | None = None,
         spec_fit_conf: str | dict | None = None,
-    ) -> BaseProfile1D | list[BaseProfile1D]:
+    ) -> list[BaseProfile1D]:
         """
         The generic get method for profiles which have been based on spectra, the only thing that tends to change
         about how we search for them is the specific search key. Largely copied from get_annular_spectra.
@@ -592,6 +594,9 @@ class GalaxyCluster(ExtendedSource):
             obs_id=obs_id,
             inst=inst,
         )
+
+        # Make sure the return is a list of products
+        init_matches = [init_matches] if not isinstance(init_matches, list) else init_matches
 
         # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
         #  associated with them, as that means that they were not generated from an annular spectrum
@@ -877,13 +882,23 @@ class GalaxyCluster(ExtendedSource):
             obs_id=obs_id,
             inst=inst,
         )
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of ProjectedGasTemperature1D instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_matched_prods = [en for en in matched_prods if isinstance(en, ProjectedGasTemperature1D)]
+        if len(filt_matched_prods) != len(matched_prods):
+            types_matched_prods = [type(en) for en in matched_prods]
+            raise TypeError(
+                f"Expected a list of ProjectedGasTemperature1D objects, instead there "
+                f"are {set(types_matched_prods)} entries."
+            )
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        if len(filt_matched_prods) == 0:
             raise NoProductAvailableError("No matching 1D projected temperature profiles can be found.")
-
-        return matched_prods
+        elif len(filt_matched_prods) == 1:
+            return filt_matched_prods[0]
+        else:
+            return filt_matched_prods
 
     def get_3d_temp_profiles(
         self,
@@ -907,8 +922,8 @@ class GalaxyCluster(ExtendedSource):
         :param bool group_spec: Was the spectrum set used to generate the profile grouped?
         :param int min_counts: If the spectrum set used to generate the profile was grouped on minimum
             counts, what was the minimum number of counts?
-        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum signal to
-            noise, what was the minimum signal-to-noise.
+        :param float min_sn: If the spectrum set used to generate the profile was grouped on minimum
+            signal-to-noise, what was the minimum signal-to-noise.
         :param float over_sample: If the spectrum set used to generate the profile was over sampled, what was
             the level of over sampling used?
         :param int set_id: The unique identifier of the annular spectrum set used to generate the profile.
@@ -943,12 +958,22 @@ class GalaxyCluster(ExtendedSource):
             inst=inst,
         )
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("No matching 3D temperature profiles can be found.")
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of GasTemperature3D instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_matched_prods = [en for en in matched_prods if isinstance(en, GasTemperature3D)]
+        if len(filt_matched_prods) != len(matched_prods):
+            types_matched_prods = [type(en) for en in matched_prods]
+            raise TypeError(
+                f"Expected a list of GasTemperature3D objects, instead there are {set(types_matched_prods)} entries."
+            )
 
-        return matched_prods
+        if len(filt_matched_prods) == 0:
+            raise NoProductAvailableError("No matching 3D temperature profiles can be found.")
+        elif len(filt_matched_prods) == 1:
+            return filt_matched_prods[0]
+        else:
+            return filt_matched_prods
 
     def get_proj_met_profiles(
         self,
@@ -1012,12 +1037,23 @@ class GalaxyCluster(ExtendedSource):
             inst=inst,
         )
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("No matching 1D projected metallicity profiles can be found.")
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of ProjectedGasMetallicity1D instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_matched_prods = [en for en in matched_prods if isinstance(en, ProjectedGasMetallicity1D)]
+        if len(filt_matched_prods) != len(matched_prods):
+            types_matched_prods = [type(en) for en in matched_prods]
+            raise TypeError(
+                f"Expected a list of ProjectedGasMetallicity1D objects, instead there are "
+                f"{set(types_matched_prods)} entries."
+            )
 
-        return matched_prods
+        if len(filt_matched_prods) == 0:
+            raise NoProductAvailableError("No matching 1D projected metallicity profiles can be found.")
+        elif len(filt_matched_prods) == 1:
+            return filt_matched_prods[0]
+        else:
+            return filt_matched_prods
 
     def get_apec_norm_profiles(
         self,
@@ -1078,12 +1114,22 @@ class GalaxyCluster(ExtendedSource):
             inst=inst,
         )
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
-            raise NoProductAvailableError("No matching APEC normalisation profiles can be found.")
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of APECNormalisation1D instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_matched_prods = [en for en in matched_prods if isinstance(en, APECNormalisation1D)]
+        if len(filt_matched_prods) != len(matched_prods):
+            types_matched_prods = [type(en) for en in matched_prods]
+            raise TypeError(
+                f"Expected a list of APECNormalisation1D objects, instead there are {set(types_matched_prods)} entries."
+            )
 
-        return matched_prods
+        if len(filt_matched_prods) == 0:
+            raise NoProductAvailableError("No matching APEC normalisation profiles can be found.")
+        elif len(filt_matched_prods) == 1:
+            return filt_matched_prods[0]
+        else:
+            return filt_matched_prods
 
     def get_density_profiles(
         self,
@@ -1204,14 +1250,29 @@ class GalaxyCluster(ExtendedSource):
 
         # The methods I used to get this far will already have gotten upset if there are no matches, so I don't need
         #  to check they exist, but I do need to check if I have a list or a single object
-        if not isinstance(interim_prods, list):
-            interim_prods = [interim_prods]
+        interim_prods = [interim_prods] if not isinstance(interim_prods, list) else interim_prods
+
+        # To appease the static type checker
+        filt_interim_prods = [en for en in interim_prods if isinstance(en, GasDensity3D)]
+        if len(filt_interim_prods) != len(interim_prods):
+            types_matched_prods = [type(en) for en in interim_prods]
+            raise TypeError(
+                f"Expected a list of GasDensity3D objects, instead there are {set(types_matched_prods)} entries."
+            )
 
         matched_prods = []
-        if method != "spec" and any([p.density_method == method for p in interim_prods]):
-            interim_prods = [p for p in interim_prods if p.density_method == method]
-            for dens_prof in interim_prods:
+        if method != "spec" and any([p.density_method == method for p in filt_interim_prods]):
+            filt_interim_prods = [p for p in filt_interim_prods if p.density_method == method]
+            for dens_prof in filt_interim_prods:
                 p = dens_prof.generation_profile
+                # The non-spec method density profiles should all have SurfaceBrightness1D generation
+                #  profiles, but actually checking will make the static type checker happy.
+                if not isinstance(p, SurfaceBrightness1D):
+                    raise TypeError(
+                        f"The {dens_prof.storage_key} density profile does not have a SurfaceBrightness1D "
+                        f"instance assigned to 'generation_profile'."
+                    )
+
                 if not psf_corr and p.pix_step == pix_step and p.min_snr == min_snr and p.psf_corrected == psf_corr:
                     matched_prods.append(dens_prof)
                 elif (
@@ -1226,20 +1287,20 @@ class GalaxyCluster(ExtendedSource):
                 ):
                     matched_prods.append(dens_prof)
 
-        elif method == "spec" and any([p.density_method == "spec" for p in interim_prods]):
-            matched_prods = interim_prods
+        elif method == "spec" and any([p.density_method == "spec" for p in filt_interim_prods]):
+            matched_prods = filt_interim_prods
         else:
-            matched_prods = interim_prods
+            matched_prods = filt_interim_prods
 
         if outer_rad is not None:
             matched_prods = [im for im in matched_prods if self.convert_radius(im.outer_radius, "deg") == outer_rad]
 
-        if len(matched_prods) == 1:
-            matched_prods = matched_prods[0]
-        elif len(matched_prods) == 0:
+        if len(matched_prods) == 0:
             raise NoProductAvailableError("Cannot find any density profiles matching your input.")
-
-        return matched_prods
+        elif len(matched_prods) == 1:
+            return matched_prods[0]
+        else:
+            return matched_prods
 
     def get_entropy_profiles(
         self,
@@ -1272,8 +1333,21 @@ class GalaxyCluster(ExtendedSource):
             mass profiles if there is not.
         :rtype: Union[SpecificEntropy, List[SpecificEntropy]]
         """
-        # Get all the hydrostatic mass profiles associated with this source
+        # Get all the entropy profiles associated with this source
         matched_prods = self.get_profiles("combined_specific_entropy", telescope=telescope)
+        # Make sure we have a list of objects
+        if not isinstance(matched_prods, list):
+            matched_prods = [matched_prods]
+
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of SpecificEntropy instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_matched_prods = [en for en in matched_prods if isinstance(en, SpecificEntropy)]
+        if len(filt_matched_prods) != len(matched_prods):
+            types_matched_prods = [type(en) for en in matched_prods]
+            raise TypeError(
+                f"Expected a list of SpecificEntropy objects, instead there are {set(types_matched_prods)} entries."
+            )
 
         # Convert the radii to degrees for comparison with deg radii later
         if radii is not None:
@@ -1281,23 +1355,29 @@ class GalaxyCluster(ExtendedSource):
 
         # Checking steps, looking for matches with the information passed by the user.
         if temp_prof is not None:
-            matched_prods = [p for p in matched_prods if p.temperature_profile != temp_prof]
+            filt_matched_prods = [p for p in filt_matched_prods if p.temperature_profile != temp_prof]
 
         if dens_prof is not None:
-            matched_prods = [p for p in matched_prods if p.density_profile != dens_prof]
+            filt_matched_prods = [p for p in filt_matched_prods if p.density_profile != dens_prof]
 
         if temp_model_name is not None:
-            matched_prods = [p for p in matched_prods if p.temperature_model.name != temp_model_name]
+            filt_matched_prods = [
+                p
+                for p in filt_matched_prods
+                if p.temperature_model is not None and p.temperature_model.name != temp_model_name
+            ]
 
         if dens_model_name is not None:
-            matched_prods = [p for p in matched_prods if p.density_model.name != dens_model_name]
+            filt_matched_prods = [
+                p for p in filt_matched_prods if p.density_model is not None and p.density_model.name != dens_model_name
+            ]
 
         if radii is not None:
-            matched_prods = [p for p in matched_prods if p.deg_radii != radii]
+            filt_matched_prods = [p for p in filt_matched_prods if p.deg_radii != radii]
 
-        if isinstance(matched_prods, list) and len(matched_prods) == 0:
+        if isinstance(filt_matched_prods, list) and len(filt_matched_prods) == 0:
             raise NoProductAvailableError("No matching entropy profiles can be found.")
-        return matched_prods
+        return filt_matched_prods
 
     def get_hydrostatic_mass_profiles(
         self,
@@ -1333,29 +1413,48 @@ class GalaxyCluster(ExtendedSource):
         # Get all the hydrostatic mass profiles associated with this source
         matched_prods = self.get_profiles("combined_hydrostatic_mass", telescope=telescope)
 
+        # Make sure the matched_prods variable is a list
+        matched_prods = [matched_prods] if not isinstance(matched_prods, list) else matched_prods
+
+        # At this point static type checkers 'know' that the matched_prods variable is a list of BaseProfile1D
+        #  instances (though it is definitely a list of HydrostaticMass instances). This helps Mypy
+        #  narrow the variable type so that it doesn't throw an error
+        filt_matched_prods = [en for en in matched_prods if isinstance(en, HydrostaticMass)]
+        if len(filt_matched_prods) != len(matched_prods):
+            types_matched_prods = [type(en) for en in matched_prods]
+            raise TypeError(
+                f"Expected a list of HydrostaticMass objects, instead there are {set(types_matched_prods)} entries."
+            )
+
         # Convert the radii to degrees for comparison with deg radii later
         if radii is not None:
             radii = self.convert_radius(radii, "deg")
 
         # Checking steps, looking for matches with the information passed by the user.
         if temp_prof is not None:
-            matched_prods = [p for p in matched_prods if p.temperature_profile != temp_prof]
+            filt_matched_prods = [p for p in filt_matched_prods if p.temperature_profile != temp_prof]
 
         if dens_prof is not None:
-            matched_prods = [p for p in matched_prods if p.density_profile != dens_prof]
+            filt_matched_prods = [p for p in filt_matched_prods if p.density_profile != dens_prof]
 
         if temp_model_name is not None:
-            matched_prods = [p for p in matched_prods if p.temperature_model.name != temp_model_name]
+            filt_matched_prods = [
+                p
+                for p in filt_matched_prods
+                if p.temperature_model is not None and p.temperature_model.name != temp_model_name
+            ]
 
         if dens_model_name is not None:
-            matched_prods = [p for p in matched_prods if p.density_model.name != dens_model_name]
+            filt_matched_prods = [
+                p for p in filt_matched_prods if p.density_model is not None and p.density_model.name != dens_model_name
+            ]
 
         if radii is not None:
-            matched_prods = [p for p in matched_prods if p.deg_radii != radii]
+            filt_matched_prods = [p for p in filt_matched_prods if p.deg_radii != radii]
 
-        if isinstance(matched_prods, list) and len(matched_prods) == 0:
+        if isinstance(filt_matched_prods, list) and len(filt_matched_prods) == 0:
             raise NoProductAvailableError("No matching hydrostatic mass profiles can be found.")
-        return matched_prods
+        return filt_matched_prods
 
     def generate_brightness_profile(
         self,
@@ -1416,21 +1515,52 @@ class GalaxyCluster(ExtendedSource):
         ):
             comb_rt = self.get_combined_ratemaps(lo_en, hi_en, telescope=telescope)
             # Fetch the mask that will remove all interloper sources from the combined ratemap
-            int_mask = self.get_interloper_mask(telescope)
+            if isinstance(comb_rt, RateMap):
+                # Fetch the mask that will remove all interloper sources from the combined ratemap
+                int_mask = self.get_interloper_mask(telescope)
+            else:
+                # Mostly to make the static type checkers happy - we aren't particularly concerned
+                #  that the return will be a list of RateMaps.
+                raise TypeError("Expected a RateMap instance, instead got a list of RateMaps.")
+
         # This situation means there is only one ObsID-instrument combo
         elif (tel_obs_inst_num == 1 and not COMBINED_INSTS[telescope]) or COMBINED_INSTS[telescope]:
             # There should in theory only ever be one ratemap that matches these criteria in this circumstance.
             comb_rt = self.get_ratemaps(lo_en=lo_en, hi_en=hi_en, telescope=telescope)
-            # Fetch the mask that will remove all interloper sources from the combined ratemap
-            int_mask = self.get_interloper_mask(telescope, comb_rt.obs_id)
+            if isinstance(comb_rt, RateMap):
+                # Fetch the mask that will remove all interloper sources from the combined ratemap
+                int_mask = self.get_interloper_mask(telescope, comb_rt.obs_id)
+            else:
+                # Mostly to make the static type checkers happy - we aren't particularly concerned
+                #  that the return will be a list of RateMaps.
+                raise TypeError("Expected a RateMap instance, instead got a list of RateMaps.")
+        else:
+            raise XGADeveloperError(
+                "Specified telescope does not follow either the pattern of all instrument's "
+                "data shipped in one EventList (e.g. eROSITA), or all instruments having "
+                "different event lists."
+            )
 
-        # If there have been PSF deconvolutions of the above data, then we can grab them too
-        # I still do it this way rather than with get_combined_ratemaps because I want ALL PSF corrected ratemaps
-        en_key = f"bound_{lo_en.value}-{hi_en.value}"
+        # If there have been PSF deconvolutions of the above data, then we can grab them as well.
+        #  We use get_products rather than get_combined_ratemaps because we want ALL PSF-corrected
+        #  ratemaps, and get_combined_ratemaps requires that you specify particular PSF-correction
+        #  configuration variables (e.g. the PSF model name).
+        init_psf_comb_rts = self.get_products("combined_ratemap", telescope=telescope)
+        # This helps Mypy narrow the variable type so that it doesn't throw an error
+        psf_comb_rts = [en for en in init_psf_comb_rts if isinstance(en, RateMap)]
+
+        # This is out of an overabundance of caution, as we don't really think that non-RateMaps
+        #  will be returned.
+        if len(psf_comb_rts) != len(init_psf_comb_rts):
+            types_matched_prods = [type(en) for en in init_psf_comb_rts]
+            raise TypeError(
+                f"Expected a list of RateMap objects, instead there are {set(types_matched_prods)} entries."
+            )
+
+        # Narrow down the PSF corrected RateMaps to just those that match the specified upper and
+        #  lower energy bounds
         psf_comb_rts = [
-            rt
-            for rt in self.get_products("combined_ratemap", telescope=telescope, just_obj=False)
-            if en_key + "_" in rt[-2]
+            cur_rt for cur_rt in psf_comb_rts if cur_rt.energy_bounds[0] == lo_en and cur_rt.energy_bounds[1] == hi_en
         ]
 
         if central_coord is None:
@@ -1464,9 +1594,7 @@ class GalaxyCluster(ExtendedSource):
             )
             self.update_products(sb_profile)
 
-        for psf_comb_rt in psf_comb_rts:
-            p_rt = psf_comb_rt[-1]
-
+        for p_rt in psf_comb_rts:
             try:
                 psf_sb_profile = self.get_1d_brightness_profile(
                     rad,
@@ -1488,7 +1616,7 @@ class GalaxyCluster(ExtendedSource):
                     )
             except NoProductAvailableError:
                 psf_sb_profile, success = radial_brightness(
-                    psf_comb_rt[-1],
+                    p_rt,
                     central_coord,
                     rad,
                     self._back_inn_factor,
@@ -1683,8 +1811,8 @@ class GalaxyCluster(ExtendedSource):
         # For multi-obs eROSITA, use combined-observation and combined-instrument spectra to avoid duplicate events
         #  and ensure we are using the product that matches the combined ratemaps
         if telescope in ["erosita", "erass"] and len(self.obs_ids[telescope]) > 1:
-            use_obs_id = "combined"
-            use_inst = "combined"
+            use_obs_id: str | None = "combined"
+            use_inst: str | None = "combined"
         else:
             use_obs_id = obs_id
             use_inst = inst
@@ -1723,13 +1851,13 @@ class GalaxyCluster(ExtendedSource):
             rates.append(s.get_conv_factor(lo_en, hi_en, "tbabs*apec")[2].value)
 
         # Just putting rates as an array for convenience
-        rates = np.array(rates)
+        rates_arr = np.array(rates)
         # These normalisation factors put all the conversion factors on the same footing, by weighting by
         #  effective area of the spectra
         norm_factors = np.array(mean_areas) / mean_areas[0]
         # The total photons is the sum of the rates multiplied by the simulation exposure (always 1e+4 seconds)
         #  weighted by the effective area.
-        total_phot = (rates * (1e4 / norm_factors)).sum()
+        total_phot = (rates_arr * (1e4 / norm_factors)).sum()
 
         # Then the total combined rate is the total number of photons / the total summed exposure, which again is a
         #  sum of the simulation exposure weighted by the effective areas of all the spectra.
