@@ -1,5 +1,5 @@
-#  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (turne540@msu.edu) 15/07/2025, 07:05. Copyright (c) The Contributors
+#  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
+#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:22 AM. Copyright (c) The Contributors.
 
 
 from typing import Tuple
@@ -189,8 +189,8 @@ def ann_radii(im_prod: Image, centre: Quantity, rad: Quantity, z: float = None, 
 
 
 def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_inn_rad_factor: float = 1.05,
-                      back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray = None,
-                      z: float = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
+                      back_out_rad_factor: float = 1.5, interloper_mask: np.ndarray | None = None,
+                      z: float| None = None, pix_step: int = 1, rad_units: UnitBase = arcsec,
                       cosmo: Cosmology = DEFAULT_COSMO, min_snr: float = 0.0, min_central_pix_rad: int = 3,
                       start_pix_rad: int = 0) -> Tuple[SurfaceBrightness1D, bool]:
     """
