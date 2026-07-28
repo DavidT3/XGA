@@ -1,9 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:17 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:21 AM. Copyright (c) The Contributors.
 """This module defines XGA source classes representing specific extended astrophysical sources (e.g. GalaxyCluster)."""
 
+from typing import overload
 from warnings import simplefilter, warn
-from typing import Any, overload
 
 import numpy as np
 from astropy import wcs
@@ -12,7 +12,7 @@ from astropy.units import Quantity, UnitConversionError, kpc
 from regions import Region
 
 from xga import COMBINED_INSTS, DEFAULT_COSMO
-from xga.exceptions import NoProductAvailableError, NoRegionsError, XGADeveloperError
+from xga.exceptions import MultipleMatchError, NoProductAvailableError, NoRegionsError, XGADeveloperError
 from xga.imagetools.profile import radial_brightness
 from xga.products.base import BaseProfile1D
 from xga.products.phot import RateMap
@@ -26,7 +26,7 @@ from xga.products.profile import (
     SpecificEntropy,
     SurfaceBrightness1D,
 )
-from xga.products.spec import Spectrum
+from xga.products.spec import AnnularSpectra, Spectrum
 from xga.sourcetools import ang_to_rad, rad_to_ang
 from xga.sourcetools.match import _dist_from_source
 
@@ -612,6 +612,11 @@ class GalaxyCluster(ExtendedSource):
 
             # Now we will grab the annular spectrum from which the current profile was generated
             rel_asp = self.get_annular_spectra(set_id=p.set_ident, telescope=telescope)
+            if not isinstance(rel_asp, AnnularSpectra):
+                raise MultipleMatchError(
+                    "Multiple AnnularSpectra matches have been found based on a 'unique' "
+                    "set identifier, contact the developers."
+                )
             # If the user specified grouped spectra and the generating annular spectra for the current
             #  profile was not grouped (or vice versa), then we aren't interested
             if group_spec != rel_asp.grouped:
@@ -761,7 +766,7 @@ class GalaxyCluster(ExtendedSource):
         fit_conf: str | dict | None = None,
     ) -> Quantity | dict:
         """
-        Get method for luminosities calculated from model fits to spectra associated with this source.
+        Get method for luminosities calculated from models fitted to spectra associated with this source.
         Either for given energy limits (that must have been specified when the fit was first performed), or
         for all luminosities associated with that model. Luminosities are returned as a 3 column numpy array;
         the 0th column is the value, the 1st column is the err-, and the 2nd is err+.
