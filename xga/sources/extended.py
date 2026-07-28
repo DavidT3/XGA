@@ -1,8 +1,9 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 12:38 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:12 AM. Copyright (c) The Contributors.
 """This module defines XGA source classes representing specific extended astrophysical sources (e.g. GalaxyCluster)."""
 
 from warnings import simplefilter, warn
+from typing import Any, overload
 
 import numpy as np
 from astropy import wcs
@@ -692,6 +693,57 @@ class GalaxyCluster(ExtendedSource):
             stacked_spectra,
             fit_conf,
         )
+
+    @overload
+    def get_luminosities(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str = ...,
+        inner_radius: str | Quantity = ...,
+        lo_en: Quantity = ...,
+        hi_en: Quantity = ...,
+        group_spec: bool = ...,
+        min_counts: int = ...,
+        min_sn: float | None = ...,
+        over_sample: float | None = ...,
+        stacked_spectra: bool = ...,
+        fit_conf: str | dict | None = ...,
+    ) -> Quantity: ...
+
+    @overload
+    def get_luminosities(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str = ...,
+        inner_radius: str | Quantity = ...,
+        lo_en: None = None,
+        hi_en: Quantity | None = ...,
+        group_spec: bool = ...,
+        min_counts: int = ...,
+        min_sn: float | None = ...,
+        over_sample: float | None = ...,
+        stacked_spectra: bool = ...,
+        fit_conf: str | dict | None = ...,
+    ) -> dict[str, Quantity]: ...
+
+    @overload
+    def get_luminosities(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str = ...,
+        inner_radius: str | Quantity = ...,
+        lo_en: Quantity | None = ...,
+        hi_en: None = None,
+        group_spec: bool = ...,
+        min_counts: int = ...,
+        min_sn: float | None = ...,
+        over_sample: float | None = ...,
+        stacked_spectra: bool = ...,
+        fit_conf: str | dict | None = ...,
+    ) -> dict[str, Quantity]: ...
 
     def get_luminosities(
         self,
