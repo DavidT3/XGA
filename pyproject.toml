@@ -177,3 +177,13 @@ skips = [
     "B404",
     "B403"
 ]
+
+[tool.coverage.run]
+source = ["xga"]     # Replace "src" with your main application directory
+omit = [
+    "tests/*",       # Omits all files in a folder named tests
+    "*_test.py",     # Omits any file ending in _test.py
+    "test_*.py",     # Omits any file starting with test_
+    "exceptions.py", # The exceptions file doesn't need coverage information.
+    "xga/files/parse_xselect_mdb.py",
+]
