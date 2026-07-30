@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:17 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 2:12 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -3573,7 +3573,12 @@ class BaseSource:
                     if len(self.obs_ids[tel]) > 1:
                         comb_rt = self.get_combined_ratemaps(self._peak_lo_en, self._peak_hi_en, telescope=tel)
                     else:
-                        comb_rt = self.get_ratemaps(lo_en=self._peak_lo_en, hi_en=self._peak_hi_en, telescope=tel)
+                        comb_rt = self.get_ratemaps(
+                            lo_en=self._peak_lo_en,
+                            hi_en=self._peak_hi_en,
+                            telescope=tel,
+                            inst="combined" if COMBINED_INSTS[tel] else None,
+                        )
 
                 # This part deals with Chandra data
                 elif self._use_peak and tel == "chandra":
@@ -5363,7 +5368,11 @@ class BaseSource:
 
         # Here is where we initialise the background regions, first in pixel coords, then converting to ra-dec.
         # TODO Verify that just using the first image is okay
-        poss_ims = self.get_images(obs_id, telescope=telescope)
+        # For telescopes where we have combined instrument data by default, we have to make sure we look for it
+        if not COMBINED_INSTS[telescope]:
+            poss_ims = self.get_images(obs_id, telescope=telescope)
+        else:
+            poss_ims = self.get_images(obs_id, telescope=telescope, inst="combined")
         im = poss_ims[0] if isinstance(poss_ims, list) else poss_ims
         src_pix_reg = src_reg.to_pixel(im.radec_wcs)
         # TODO Try and remember why I had to convert to pixel regions to make it work
@@ -5404,7 +5413,11 @@ class BaseSource:
         :return: A list of regions that lie within the user supplied region.
         :rtype: List[SkyRegion]
         """
-        poss_ims = self.get_images(telescope=telescope)
+        # For telescopes where we have combined instrument data by default, we have to make sure we look for it
+        if not COMBINED_INSTS[telescope]:
+            poss_ims = self.get_images(telescope=telescope)
+        else:
+            poss_ims = self.get_images(telescope=telescope, inst="combined")
         im = poss_ims[0] if isinstance(poss_ims, list) else poss_ims
 
         crossover = np.array(
@@ -5486,7 +5499,11 @@ class BaseSource:
         else:
             # Just grab the first instrument that comes out the get method, the masks should be the same.
             # mask_image = self.get_products("image", obs_id, telescope=telescope)[0]
-            mask_images = self.get_images(obs_id=obs_id, telescope=telescope)
+            # For telescopes where we have combined instrument data by default, we have to make sure we look for it
+            if not COMBINED_INSTS[telescope]:
+                mask_images = self.get_images(obs_id=obs_id, telescope=telescope)
+            else:
+                mask_images = self.get_images(obs_id=obs_id, telescope=telescope, inst="combined")
             mask_image = mask_images[0] if isinstance(mask_images, list) else mask_images
 
         mask = src_reg.to_pixel(mask_image.radec_wcs).to_mask().to_image(mask_image.shape)
@@ -5574,8 +5591,10 @@ class BaseSource:
             # Grab an image based on whether the ObsID is combined or specific
             if obs_id == "combined":
                 im = self.get_combined_images(telescope=telescope)
-            else:
+            elif not COMBINED_INSTS[telescope]:
                 im = self.get_images(obs_id, telescope=telescope)
+            else:
+                im = self.get_images(obs_id, telescope=telescope, inst="combined")
 
             if isinstance(im, list):
                 im = im[0]
@@ -5651,10 +5670,12 @@ class BaseSource:
         if obs_id is None:
             # Doesn't matter which combined images, just need the size and coord conversion powers
             im = self.get_combined_images(telescope=telescope)
-        else:
+        elif not COMBINED_INSTS[telescope]:
             # Again so long as the image matches the ObsID passed in by the user I don't care what instrument
             #  its from
             im = self.get_images(obs_id=obs_id, telescope=telescope)
+        else:
+            im = self.get_images(obs_id=obs_id, telescope=telescope, inst="combined")
 
         # If it's not an instance of Image that means a list of Images has been returned, and as I only want
         #  the WCS information and the shape of the image I don't care which one we use
