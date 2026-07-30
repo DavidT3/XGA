@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 2:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/30/26, 1:32 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -2636,14 +2636,14 @@ class BaseSource:
                             if not COMBINED_INSTS[tel]
                             else self.get_images(obs_id, telescope=tel, inst="combined")
                         )
-                    except NoProductAvailableError as err:
+                    except NoProductAvailableError as im_err:
                         raise NoProductAvailableError(
                             f"There is no image available for {tel}-{obs_id}, associated "
                             f"with {self.name}. An image is currently required to check for sky "
                             "coordinates being present within a sky region - though "
                             "hopefully no-one will ever see this because I'll have fixed "
                             "it!"
-                        ) from err
+                        ) from im_err
                         w = None
                     # In this case the try statement worked, and so we can extract the WCS from the image
                     else:
@@ -3090,16 +3090,20 @@ class BaseSource:
         # Then, if we have been asked to find only PSF corrected products we apply further filters. We also
         #  require that the PSF correction configuration information of selected products matches what was
         #  passed to this method.
-        if psf_corr:
-            filt_broad_matches = [
-                en
-                for en in filt_broad_matches
-                if en.psf_corrected
-                and en.psf_model == psf_model
-                and en.psf_bins == psf_bins
-                and en.psf_algorithm == psf_algo
-                and en.psf_iterations == psf_iter
-            ]
+        filt_broad_matches = [
+            en
+            for en in filt_broad_matches
+            if en.psf_corrected == psf_corr
+            and (
+                not psf_corr
+                or (
+                    en.psf_model == psf_model
+                    and en.psf_bins == psf_bins
+                    and en.psf_algorithm == psf_algo
+                    and en.psf_iterations == psf_iter
+                )
+            )
+        ]
 
         # This part of the code ensures that if inst is None (the default), only products for 'real'
         #  instruments are returned. To retrieve a multi-instrument combined product, the user must
@@ -4410,6 +4414,7 @@ class BaseSource:
         if len(filt_init_matches) != len(init_matches):
             types_matched_prods = [type(en) for en in init_matches]
             raise TypeError(f"Expected a list of Image objects, instead there are {set(types_matched_prods)} entries.")
+
         return filt_init_matches[0] if len(filt_init_matches) == 1 else filt_init_matches
 
     def get_expmaps(
