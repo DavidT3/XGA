@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/30/26, 1:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/30/26, 2:04 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -3061,6 +3061,11 @@ class BaseSource:
             raise ValueError(
                 f"'lo_en' ({lo_en}) and hi_en ({hi_en}) must be either BOTH None or BOTH an Astropy quantity."
             )
+
+        # Type check psf_corr - had some instances where None was being passed in silently, which
+        #  will stop any product being returned by this method.
+        if not isinstance(psf_corr, bool):
+            raise TypeError(f"Value passed to 'psf_corr' ({psf_corr}) must be a boolean variable.")
 
         # If we are looking for a PSF corrected product then we check the product type
         #  The use of np.char like that means we can catch when the product type has been
