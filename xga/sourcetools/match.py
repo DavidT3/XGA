@@ -1,12 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/17/26, 1:52 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 3:12 PM. Copyright (c) The Contributors.
 from __future__ import annotations
 
 import gc
 import os
 from copy import deepcopy
 from multiprocessing import Pool
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, overload, Literal
 from warnings import warn
 
 import numpy as np
@@ -477,7 +477,7 @@ def _process_init_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, 
     return initial_results, final_obs_ids, all_indices, final_res, final_ra, final_dec, final_obs_id_srcs
 
 
-def census_match(telescope: Union[str, list] = None, obs_ids: Union[List[str], dict] = None) -> Tuple[dict, dict]:
+def census_match(telescope: str | list | None = None, obs_ids: List[str] | dict | None = None) -> Tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
     """
     Returns XGA census entries (with ObsID, ra, and dec) that are not completely blacklisted, for the specified
     telescope(s). This is an extremely simple function, and could be largely replicated by just working with the
@@ -569,8 +569,23 @@ def _vectorized_separation_match_wrapper(args):
     return _vectorized_separation_match(*args)
 
 
-def separation_match(src_ra: Union[float, np.ndarray], src_dec: Union[float, np.ndarray],
-                     distance: Union[Quantity, dict] = None, telescope: Union[str, List[str]] = None,
+@overload
+def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
+                     distance: Quantity | dict | None = None, telescope: str | List[str] | None = None,
+                     num_cores: int = NUM_CORES, show_warnings: bool = True,
+                     return_flat: Literal[False] = False,) \
+        -> Tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]: ...
+
+@overload
+def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
+                     distance: Quantity | dict | None = None, telescope: str | List[str] | None = None,
+                     num_cores: int = NUM_CORES, show_warnings: bool = True,
+                     return_flat: Literal[True] = True,) \
+        -> Tuple[pd.DataFrame, pd.DataFrame]: ...
+
+
+def separation_match(src_ra: float | np.ndarray, src_dec: float| np.ndarray,
+                     distance: Quantity | dict | None = None, telescope: str | List[str] | None = None,
                      num_cores: int = NUM_CORES, show_warnings: bool = True,
                      return_flat: bool = False) \
         -> Tuple[Union[dict, List[dict], pd.DataFrame], Union[dict, List[dict], pd.DataFrame]]:

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/9/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 2:18 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -853,7 +853,7 @@ def dict_search(key: str, var: dict) -> list:
                     yield [str(k), result]
 
 
-def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
+def check_telescope_choices(telescope: str | List[str] | None) -> List[str]:
     """
     This function centralises some checks that might be made in various places in the module. The checks are of
     the choices which the user has made regarding which telescopes to use for a function, and it makes sure that the
@@ -861,7 +861,7 @@ def check_telescope_choices(telescope: Union[str, List[str]]) -> List[str]:
     XGA, and makes sure that a list of strings is returned (even if there is only one) so that the output is always
     consistent.
 
-    :param str/List[str] telescope: The telescope choice made by the user - the formatting and validity of which will
+    :param str/List[str]/None telescope: The telescope choice made by the user - the formatting and validity of which will
         be checked by this function.
     :return: A list of telescope names (or a single name) that are valid and that have made it through the checks.
     :rtype: List[str]

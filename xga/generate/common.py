@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 6/23/26, 1:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 10:06 AM. Copyright (c) The Contributors.
 
 import os
 import sys
@@ -554,7 +554,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     return final_src
 
 
-def check_pattern(pattern: Union[str, int], telescope: str = 'xmm') -> Tuple[str, str]:
+def check_pattern(pattern: Union[str, int], telescope: str | None = 'xmm') -> Tuple[str, str]:
     """
     A very simple (and not exhaustive) checker for pattern expressions.
 
@@ -610,8 +610,9 @@ def check_pattern(pattern: Union[str, int], telescope: str = 'xmm') -> Tuple[str
         # TODO Add a pattern checker when I actually understand what patterns can be for Chandra
         patt_file_name = str(pattern)
     else:
-        warn("Support for the {t} telescope has not yet been added to this function.".format(t=telescope),
-             stacklevel=2)
+        if telescope is not None:
+            warn("Support for the {t} telescope has not yet been added to this function.".format(t=telescope),
+                 stacklevel=2)
         patt_file_name = str(pattern)
 
     return pattern, patt_file_name

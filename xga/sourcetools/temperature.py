@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/20/26, 12:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/30/26, 2:07 PM. Copyright (c) The Contributors.
 
 from typing import Tuple, Union, List, Dict
 from warnings import warn
@@ -60,7 +60,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     if telescope in ['erosita', 'erass'] and len(source.obs_ids[telescope]) > 1:
         # for erosita, no psf correction is available yet
         get_combined = True
-        psf_corr = None
+        psf_corr = False
         psf_model = None
         psf_bins = None
         psf_algo = None
@@ -68,7 +68,7 @@ def _ann_bins_setup(source: BaseSource, outer_rad: Quantity, min_width: Quantity
     elif telescope in ['erosita', 'erass'] and len(source.obs_ids[telescope]) == 1:
         # for erosita, no psf correction is available yet
         get_combined = False
-        psf_corr = None
+        psf_corr = False
         psf_model = None
         psf_bins = None
         psf_algo = None

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:08 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 4:13 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -3300,8 +3300,8 @@ class RateMap(Image):
         return edge_flag
 
     def signal_to_noise(self, source_mask: np.ndarray, back_mask: np.ndarray, exp_corr: bool = True,
-                        allow_negative: bool = False, x_slice_lims: List[int] = None,
-                        y_slice_lims: List[int] = None):
+                        allow_negative: bool = False, x_slice_lims: List[int] | None = None,
+                        y_slice_lims: List[int] | None = None) -> np.float64:
         """
         A signal-to-noise calculation method which takes information on source and background regions, then uses
         that to calculate a signal-to-noise for the source. This was primarily motivated by the desire to produce
@@ -3321,7 +3321,7 @@ class RateMap(Image):
         :param List[int] y_slice_lims: Lower and upper slice y-limits (numpy axis zero) applied to the passed
             masks, and as such have to be applied to the data array.
         :return: A signal-to-noise value for the source region.
-        :rtype: float
+        :rtype: np.float64
         """
         # If the optional slicing limits have been passed, we'll use them to extract a subset of the data, otherwise
         #  we'll use our entire data array - also check that if one set of slice limits are passed, the other is
@@ -3381,7 +3381,7 @@ class RateMap(Image):
             # Find the total counts within the background area
             bck_cnt = (self.image.data[y_slice, x_slice] * back_mask).sum()
 
-            # Signal to noise is then just finding the source counts by subtracting the area scaled background counts
+            # Signal-to-noise is then just finding the source counts by subtracting the area scaled background counts
             #  and dividing by the square root of the total counts within the source area
             sn = (tot_cnt - bck_cnt*area_norm) / np.sqrt(tot_cnt)
 
