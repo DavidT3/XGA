@@ -232,7 +232,7 @@ class Image(BaseProduct):
             # And if it passes that we check that the instrument values are one of the allowed list
             elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
                 raise ValueError(f"The allowed instruments for {telescope} are: "
-                                 f"{", ".join(ALLOWED_INST[telescope].values())}")
+                                 f"{', '.join(ALLOWED_INST[telescope].values())}")
 
         # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
         #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by

@@ -71,7 +71,7 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
 
     if abund_table not in ABUND_TABLES:
         raise ValueError(f"{abund_table} is not an XSPEC abundance table, allowed abundance tables are; "
-                         f"{", ".join(ABUND_TABLES)}.")
+                         f"{', '.join(ABUND_TABLES)}.")
 
     if not timeout.unit.is_equivalent('second'):
         raise UnitConversionError("The timeout quantity must be in units which can be converted to seconds, you have"
