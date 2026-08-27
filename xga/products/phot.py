@@ -1735,6 +1735,14 @@ class Image(BaseProduct):
             if y_lims is not None:
                 ax.set_ylim(y_lims)
 
+        # Here the user has passed manual x-limits, so we apply them
+        print(zoom_in)
+        if zoom_in and manual_zoom_xlims is not None:
+            ax.set_xlim(manual_zoom_xlims)
+        # Same here but for manual y-limits
+        if zoom_in and manual_zoom_ylims is not None:
+            ax.set_ylim(manual_zoom_ylims)
+
         return ax
 
     def view(
