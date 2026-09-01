@@ -103,9 +103,11 @@ def mission_software_call(mission_name: str, avail_check: Callable[[], None]):
                         else:
                             prod_obj, rel_src = results_in
                             if isinstance(prod_obj, list):
+                                prod_obj = [prod for prod in prod_obj if prod is not None]
                                 results[rel_src] += prod_obj
                             else:
-                                results[rel_src].append(prod_obj)
+                                if prod_obj is not None:
+                                    results[rel_src].append(prod_obj)
                             gen.update(1)
 
                     def err_callback(err):
