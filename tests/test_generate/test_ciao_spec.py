@@ -1,57 +1,57 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/10/26, 7:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/2/26, 4:55 PM. Copyright (c) The Contributors.
 
 import unittest
 
-from xga.exceptions import TelescopeNotAssociatedError, NoProductAvailableError
+from xga.exceptions import NoProductAvailableError, TelescopeNotAssociatedError
 from xga.generate.ciao.spec import specextract_spectrum
 from xga.products import Spectrum
+
 from .. import get_test_source
-from ..utils import require_ciao
+from ..utils import require_ciao, require_sas
 
 
 class TestCiaoSpecFuncs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.src = get_test_source('all')
+        cls.src = get_test_source("all")
+        cls.xmm_src = get_test_source("xmm")
 
     @require_ciao
-    def test_specextract_spectrum_no_tel_error(self):
+    @require_sas
+    def test_specextract_spectrum_no_tel_error(self) -> None:
         """
         Testing that TelescopeNotAssociatedError is raised when Chandra isn't associated.
         """
         with self.assertRaises(TelescopeNotAssociatedError):
-            specextract_spectrum(self.src, 'r500')
+            specextract_spectrum(self.xmm_src, "r500")
 
     @require_ciao
-    def test_specextract_spectrum_if_available(self):
+    def test_specextract_spectrum_if_available(self) -> None:
         """
         Test specextract_spectrum if Chandra data is available. Will skip if no Chandra observations.
         """
         # Check if Chandra is actually available for this source
-        if 'chandra' not in self.src.obs_ids or len(self.src.obs_ids.get('chandra', [])) == 0:
+        if "chandra" not in self.src.obs_ids or len(self.src.obs_ids.get("chandra", [])) == 0:
             self.skipTest("No Chandra observations available for test source")
 
         # If we get here, Chandra data exists - try to generate spectra
-        specextract_spectrum(self.src, 'r500')
+        specextract_spectrum(self.src, "r500")
 
         # Try to retrieve the generated products
         try:
-            spec = self.src.get_spectra('r500', telescope='chandra')
+            spec = self.src.get_spectra("r500", telescope="chandra")
         except NoProductAvailableError:
             self.fail("NoProductAvailableError raised when retrieving Chandra spectra.")
 
         if isinstance(spec, list):
             for s in spec:
-                assert s.telescope == 'chandra'
+                assert s.telescope == "chandra"
                 assert isinstance(s, Spectrum)
         else:
-            assert spec.telescope == 'chandra'
+            assert spec.telescope == "chandra"
             assert isinstance(spec, Spectrum)
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-

@@ -4,7 +4,7 @@ CLAUDE.md
 .coverage
 .pytest_cache
 xga_output
-daxa_output
+*daxa_output
 *census*
 *blacklist*
 .idea
@@ -19,5 +19,6 @@ daxa_output
 *.pyc
 xga/__pycache__/__init__.cpython-39.pyc
 claude_context/
+.claude
 htmlcov
 xga/_version.py
