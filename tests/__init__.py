@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/22/26, 9:08 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/2/26, 3:38 PM. Copyright (c) The Contributors.
 import os
 
 import numpy as np
@@ -8,7 +8,8 @@ from astropy.units import Quantity
 
 from xga import OUTPUT
 from xga.sources import GalaxyCluster
-from .source_info import SRC_INFO, SUPP_SRC_INFO, EXPECTED_ERO_OBS, EXPECTED_XMM_OBS
+
+from .source_info import EXPECTED_ERO_OBS, EXPECTED_XMM_OBS, SRC_INFO, SUPP_SRC_INFO
 
 MISC_OUTPUT_TESTS = os.path.join(OUTPUT, "test_figures")
 os.makedirs(MISC_OUTPUT_TESTS, exist_ok=True)
@@ -17,19 +18,24 @@ EXTERNAL_TEST_DATA_PATH = os.path.join(OUTPUT, "test_data", "external_data")
 os.makedirs(EXTERNAL_TEST_DATA_PATH, exist_ok=True)
 
 # Making a df to make a sample from
-column_names = ['name', 'ra', 'dec', 'z', 'r500']
-cluster_data = np.array([[SRC_INFO['name'], SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], 500],
-                         [SUPP_SRC_INFO['name'], SUPP_SRC_INFO['ra'], SUPP_SRC_INFO['dec'], SUPP_SRC_INFO['z'], 500]])
+column_names = ["name", "ra", "dec", "z", "r500"]
+cluster_data = np.array(
+    [
+        [SRC_INFO["name"], SRC_INFO["ra"], SRC_INFO["dec"], SRC_INFO["z"], 500],
+        [SUPP_SRC_INFO["name"], SUPP_SRC_INFO["ra"], SUPP_SRC_INFO["dec"], SUPP_SRC_INFO["z"], 500],
+    ]
+)
 
 CLUSTER_SMP = pd.DataFrame(data=cluster_data, columns=column_names)
-CLUSTER_SMP[['ra', 'dec', 'z', 'r500']] = CLUSTER_SMP[['ra', 'dec', 'z', 'r500']].astype(float)
+CLUSTER_SMP[["ra", "dec", "z", "r500"]] = CLUSTER_SMP[["ra", "dec", "z", "r500"]].astype(float)
 
 
 # We use a factory pattern to provide the test sources, this is because they are expensive to instantiate
 #  and we don't want to do it at import time, as the configuration might not be set up yet.
 _CACHED_SOURCES = {}
 
-def get_test_source(telescope: str = 'all', shared: bool = True, load_fits: bool = True) -> GalaxyCluster:
+
+def get_test_source(telescope: str = "all", shared: bool = True, load_fits: bool = True) -> GalaxyCluster:
     """
     A factory function to provide test sources. This is used to avoid instantiating them at import time.
 
@@ -50,21 +56,53 @@ def get_test_source(telescope: str = 'all', shared: bool = True, load_fits: bool
         return _CACHED_SOURCES[telescope]
 
     # Otherwise we set up the requested source instance for testing.
-    if telescope == 'all':
-        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                            name=SRC_INFO['name'], use_peak=False,
-                            search_distance={'erass': Quantity(3.6, 'deg')},
-                            load_profiles=False, load_fits=load_fits)
-    elif telescope == 'xmm':
-        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                            name=SRC_INFO['name'], use_peak=False,
-                            telescope='xmm', load_profiles=False, load_fits=load_fits)
-    elif telescope == 'erass' or telescope == 'erosita':
-        src = GalaxyCluster(SRC_INFO['ra'], SRC_INFO['dec'], SRC_INFO['z'], r500=Quantity(500, 'kpc'),
-                            name=SRC_INFO['name'], use_peak=False,
-                            telescope='erass',
-                            search_distance={'erass': Quantity(3.6, 'deg')},
-                            load_profiles=False, load_fits=load_fits)
+    if telescope == "all":
+        src = GalaxyCluster(
+            SRC_INFO["ra"],
+            SRC_INFO["dec"],
+            SRC_INFO["z"],
+            r500=Quantity(500, "kpc"),
+            name=SRC_INFO["name"],
+            use_peak=False,
+            search_distance={"erass": Quantity(3.6, "deg")},
+            load_profiles=False,
+            load_fits=load_fits,
+        )
+    elif telescope == "xmm":
+        src = GalaxyCluster(
+            SRC_INFO["ra"],
+            SRC_INFO["dec"],
+            SRC_INFO["z"],
+            r500=Quantity(500, "kpc"),
+            name=SRC_INFO["name"],
+            use_peak=False,
+            telescope="xmm",
+            load_profiles=False,
+            load_fits=load_fits,
+        )
+    elif telescope == "erass" or telescope == "erosita":
+        src = GalaxyCluster(
+            SRC_INFO["ra"],
+            SRC_INFO["dec"],
+            SRC_INFO["z"],
+            r500=Quantity(500, "kpc"),
+            name=SRC_INFO["name"],
+            use_peak=False,
+            telescope="erass",
+            search_distance={"erass": Quantity(3.6, "deg")},
+            load_profiles=False,
+            load_fits=load_fits,
+        )
+    elif telescope == "chandra":
+        src = GalaxyCluster(
+            SRC_INFO["ra"],
+            SRC_INFO["dec"],
+            SRC_INFO["z"],
+            r500=Quantity(500, "kpc"),
+            name=SRC_INFO["name"],
+            use_peak=False,
+            telescope="chandra",
+        )
     else:
         raise ValueError(f"Unknown mission name: {telescope}")
 
