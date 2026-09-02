@@ -288,7 +288,7 @@ class ClusterSample(BaseSample):
                 if self._sources[n].disassociated:
                     try:
                         # This re-runs peak finding
-                        self._sources[n]._all_peaks(peak_find_method)
+                        self._sources[n]._all_peaks(peak_find_method, 'extended')
                         self._sources[n]._default_coord = self._sources[n].peak
 
                     except PeakConvergenceFailedError:
