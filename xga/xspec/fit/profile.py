@@ -12,6 +12,7 @@ from ._common import _write_xspec_script, _check_inputs, _pregen_annular_spectra
 from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
 from ..run import xspec_call
 from ... import NUM_CORES
+from ...utils import DEFAULT_ABUND_TABLE
 from ...exceptions import ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
 from ...products import Spectrum
 from ...samples.base import BaseSample
@@ -25,7 +26,7 @@ def single_temp_apec_profile(sources: Union[BaseSource, BaseSample], radii: Unio
                              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
                              freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
                              hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                             abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+                             abund_table: str = DEFAULT_ABUND_TABLE, fit_method: str = "leven", group_spec: bool = True,
                              min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
                              num_cores: int = NUM_CORES, spectrum_checking: bool = True,
                              timeout: Quantity = Quantity(1, 'hr'), use_cross_arf: bool = False,

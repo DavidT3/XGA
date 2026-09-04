@@ -29,7 +29,7 @@ from ..products.profile import SurfaceBrightness1D, GasDensity3D
 from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster, BaseSource
 from ..sourcetools import ang_to_rad
-from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT
+from ..utils import NHC, ABUND_TABLES, NUM_CORES, MEAN_MOL_WEIGHT, DEFAULT_ABUND_TABLE
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
@@ -405,7 +405,7 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
 def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                           model: Union[str, List[str], BaseModel1D, List[BaseModel1D]], fit_method: str = "mcmc",
                           outer_radius: Union[str, Quantity] = "r500", num_dens: bool = True, use_peak: bool = True,
-                          pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = "angr",
+                          pix_step: int = 1, min_snr: Union[int, float] = 0.0, abund_table: str = DEFAULT_ABUND_TABLE,
                           lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                           psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                           psf_iter: int = 15, num_walkers: int = 20, num_steps: int = 20000, num_samples: int = 10000,
@@ -665,7 +665,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
 
 def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
                   inv_abel_method: str, num_dens: bool = True, use_peak: bool = True, pix_step: int = 1,
-                  min_snr: Union[int, float] = 0.0, abund_table: str = "angr", lo_en: Quantity = Quantity(0.5, 'keV'),
+                  min_snr: Union[int, float] = 0.0, abund_table: str = DEFAULT_ABUND_TABLE, lo_en: Quantity = Quantity(0.5, 'keV'),
                   hi_en: Quantity = Quantity(2.0, 'keV'), psf_corr: bool = True, psf_model: str = "ELLBETA",
                   psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_samples: int = 10000,
                   group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None,
@@ -970,7 +970,7 @@ def ann_spectra_apec_norm(sources: Union[GalaxyCluster, ClusterSample],
                           psf_iter: int = 15, allow_negative: bool = False,
                           exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
                           min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
-                          freeze_met: bool = True, abund_table: str = "angr",
+                          freeze_met: bool = True, abund_table: str = DEFAULT_ABUND_TABLE,
                           temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                           temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 10000,
                           sigma: int = 1, num_cores: int = NUM_CORES, stacked_spectra: bool = False,

@@ -20,7 +20,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.interpolate import interp1d
 
-from xga import ABUND_TABLES, MEAN_MOL_WEIGHT, NHC
+from xga import ABUND_TABLES, MEAN_MOL_WEIGHT, NHC, DEFAULT_ABUND_TABLE
 from xga.exceptions import (
     ModelNotAssociatedError,
     MultipleMatchError,
@@ -1256,7 +1256,7 @@ class APECNormalisation1D(BaseProfile1D):
         
 
     def _gen_profile_setup(
-        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr"
+        self, redshift: float, cosmo: Cosmology, abund_table: str = DEFAULT_ABUND_TABLE
     ) -> tuple[Quantity, Quantity, float]:
         """
         There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
@@ -1313,7 +1313,7 @@ class APECNormalisation1D(BaseProfile1D):
         self,
         redshift: float,
         cosmo: Quantity,
-        abund_table: str = "angr",
+        abund_table: str = DEFAULT_ABUND_TABLE,
         num_real: int = 10000,
         sigma: int = 1,
         num_dens: bool = True,
@@ -1397,7 +1397,7 @@ class APECNormalisation1D(BaseProfile1D):
         return dens_prof
 
     def emission_measure_profile(
-        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr", num_real: int = 100, sigma: int = 2
+        self, redshift: float, cosmo: Cosmology, abund_table: str = DEFAULT_ABUND_TABLE, num_real: int = 100, sigma: int = 2
     ) -> EmissionMeasure1D:
         """
         A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was

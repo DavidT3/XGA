@@ -14,6 +14,7 @@ from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _spec_
 from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
 from ..run import xspec_call
 from ... import NUM_CORES
+from ...utils import DEFAULT_ABUND_TABLE
 from ...exceptions import ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
@@ -26,7 +27,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
                      freeze_met: bool = True, freeze_temp: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
+                     abund_table: str = DEFAULT_ABUND_TABLE, fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                      min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                      spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
                      stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
@@ -253,7 +254,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
                       lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                       freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False,
                       lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-                      par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+                      par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = DEFAULT_ABUND_TABLE,
                       fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
                       over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                       spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
@@ -470,7 +471,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
                         lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
                         freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
                         hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                        abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+                        abund_table: str = DEFAULT_ABUND_TABLE, fit_method: str = "leven", group_spec: bool = True,
                         min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
                         num_cores: int = NUM_CORES, spectrum_checking: bool = True,
                         timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
@@ -649,7 +650,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
               lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_pho_index: float = 1.,
               lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
+              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = DEFAULT_ABUND_TABLE,
               fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
               over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
               timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
@@ -820,7 +821,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
               lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
               start_temp: Quantity = Quantity(1, "keV"), lo_en: Quantity = Quantity(0.3, "keV"),
               hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True, par_fit_stat: float = 1.,
-              lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
+              lum_conf: float = 68., abund_table: str = DEFAULT_ABUND_TABLE, fit_method: str = "leven", group_spec: bool = True,
               min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
               num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
               telescope: Union[str, List[str]] = None):
@@ -1011,7 +1012,7 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                      freeze_met_one: bool = True, freeze_met_two: bool = True, freeze_temp_one: bool = False,
                      freeze_temp_two: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
                      hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
+                     abund_table: str = DEFAULT_ABUND_TABLE, fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
                      min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                      spectrum_checking: bool = False, timeout: Quantity = Quantity(1, 'hr'),
                      stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) -> Union[BaseSource, BaseSample, List[BaseSource]]:
