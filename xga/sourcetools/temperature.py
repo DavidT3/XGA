@@ -10,6 +10,7 @@ from astropy.units import Quantity
 from ._common import _get_all_telescopes
 from .deproj import shell_ann_vol_intersect
 from .. import NUM_CORES, ABUND_TABLES
+from ..utils import DEFAULT_ABUND_TABLE
 from ..exceptions import NoProductAvailableError
 from ..generate.sas import region_setup
 from ..imagetools.misc import pix_deg_scale
@@ -403,7 +404,7 @@ def min_snr_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
                            min_sn: Union[int, float] = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
-                           abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                           abund_table: str = DEFAULT_ABUND_TABLE, temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
                            telescope: Union[str, List[str]] = None,
                            stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
@@ -564,7 +565,7 @@ def min_cnt_proj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            psf_iter: int = 15, group_spec: bool = True, min_counts: int = 5,
                            min_sn: Union[int, float] = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
-                           abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                           abund_table: str = DEFAULT_ABUND_TABLE, temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_cores: int = NUM_CORES,
                            telescope: Union[str, List[str]] = None,
                            stacked_spectra: bool = False) -> Dict[str, List[Quantity]]:
@@ -724,7 +725,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                            exp_corr: bool = True, group_spec: bool = True, min_counts: int = 5,
                            min_sn: Union[int, float] = None,
                            over_sample: float = None, one_rmf: bool = True, freeze_met: bool = True,
-                           abund_table: str = "angr", temp_lo_en: Quantity = Quantity(0.3, 'keV'),
+                           abund_table: str = DEFAULT_ABUND_TABLE, temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                            temp_hi_en: Quantity = Quantity(7.9, 'keV'), num_data_real: int = 3000,
                            conf_level: int = 68.2, num_cores: int = NUM_CORES, stacked_spectra: bool = False,
                            telescope: Union[str, List[str]] = None) -> Dict[str, List[GasTemperature3D]]:

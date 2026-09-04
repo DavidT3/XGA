@@ -8,6 +8,7 @@ from astropy.units import Quantity
 
 from .misc import model_check
 from .. import NUM_CORES
+from ..utils import DEFAULT_ABUND_TABLE
 from ..exceptions import ModelNotAssociatedError, NotAssociatedError
 from ..generate.sas._common import region_setup
 from ..imagetools.psf import rl_psf
@@ -169,7 +170,7 @@ def _setup_inv_abel_dens_onion_temp(sources: Union[GalaxyCluster, ClusterSample]
                                     inv_abel_method: str = None, temp_annulus_method: str = 'min_snr',
                                     temp_min_snr: Union[int, float] = 30, temp_min_cnt: Union[int, Quantity] = Quantity(1000, 'ct'),
                                     temp_min_width: Quantity = Quantity(20, 'arcsec'), temp_use_combined: bool = True,
-                                    temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = "angr",
+                                    temp_use_worst: bool = False, freeze_met: bool = True, abund_table: str = DEFAULT_ABUND_TABLE,
                                     temp_lo_en: Quantity = Quantity(0.3, 'keV'),
                                     temp_hi_en: Quantity = Quantity(7.9, 'keV'), group_spec: bool = True,
                                     spec_min_counts: int = 5, spec_min_sn: Union[int, float] = None, over_sample: float = None,
