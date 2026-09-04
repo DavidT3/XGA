@@ -1120,6 +1120,9 @@ with (importlib.resources.files(__package__) / "files/mean_mol_weights.json").op
 # For a fully ionised plasma, this is the electron-to-proton ratio
 with (importlib.resources.files(__package__) / "files/e_to_p_ratios.json").open("r") as f:
     NHC = json.load(f)
+
+# Setting a default table to use here in case we would like to change it in the future
+DEFAULT_ABUND_TABLE = 'aspl'
 # -----------------------------------------------------------------
 
 
