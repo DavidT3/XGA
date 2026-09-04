@@ -72,9 +72,7 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately,
     #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
     if mask is not None:
-        mask[mask == 0] = -1
-        mask[mask == 1] = 0
-        mask[mask == -1] = 1
+        mask *= -1
 
     # By default, we raise an error if the input product has already been smoothed, but
     #  we do also include an argument that allows the user to override the
