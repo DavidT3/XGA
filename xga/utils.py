@@ -1109,16 +1109,19 @@ SRC_REGION_COLOURS = {'pnt': ["red"], 'ext': ["green", "magenta", "blue", "cyan"
 # ------------- Defining constants to do with physics -------------
 # I know this is practically pointless, I could just use m_p
 HY_MASS = m_p + m_e
-
+    
 # Mean molecular weight, mu
 # TODO Make sure this doesn't change with abundance table, I think it might?
-MEAN_MOL_WEIGHT = 0.61
+with (importlib.resources.files(__package__) / "files/mean_mol_weights.json").open("r") as f:
+    MEAN_MOL_WEIGHT = json.load(f)
 
 # TODO Populate this further, also actually calculate and verify these myself, the value here is taken
 #  from pyproffit code
 # For a fully ionised plasma, this is the electron-to-proton ratio
-NHC = {"angr": 1.199}
+with (importlib.resources.files(__package__) / "files/e_to_p_ratios.json").open("r") as f:
+    NHC = json.load(f)
 # -----------------------------------------------------------------
+
 
 
 # ------------- Defining constants to do with units -------------
