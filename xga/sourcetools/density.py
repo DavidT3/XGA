@@ -638,7 +638,7 @@ def inv_abel_fitted_model(sources: Union[GalaxyCluster, ClusterSample],
                             # TODO Check the origin of the mean molecular weight, see if there are
                             #  different values for different abundance tables
                             # The mean molecular weight multiplied by the proton mass
-                            conv_mass = MEAN_MOL_WEIGHT*m_p
+                            conv_mass = MEAN_MOL_WEIGHT[abund_table]*m_p
                             dens_prof = GasDensity3D(dens_rads.to("kpc"),
                                                     (med_num_dens*conv_mass).to('Msun/Mpc^3'),
                                                     sb_prof.centre, src.name, cur_obs, cur_inst,
@@ -938,7 +938,7 @@ def inv_abel_data(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Un
                                                  deg_radii=dens_deg_rads, auto_save=True, telescope=tel)
                     else:
                         # The mean molecular weight multiplied by the proton mass
-                        conv_mass = MEAN_MOL_WEIGHT*m_p
+                        conv_mass = MEAN_MOL_WEIGHT[abund_table]*m_p
                         dens_prof = GasDensity3D(dens_rads.to("kpc"), (med_num_dens*conv_mass).to('Msun/Mpc^3'),
                                                  sb_prof.centre, src.name, cur_obs, cur_inst, inv_abel_method, sb_prof,
                                                  dens_rads_errs, (num_dens_err*conv_mass).to('Msun/Mpc^3'),
