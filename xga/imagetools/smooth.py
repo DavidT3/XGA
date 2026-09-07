@@ -355,8 +355,8 @@ def adaptive_smooth(
     # Normalise the final image
     final_image = final_num / final_norm
 
-    # Remove the padded borders (only half padwidth because of where xlo, xhi, ylo, yhi are defined)
-    sm_data = final_image[int(pad_width/2):int(-pad_width/2), int(pad_width/2):int(-pad_width/2)]
+    # Remove the padded borders
+    sm_data = final_image[int(pad_width):int(-pad_width), int(pad_width):int(-pad_width)]
 
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
