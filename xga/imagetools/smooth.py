@@ -2,6 +2,7 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:17 PM. Copyright (c) The Contributors.
 """The xga.imagetools.smooth module contains functions for convolving XGA Image and RateMap products with kernels."""
 
+import tqdm
 import numpy as np
 from astropy.convolution import Kernel, convolve, convolve_fft, Gaussian2DKernel
 
