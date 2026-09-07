@@ -363,7 +363,10 @@ def adaptive_smooth(
     smoothed_info = {
         "method": "adaptive",
         "pars": {
-            "kernel_widths": widths
+            "kernel_widths": widths,
+            "num_widths": num_widths,
+            "min_size": min_size,
+            "max_size": max_size
         }
     }
     if type(prod) == Image:
