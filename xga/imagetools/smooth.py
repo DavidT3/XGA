@@ -3,6 +3,7 @@
 
 from typing import Union, Optional
 
+import tqdm
 import numpy as np
 from astropy.convolution import Kernel, convolve, convolve_fft, Gaussian2DKernel
 
