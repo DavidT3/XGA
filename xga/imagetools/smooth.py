@@ -360,11 +360,17 @@ def adaptive_smooth(
 
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
+    smoothed_info = {
+        "method": "adaptive",
+        "pars": {
+            "kernel_widths": widths
+        }
+    }
     if type(prod) == Image:
         sm_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
                         prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
                         hi_en=prod.energy_bounds[1], telescope=prod.telescope, check_exists=False,
-                        smoothed=True, smoothed_info=kernel)
+                        smoothed=True, smoothed_info=smoothed_info)
 
     # User requested that the count-rate array of a RateMap be smoothed
     elif type(prod) == RateMap and not ratemap_smooth_im:
@@ -377,7 +383,7 @@ def adaptive_smooth(
         sm_im_prod = Image({'data': sm_data, 'wcs': prod.radec_wcs, 'header': prod.header}, prod.obs_id,
                             prod.instrument, "", "", "", lo_en=prod.energy_bounds[0],
                             hi_en=prod.energy_bounds[1], telescope=prod.telescope, check_exists=False,
-                            smoothed=True, smoothed_info=kernel)
+                            smoothed=True, smoothed_info=smoothed_info)
 
         # Now we make a new RateMap instance using that smoothed image
         sm_prod = RateMap(sm_im_prod, prod.expmap)
