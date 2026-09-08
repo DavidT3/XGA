@@ -73,7 +73,9 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
     # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately,
     #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
     if mask is not None:
-        mask *= -1
+        mask[mask == 0] = -1
+        mask[mask == 1] = 0
+        mask[mask == -1] = 1
 
     # By default, we raise an error if the input product has already been smoothed, but
     #  we do also include an argument that allows the user to override the
@@ -240,7 +242,9 @@ def adaptive_smooth(
     # While we ask for masks in the style XGA produces (0s where you don't want data, 1s where you do), unfortunately,
     #  the smoothing functions seem to want the opposite, so I'll quickly invert the mask here
     if mask is not None:
-        mask *= -1
+        mask[mask == 0] = -1
+        mask[mask == 1] = 0
+        mask[mask == -1] = 1
 
     # By default, we raise an error if the input product has already been smoothed, but
     #  we do also include an argument that allows the user to override the
@@ -286,10 +290,7 @@ def adaptive_smooth(
     weight_pad = np.pad(weights, pad_width, 'reflect')
     var_pad = np.pad(variance, pad_width, 'reflect')
 
-    # And now crop to the area specified by the lims (and account for pad width offset so kernel never runs away)
-
     # Precompute the constant arrays
-    weight_pad = weight_pad
     num_base = img_pad * weight_pad
     den_base = (weight_pad**2) * var_pad
 
