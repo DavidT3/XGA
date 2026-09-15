@@ -1,0 +1,91 @@
+{
+    "creators": [
+        {
+            "name": "Turner, David J.",
+            "orcid": "0000-0001-9658-1396",
+            "affiliation": "Center for Space Science and Technology, University of Maryland, Baltimore County (UMBC), Baltimore, Maryland, USA; High Energy Astrophysics Science Archive Research Center (HEASARC), NASA/GSFC, Greenbelt, Maryland, USA; Center for Research and Exploration in Space Science and Technology (CRESST II), NASA/GSFC, Greenbelt, Maryland, USA",
+            "type": "ProjectLeader"
+        },
+        {
+            "name": "Pilling, Jessica E.",
+            "orcid": "0000-0002-3211-928X",
+            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "type": "ProjectMember"
+        },
+        {
+            "name": "Wang, Ray",
+            "orcid": "0000-0003-2102-8646",
+            "affiliation": "Department of Physics and Astronomy, Michigan State University, Lansing, Michigan, USA",
+            "type": "ProjectMember"
+        },
+        {
+            "name": "Hall, Joseph",
+            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "type": "ProjectMember"
+        }
+    ],
+    "contributors": [
+        {
+            "name": "Donahue, Megan",
+            "orcid": "0000-0002-2808-0853",
+            "affiliation": "Department of Physics and Astronomy, Michigan State University, Lansing, Michigan, USA",
+            "type": "ProjectMember"
+        },
+        {
+            "name": "Giles, Paul A.",
+            "orcid": "0000-0003-4937-8453",
+            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "type": "ProjectMember"
+        },
+        {
+            "name": "Romer, Kathy",
+            "orcid": "0000-0002-9328-879X",
+            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "type": "ProjectMember"
+        },
+        {
+            "name": "Korbina, Violetta",
+            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "type": "ProjectMember"
+        }
+    ],
+    "title": "X-ray Generate and Analyse (XGA)",
+    "access_right": "open",
+    "related_identifiers": [
+        {
+            "identifier": "https://doi.org/10.48550/arXiv.2202.01236",
+            "relation": "isDescribedBy",
+            "resource_type": "publication-article"
+        },
+        {
+            "identifier": "ascl:2301.012",
+            "relation": "isAlternateIdentifier",
+            "resource_type": "software"
+        },
+        {
+            "identifier": "https://github.com/DavidT3/XGA",
+            "relation": "isSupplementTo",
+            "resource_type": "software"
+        }
+    ],
+    "keywords": [
+        "xga",
+        "xmm",
+        "xmm-science-analysis",
+        "xspec",
+        "xmm-observations",
+        "sas",
+        "heasoft",
+        "x-ray",
+        "astrophysics",
+        "astronomy",
+        "galaxy-clusters",
+        "x-ray-astronomy",
+        "chandra",
+        "erosita"
+    ],
+    "license": "bsd-3-clause",
+    "upload_type": "software",
+    "language": "eng",
+    "description": "XGA is a Python module designed to make the acquisition and processing of archives of X-ray astronomy data as painless as possible. It provides a consistent interface to the downloading and cleaning processes of each telescope, allowing the user to easily create multi-mission X-ray archives."
+}
