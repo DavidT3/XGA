@@ -49,7 +49,7 @@
             "type": "ProjectMember"
         }
     ],
-    "title": "X-ray Generate and Analyse (XGA)",
+    "title": "X-ray: Generate and Analyse (XGA)",
     "access_right": "open",
     "related_identifiers": [
         {
@@ -58,7 +58,7 @@
             "resource_type": "publication-article"
         },
         {
-            "identifier": "ascl:2301.012",
+            "identifier": "https://ascl.net/2301.012",
             "relation": "isAlternateIdentifier",
             "resource_type": "software"
         },
@@ -87,5 +87,5 @@
     "license": "bsd-3-clause",
     "upload_type": "software",
     "language": "eng",
-    "description": "XGA is a Python module designed to make the acquisition and processing of archives of X-ray astronomy data as painless as possible. It provides a consistent interface to the downloading and cleaning processes of each telescope, allowing the user to easily create multi-mission X-ray archives."
+    "description": "X-ray: Generate and Analyse (XGA) provides a Python interface to high-energy astrophysics data product generation and analysis, enabling large scale interactive/scripted exploration of X-ray sources. XMM, eROSITA, and Chandra (partial) are supported. Product classes provide powerful Python interfaces with high-energy data products."
 }
