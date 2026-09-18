@@ -9,7 +9,7 @@
         {
             "name": "Pilling, Jessica E.",
             "orcid": "0000-0002-3211-928X",
-            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "affiliation": "Universität Innsbruck, Institut für Astro- und Teilchenphysik, Technikerstr. 25/8, 6020 Innsbruck, Austria",
             "type": "ProjectMember"
         },
         {
@@ -20,7 +20,8 @@
         },
         {
             "name": "Hall, Joseph",
-            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "orcid": "0009-0003-7464-2348",
+            "affiliation": "H.H. Wills Physics Laboratory, University of Bristol, Tyndall Avenue, Bristol, BS8 1TL, UK",
             "type": "ProjectMember"
         }
     ],
