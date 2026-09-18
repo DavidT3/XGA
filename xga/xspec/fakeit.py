@@ -15,14 +15,14 @@ from ..exceptions import NoProductAvailableError, ModelNotAssociatedError, Param
 from ..products import Spectrum
 from ..samples.extended import ClusterSample
 from ..sources import BaseSource, GalaxyCluster
-from ..utils import ABUND_TABLES
+from ..utils import ABUND_TABLES, DEFAULT_ABUND_TABLE
 
 
 @xspec_call
 def cluster_cr_conv(sources: Union[GalaxyCluster, ClusterSample], outer_radius: Union[str, Quantity],
                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), sim_temp: Dict[str, Quantity] = None,
                     sim_met: Union[float, List] = 0.3, conv_en: Quantity = Quantity([[0.5, 2.0]], "keV"),
-                    abund_table: str = "angr", group_spec: bool = True, min_counts: int = 5,
+                    abund_table: str = DEFAULT_ABUND_TABLE, group_spec: bool = True, min_counts: int = 5,
                     min_sn: Union[int, float] = None,
                     over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
