@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/19/26, 6:48 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/19/26, 7:12 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -638,32 +638,7 @@ def rebuild_census(
 
             # This handles both the full rebuild (since we just deleted the file)
             # and the standard 'find new data' update
-            CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel, num_cores=num_cores)
-
-            if clean_dead:
-                # Cleanup of dead entries
-                census = CENSUS[tel]
-                rel_root_dir = xga_conf[tel.upper() + "_FILES"][f"root_{tel}_dir"]
-
-                # We get a list of all directories in the root directory that look like ObsIDs
-                # We use a set for O(1) lookup efficiency
-                current_obs = {
-                    poss_oi
-                    for poss_oi in os.listdir(rel_root_dir)
-                    if os.path.isdir(os.path.join(rel_root_dir, poss_oi)) and obs_id_test(tel, poss_oi)
-                }
-
-                # Filter the census to only keep rows where the ObsID is still present
-                original_len = len(census)
-                # We access the ObsID column
-                census = census[census["ObsID"].isin(current_obs)]
-
-                if len(census) != original_len:
-                    # Update the internal CENSUS dictionary
-                    CENSUS[tel] = census
-                    # Save the cleaned census back to disk
-                    census.to_csv(census_file, index=False)
-                    warn(f"Cleaned {original_len - len(census)} dead entries from {tel} census.", stacklevel=2)
+            CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel, num_cores=num_cores, clean_dead=clean_dead)
 
 
 def obs_id_test(test_tele: str, test_string: str) -> bool:
@@ -802,12 +777,14 @@ def _extract_header_info(
     return info
 
 
-def build_observation_census(tel: str, num_cores: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_observation_census(tel: str, num_cores: int, clean_dead: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     A function that builds/updates the census and blacklist for each telescope.
 
     :param str tel: The name of the telescope we are setting up a census/blacklist for.
     :param int num_cores: The number of cores to use for parallel header extraction.
+    :param bool clean_dead: If True, the census will be checked for entries that no longer have a corresponding
+        ObsID directory in the data path, and those entries will be removed.
     :return: The census and blacklist dataframes for the input telescope.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
@@ -895,6 +872,7 @@ def build_observation_census(tel: str, num_cores: int) -> tuple[pd.DataFrame, pd
     # First, set up a list to store any ObsIDs we find that ARE NOT already a part of the census
     #  for this telescope
     new_obs_census = []
+    all_obs_present = []
 
     if root_dir_fs is None:
         # If root_dir_fs is None, that means we're dealing with local files. Using scandir is more
@@ -903,8 +881,13 @@ def build_observation_census(tel: str, num_cores: int) -> tuple[pd.DataFrame, pd
         with os.scandir(rel_root_dir) as entries:
             for entry in entries:
                 try:
-                    if entry.is_dir() and obs_id_test(tel, entry.name) and entry.name not in existing_obs:
-                        new_obs_census.append(entry.name)
+                    if entry.is_dir() and obs_id_test(tel, entry.name):
+                        if entry.name not in existing_obs:
+                            new_obs_census.append(entry.name)
+                        # We want to be able to check for census entries that no longer appear in the
+                        #  data directory, so if we confirm that the entry IS a directory and matches
+                        #  the expected format of an ObsID for this telescope, we also put it in another list
+                        all_obs_present.append(entry.name)
                 except OSError:
                     # Add an OSError catch as some of these checks can raise errors if there is a
                     #  broken symlink for instance, or a symlink that somehow refers to itself
@@ -918,8 +901,14 @@ def build_observation_census(tel: str, num_cores: int) -> tuple[pd.DataFrame, pd
         with root_dir_fs.ls(root_dir_url_path, detail=True) as entries:
             for entry in entries:
                 app_obs_id = entry["name"].split("/")[-1].strip("/")
-                if entry["type"] == "directory" and app_obs_id not in existing_obs and obs_id_test(tel, app_obs_id):
-                    new_obs_census.append(app_obs_id)
+                if entry["type"] == "directory" and obs_id_test(tel, app_obs_id):
+                    if app_obs_id not in existing_obs:
+                        new_obs_census.append(app_obs_id)
+
+                # We want to be able to check for census entries that no longer appear in the
+                #  data directory, so if we confirm that the entry IS a directory and matches
+                #  the expected format of an ObsID for this telescope, we also put it in another list
+                all_obs_present.append(app_obs_id)
 
     if len(new_obs_census) != 0:
         evt_path_keys = [e_key for e_key in tele_conf if "evts" in e_key and "clean" in e_key]
@@ -967,7 +956,24 @@ def build_observation_census(tel: str, num_cores: int) -> tuple[pd.DataFrame, pd
     rel_bl_cols = [col for col in blacklist.columns if "EXCLUDE" in col]
     blacklist[rel_bl_cols] = blacklist[rel_bl_cols].apply(lambda x: x.isin(["T", "True", "t", "true"]))
 
-    # Finally we return the census and the blacklist
+    # Cleanup of dead entries - if the user has turned it on.
+    if clean_dead:
+        # Here we drop any entries in the sentence that are NO LONGER PRESENT in the root data directory. We
+        #  use the list of all ObsID directories in the root data directory that we constructed earlier
+        #  in this function.
+
+        og_census_len = len(obs_lookup)
+
+        obs_lookup = obs_lookup[obs_lookup["ObsID"].isin(all_obs_present)]
+
+        if len(obs_lookup) != og_census_len:
+            # Save the cleaned census back to disk
+            obs_lookup.to_csv(census_file, index=False)
+            warn(
+                f"Cleaned {og_census_len - len(obs_lookup)} dead entries from {tel}'s observation census.", stacklevel=2
+            )
+
+    # Finally, we return the census and the blacklist
     return obs_lookup, blacklist
 
 
