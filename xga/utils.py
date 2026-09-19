@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/19/26, 6:26 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/19/26, 6:48 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -687,34 +687,67 @@ def obs_id_test(test_tele: str, test_string: str) -> bool:
 
 
 def _extract_header_info(
-    obs: str, tel: str, evt_path_keys: list[str], evt_path_insts: list[str], inst_from_evt: bool, tele_conf: dict
-):
+    obs_id: str,
+    tel: str,
+    evt_path_keys: list[str],
+    evt_path_insts: list[str],
+    inst_from_evt: bool,
+    tele_conf: dict,
+    file_proto: str | None,
+) -> dict:
     """
     An internal helper function to extract pointing and instrument usability information from
     a single observation's event lists. This is designed to be run in parallel.
 
-    :param str obs: The ObsID to extract info for.
+    :param str obs_id: The ObsID to extract info for.
     :param str tel: The telescope name.
     :param List[str] evt_path_keys: The configuration keys for event lists.
     :param List[str] evt_path_insts: The instrument names associated with those keys.
     :param bool inst_from_evt: Whether instrument info should be pulled from the event list header.
     :param dict tele_conf: The configuration dictionary for the specific telescope.
+    :param str file_proto: Which protocol (e.g. local, HTTPS, S3 URI) the event list
     :return: A dictionary of information for the census.
     :rtype: dict
     """
     # Set up the data that will be added to the census for the current observation
-    info = {"ObsID": obs}
+    info = {"ObsID": obs_id}
 
     # Iterating through the identified event list keys in the config for the current telescope
     for evt_key_ind, evt_key in enumerate(evt_path_keys):
-        evt_path = tele_conf[evt_key].format(obs_id=obs)
+        evt_path = tele_conf[evt_key].format(obs_id=obs_id)
 
         if os.path.exists(evt_path):
             # Just read in the header of the events file - want to avoid reading a big old table of
             #  events into memory, as we might be doing this a bunch of times
             try:
                 # Using getheader is optimized for just grabbing the header
-                evts_header = fits.getheader(evt_path, extname="EVENTS")
+                # TODO I THINK THERE WAS A REASON WE _HAD_ TO SWITCH TO USING THE EVENTS HEADER
+                #  AND I THINK IT WAS EROSITA... MY CONCERN IS IF EVT LISTS ARE COMPRESSED THEN
+                #  ANYTHING APART FROM THE FIRST HEADER IS GOING TO MEAN READING/STREAMING THE WHOLE
+                #  FILE... (I think?)
+                if file_proto is None:
+                    evts_header = fits.getheader(evt_path, extname="EVENTS", lazy_load_hdus=True)
+                elif file_proto.lower() == "s3":
+                    # Again this includes an assumption that the data are being read specifically
+                    #  from an open-access S3 bucket (the HEASARC one most likely).
+                    evts_header = fits.getheader(
+                        evt_path,
+                        extname="EVENTS",
+                        lazy_load_hdus=True,
+                        use_fsspec=True,
+                        cache=False,
+                        fsspec_kwargs={"anon": True},
+                    )
+                else:
+                    evts_header = fits.getheader(
+                        evt_path,
+                        extname="EVENTS",
+                        lazy_load_hdus=True,
+                        use_fsspec=True,
+                        cache=False,
+                        fsspec_kwargs={"ssl": False},
+                    )
+
             except Exception:
                 # If anything goes wrong, we assume the file is corrupted or unusable
                 if inst_from_evt:
@@ -898,7 +931,16 @@ def build_observation_census(tel: str, num_cores: int) -> tuple[pd.DataFrame, pd
         with ProcessPoolExecutor(max_workers=num_cores) as executor:
             # Create a list of futures
             futures = [
-                executor.submit(_extract_header_info, obs, tel, evt_path_keys, evt_path_insts, inst_from_evt, tele_conf)
+                executor.submit(
+                    _extract_header_info,
+                    obs,
+                    tel,
+                    evt_path_keys,
+                    evt_path_insts,
+                    inst_from_evt,
+                    tele_conf,
+                    root_dir_prot,
+                )
                 for obs in new_obs_census
             ]
 
