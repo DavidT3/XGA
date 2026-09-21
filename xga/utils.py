@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 12:18 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 12:20 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -562,7 +562,7 @@ def _initialise_xga():
         no_check = poss_ens + [f"root_{tel}_dir"]
         for entry in cur_sec:
             if "/this/is/required/" in cur_sec[entry]:
-                any_req_defaults = False
+                all_req_changed = False
             elif (
                 entry not in no_check and cur_sec[f"root_{tel}_dir"] not in cur_sec[entry] and cur_sec[entry][0] != "/"
             ):
