@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 12:20 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 2:23 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -550,6 +550,11 @@ def _initialise_xga():
         elif os.path.exists(cur_sec[f"root_{tel}_dir"]):
             root_dir_exists = True
 
+        # We make sure that the root directory is an absolute path, just for our sanity later on. THOUGH
+        #  only if the root filesystem is None, meaning the files are local.
+        if root_dir_fs is None:
+            cur_sec[f"root_{tel}_dir"] = os.path.join(os.path.abspath(cur_sec[f"root_{tel}_dir"]), "")
+
         # This is a pretty blunt-force approach, but honestly I think it should work fine consider we just want to
         #  check whether any of the required sections have been left as the default values (meaning that telescope
         #  hasn't been configured and can't be used).
@@ -563,16 +568,15 @@ def _initialise_xga():
         for entry in cur_sec:
             if "/this/is/required/" in cur_sec[entry]:
                 all_req_changed = False
+            # If the product paths are NOT absolute, then we need to prepend the root data directory. This should
+            #  work even if the file system is not local, as the structure of the URL/URI paths will be the same.
             elif (
-                entry not in no_check and cur_sec[f"root_{tel}_dir"] not in cur_sec[entry] and cur_sec[entry][0] != "/"
+                entry not in no_check
+                and cur_sec[f"root_{tel}_dir"] not in cur_sec[entry]
+                and not os.path.isabs(cur_sec[entry][0])
             ):
-                # Replace the current definition with an absolute one s
-                cur_sec[entry] = os.path.join(os.path.abspath(cur_sec[f"root_{tel}_dir"]), cur_sec[entry])
-
-        # We make sure that the root directory is an absolute path, just for our sanity later on. THOUGH
-        #  only if the root filesystem is None, meaning the files are local.
-        if root_dir_fs is None:
-            cur_sec[f"root_{tel}_dir"] = os.path.join(os.path.abspath(cur_sec[f"root_{tel}_dir"]), "")
+                # Replace the current definition of the path with one
+                cur_sec[entry] = os.path.join(cur_sec[f"root_{tel}_dir"], cur_sec[entry])
 
         # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
         #  the USABLE entry for the current telescope will stay at the default value of False
@@ -585,11 +589,11 @@ def _initialise_xga():
     CENSUS = {}
     BLACKLIST = {}
     # Also create a dictionary that tells parts of XGA whether it should expect the event lists of the different
-    #  instruments to be separate, or combined (I'm looking at you eROSITA CalPV).
+    #  instruments to be separate or combined (I'm looking at you eROSITA CalPV).
     COMBINED_INSTS = {}
 
     # Checking if someone had been using the XMM only version of XGA previously - with this update to implement the
-    #  infrastructure to support different telescopes the census/blacklist files will exist for EACH telescope
+    #  infrastructure to support different telescopes, the census/blacklist files will exist for EACH telescope
     #  individually
     old_census_path = os.path.join(CONFIG_PATH, "census.csv")
     if os.path.exists(old_census_path):
@@ -743,88 +747,79 @@ def _extract_header_info(
     for evt_key_ind, evt_key in enumerate(evt_path_keys):
         evt_path = tele_conf[evt_key].format(obs_id=obs_id)
 
-        if os.path.exists(evt_path):
-            # Just read in the header of the events file - want to avoid reading a big old table of
-            #  events into memory, as we might be doing this a bunch of times
-            try:
-                # Using getheader is optimized for just grabbing the header
-                # TODO I THINK THERE WAS A REASON WE _HAD_ TO SWITCH TO USING THE EVENTS HEADER
-                #  AND I THINK IT WAS EROSITA... MY CONCERN IS IF EVT LISTS ARE COMPRESSED THEN
-                #  ANYTHING APART FROM THE FIRST HEADER IS GOING TO MEAN READING/STREAMING THE WHOLE
-                #  FILE... (I think?)
-                if file_proto is None:
-                    evts_header = fits.getheader(evt_path, extname="EVENTS", lazy_load_hdus=True)
-                elif file_proto.lower() == "s3":
-                    # Again this includes an assumption that the data are being read specifically
-                    #  from an open-access S3 bucket (the HEASARC one most likely).
-                    evts_header = fits.getheader(
-                        evt_path,
-                        extname="EVENTS",
-                        lazy_load_hdus=True,
-                        use_fsspec=True,
-                        cache=False,
-                        fsspec_kwargs={"anon": True},
-                    )
-                else:
-                    evts_header = fits.getheader(
-                        evt_path,
-                        extname="EVENTS",
-                        lazy_load_hdus=True,
-                        use_fsspec=True,
-                        cache=False,
-                        fsspec_kwargs={"ssl": False},
-                    )
-
-            except Exception:
-                # If anything goes wrong, we assume the file is corrupted or unusable
-                if inst_from_evt:
-                    for i in ALLOWED_INST[tel]:
-                        info[f"USE_{i.upper()}"] = "F"
-                else:
-                    info[f"USE_{evt_path_insts[evt_key_ind].upper()}"] = "F"
-                continue
-
-            # pointing coordinates
-            if tel in ["erosita", "erass"] and evts_header.get("OBS_MODE") == "SURVEY":
-                if evts_header.get("RA_CEN", 0.0) == 0.0 and evts_header.get("RA_OBJ", 0.0) != 0.0:
-                    info["RA_PNT"] = evts_header.get("RA_OBJ")
-                else:
-                    info["RA_PNT"] = evts_header.get("RA_CEN")
-
-                if evts_header.get("DEC_CEN", 0.0) == 0.0 and evts_header.get("DEC_OBJ", 0.0) != 0.0:
-                    info["DEC_PNT"] = evts_header.get("DEC_OBJ")
-                else:
-                    info["DEC_PNT"] = evts_header.get("DEC_CEN")
+        # Just read in the header of the events file - want to avoid reading a big old table of
+        #  events into memory, as we might be doing this a bunch of times
+        try:
+            # Using getheader is optimized for just grabbing the header
+            # TODO I THINK THERE WAS A REASON WE _HAD_ TO SWITCH TO USING THE EVENTS HEADER
+            #  AND I THINK IT WAS EROSITA... MY CONCERN IS IF EVT LISTS ARE COMPRESSED THEN
+            #  ANYTHING APART FROM THE FIRST HEADER IS GOING TO MEAN READING/STREAMING THE WHOLE
+            #  FILE... (I think?) - IT SEEMS TO BE SLOW REGARDLESS OF PRIMARY OR EVENT TABLE
+            if file_proto is None:
+                evts_header = fits.getheader(evt_path, extname="EVENTS", lazy_load_hdus=True)
+            elif file_proto.lower() == "s3":
+                # Again this includes an assumption that the data are being read specifically
+                #  from an open-access S3 bucket (the HEASARC one most likely).
+                evts_header = fits.getheader(
+                    evt_path,
+                    extname="EVENTS",
+                    lazy_load_hdus=True,
+                    use_fsspec=True,
+                    cache=False,
+                    fsspec_kwargs={"anon": True},
+                )
             else:
-                info["RA_PNT"] = evts_header.get("RA_PNT")
-                info["DEC_PNT"] = evts_header.get("DEC_PNT")
+                evts_header = fits.getheader(
+                    evt_path,
+                    extname="EVENTS",
+                    lazy_load_hdus=True,
+                    use_fsspec=True,
+                    cache=False,
+                    fsspec_kwargs={"ssl": False},
+                )
 
-            # Filter check
-            if "FILTER" in evts_header:
-                good_filt = evts_header["FILTER"] not in BANNED_FILTS[tel]
-            else:
-                good_filt = True
-
-            if inst_from_evt:
-                hdr_insts = [
-                    evts_header[h_key]
-                    for h_key in list(evts_header.keys())
-                    if "INSTRUM" in h_key and "INSTRUME" not in h_key
-                ]
-                for i in ALLOWED_INST[tel]:
-                    use_key = f"USE_{i.upper()}"
-                    info[use_key] = "T" if (i.upper() in hdr_insts and good_filt) else "F"
-            else:
-                use_key = f"USE_{evt_path_insts[evt_key_ind].upper()}"
-                info[use_key] = "T" if good_filt else "F"
-
-        else:
-            # If the file path doesn't exist then we have to set the usable column(s) to False!
+        except Exception:
+            # If anything goes wrong, we assume the file is corrupted or unusable
             if inst_from_evt:
                 for i in ALLOWED_INST[tel]:
                     info[f"USE_{i.upper()}"] = "F"
             else:
                 info[f"USE_{evt_path_insts[evt_key_ind].upper()}"] = "F"
+            continue
+
+        # pointing coordinates
+        if tel in ["erosita", "erass"] and evts_header.get("OBS_MODE") == "SURVEY":
+            if evts_header.get("RA_CEN", 0.0) == 0.0 and evts_header.get("RA_OBJ", 0.0) != 0.0:
+                info["RA_PNT"] = evts_header.get("RA_OBJ")
+            else:
+                info["RA_PNT"] = evts_header.get("RA_CEN")
+
+            if evts_header.get("DEC_CEN", 0.0) == 0.0 and evts_header.get("DEC_OBJ", 0.0) != 0.0:
+                info["DEC_PNT"] = evts_header.get("DEC_OBJ")
+            else:
+                info["DEC_PNT"] = evts_header.get("DEC_CEN")
+        else:
+            info["RA_PNT"] = evts_header.get("RA_PNT")
+            info["DEC_PNT"] = evts_header.get("DEC_PNT")
+
+        # Filter check
+        if "FILTER" in evts_header:
+            good_filt = evts_header["FILTER"] not in BANNED_FILTS[tel]
+        else:
+            good_filt = True
+
+        if inst_from_evt:
+            hdr_insts = [
+                evts_header[h_key]
+                for h_key in list(evts_header.keys())
+                if "INSTRUM" in h_key and "INSTRUME" not in h_key
+            ]
+            for i in ALLOWED_INST[tel]:
+                use_key = f"USE_{i.upper()}"
+                info[use_key] = "T" if (i.upper() in hdr_insts and good_filt) else "F"
+        else:
+            use_key = f"USE_{evt_path_insts[evt_key_ind].upper()}"
+            info[use_key] = "T" if good_filt else "F"
 
     return info
 
