@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 4:41 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 4:48 PM. Copyright (c) The Contributors.
 
 from warnings import warn
 
@@ -560,6 +560,7 @@ def min_snr_proj_temp_prof(
     num_cores: int = NUM_CORES,
     telescope: str | list[str] = None,
     stacked_spectra: bool = False,
+    allow_edge_clipping: bool = False,
 ) -> dict[str, list[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
@@ -615,6 +616,10 @@ def min_snr_proj_temp_prof(
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param bool allow_edge_clipping: If True, during annulus calculation (e.g. to achieve minimum signal-to-noise), the
+        background/annulus selection region will be clipped to the bounds of the image instead of raising a ValueError
+        when the outer background radius extends beyond the image edges. A warning will be issued if clipping
+        occurs. Default is False.
     :return: A dictionary of lists of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
         to a source. Each key corresponds to a telescope.
@@ -696,6 +701,7 @@ def min_snr_proj_temp_prof(
                     psf_iter=psf_iter,
                     allow_negative=allow_negative,
                     exp_corr=exp_corr,
+                    allow_edge_clipping=allow_edge_clipping,
                 )
             else:
                 # The return for this function is two dictionaries of arrays ranked worst to best, so we
@@ -726,6 +732,7 @@ def min_snr_proj_temp_prof(
                     psf_iter,
                     allow_negative,
                     exp_corr,
+                    allow_edge_clipping=allow_edge_clipping,
                 )
 
             # Add the current telescope's radii to the storage dictionary
@@ -781,6 +788,7 @@ def min_cnt_proj_temp_prof(
     num_cores: int = NUM_CORES,
     telescope: str | list[str] = None,
     stacked_spectra: bool = False,
+    allow_edge_clipping: bool = False,
 ) -> dict[str, list[Quantity]]:
     """
     This is a convenience function that allows you to quickly and easily start measuring projected
@@ -830,6 +838,10 @@ def min_cnt_proj_temp_prof(
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be used for this
         XSPEC spectral fit. If a stacking procedure for a particular telescope is not supported, this function will
         instead use individual spectra for an ObsID. The default is False.
+    :param bool allow_edge_clipping: If True, during annulus calculation (e.g. to achieve minimum signal-to-noise), the
+        background/annulus selection region will be clipped to the bounds of the image instead of raising a ValueError
+        when the outer background radius extends beyond the image edges. A warning will be issued if clipping
+        occurs. Default is False.
     :return: A dictionary of lists of non-scalar astropy quantities containing the annular radii used to generate the
         projected temperature profiles created by this function. Each Quantity element of the list corresponds
         to a source. Each key corresponds to a telescope.
@@ -894,14 +906,15 @@ def min_cnt_proj_temp_prof(
                     psf_bins=psf_bins,
                     psf_algo=psf_algo,
                     psf_iter=psf_iter,
+                    allow_edge_clipping=allow_edge_clipping,
                 )
             else:
-                # Use the source's built in count ranking method (which in turn uses some RateMap class
+                # Use the source's built-in count ranking method (which in turn uses some RateMap class
                 #  methods) to rank the individual observations (cnt_rnk is ObsID, Instrument combinations in
                 #  order of ascending counts).
                 # We then use the counts measured for each ObsID-Instrument combo (which are returned and
                 #  stored in cnts) to decide upon the median observation.
-                # Unfortunately eROSITA and eRASS need special treatment (for now at least).
+                # Unfortunately, eROSITA and eRASS need special treatment (for now at least).
                 #  They get stacked_inst set to True, as we don't really want to deal with
                 #  individual ObsID-inst combos there
                 stacked_inst = True if tel in ["erosita", "erass"] else False
@@ -933,6 +946,7 @@ def min_cnt_proj_temp_prof(
                     psf_bins,
                     psf_algo,
                     psf_iter,
+                    allow_edge_clipping=allow_edge_clipping,
                 )
 
             # Add the current telescope's radii to the storage dictionary
