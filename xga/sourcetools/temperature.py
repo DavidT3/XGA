@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 4:37 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 4:41 PM. Copyright (c) The Contributors.
 
 from warnings import warn
 
@@ -61,7 +61,7 @@ def _ann_bins_setup(
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
     :param bool allow_edge_clipping: If True, the background/annulus selection region will be clipped to the
         bounds of the image instead of raising a ValueError when the outer background radius extends beyond the
-        image edges. A warning will be issued if clipping occurs. Default is False (original raise behaviour).
+        image edges. A warning will be issued if clipping occurs. Default is False.
     :return: The various variables that this function sets up.
     :rtype: Tuple
     """
@@ -227,6 +227,7 @@ def _snr_bins(
     psf_iter: int = 15,
     allow_negative: bool = False,
     exp_corr: bool = True,
+    allow_edge_clipping: bool = False,
 ) -> tuple[Quantity, np.ndarray, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum signal to noise
@@ -255,6 +256,9 @@ def _snr_bins(
     :param bool exp_corr: Should signal to noises be measured with exposure time correction, default is True. I
             recommend that this be true for combined observations, as exposure time could change quite dramatically
             across the combined product.
+    :param bool allow_edge_clipping: If True, the background/annulus selection region will be clipped to the
+        bounds of the image instead of raising a ValueError when the outer background radius extends beyond the
+        image edges. A warning will be issued if clipping occurs. Default is False.
     :return: The radii of the requested annuli, the final snr values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, np.ndarray, int]
@@ -274,6 +278,7 @@ def _snr_bins(
         psf_bins,
         psf_algo,
         psf_iter,
+        allow_edge_clipping,
     )
     # This just makes it much nicer to read
     (
@@ -381,6 +386,7 @@ def _cnt_bins(
     psf_bins: int = 4,
     psf_algo: str = "rl",
     psf_iter: int = 15,
+    allow_edge_clipping: bool = False,
 ) -> tuple[Quantity, Quantity, int]:
     """
     An internal function that will find the radii required to create annuli with a certain minimum number of counts
@@ -407,6 +413,9 @@ def _cnt_bins(
         side in the PSF grid.
     :param str psf_algo: If the ratemap you want to use is PSF corrected, this is the algorithm used.
     :param int psf_iter: If the ratemap you want to use is PSF corrected, this is the number of iterations.
+    :param bool allow_edge_clipping: If True, the background/annulus selection region will be clipped to the
+        bounds of the image instead of raising a ValueError when the outer background radius extends beyond the
+        image edges. A warning will be issued if clipping occurs. Default is False.
     :return: The radii of the requested annuli, the final count values, and the original maximum number
         based on min_width.
     :rtype: Tuple[Quantity, Quantity, int]
@@ -433,6 +442,7 @@ def _cnt_bins(
         psf_bins,
         psf_algo,
         psf_iter,
+        allow_edge_clipping,
     )
     # This just makes it much nicer to read
     (
