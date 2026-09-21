@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/19/26, 7:12 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 12:18 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -21,6 +21,7 @@ from astropy.units import Quantity, add_enabled_equivalencies, add_enabled_units
 from astropy.wcs import WCS
 from fitsio import FITSHDR
 from fsspec.core import split_protocol, url_to_fs
+from fsspec.spec import AbstractFileSystem
 from packaging.version import Version
 from tqdm import tqdm
 
@@ -211,10 +212,10 @@ def _get_esass_info() -> tuple[str | None, bool]:
         # Version strings for eSASS are handled a bit differently as they're not always standard versions
         # but we'll try to wrap them in Version objects regardless for consistency
         if "ESASS4EDR" in which_evtool.upper():
-            # Version('0.1.0')  # Dummy numeric version for EDR
+            # Version('0.1.0') -  Dummy numeric version for EDR
             esass_version = "ESASS4EDR"
         elif "ESASS4DR1" in which_evtool.upper():
-            # Version('1.0.0')  # Dummy numeric version for DR1
+            # Version('1.0.0') - Dummy numeric version for DR1
             esass_version = "ESASS4DR1"
         else:
             warn(
@@ -389,6 +390,46 @@ def _prep_xga_config_file() -> tuple[dict, str, str]:
     return cur_xga_conf, cur_config_path, cur_config_file
 
 
+def _get_root_data_filesystem(cur_root_dir: str) -> tuple[str, AbstractFileSystem | None, str | None]:
+    """
+    Internal function to derive the file protocol of and set up a filesystem for root data directories
+    of the various missions specified in the configuration file.
+
+    :param str cur_root_dir: Value set for a mission's root data directory in the configuration file.
+    :return: A tuple containing the protocol of the root directory, the filesystem object, and the URL path.
+    :rtype: Tuple[str, AbstractFileSystem | None, str | None]
+    """
+    # This simply returns the 'protocol' of the root directory provided - if the directory is local
+    #  then it will be None, if it's a URL starting 'https://' it will be 'https', and if it's
+    #  an S3 URI then it will be 's3', and so on.
+    root_dir_prot = split_protocol(cur_root_dir)[0]
+
+    # We use fsspec to handle the URL and URI cases
+    if root_dir_prot == "s3":
+        # Pass anon=True to account for the most likely-by-far use case, which is that they are pointing
+        #  at the public HEASARC S3 bucket. This does shut down the possibility of them using
+        #  private buckets, but if there is demand we can allow credential passing.
+        root_dir_fs, root_dir_url_path = url_to_fs(cur_root_dir, anon=True)
+
+    elif root_dir_prot == "http" or root_dir_prot == "https":
+        # If the root data directory was a more standard URL, we set ssl=False. This helps to avoid
+        #  some issues with SSL certificates that seem to be quite common.
+        # TODO CHECK IF THERE IS A BETTER WAY TO DO THIS, I DON'T LIKE DISABLING A SECURITY FEATURE.
+        root_dir_fs, root_dir_url_path = url_to_fs(cur_root_dir, ssl=False)
+
+    elif root_dir_prot is None:
+        root_dir_fs = None
+        root_dir_url_path = None
+
+    else:
+        raise XGAConfigError(
+            f"XGA does not currently support root data paths using the {root_dir_prot} "
+            f"protocol, only local files, http, https, and S3."
+        )
+
+    return root_dir_prot, root_dir_fs, root_dir_url_path
+
+
 def _initialise_xga():
     """
     The internal function that actually performs the XGA configuration and census loading, as well as
@@ -461,7 +502,7 @@ def _initialise_xga():
             " was the default entry in new configuration files; please change it before proceeding."
         )
 
-    # Optionally there can be a num_cores entry in the overall settings section, and if there is we check that it is
+    # Optionally, there can be a num_cores entry in the overall settings section, and if there is we check that it is
     #  a valid value - though we don't throw an error if it isn't, we just default to XGA automatically determining
     #  the number of cores to use.
     if (
@@ -497,7 +538,16 @@ def _initialise_xga():
         #  actually exists
         # This variable keeps track of if the root_dir for this telescope actually exists
         root_dir_exists = False
-        if os.path.exists(cur_sec[f"root_{tel}_dir"]):
+
+        # This function determines the file protocol of the root data directory and sets up a file system
+        #  if it is remote - that then lets us do a '.exists' check.
+        root_dir_prot, root_dir_fs, root_dir_url_path = _get_root_data_filesystem(cur_sec[f"root_{tel}_dir"])
+
+        # If the return 'root_dir_fs' is None, we know the directory is local, so just use the
+        #  standard os.path.exists() method.
+        if root_dir_fs is not None and root_dir_fs.exists(root_dir_url_path):
+            root_dir_exists = True
+        elif os.path.exists(cur_sec[f"root_{tel}_dir"]):
             root_dir_exists = True
 
         # This is a pretty blunt-force approach, but honestly I think it should work fine consider we just want to
@@ -519,8 +569,10 @@ def _initialise_xga():
                 # Replace the current definition with an absolute one s
                 cur_sec[entry] = os.path.join(os.path.abspath(cur_sec[f"root_{tel}_dir"]), cur_sec[entry])
 
-        # We make sure that the root directory is an absolute path, just for our sanity later on
-        cur_sec[f"root_{tel}_dir"] = os.path.abspath(cur_sec[f"root_{tel}_dir"]) + "/"
+        # We make sure that the root directory is an absolute path, just for our sanity later on. THOUGH
+        #  only if the root filesystem is None, meaning the files are local.
+        if root_dir_fs is None:
+            cur_sec[f"root_{tel}_dir"] = os.path.join(os.path.abspath(cur_sec[f"root_{tel}_dir"]), "")
 
         # This tells the rest of XGA that the current telescope is usable! If these conditions aren't fulfilled then
         #  the USABLE entry for the current telescope will stay at the default value of False
@@ -777,14 +829,14 @@ def _extract_header_info(
     return info
 
 
-def build_observation_census(tel: str, num_cores: int, clean_dead: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_observation_census(tel: str, num_cores: int, clean_dead: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     A function that builds/updates the census and blacklist for each telescope.
 
     :param str tel: The name of the telescope we are setting up a census/blacklist for.
     :param int num_cores: The number of cores to use for parallel header extraction.
     :param bool clean_dead: If True, the census will be checked for entries that no longer have a corresponding
-        ObsID directory in the data path, and those entries will be removed.
+        ObsID directory in the data path, and those entries will be removed. Default is False.
     :return: The census and blacklist dataframes for the input telescope.
     :rtype: Tuple[pd.DataFrame, pd.DataFrame]
     """
@@ -839,33 +891,10 @@ def build_observation_census(tel: str, num_cores: int, clean_dead: bool) -> tupl
     #  paths using fsspec
     rel_root_dir = tele_conf[f"root_{tel}_dir"]
 
-    # This simply returns the 'protocol' of the root directory provided - if the directory is local
-    #  then it will be None, if its a URL starting 'https://' it will be 'https', and if it's
-    #  an S3 URI than it will be 's3', and so on.
-    root_dir_prot = split_protocol(rel_root_dir)[0]
-
-    # We use fsspec to handle the URL and URI cases
-    if root_dir_prot == "s3":
-        # Pass anon=True to account for the most likely-by-far use case, which is that they are pointing
-        #  at the public HEASARC S3 bucket. This does shut down the possibility of them using
-        #  private buckets, but if there is demand we can allow credential passing.
-        root_dir_fs, root_dir_url_path = url_to_fs(rel_root_dir, anon=True)
-
-    elif root_dir_prot == "http" or root_dir_prot == "https":
-        # If the root data directory was a more standard URL, we set ssl=False. This helps to avoid
-        #  some issues with SSL certificates that seem to be quite common.
-        # TODO CHECK IF THERE IS A BETTER WAY TO DO THIS, I DON'T LIKE DISABLING A SECURITY FEATURE.
-        root_dir_fs, root_dir_url_path = url_to_fs(rel_root_dir, ssl=False)
-
-    elif root_dir_prot is None:
-        root_dir_fs = None
-        root_dir_url_path = None
-
-    else:
-        raise XGAConfigError(
-            f"XGA does not currently support root data paths using the {root_dir_prot} "
-            f"protocol, only local files, http, https, and S3."
-        )
+    # Runs an internal function to determine which file protocol (local, S3, HTTP/HTTPS) is being
+    #  used for the root data directory, and to return a filesystem and URL path if they are
+    #  remote (root_dir_fs and root_dir_url_path will be None if the directory is local)
+    root_dir_prot, root_dir_fs, root_dir_url_path = _get_root_data_filesystem(rel_root_dir)
 
     # Now we have to find out which observations are available - the exact methodology of that differs
     #  based on the type of path provided.
@@ -898,17 +927,16 @@ def build_observation_census(tel: str, num_cores: int, clean_dead: bool) -> tupl
     else:
         # We have to set detail=True to make sure we retrieve information other than just the name,
         #  as we have to check if the entry is a directory.
-        with root_dir_fs.ls(root_dir_url_path, detail=True) as entries:
-            for entry in entries:
-                app_obs_id = entry["name"].split("/")[-1].strip("/")
-                if entry["type"] == "directory" and obs_id_test(tel, app_obs_id):
-                    if app_obs_id not in existing_obs:
-                        new_obs_census.append(app_obs_id)
+        for entry in root_dir_fs.ls(root_dir_url_path, detail=True):
+            app_obs_id = entry["name"].split("/")[-1].strip("/")
+            if entry["type"] == "directory" and obs_id_test(tel, app_obs_id):
+                if app_obs_id not in existing_obs:
+                    new_obs_census.append(app_obs_id)
 
-                # We want to be able to check for census entries that no longer appear in the
-                #  data directory, so if we confirm that the entry IS a directory and matches
-                #  the expected format of an ObsID for this telescope, we also put it in another list
-                all_obs_present.append(app_obs_id)
+            # We want to be able to check for census entries that no longer appear in the
+            #  data directory, so if we confirm that the entry IS a directory and matches
+            #  the expected format of an ObsID for this telescope, we also put it in another list
+            all_obs_present.append(app_obs_id)
 
     if len(new_obs_census) != 0:
         evt_path_keys = [e_key for e_key in tele_conf if "evts" in e_key and "clean" in e_key]
