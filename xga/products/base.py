@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:33 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/25/26, 4:43 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -15,6 +15,7 @@ from warnings import warn
 import emcee as em
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, deg
+from fsspec.core import split_protocol, url_to_fs
 from getdist import MCSamples, plots
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -111,18 +112,22 @@ class BaseProduct:
                 # Here the user has forced us to treat the path as remote
                 self._local_file = False
                 self._remote_type = "unknown"
-            elif path.startswith("s3://") or path.startswith("gs://"):
-                # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
-                #  use with resources like the HEASARC open S3 bucket
-                self._local_file = False
-                self._remote_type = "s3"
-            elif path.startswith("https://"):
-                self._local_file = False
-                self._remote_type = "https"
             else:
-                # Otherwise we decide that the file is local
-                self._local_file = True
-                self._remote_type = None
+                # Using the same fsspec protocol-splitting logic used elsewhere in XGA (e.g. for root data
+                #  directories in the config file) to determine whether this path is local or remote, and if
+                #  remote, what protocol it uses.
+                proto = split_protocol(path)[0]
+                if proto is None:
+                    # No protocol identifier means we consider the file local
+                    self._local_file = True
+                    self._remote_type = None
+                else:
+                    # Any protocol identifier (s3, gs, http, https, etc.) means we consider the file remote - we
+                    #  retain the previous behaviour of treating gs:// paths the same as s3:// paths for the
+                    #  purposes of default fsspec_kwargs, as both are commonly used for open-access
+                    #  astronomical archive buckets.
+                    self._local_file = False
+                    self._remote_type = proto
         else:
             # We will use the existing 'local_file' mechanism in the case of in-memory declarations, so that the
             #  init does not try to determine if the file exists.
@@ -140,7 +145,8 @@ class BaseProduct:
 
         # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
         #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
-        if fsspec_kwargs is None and self._remote_type == "s3":
+        #  This default is applied for both 's3' and 'gs' protocols
+        if fsspec_kwargs is None and self._remote_type in ("s3", "gs"):
             fsspec_kwargs = {"anon": True}
         # We store the optional keyword arguments that the user can pass to facilitate access to
         #  remote files in an attribute
@@ -153,16 +159,38 @@ class BaseProduct:
         #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
 
-        # Try to determine if the file exists (if this init has been told to, at
-        #  least) - this will not currently check remote files.
-        if self._local_file and (not check_exists or os.path.exists(path)):
+        # Try to determine if the file exists (if this init has been told to, at least)
+        if self._local_file:
+            if not check_exists or os.path.exists(path):
+                self._path = path
+            else:
+                self._path = None
+                self._usable = False
+                self._why_unusable.append("ProductPathDoesNotExist")
+        elif not isinstance(path, str):
+            # In-memory declarations (non-string path) skip existence checking entirely, as there is
+            #  no file path to check
             self._path = path
-        elif self._local_file:
-            self._path = None
-            self._usable = False
-            self._why_unusable.append("ProductPathDoesNotExist")
+        elif not check_exists:
+            # The user has explicitly told us not to check, so we trust that the path is valid
+            self._path = path
         else:
-            self._path = path
+            # This is the remote-file existence check, using fsspec to resolve a filesystem for the
+            #  path's protocol and query whether the file actually exists there
+            try:
+                fs, fs_path = url_to_fs(path, **(self._fsspec_kwargs or {}))
+                if fs.exists(fs_path):
+                    self._path = path
+                else:
+                    self._path = None
+                    self._usable = False
+                    self._why_unusable.append("ProductPathDoesNotExist")
+            except OSError:
+                # A failure here (e.g. network issue, credential problem) means we cannot confirm the file
+                #  exists, so we treat it cautiously as unusable, rather than optimistically assuming it's fine
+                self._path = None
+                self._usable = False
+                self._why_unusable.append("ProductPathCouldNotBeChecked")
 
         # Turning null stderr and stdouts (for instance, if the product is just being loaded in, as opposed to it
         #  being generated by XGA and needing to be checked for process success) into empty strings
