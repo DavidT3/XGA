@@ -1,10 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 3:06 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 4:36 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
 is set up here.
 """
+
+from xga.products.mission import BadPixels, MissionAttitude, MissionMask
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
@@ -1223,7 +1225,7 @@ class BaseSource:
             cur_fs_info = ROOT_DIR_FS.get(tel, {})
             cur_fs = cur_fs_info.get("file_system")
 
-            cur_init_file_name_list = []
+            cur_init_file_name_list: list[str] = []
             for cur_dir in set([os.path.dirname(file) for file in files.values()]):
                 # We've already listed this directory (possibly for a different energy band of the same
                 #  ObsID-instrument), so we just re-use the cached result rather than re-querying
@@ -1361,7 +1363,7 @@ class BaseSource:
                 if "attitude_file" in rel_sec and (
                     "combined" not in obs_dict[tel][obs_id] or "attitude" not in obs_dict[tel][obs_id]["combined"]
                 ):
-                    att_prod = BaseProduct(
+                    att_prod = MissionAttitude(
                         rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, "combined", "", "", "", telescope=tel
                     )
                     # Makes sure there is a combined entry if there wasn't already
@@ -1373,7 +1375,7 @@ class BaseSource:
                     obs_dict[tel][obs_id].setdefault(inst, {})
 
                     temp_pth = rel_sec[f"{inst}_attitude_file"]
-                    att_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
+                    att_prod = MissionAttitude(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
                     obs_dict[tel][obs_id][inst]["attitude"] = att_prod
                 else:
                     att_prod = None
@@ -1383,7 +1385,7 @@ class BaseSource:
                 #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
                 if f"{inst}_badpix_file" in rel_sec:
                     temp_pth = rel_sec[f"{inst}_badpix_file"]
-                    badpix_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
+                    badpix_prod = BadPixels(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
                 else:
                     badpix_prod = None
 
@@ -1391,7 +1393,7 @@ class BaseSource:
                 #  'mask file' to be accessible
                 if f"{inst}_mask_file" in rel_sec:
                     temp_pth = rel_sec[f"{inst}_mask_file"]
-                    mask_prod = BaseProduct(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
+                    mask_prod = MissionMask(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
                 else:
                     mask_prod = None
 
