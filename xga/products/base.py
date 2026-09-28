@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/25/26, 4:43 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 10:52 AM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -146,8 +146,12 @@ class BaseProduct:
         # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
         #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
         #  This default is applied for both 's3' and 'gs' protocols
-        if fsspec_kwargs is None and self._remote_type in ("s3", "gs"):
+        if fsspec_kwargs is None and self._remote_type in ["s3", "gs"]:
             fsspec_kwargs = {"anon": True}
+        elif fsspec_kwargs is None and self._remote_type in ["https", "http"]:
+            # TODO CHECK IF THERE IS A BETTER WAY TO DO THIS, I DON'T LIKE DISABLING A SECURITY FEATURE.
+            fsspec_kwargs = {"ssl": False}
+
         # We store the optional keyword arguments that the user can pass to facilitate access to
         #  remote files in an attribute
         self._fsspec_kwargs = fsspec_kwargs
@@ -179,6 +183,7 @@ class BaseProduct:
             #  path's protocol and query whether the file actually exists there
             try:
                 fs, fs_path = url_to_fs(path, **(self._fsspec_kwargs or {}))
+
                 if fs.exists(fs_path):
                     self._path = path
                 else:

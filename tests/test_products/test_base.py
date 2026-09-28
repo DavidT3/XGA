@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/25/26, 5:46 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 10:52 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -47,35 +47,59 @@ class TestBaseProductFileExists(unittest.TestCase):
     def test_local_exist(self) -> None:
         """Tests whether defining a BaseProduct with a local file and check_exists=True will work."""
         cur_test_evt = BaseProduct(self.loc_evt_path, "", "", "", "", "", check_exists=True)
-        self.assertEqual(cur_test_evt.usable, True)
+        self.assertEqual(
+            cur_test_evt.usable,
+            True,
+            f"Expected usable to be True, instead False. Reason given - {cur_test_evt.not_usable_reasons}.",
+        )
 
     def test_url_exist(self) -> None:
         """Tests whether defining a BaseProduct with an HTTP/HTTPS path and check_exists=True will work."""
         cur_test_evt = BaseProduct(self.url_evt_path, "", "", "", "", "", check_exists=True)
-        self.assertEqual(cur_test_evt.usable, True)
+        self.assertEqual(
+            cur_test_evt.usable,
+            True,
+            f"Expected usable to be True, instead False. Reason given - {cur_test_evt.not_usable_reasons}.",
+        )
 
     def test_s3_uri_exist(self) -> None:
         """Tests whether defining a BaseProduct with an S3 URI path and check_exists=True will work."""
         cur_test_evt = BaseProduct(self.s3_evt_path, "", "", "", "", "", check_exists=True)
-        self.assertEqual(cur_test_evt.usable, True)
+        self.assertEqual(
+            cur_test_evt.usable,
+            True,
+            f"Expected usable to be True, instead False. Reason given - {cur_test_evt.not_usable_reasons}.",
+        )
 
     def test_local_not_exist(self) -> None:
         """Tests whether defining a BaseProduct with a fake local file path and check_exists=True will behave properly."""
         cur_broken_test_evt = BaseProduct(self.broken_loc_evt_path, "", "", "", "", "", check_exists=True)
-        self.assertEqual(cur_broken_test_evt.usable, False)
-        self.assertEqual(cur_broken_test_evt.not_usable_reasons, ["ProductPathDoesNotExist"])
+        self.assertEqual(cur_broken_test_evt.usable, False, "Expected usable to be False, instead True.")
+        self.assertEqual(
+            cur_broken_test_evt.not_usable_reasons,
+            ["ProductPathDoesNotExist"],
+            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead {cur_broken_test_evt.not_usable_reasons}.",
+        )
 
     def test_url_not_exist(self) -> None:
         """Tests whether defining a BaseProduct with a fake HTTP/HTTPS path and check_exists=True will behave properly."""
         cur_broken_test_evt = BaseProduct(self.broken_url_evt_path, "", "", "", "", "", check_exists=True)
-        self.assertEqual(cur_broken_test_evt.usable, False)
-        self.assertEqual(cur_broken_test_evt.not_usable_reasons, ["ProductPathDoesNotExist"])
+        self.assertEqual(cur_broken_test_evt.usable, False, "Expected usable to be False, instead True.")
+        self.assertEqual(
+            cur_broken_test_evt.not_usable_reasons,
+            ["ProductPathDoesNotExist"],
+            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead {cur_broken_test_evt.not_usable_reasons}.",
+        )
 
     def test_s3_uri_not_exist(self) -> None:
         """Tests whether defining a BaseProduct with a fake S3 URI path and check_exists=True will behave properly."""
         cur_broken_test_evt = BaseProduct(self.broken_s3_evt_path, "", "", "", "", "", check_exists=True)
-        self.assertEqual(cur_broken_test_evt.usable, False)
-        self.assertEqual(cur_broken_test_evt.not_usable_reasons, ["ProductPathDoesNotExist"])
+        self.assertEqual(cur_broken_test_evt.usable, False, "Expected usable to be False, instead True.")
+        self.assertEqual(
+            cur_broken_test_evt.not_usable_reasons,
+            ["ProductPathDoesNotExist"],
+            f"Expected not_usable_reasons to be ['ProductPathDoesNotExist'], instead {cur_broken_test_evt.not_usable_reasons}.",
+        )
 
 
 if __name__ == "__main__":
