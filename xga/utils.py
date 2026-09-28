@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/21/26, 2:23 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 11:33 AM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -743,6 +743,15 @@ def _extract_header_info(
     # Set up the data that will be added to the census for the current observation
     info = {"ObsID": obs_id}
 
+    # Due to how compressed fits files have to be streamed/read, it is much more efficient to only open the
+    #  primary header to fetch the effective RA/Dec of the observation. Some missions do store that information
+    #  in the primary header, but unfortunately, many just put it in 'EVENTS'.
+    # For those missions we KNOW store the RA/Dec in the primary, we'll make sure this function
+    #  uses it, but otherwise we have to assume that the info is in EVENTS
+    # TODO WHEN ADDING MORE MISSIONS, SEE THE COMMENTS OF ISSUE #1577 FOR INFO ON WHICH MISSIONS KEEP
+    #  THE RA/DEC INFO IN THE PRIMARY HEADER.
+    tab_name = "PRIMARY" if tel in ["xmm", "erass", "erosita"] else "PRIMARY"
+
     # Iterating through the identified event list keys in the config for the current telescope
     for evt_key_ind, evt_key in enumerate(evt_path_keys):
         evt_path = tele_conf[evt_key].format(obs_id=obs_id)
@@ -751,18 +760,14 @@ def _extract_header_info(
         #  events into memory, as we might be doing this a bunch of times
         try:
             # Using getheader is optimized for just grabbing the header
-            # TODO I THINK THERE WAS A REASON WE _HAD_ TO SWITCH TO USING THE EVENTS HEADER
-            #  AND I THINK IT WAS EROSITA... MY CONCERN IS IF EVT LISTS ARE COMPRESSED THEN
-            #  ANYTHING APART FROM THE FIRST HEADER IS GOING TO MEAN READING/STREAMING THE WHOLE
-            #  FILE... (I think?) - IT SEEMS TO BE SLOW REGARDLESS OF PRIMARY OR EVENT TABLE
             if file_proto is None:
-                evts_header = fits.getheader(evt_path, extname="EVENTS", lazy_load_hdus=True)
+                evts_header = fits.getheader(evt_path, extname=tab_name, lazy_load_hdus=True)
             elif file_proto.lower() == "s3":
                 # Again this includes an assumption that the data are being read specifically
                 #  from an open-access S3 bucket (the HEASARC one most likely).
                 evts_header = fits.getheader(
                     evt_path,
-                    extname="EVENTS",
+                    extname=tab_name,
                     lazy_load_hdus=True,
                     use_fsspec=True,
                     cache=False,
@@ -771,7 +776,7 @@ def _extract_header_info(
             else:
                 evts_header = fits.getheader(
                     evt_path,
-                    extname="EVENTS",
+                    extname=tab_name,
                     lazy_load_hdus=True,
                     use_fsspec=True,
                     cache=False,
