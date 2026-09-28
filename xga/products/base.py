@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 10:52 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 5:44 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -15,6 +15,7 @@ from warnings import warn
 import emcee as em
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, deg
+from fsspec import AbstractFileSystem
 from fsspec.core import split_protocol, url_to_fs
 from getdist import MCSamples, plots
 from matplotlib import pyplot as plt
@@ -139,6 +140,16 @@ class BaseProduct:
         # Keep track of whether the user forced the path to be considered as a remote url or not, that information
         #  may be required in some warning/error messages later on
         self._force_remote = force_remote
+
+        # Track whether this was declared with an in-memory (non-string) data structure
+        self._in_memory = not isinstance(path, str)
+
+        # Preserve the original remote URI even after a later successful download() overwrites self._path
+        #  with the local copy's path. None for local or in-memory products.
+        self._remote_path = path if (isinstance(path, str) and not self._local_file) else None
+
+        # Local and in-memory products have nothing to download, so they start off trivially "downloaded"
+        self._downloaded = self._local_file or self._in_memory
 
         # Also keep track of whether we're assuming that the files exist, or checking.
         self._check_exists = check_exists
@@ -491,9 +502,123 @@ class BaseProduct:
                 f"or 'radec_wcs' property to retrieve the RA-DEC equinox from."
             )
 
+    @property
+    def downloaded(self) -> bool:
+        """Whether this product's remote file has been downloaded locally (or was never remote)."""
+        return self._downloaded
+
+    @property
+    def remote_path(self) -> str | None:
+        """The original remote URI, preserved even after download() updates 'path'. None if never remote."""
+        return self._remote_path
+
     # --------- Define internal functions ---------
 
     # --------- Define external functions ---------
+    def download(
+        self,
+        save_path: str,
+        overwrite: bool = False,
+        remote_file_sys: AbstractFileSystem | None = None,
+        show_warn: bool = True,
+    ) -> None:
+        """
+        Downloads this product's remote file to local storage, then updates 'path' to point at the local
+        copy. The original remote URI remains available via the 'remote_path' property.
+
+        'save_path' should PREFERABLY be a DIRECTORY, not a complete file path - this preserves the remote
+        file's name locally, which is a prerequisite for any future cross-session "already downloaded"
+        detection (not yet implemented; only the in-session 'downloaded' flag is checked currently).
+
+        :param str save_path: A local directory (preferred) or complete destination file path. Treated as a
+            directory if it exists as one, ends with a path separator, or has no file extension.
+        :param bool overwrite: Forces a re-download even if 'downloaded' is already True. Default False.
+        :param AbstractFileSystem remote_file_sys: An existing fsspec filesystem to use instead of constructing one from 'fsspec_kwargs' -
+            mainly for reuse by download_products().
+        :param bool show_warn: Whether to show a warning if this product is already local. Default True.
+        :rtype: None
+        """
+        # In-memory products were never associated with a remote (or any) file path, so there is nothing
+        #  for this method to fetch - we warn rather than raising, since calling download() on the wrong
+        #  kind of product shouldn't be a fatal mistake, just a no-op
+        if self._in_memory:
+            if show_warn:
+                warn("Product declared from in-memory data, there is no remote file to download.", stacklevel=2)
+
+        # A None remote_path means this product was already local at declaration time (see the __init__
+        #  logic that only sets remote_path for genuinely remote, string-path products) - so again, nothing
+        #  to download, we just hand back the existing local path
+        elif self._remote_path is None:
+            if show_warn:
+                warn(f"This product's file is already local ({self._path}), download() skipped.", stacklevel=2)
+
+        # If we've already downloaded this product's file (and the user hasn't explicitly asked us to
+        #  overwrite it), there's no need to hit the remote filesystem again - self._path was updated to
+        #  the local copy the last time this succeeded, so we just return that
+        elif self._downloaded and not overwrite:
+            if show_warn:
+                warn(
+                    f"Already downloaded to {self._path}, download() skipped (pass overwrite=True to force).",
+                    stacklevel=2,
+                )
+
+        else:
+            try:
+                # If the caller hasn't handed us an existing filesystem (e.g. from download_products(), which
+                #  builds and reuses one filesystem per group of products), we build one ourselves here, using
+                #  this product's own fsspec_kwargs (credentials, anon access, etc.)
+                if remote_file_sys is None:
+                    remote_file_sys, remote_fs_path = url_to_fs(self._remote_path, **(self._fsspec_kwargs or {}))
+                else:
+                    # We were given a filesystem already, so we just need to strip the protocol prefix off the
+                    #  remote path ourselves, since fsspec filesystem methods expect paths relative to the fs
+                    remote_fs_path = split_protocol(self._remote_path)[1]
+
+                # Grabbing just the file name portion of the remote path, so that if the user has given us a
+                #  destination directory we can preserve the original remote file name locally
+                remote_name = os.path.basename(remote_fs_path)
+
+                # Now working out whether the save_path the user gave us should be treated as a directory (the
+                #  preferred usage) or as a complete destination file path. We consider it directory-like if it
+                #  already exists as a directory, ends with a path separator, or simply has no file extension
+                save_path = os.fspath(save_path)
+                is_dir_like = (
+                    save_path.endswith(os.sep) or os.path.isdir(save_path) or os.path.splitext(save_path)[1] == ""
+                )
+
+                if is_dir_like:
+                    # Make sure the destination directory exists, then keep the remote file's own name so that
+                    #  future calls/instances can recognise this same file was already fetched here
+                    os.makedirs(save_path, exist_ok=True)
+                    local_path = os.path.join(save_path, remote_name)
+                else:
+                    # The user gave us a complete file path instead - we still make sure the parent directory
+                    #  exists, but we use their exact requested name rather than the remote one
+                    if os.path.dirname(save_path):
+                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    local_path = save_path
+
+                # This is the actual transfer - fsspec handles streaming the remote bytes down to the local path
+                remote_file_sys.get(remote_fs_path, local_path)
+
+            except Exception as err:
+                # Anything going wrong above (bad credentials, network failure, missing remote file, etc.) means
+                #  this product should now be considered unusable for analysis, in keeping with how the rest of
+                #  BaseProduct already records file-related problems via _usable/_why_unusable. We re-raise
+                #  afterwards so the caller of a single download() call is still informed immediately - it's only
+                #  download_products() that chooses to catch this and continue with the rest of a batch
+                self._usable = False
+                if "ProductDownloadFailed" not in self._why_unusable:
+                    self._why_unusable.append("ProductDownloadFailed")
+                raise err
+
+            # Only once the download has genuinely succeeded do we update this instance to point at the new
+            #  local copy - self._remote_path is deliberately left untouched, so it remains as a permanent record
+            #  of where the file originally came from
+            self._path = local_path
+            self._local_file = True
+            self._downloaded = True
+
     def parse_stderr(self) -> tuple[list[str], list[dict], list]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
