@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/30/26, 2:04 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 3:06 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -88,6 +88,7 @@ from xga.utils import (
     OUTPUT,
     PRETTY_TELESCOPE_NAMES,
     RAD_MATCH_PRECISION,
+    ROOT_DIR_FS,
     SRC_REGION_COLOURS,
     check_telescope_choices,
     dict_search,
@@ -1173,6 +1174,9 @@ class BaseSource:
             dictionary containing paths to region files.
         :rtype: Tuple[dict, dict]
         """
+        # Caches directory listings (local or remote) so we don't repeatedly hit a remote filesystem for the
+        #  same directory across multiple calls to read_default_products (e.g. once per energy band/ObsID-inst)
+        file_dir_list_cache: dict[str, set[str]] = {}
 
         def read_default_products(en_lims: tuple) -> tuple[str, dict]:
             """
@@ -1215,14 +1219,41 @@ class BaseSource:
             # This iterates through the directories that seem to hold (per the config file)
             #  initial products that we want to load in, and constructs a set containing all of
             #  the file names. This makes it a lot faster to check that files exist, versus
-            #  doing a bunch of 'os.path.exists' calls.
+            #  doing a bunch of 'os.path.exists' (or remote equivalent) calls.
+            cur_fs_info = ROOT_DIR_FS.get(tel, {})
+            cur_fs = cur_fs_info.get("file_system")
+
             cur_init_file_name_list = []
             for cur_dir in set([os.path.dirname(file) for file in files.values()]):
-                try:
-                    for cur_cont_f in os.listdir(cur_dir):
-                        cur_init_file_name_list.append(cur_cont_f)
-                except FileNotFoundError:
-                    pass
+                # We've already listed this directory (possibly for a different energy band of the same
+                #  ObsID-instrument), so we just re-use the cached result rather than re-querying
+                if cur_dir in file_dir_list_cache:
+                    cur_init_file_name_list += file_dir_list_cache[cur_dir]
+                    continue
+
+                if cur_fs is None:
+                    # Local filesystem - retain the original, fast, os.listdir behaviour
+                    try:
+                        cur_listing = set(os.listdir(cur_dir))
+                    except FileNotFoundError:
+                        cur_listing = set()
+                else:
+                    # Remote filesystem (S3, HTTP/HTTPS etc.) - use the fsspec filesystem's own listing
+                    #  method rather than checking file existence one-by-one, which would be very slow
+                    #  over a network connection. detail=False keeps the call as lightweight as possible,
+                    #  as we only need file names.
+                    try:
+                        cur_listing = {os.path.basename(p.rstrip("/")) for p in cur_fs.ls(cur_dir, detail=False)}
+                    except FileNotFoundError:
+                        cur_listing = set()
+                    except OSError:
+                        # Some fsspec backends raise a generic OSError (or subclass) rather than
+                        #  FileNotFoundError for a non-existent remote directory
+                        cur_listing = set()
+
+                file_dir_list_cache[cur_dir] = cur_listing
+                cur_init_file_name_list += cur_listing
+
             cur_init_file_names = set(cur_init_file_name_list)
 
             # This looks up the class which corresponds to the key (which is the product ID in this case
