@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 11:41 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 12:09 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -20,9 +20,11 @@ from astropy.io import fits
 from astropy.units import Quantity, add_enabled_equivalencies, add_enabled_units, def_unit
 from astropy.wcs import WCS
 from fitsio import FITSHDR
+from fsspec import AbstractFileSystem
 from fsspec.core import split_protocol, url_to_fs
 from fsspec.spec import AbstractFileSystem
 from packaging.version import Version
+from pandas import DataFrame
 from tqdm import tqdm
 
 from .exceptions import InvalidTelescopeError, NoTelescopeDataError, XGAConfigError
@@ -40,6 +42,7 @@ _LAZY_VARS = {
     "xga_conf",
     "CENSUS",
     "BLACKLIST",
+    "ROOT_DIR_FS",
     "COMBINED_INSTS",
     "SAS_AVAIL",
     "SAS_VERSION",
@@ -461,7 +464,8 @@ def _initialise_xga():
         SASERROR_LIST, \
         SASWARNING_LIST, \
         XSPEC_FIT_METHOD, \
-        ABUND_TABLES
+        ABUND_TABLES, \
+        ROOT_DIR_FS
 
     xga_conf, CONFIG_PATH, CONFIG_FILE = _prep_xga_config_file()
 
@@ -588,6 +592,13 @@ def _initialise_xga():
     # Read dataframe of ObsIDs and pointing coordinates into dictionaries
     CENSUS = {}
     BLACKLIST = {}
+
+    # XGA supports remote data sources being specified in the configuration file - these can either
+    #  be accessed through URLs, or through URIs (such as for HEASARC's S3 bucket - a preferred source).
+    # We wish to keep track of the correct file system to use for each telescope and make it accessible
+    #  throughout XGA (once populated by the build_observation_census return), so we set up a constant
+    ROOT_DIR_FS = {tel: {"file_protocol": "", "file_system": None, "file_path_url": ""} for tel in USABLE}
+
     # Also create a dictionary that tells parts of XGA whether it should expect the event lists of the different
     #  instruments to be separate or combined (I'm looking at you eROSITA CalPV).
     COMBINED_INSTS = {}
@@ -610,7 +621,13 @@ def _initialise_xga():
     for tel in USABLE:
         # We only care to have/make a census if the telescope is actually set up and usable
         if USABLE[tel]:
-            CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel, num_cores=NUM_CORES)
+            (
+                CENSUS[tel],
+                BLACKLIST[tel],
+                ROOT_DIR_FS[tel]["file_protocol"],
+                ROOT_DIR_FS[tel]["file_system"],
+                ROOT_DIR_FS[tel]["file_path_url"],
+            ) = build_observation_census(tel, num_cores=NUM_CORES)
 
         # Populate the dictionary that says whether the event lists for a given telescope are combined or not - it would
         #  have been so much easier if they were all always separate, but the eROSITA CalPV ones weren't released like
@@ -692,9 +709,9 @@ def rebuild_census(
                 if os.path.exists(census_file):
                     os.remove(census_file)
 
-            # This handles both the full rebuild (since we just deleted the file)
-            # and the standard 'find new data' update
-            CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel, num_cores=num_cores, clean_dead=clean_dead)
+            # This handles both the full rebuild (since we just deleted the file) and the
+            #  standard 'find new data' update
+            CENSUS[tel], BLACKLIST[tel] = build_observation_census(tel, num_cores=num_cores, clean_dead=clean_dead)[:2]
 
 
 def obs_id_test(test_tele: str, test_string: str) -> bool:
@@ -829,7 +846,9 @@ def _extract_header_info(
     return info
 
 
-def build_observation_census(tel: str, num_cores: int, clean_dead: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_observation_census(
+    tel: str, num_cores: int, clean_dead: bool = False
+) -> tuple[DataFrame, DataFrame, str, AbstractFileSystem | None, str | None]:
     """
     A function that builds/updates the census and blacklist for each telescope.
 
@@ -837,8 +856,9 @@ def build_observation_census(tel: str, num_cores: int, clean_dead: bool = False)
     :param int num_cores: The number of cores to use for parallel header extraction.
     :param bool clean_dead: If True, the census will be checked for entries that no longer have a corresponding
         ObsID directory in the data path, and those entries will be removed. Default is False.
-    :return: The census and blacklist dataframes for the input telescope.
-    :rtype: Tuple[pd.DataFrame, pd.DataFrame]
+    :return: The census and blacklist dataframes for the input telescope, then the file protocol, file system, and
+        file path URL for the input telescope's root file system.
+    :rtype: Tuple[pd.DataFrame, pd.DataFrame, str, AbstractFileSystem | None, str | None]
     """
     # The census_dir is the directory containing the blacklist and census for each telescope
     census_dir = os.path.join(CONFIG_PATH, tel, "")
@@ -1002,7 +1022,7 @@ def build_observation_census(tel: str, num_cores: int, clean_dead: bool = False)
             )
 
     # Finally, we return the census and the blacklist
-    return obs_lookup, blacklist
+    return obs_lookup, blacklist, root_dir_prot, root_dir_fs, root_dir_url_path
 
 
 # This function also now exists in imagetools.miss, which is where it will live forevermore - I wouldn't normally
