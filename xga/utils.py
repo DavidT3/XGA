@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 11:33 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 11:41 AM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -750,7 +750,7 @@ def _extract_header_info(
     #  uses it, but otherwise we have to assume that the info is in EVENTS
     # TODO WHEN ADDING MORE MISSIONS, SEE THE COMMENTS OF ISSUE #1577 FOR INFO ON WHICH MISSIONS KEEP
     #  THE RA/DEC INFO IN THE PRIMARY HEADER.
-    tab_name = "PRIMARY" if tel in ["xmm", "erass", "erosita"] else "PRIMARY"
+    tab_name = "PRIMARY" if tel in ["xmm", "erass", "erosita"] else "EVENTS"
 
     # Iterating through the identified event list keys in the config for the current telescope
     for evt_key_ind, evt_key in enumerate(evt_path_keys):
