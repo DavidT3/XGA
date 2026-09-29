@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 9:01 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 10:33 AM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -589,12 +589,9 @@ class BaseProduct:
                 #  builds and reuses one filesystem per group of products), we build one ourselves here, using
                 #  this product's own fsspec_kwargs (credentials, anon access, etc.)
                 # TODO NOPE WE SHOULD JUST USE THE ONE WE CONSTRUCT IN THE INIT
+                built_fs, remote_fs_path = url_to_fs(self._remote_path, **(self._fsspec_kwargs or {}))
                 if remote_file_sys is None:
-                    remote_file_sys, remote_fs_path = url_to_fs(self._remote_path, **(self._fsspec_kwargs or {}))
-                else:
-                    # We were given a filesystem already, so we just need to strip the protocol prefix off the
-                    #  remote path ourselves, since fsspec filesystem methods expect paths relative to the fs
-                    remote_fs_path = split_protocol(self._remote_path)[1]
+                    remote_file_sys = built_fs
 
                 # Grabbing just the file name portion of the remote path, so that if the user has given us a
                 #  destination directory we can preserve the original remote file name locally

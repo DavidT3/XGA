@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 9:05 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 10:33 AM. Copyright (c) The Contributors.
 
 import os
 from collections.abc import Sequence
 
-from fsspec.core import split_protocol, url_to_fs
+from fsspec.callbacks import DEFAULT_CALLBACK, TqdmCallback
+from fsspec.core import url_to_fs
 
 from xga.products import BaseProduct
 
@@ -15,6 +16,7 @@ def download_products(
     remote_file_sys=None,
     overwrite: bool = False,
     batch_size: int | None = None,
+    disable_progress: bool = False,
 ) -> dict:
     """
     Downloads remote files for a batch of BaseProduct instances, reusing fsspec filesystem connections
@@ -33,6 +35,7 @@ def download_products(
     :param bool overwrite: Force re-download of already-downloaded products. Default False.
     :param int batch_size: Passed through to fsspec's 'get' if the filesystem supports it, to cap
         concurrent transfers per group. Default None (filesystem default).
+    :param bool disable_progress: Setting this to True turns off the download progress bar. Default False.
     :return: Dict mapping each product to its local path, or to the Exception raised on failure.
     :rtype: dict
     """
@@ -114,21 +117,21 @@ def download_products(
             # Make sure the destination directory actually exists before we try to download anything into it
             os.makedirs(cur_save_path, exist_ok=True)
 
-        # Building the parallel lists of remote paths (stripped of their protocol prefix, since fsspec
-        #  filesystem methods expect paths relative to that filesystem) and the local destination paths
+        # Building the parallel lists of remote paths and local destination paths
         for cur_prod in grp_products:
-            remote_fs_path = split_protocol(cur_prod.remote_path)[1]
+            _, remote_fs_path = url_to_fs(cur_prod.remote_path, **(cur_prod.fsspec_kwargs or {}))
             local_path = os.path.join(cur_save_path, os.path.basename(remote_fs_path)) if is_dir_like else cur_save_path
             remote_fs_paths.append(remote_fs_path)
             local_paths.append(local_path)
             mapping.append((cur_prod, local_path))
 
+        cb = DEFAULT_CALLBACK if disable_progress else TqdmCallback(tqdm_kwargs={"desc": "Downloading products"})
         try:
             # This is the key efficiency step - passing lists of remote and local paths to a single 'get'
             #  call, rather than looping one product at a time, allows async-capable filesystems (s3fs,
             #  gcsfs, fsspec's HTTPFileSystem) to fetch multiple files concurrently under the hood
             get_kwargs = {} if batch_size is None else {"batch_size": batch_size}
-            grp_fs.get(remote_fs_paths, local_paths, **get_kwargs)
+            grp_fs.get(remote_fs_paths, local_paths, callback=cb, **get_kwargs)
 
             # If we get here without an exception, we assume the whole batch succeeded - update every
             #  product in this group to point at its new local file, and mark it as downloaded
@@ -145,7 +148,8 @@ def download_products(
             #  prod_groups can continue uninterrupted
             for cur_prod, _ in mapping:
                 try:
-                    results[cur_prod] = cur_prod.download(save_path, overwrite=overwrite, remote_file_sys=grp_fs)
+                    cur_prod.download(save_path, overwrite=overwrite, remote_file_sys=grp_fs, show_warn=False)
+                    results[cur_prod] = cur_prod.path
                 except Exception as err:
                     # cur_prod.download() already sets cur_prod._usable = False and appends to cur_prod._why_unusable
                     #  internally on failure, so we just need to record the exception here
