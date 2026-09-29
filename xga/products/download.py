@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:25 PM. Copyright (c) The Contributors.
 """
 This submodule defines functions that relate to the downloading of multiple remote data files, with a focus
 on optimizing the efficiency/speed of transfers when compared to the convenience of each product instance's
@@ -131,14 +131,10 @@ def download_products(
                 _, remote_fs_path = url_to_fs(cur_prod.remote_path, **(cur_prod.fsspec_kwargs or {}))
 
                 # Working out whether the current save_path should be treated as a directory (the
-                #  preferred usage, so that each remote file keeps its own name) or as a single complete file path
+                # preferred usage, so that each remote file keeps its own name) or as a single complete file path
                 #  (only really sensible if there's one file in this group, but we don't enforce that here)
                 cur_save_path = os.fspath(cur_save_path)
-                is_dir_like = (
-                    cur_save_path.endswith(os.sep)
-                    or os.path.isdir(cur_save_path)
-                    or os.path.splitext(cur_save_path)[1] == ""
-                )
+                is_dir_like = cur_save_path.endswith(os.sep) or os.path.isdir(cur_save_path)
                 if is_dir_like:
                     # Make sure the destination directory actually exists before we try to download anything into it
                     os.makedirs(cur_save_path, exist_ok=True)

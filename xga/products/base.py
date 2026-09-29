@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:25 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -647,11 +647,9 @@ class BaseProduct:
 
                 # Now working out whether the save_path the user gave us should be treated as a directory (the
                 #  preferred usage) or as a complete destination file path. We consider it directory-like if it
-                #  already exists as a directory, ends with a path separator, or simply has no file extension
+                #  already exists as a directory or ends with a path separator.
                 save_path = os.fspath(save_path)
-                is_dir_like = (
-                    save_path.endswith(os.sep) or os.path.isdir(save_path) or os.path.splitext(save_path)[1] == ""
-                )
+                is_dir_like = save_path.endswith(os.sep) or os.path.isdir(save_path)
 
                 if is_dir_like:
                     # Make sure the destination directory exists, then keep the remote file's own name so that
