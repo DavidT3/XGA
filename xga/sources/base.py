@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:32 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:29 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -1525,7 +1525,12 @@ class BaseSource:
         # If there are any remote products that were missing from local storage, we download them now. We do
         #  this in one bulk call at the end of the telescope loop for maximum efficiency.
         if len(to_download) != 0:
-            download_products(to_download, to_download_save_paths)
+            # We disable the progress bar if the source is a member of a sample - otherwise the bar will collide
+            #  with the declaration bar produced by the sample.
+            # TODO - Figure out how to defer product downloading for sample members until post-basesource
+            #  declaration, so we can fetch everything at once. Or actually first I should figure out if
+            #  that would be worth the effort efficiency wise.
+            download_products(to_download, to_download_save_paths, disable_progress=self._samp_member)
 
         # We must re-check if the products we were going to load are usable, as some might have failed to download
         for tel in obs_dict:
