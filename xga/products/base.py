@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 5:44 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 8:56 AM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -512,6 +512,16 @@ class BaseProduct:
         """The original remote URI, preserved even after download() updates 'path'. None if never remote."""
         return self._remote_path
 
+    @property
+    def not_from_file(self) -> bool:
+        """
+        Indicates whether this product was assembled in memory rather than being read from a file.
+
+        :return: A boolean value. True if the product was assembled in-memory, False if read from a file.
+        :rtype: bool
+        """
+        return self._in_memory
+
     # --------- Define internal functions ---------
 
     # --------- Define external functions ---------
@@ -567,6 +577,7 @@ class BaseProduct:
                 # If the caller hasn't handed us an existing filesystem (e.g. from download_products(), which
                 #  builds and reuses one filesystem per group of products), we build one ourselves here, using
                 #  this product's own fsspec_kwargs (credentials, anon access, etc.)
+                # TODO NOPE WE SHOULD JUST USE THE ONE WE CONSTRUCT IN THE INIT
                 if remote_file_sys is None:
                     remote_file_sys, remote_fs_path = url_to_fs(self._remote_path, **(self._fsspec_kwargs or {}))
                 else:
@@ -899,7 +910,7 @@ class BaseProduct:
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
-    def raise_errors(self) -> NoReturn:
+    def raise_errors(self) -> None:
         """
         Method to raise the errors parsed from std_err string.
         """
@@ -924,7 +935,7 @@ class BaseAggregateProduct:
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
 
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None):
         """
         The init method for the BaseAggregateProduct class
 
@@ -2137,7 +2148,7 @@ class BaseProfile1D:
 
         return chains
 
-    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple = None) -> None:
+    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple | None = None) -> None:
         """
         Simple view method to quickly look at the MCMC chains for a given model fit.
 
@@ -2277,17 +2288,17 @@ class BaseProfile1D:
         main_ax: Axes,
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
         models: bool = True,
         back_sub: bool = True,
         just_models: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool | Quantity = False,
         y_norm: bool | Quantity = False,
-        x_label: str = None,
-        y_label: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
         data_colour: str = "black",
         model_colour: str | list[str] = "seagreen",
         show_legend: bool = True,
@@ -2295,7 +2306,7 @@ class BaseProfile1D:
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         joined_points: bool = False,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
     ):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
@@ -2729,17 +2740,17 @@ class BaseProfile1D:
         figsize=(10, 7),
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
         models: bool = True,
         back_sub: bool = True,
         just_models: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool | Quantity = False,
         y_norm: bool | Quantity = False,
-        x_label: str = None,
-        y_label: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
         data_colour: str = "black",
         model_colour: str | list[str] = "seagreen",
         show_legend: bool = True,
@@ -2747,7 +2758,7 @@ class BaseProfile1D:
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         joined_points: bool = False,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
     ) -> None:
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
@@ -2845,17 +2856,17 @@ class BaseProfile1D:
         figsize=(10, 7),
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
         models: bool = True,
         back_sub: bool = True,
         just_models: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool | Quantity = False,
         y_norm: bool | Quantity = False,
-        x_label: str = None,
-        y_label: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
         data_colour: str = "black",
         model_colour: str | list[str] = "seagreen",
         show_legend: bool = True,
@@ -2863,7 +2874,7 @@ class BaseProfile1D:
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         joined_points: bool = False,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
     ) -> None:
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
@@ -3621,22 +3632,22 @@ class BaseAggregateProfile1D:
         figsize: tuple = (10, 7),
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
-        model: str = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
+        model: str | None = None,
         back_sub: bool = True,
         show_legend: bool = True,
         just_model: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool = False,
         y_norm: bool = False,
-        x_label: str = None,
-        y_label: str = None,
-        save_path: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        save_path: str | None = None,
         draw_vals: dict | None = None,
         auto_legend: bool = True,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
         show_residual_ax: bool = True,
         joined_points: bool = False,
     ) -> None:
