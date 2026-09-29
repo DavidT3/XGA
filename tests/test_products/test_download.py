@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:59 PM. Copyright (c) The Contributors.
 
 import os
 import tempfile
@@ -73,6 +73,29 @@ class TestDownloadProducts(unittest.TestCase):
         self.assertTrue(p_good.downloaded)
         self.assertFalse(p_bad.usable)
         self.assertIsInstance(res[p_bad], Exception)
+
+    def test_download_products_non_existent_dir_with_sep(self) -> None:
+        """Tests download_products when the destination directory doesn't exist yet but has a trailing separator."""
+        new_dir = os.path.join(self.shared_td.name, "new_dir_sep") + os.sep
+        p1 = BaseProduct(self.url_evt_path, "", "", "", "", "", check_exists=True)
+        res = download_products([p1], save_path=new_dir, disable_progress=True)
+        self.assertTrue(os.path.isdir(new_dir))
+        self.assertTrue(os.path.exists(res[p1]))
+        self.assertEqual(os.path.dirname(res[p1]) + os.sep, new_dir)
+
+    def test_download_products_multiple_to_non_existent_dir(self) -> None:
+        """Tests that multiple products to a non-existent dir (with sep) don't overwrite each other."""
+        new_dir = os.path.join(self.shared_td.name, "multi_dir") + os.sep
+        p1 = BaseProduct(self.s3_evt_path, "", "", "", "", "", check_exists=True)
+        p2 = BaseProduct(self.s3_evt_path_2, "", "", "", "", "", check_exists=True)
+        res = download_products([p1, p2], save_path=new_dir, disable_progress=True)
+
+        self.assertTrue(os.path.isdir(new_dir))
+        self.assertTrue(os.path.exists(res[p1]))
+        self.assertTrue(os.path.exists(res[p2]))
+        self.assertNotEqual(res[p1], res[p2])
+        self.assertEqual(os.path.dirname(res[p1]) + os.sep, new_dir)
+        self.assertEqual(os.path.dirname(res[p2]) + os.sep, new_dir)
 
 
 if __name__ == "__main__":
