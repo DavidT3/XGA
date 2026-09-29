@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 4:36 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 2:02 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -77,6 +77,7 @@ from xga.products import (
     RateMap,
     Spectrum,
 )
+from xga.products.download import download_products
 from xga.products.lightcurve import AggregateLightCurve, LightCurve
 from xga.sourcetools import ang_to_rad, nh_lookup, rad_to_ang, separation_match
 from xga.sourcetools.match import _dist_from_source, census_match
@@ -1180,6 +1181,11 @@ class BaseSource:
         #  same directory across multiple calls to read_default_products (e.g. once per energy band/ObsID-inst)
         file_dir_list_cache: dict[str, set[str]] = {}
 
+        # These lists will store products that need to be downloaded from remote filesystems, and the local paths
+        #  where they should be stored. download_products() will take this list and act on it at once.
+        to_download: list[BaseProduct] = []
+        to_download_save_paths: list[str] = []
+
         def read_default_products(en_lims: tuple) -> tuple[str, dict]:
             """
             This nested function takes pairs of energy limits defined in the config file and runs
@@ -1260,22 +1266,33 @@ class BaseSource:
 
             # This looks up the class which corresponds to the key (which is the product ID in this case
             #  e.g. image), then instantiates an object of that class
-            prod_objs = {
-                key: PROD_MAP[key](
-                    file,
-                    obs_id=obs_id,
-                    instrument=inst,
-                    stdout_str="",
-                    stderr_str="",
-                    gen_cmd="",
-                    lo_en=lo,
-                    hi_en=hi,
-                    telescope=tel,
-                    check_exists=False,
-                )
-                for key, file in files.items()
-                if os.path.basename(file) in cur_init_file_names
-            }
+            prod_objs = {}
+            for key, file in files.items():
+                if os.path.basename(file) in cur_init_file_names:
+                    # Determine if the file is remote
+                    is_remote = split_protocol(file)[0] is not None
+                    # Instantiate the product
+                    new_prod = PROD_MAP[key](
+                        file,
+                        obs_id=obs_id,
+                        instrument=inst,
+                        stdout_str="",
+                        stderr_str="",
+                        gen_cmd="",
+                        lo_en=lo,
+                        hi_en=hi,
+                        telescope=tel,
+                        check_exists=False if is_remote else True,
+                    )
+
+                    # If it is remote but doesn't exist locally, we add it to the download queue
+                    if is_remote and not os.path.exists(file):
+                        to_download.append(new_prod)
+                        # We want to save it in its expected local path, but download_products expects a directory
+                        #  if we want it to keep the remote name.
+                        to_download_save_paths.append(os.path.dirname(file))
+
+                    prod_objs[key] = new_prod
 
             # If both an image and an exposure map are present for this energy band, a RateMap object is generated
             if "image" in prod_objs and "expmap" in prod_objs:
@@ -1344,6 +1361,9 @@ class BaseSource:
 
                 # Load the event list - if this doesn't work then there isn't any point continuing to the
                 #  rest of the initial product loading process for the current telescope-ObsID-instrument
+                from fsspec.core import split_protocol
+
+                is_evt_remote = split_protocol(evt_file)[0] is not None
                 evt_list = EventList(
                     evt_file,
                     obs_id=obs_id,
@@ -1352,9 +1372,15 @@ class BaseSource:
                     stderr_str="",
                     gen_cmd="",
                     telescope=tel,
-                    check_exists=True,
+                    check_exists=False if is_evt_remote else True,
                 )
-                if not evt_list.usable:
+
+                # If it is remote but doesn't exist locally, we add it to the download queue
+                if is_evt_remote and not os.path.exists(evt_file):
+                    to_download.append(evt_list)
+                    to_download_save_paths.append(os.path.dirname(evt_file))
+
+                if not evt_list.usable and not is_evt_remote:
                     continue
 
                 # Attitude file is a special type of data product, we shouldn't ever deal with it directly so it
@@ -1363,9 +1389,24 @@ class BaseSource:
                 if "attitude_file" in rel_sec and (
                     "combined" not in obs_dict[tel][obs_id] or "attitude" not in obs_dict[tel][obs_id]["combined"]
                 ):
+                    att_path = rel_sec["attitude_file"].format(obs_id=obs_id)
+                    is_att_remote = split_protocol(att_path)[0] is not None
                     att_prod = MissionAttitude(
-                        rel_sec["attitude_file"].format(obs_id=obs_id), obs_id, "combined", "", "", "", telescope=tel
+                        att_path,
+                        obs_id,
+                        "combined",
+                        "",
+                        "",
+                        "",
+                        telescope=tel,
+                        check_exists=False if is_att_remote else True,
                     )
+
+                    # If it is remote but doesn't exist locally, we add it to the download queue
+                    if is_att_remote and not os.path.exists(att_path):
+                        to_download.append(att_prod)
+                        to_download_save_paths.append(os.path.dirname(att_path))
+
                     # Makes sure there is a combined entry if there wasn't already
                     obs_dict[tel][obs_id].setdefault("combined", {})
                     obs_dict[tel][obs_id]["combined"]["attitude"] = att_prod
@@ -1375,7 +1416,17 @@ class BaseSource:
                     obs_dict[tel][obs_id].setdefault(inst, {})
 
                     temp_pth = rel_sec[f"{inst}_attitude_file"]
-                    att_prod = MissionAttitude(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
+                    att_path = temp_pth.format(obs_id=obs_id)
+                    is_att_remote = split_protocol(att_path)[0] is not None
+                    att_prod = MissionAttitude(
+                        att_path, obs_id, inst, "", "", "", telescope=tel, check_exists=False if is_att_remote else True
+                    )
+
+                    # If it is remote but doesn't exist locally, we add it to the download queue
+                    if is_att_remote and not os.path.exists(att_path):
+                        to_download.append(att_prod)
+                        to_download_save_paths.append(os.path.dirname(att_path))
+
                     obs_dict[tel][obs_id][inst]["attitude"] = att_prod
                 else:
                     att_prod = None
@@ -1385,7 +1436,16 @@ class BaseSource:
                 #  file. If we have XGA setup to write a badpix_file entry in the config, we must try to read it in
                 if f"{inst}_badpix_file" in rel_sec:
                     temp_pth = rel_sec[f"{inst}_badpix_file"]
-                    badpix_prod = BadPixels(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
+                    bp_path = temp_pth.format(obs_id=obs_id)
+                    is_bp_remote = split_protocol(bp_path)[0] is not None
+                    badpix_prod = BadPixels(
+                        bp_path, obs_id, inst, "", "", "", telescope=tel, check_exists=False if is_bp_remote else True
+                    )
+
+                    # If it is remote but doesn't exist locally, we add it to the download queue
+                    if is_bp_remote and not os.path.exists(bp_path):
+                        to_download.append(badpix_prod)
+                        to_download_save_paths.append(os.path.dirname(bp_path))
                 else:
                     badpix_prod = None
 
@@ -1393,7 +1453,23 @@ class BaseSource:
                 #  'mask file' to be accessible
                 if f"{inst}_mask_file" in rel_sec:
                     temp_pth = rel_sec[f"{inst}_mask_file"]
-                    mask_prod = MissionMask(temp_pth.format(obs_id=obs_id), obs_id, inst, "", "", "", telescope=tel)
+                    mask_path = temp_pth.format(obs_id=obs_id)
+                    is_mask_remote = split_protocol(mask_path)[0] is not None
+                    mask_prod = MissionMask(
+                        mask_path,
+                        obs_id,
+                        inst,
+                        "",
+                        "",
+                        "",
+                        telescope=tel,
+                        check_exists=False if is_mask_remote else True,
+                    )
+
+                    # If it is remote but doesn't exist locally, we add it to the download queue
+                    if is_mask_remote and not os.path.exists(mask_path):
+                        to_download.append(mask_prod)
+                        to_download_save_paths.append(os.path.dirname(mask_path))
                 else:
                     mask_prod = None
 
@@ -1434,6 +1510,33 @@ class BaseSource:
                     del obs_dict[tel][obs_id]
 
             # Cleans any observations that don't have at least one instrument associated with them
+            obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
+
+        # If there are any remote products that were missing from local storage, we download them now. We do
+        #  this in one bulk call at the end of the telescope loop for maximum efficiency.
+        if len(to_download) != 0:
+            download_products(to_download, to_download_save_paths)
+
+        # We must re-check if the products we were going to load are usable, as some might have failed to download
+        for tel in obs_dict:
+            for obs_id in obs_dict[tel]:
+                for inst in list(obs_dict[tel][obs_id]):
+                    for prod_type in list(obs_dict[tel][obs_id][inst]):
+                        prod = obs_dict[tel][obs_id][inst][prod_type]
+                        # This works for both single products and dictionaries of products (like Image/ExpMap)
+                        if isinstance(prod, BaseProduct) and not prod.usable:
+                            del obs_dict[tel][obs_id][inst][prod_type]
+                        elif isinstance(prod, dict):
+                            for bound_key in list(prod):
+                                if not prod[bound_key].usable:
+                                    del obs_dict[tel][obs_id][inst][prod_type][bound_key]
+                    # If an instrument has no products left after our usability check, we remove it
+                    if len(obs_dict[tel][obs_id][inst]) == 0:
+                        del obs_dict[tel][obs_id][inst]
+                # If an ObsID has no instruments left, we remove it
+                if len(obs_dict[tel][obs_id]) == 0:
+                    del obs_dict[tel][obs_id]
+            # If a telescope has no ObsIDs left, we remove it
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
 
         return obs_dict, reg_dict
