@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:29 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:34 PM. Copyright (c) The Contributors.
 """
 This submodule defines functions that relate to the downloading of multiple remote data files, with a focus
 on optimizing the efficiency/speed of transfers when compared to the convenience of each product instance's
@@ -118,7 +118,7 @@ def download_products(
                     results[cur_prod] = err
 
     # Now we actually perform the downloads, one filesystem group at a time
-    with tqdm(total=len(to_fetch), desc="Downloading products", disable=disable_progress) as pbar:
+    with tqdm(total=len(to_fetch), desc="Downloading remote products", disable=disable_progress) as pbar:
         for grp_fs, grp_info in prod_groups.values():
             # These three lists are built up in parallel (same index = same product) so that after the batched
             #  'get' call succeeds, we know exactly which local path corresponds to which product
