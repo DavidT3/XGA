@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 10:33 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:14 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -255,6 +255,18 @@ class BaseProduct:
         """
         return self._usable
 
+    @usable.setter
+    def usable(self, is_usable: bool):
+        """
+        Setter for the usable property.
+
+        :param bool is_usable: A boolean flag describing if the product should be used.
+        """
+        if isinstance(is_usable, bool):
+            self._usable = is_usable
+        else:
+            raise TypeError("The 'usable' property must be set with a boolean variable.")
+
     @property
     def path(self) -> str:
         """
@@ -290,6 +302,18 @@ class BaseProduct:
         :rtype: bool
         """
         return self._local_file
+
+    @local_file.setter
+    def local_file(self, is_local: bool):
+        """
+        Setter for the local_file property.
+
+        :param bool is_local: A boolean flag describing if the product is pointed at a local file.
+        """
+        if isinstance(is_local, bool):
+            self._local_file = is_local
+        else:
+            raise TypeError("The 'local_file' property must be set with a boolean variable.")
 
     @property
     def force_remote(self) -> bool:
@@ -448,6 +472,18 @@ class BaseProduct:
         """
         return self._why_unusable
 
+    @not_usable_reasons.setter
+    def not_usable_reasons(self, reasons: list):
+        """
+        Setter for the not_usable_reasons property.
+
+        :param list reasons: A list of strings indicating why a product is unusable.
+        """
+        if isinstance(reasons, list):
+            self._why_unusable = reasons
+        else:
+            raise TypeError("The 'not_usable_reasons' property must be set with a list.")
+
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
     @property
     def sas_command(self) -> str:
@@ -505,6 +541,18 @@ class BaseProduct:
     def downloaded(self) -> bool:
         """Whether this product's remote file has been downloaded locally (or was never remote)."""
         return self._downloaded
+
+    @downloaded.setter
+    def downloaded(self, is_downloaded: bool):
+        """
+        Setter for the downloaded property.
+
+        :param bool is_downloaded: A boolean flag describing whether the product has been downloaded locally.
+        """
+        if isinstance(is_downloaded, bool):
+            self._downloaded = is_downloaded
+        else:
+            raise TypeError("The 'downloaded' property must be set with a boolean variable.")
 
     @property
     def remote_path(self) -> str | None:

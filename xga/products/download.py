@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 2:02 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:14 PM. Copyright (c) The Contributors.
 
 import os
 from collections.abc import Sequence
@@ -103,9 +103,12 @@ def download_products(
                 #  protocol), then every product in the group is a lost cause - mark them all as unusable
                 #  and record the exception, rather than letting this stop the rest of the batch
                 for cur_prod, cur_save_path in grp_info:
-                    cur_prod._usable = False
+                    cur_prod.usable = False
                     if "ProductDownloadFailed" not in cur_prod.not_usable_reasons:
-                        cur_prod.not_usable_reasons.append("ProductDownloadFailed")
+                        # Since we have a setter now, we can append to the list and set it back
+                        reasons = cur_prod.not_usable_reasons
+                        reasons.append("ProductDownloadFailed")
+                        cur_prod.not_usable_reasons = reasons
                     results[cur_prod] = err
 
     # Now we actually perform the downloads, one filesystem group at a time
@@ -165,9 +168,9 @@ def download_products(
                 # If we get here without an exception, we assume the whole batch succeeded - update every
                 #  product in this group to point at its new local file, and mark it as downloaded
                 for cur_prod, local_path, cur_save_path in mapping:
-                    cur_prod._path = local_path
-                    cur_prod._local_file = True
-                    cur_prod._downloaded = True
+                    cur_prod.path = local_path
+                    cur_prod.local_file = True
+                    cur_prod.downloaded = True
                     results[cur_prod] = local_path
             except Exception:
                 # The batched transfer failed for the group as a whole - rather than giving up on every product
@@ -183,8 +186,8 @@ def download_products(
                         results[cur_prod] = cur_prod.path
                         pbar.update(1)
                     except Exception as err:
-                        # cur_prod.download() already sets cur_prod._usable = False and appends to cur_prod._why_unusable
-                        #  internally on failure, so we just need to record the exception here
+                        # cur_prod.download() already sets cur_prod.usable = False and appends to
+                        #  cur_prod.not_usable_reasons internally on failure, so we just need to record the exception here
                         results[cur_prod] = err
                         pbar.update(1)
 

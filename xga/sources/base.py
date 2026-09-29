@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 2:02 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:14 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -1288,9 +1288,9 @@ class BaseSource:
                     # If it is remote but doesn't exist locally, we add it to the download queue
                     if is_remote and not os.path.exists(file):
                         to_download.append(new_prod)
-                        # We want to save it in its expected local path, but download_products expects a directory
-                        #  if we want it to keep the remote name.
-                        to_download_save_paths.append(os.path.dirname(file))
+                        # Remote files are downloaded into a specific subdirectory of the telescope directory
+                        save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id)
+                        to_download_save_paths.append(save_dir)
 
                     prod_objs[key] = new_prod
 
@@ -1378,7 +1378,9 @@ class BaseSource:
                 # If it is remote but doesn't exist locally, we add it to the download queue
                 if is_evt_remote and not os.path.exists(evt_file):
                     to_download.append(evt_list)
-                    to_download_save_paths.append(os.path.dirname(evt_file))
+                    # Remote files are downloaded into a specific subdirectory of the telescope directory
+                    save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id)
+                    to_download_save_paths.append(save_dir)
 
                 if not evt_list.usable and not is_evt_remote:
                     continue
@@ -1405,7 +1407,9 @@ class BaseSource:
                     # If it is remote but doesn't exist locally, we add it to the download queue
                     if is_att_remote and not os.path.exists(att_path):
                         to_download.append(att_prod)
-                        to_download_save_paths.append(os.path.dirname(att_path))
+                        # Remote files are downloaded into a specific subdirectory of the telescope directory
+                        save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id)
+                        to_download_save_paths.append(save_dir)
 
                     # Makes sure there is a combined entry if there wasn't already
                     obs_dict[tel][obs_id].setdefault("combined", {})
@@ -1425,7 +1429,9 @@ class BaseSource:
                     # If it is remote but doesn't exist locally, we add it to the download queue
                     if is_att_remote and not os.path.exists(att_path):
                         to_download.append(att_prod)
-                        to_download_save_paths.append(os.path.dirname(att_path))
+                        # Remote files are downloaded into a specific subdirectory of the telescope directory
+                        save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id)
+                        to_download_save_paths.append(save_dir)
 
                     obs_dict[tel][obs_id][inst]["attitude"] = att_prod
                 else:
@@ -1445,7 +1451,9 @@ class BaseSource:
                     # If it is remote but doesn't exist locally, we add it to the download queue
                     if is_bp_remote and not os.path.exists(bp_path):
                         to_download.append(badpix_prod)
-                        to_download_save_paths.append(os.path.dirname(bp_path))
+                        # Remote files are downloaded into a specific subdirectory of the telescope directory
+                        save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id)
+                        to_download_save_paths.append(save_dir)
                 else:
                     badpix_prod = None
 
@@ -1469,7 +1477,9 @@ class BaseSource:
                     # If it is remote but doesn't exist locally, we add it to the download queue
                     if is_mask_remote and not os.path.exists(mask_path):
                         to_download.append(mask_prod)
-                        to_download_save_paths.append(os.path.dirname(mask_path))
+                        # Remote files are downloaded into a specific subdirectory of the telescope directory
+                        save_dir = os.path.join(OUTPUT, tel, "remote-data-download", obs_id)
+                        to_download_save_paths.append(save_dir)
                 else:
                     mask_prod = None
 
