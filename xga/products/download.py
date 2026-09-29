@@ -1,10 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 10:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 11:24 AM. Copyright (c) The Contributors.
 
 import os
 from collections.abc import Sequence
 
-from fsspec.callbacks import DEFAULT_CALLBACK, TqdmCallback
+from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from fsspec.core import url_to_fs
 from tqdm.auto import tqdm as auto_tqdm
 
@@ -100,65 +100,74 @@ def download_products(
                     results[cur_prod] = err
 
     # Now we actually perform the downloads, one filesystem group at a time
-    for grp_fs, grp_products in prod_groups.values():
-        # These three lists are built up in parallel (same index = same product) so that after the batched
-        #  'get' call succeeds, we know exactly which local path corresponds to which product
-        remote_fs_paths = []
-        local_paths = []
-        mapping = []
+    with auto_tqdm(total=len(to_fetch), desc="Downloading products", disable=disable_progress) as pbar:
+        for grp_fs, grp_products in prod_groups.values():
+            # These three lists are built up in parallel (same index = same product) so that after the batched
+            #  'get' call succeeds, we know exactly which local path corresponds to which product
+            remote_fs_paths = []
+            local_paths = []
+            mapping = []
 
-        # Working out, once per group, whether the user's save_path should be treated as a directory (the
-        #  preferred usage, so that each remote file keeps its own name) or as a single complete file path
-        #  (only really sensible if there's one file in this group, but we don't enforce that here)
-        cur_save_path = os.fspath(save_path)
-        is_dir_like = (
-            cur_save_path.endswith(os.sep) or os.path.isdir(cur_save_path) or os.path.splitext(cur_save_path)[1] == ""
-        )
-        if is_dir_like:
-            # Make sure the destination directory actually exists before we try to download anything into it
-            os.makedirs(cur_save_path, exist_ok=True)
+            # Working out, once per group, whether the user's save_path should be treated as a directory (the
+            #  preferred usage, so that each remote file keeps its own name) or as a single complete file path
+            #  (only really sensible if there's one file in this group, but we don't enforce that here)
+            cur_save_path = os.fspath(save_path)
+            is_dir_like = (
+                cur_save_path.endswith(os.sep) or os.path.isdir(cur_save_path) or os.path.splitext(cur_save_path)[1] == ""
+            )
+            if is_dir_like:
+                # Make sure the destination directory actually exists before we try to download anything into it
+                os.makedirs(cur_save_path, exist_ok=True)
 
-        # Building the parallel lists of remote paths and local destination paths
-        for cur_prod in grp_products:
-            _, remote_fs_path = url_to_fs(cur_prod.remote_path, **(cur_prod.fsspec_kwargs or {}))
-            local_path = os.path.join(cur_save_path, os.path.basename(remote_fs_path)) if is_dir_like else cur_save_path
-            remote_fs_paths.append(remote_fs_path)
-            local_paths.append(local_path)
-            mapping.append((cur_prod, local_path))
+            # Building the parallel lists of remote paths and local destination paths
+            for cur_prod in grp_products:
+                _, remote_fs_path = url_to_fs(cur_prod.remote_path, **(cur_prod.fsspec_kwargs or {}))
+                local_path = os.path.join(cur_save_path, os.path.basename(remote_fs_path)) if is_dir_like else cur_save_path
+                remote_fs_paths.append(remote_fs_path)
+                local_paths.append(local_path)
+                mapping.append((cur_prod, local_path))
 
-        cb = (
-            DEFAULT_CALLBACK
-            if disable_progress
-            else TqdmCallback(tqdm_kwargs={"desc": "Downloading products"}, tqdm_cls=auto_tqdm)
-        )
-        try:
-            # This is the key efficiency step - passing lists of remote and local paths to a single 'get'
-            #  call, rather than looping one product at a time, allows async-capable filesystems (s3fs,
-            #  gcsfs, fsspec's HTTPFileSystem) to fetch multiple files concurrently under the hood
-            with cb:
+            # This is a custom callback that updates the master tqdm progress bar by one for every file that
+            #  finishes being fetched by fsspec. This is more reliable for batch transfers than using
+            #  fsspec's TqdmCallback, which tends to just count files anyway and can be confusing when
+            #  multiple groups exist.
+            class PBarCallback(Callback):
+                def relative_update(self, inc=1):
+                    pbar.update(inc)
+
+            cb = DEFAULT_CALLBACK if disable_progress else PBarCallback()
+
+            try:
+                # This is the key efficiency step - passing lists of remote and local paths to a single 'get'
+                #  call, rather than looping one product at a time, allows async-capable filesystems (s3fs,
+                #  gcsfs, fsspec's HTTPFileSystem) to fetch multiple files concurrently under the hood
                 get_kwargs = {} if batch_size is None else {"batch_size": batch_size}
                 grp_fs.get(remote_fs_paths, local_paths, callback=cb, **get_kwargs)
 
-            # If we get here without an exception, we assume the whole batch succeeded - update every
-            #  product in this group to point at its new local file, and mark it as downloaded
-            for cur_prod, local_path in mapping:
-                cur_prod._path = local_path
-                cur_prod._local_file = True
-                cur_prod._downloaded = True
-                results[cur_prod] = local_path
-        except Exception:
-            # The batched transfer failed for the group as a whole - rather than giving up on every product
-            #  in the group, we fall back to downloading them one at a time through the normal instance
-            #  method, so that a single problematic file doesn't take down the rest of a perfectly good
-            #  batch. Any individual failures here are caught and recorded, not raised, so the loop over
-            #  prod_groups can continue uninterrupted
-            for cur_prod, _ in mapping:
-                try:
-                    cur_prod.download(save_path, overwrite=overwrite, remote_file_sys=grp_fs, show_warn=False)
-                    results[cur_prod] = cur_prod.path
-                except Exception as err:
-                    # cur_prod.download() already sets cur_prod._usable = False and appends to cur_prod._why_unusable
-                    #  internally on failure, so we just need to record the exception here
-                    results[cur_prod] = err
+                # If we get here without an exception, we assume the whole batch succeeded - update every
+                #  product in this group to point at its new local file, and mark it as downloaded
+                for cur_prod, local_path in mapping:
+                    cur_prod._path = local_path
+                    cur_prod._local_file = True
+                    cur_prod._downloaded = True
+                    results[cur_prod] = local_path
+            except Exception:
+                # The batched transfer failed for the group as a whole - rather than giving up on every product
+                #  in the group, we fall back to downloading them one at a time through the normal instance
+                #  method, so that a single problematic file doesn't take down the rest of a perfectly good
+                #  batch. Any individual failures here are caught and recorded, not raised, so the loop over
+                #  prod_groups can continue uninterrupted. We decrement the progress bar for the failed
+                #  batch and then re-increment as individual successes happen.
+                pbar.update(-len(mapping))
+                for cur_prod, _ in mapping:
+                    try:
+                        cur_prod.download(save_path, overwrite=overwrite, remote_file_sys=grp_fs, show_warn=False)
+                        results[cur_prod] = cur_prod.path
+                        pbar.update(1)
+                    except Exception as err:
+                        # cur_prod.download() already sets cur_prod._usable = False and appends to cur_prod._why_unusable
+                        #  internally on failure, so we just need to record the exception here
+                        results[cur_prod] = err
+                        pbar.update(1)
 
     return results
