@@ -1,11 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 10:33 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 10:49 AM. Copyright (c) The Contributors.
 
 import os
 from collections.abc import Sequence
 
 from fsspec.callbacks import DEFAULT_CALLBACK, TqdmCallback
 from fsspec.core import url_to_fs
+from tqdm.auto import tqdm as auto_tqdm
 
 from xga.products import BaseProduct
 
@@ -125,13 +126,18 @@ def download_products(
             local_paths.append(local_path)
             mapping.append((cur_prod, local_path))
 
-        cb = DEFAULT_CALLBACK if disable_progress else TqdmCallback(tqdm_kwargs={"desc": "Downloading products"})
+        cb = (
+            DEFAULT_CALLBACK
+            if disable_progress
+            else TqdmCallback(tqdm_kwargs={"desc": "Downloading products"}, tqdm_cls=auto_tqdm)
+        )
         try:
             # This is the key efficiency step - passing lists of remote and local paths to a single 'get'
             #  call, rather than looping one product at a time, allows async-capable filesystems (s3fs,
             #  gcsfs, fsspec's HTTPFileSystem) to fetch multiple files concurrently under the hood
-            get_kwargs = {} if batch_size is None else {"batch_size": batch_size}
-            grp_fs.get(remote_fs_paths, local_paths, callback=cb, **get_kwargs)
+            with cb:
+                get_kwargs = {} if batch_size is None else {"batch_size": batch_size}
+                grp_fs.get(remote_fs_paths, local_paths, callback=cb, **get_kwargs)
 
             # If we get here without an exception, we assume the whole batch succeeded - update every
             #  product in this group to point at its new local file, and mark it as downloaded
