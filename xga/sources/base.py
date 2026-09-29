@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:32 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -5449,11 +5449,11 @@ class BaseSource:
         """
         att_files = self.get_products("attitude", obs_id, telescope=telescope, inst=inst)
 
-        filt_att_files = [p for p in att_files if type(p) is BaseProduct]
+        filt_att_files = [p for p in att_files if type(p) is MissionAttitude]
         if len(filt_att_files) != len(att_files):
             types_matched_prods = [type(en) for en in att_files]
             raise TypeError(
-                f"Expected a list of BaseProduct instances, instead there are {set(types_matched_prods)} entries."
+                f"Expected a list of MissionAttitude instances, instead there are {set(types_matched_prods)} entries."
             )
 
         # Perform some checks on the number of attitude files being returned
