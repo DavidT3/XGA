@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 8:56 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 9:01 AM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -9,7 +9,6 @@ import os
 import pickle
 from copy import deepcopy
 from random import randint
-from typing import NoReturn
 from warnings import warn
 
 import emcee as em
@@ -521,6 +520,18 @@ class BaseProduct:
         :rtype: bool
         """
         return self._in_memory
+
+    @property
+    def remote_type(self) -> str | None:
+        """
+        If this product was declared to interface with a remote file, this property describes the 'type' of
+        remote file. If None, then the file is considered local, otherwise the return may be 's3', 'gs', 'http',
+        or 'https'.
+
+        :return: Remote file type - None if local, otherwise a string such as 's3' or 'https'.
+        :rtype: str | None
+        """
+        return self._remote_type
 
     # --------- Define internal functions ---------
 
