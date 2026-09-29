@@ -1,12 +1,18 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 3:29 PM. Copyright (c) The Contributors.
+"""
+This submodule defines functions that relate to the downloading of multiple remote data files, with a focus
+on optimizing the efficiency/speed of transfers when compared to the convenience of each product instance's
+individual download method.
+"""
 
 import os
 from collections.abc import Sequence
 
+from fsspec import AbstractFileSystem
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from fsspec.core import url_to_fs
-from tqdm.auto import tqdm as auto_tqdm
+from tqdm import tqdm
 
 from xga.products import BaseProduct
 
@@ -14,7 +20,7 @@ from xga.products import BaseProduct
 def download_products(
     products: Sequence[BaseProduct],
     save_path: str | Sequence[str],
-    remote_file_sys=None,
+    remote_file_sys: AbstractFileSystem | None = None,
     overwrite: bool = False,
     batch_size: int | None = None,
     disable_progress: bool = False,
@@ -102,7 +108,7 @@ def download_products(
                 # If we can't even build the filesystem for this group (e.g. bad credentials, unsupported
                 #  protocol), then every product in the group is a lost cause - mark them all as unusable
                 #  and record the exception, rather than letting this stop the rest of the batch
-                for cur_prod, cur_save_path in grp_info:
+                for cur_prod, _cur_save_path in grp_info:
                     cur_prod.usable = False
                     if "ProductDownloadFailed" not in cur_prod.not_usable_reasons:
                         # Since we have a setter now, we can append to the list and set it back
@@ -112,7 +118,7 @@ def download_products(
                     results[cur_prod] = err
 
     # Now we actually perform the downloads, one filesystem group at a time
-    with auto_tqdm(total=len(to_fetch), desc="Downloading products", disable=disable_progress) as pbar:
+    with tqdm(total=len(to_fetch), desc="Downloading products", disable=disable_progress) as pbar:
         for grp_fs, grp_info in prod_groups.values():
             # These three lists are built up in parallel (same index = same product) so that after the batched
             #  'get' call succeeds, we know exactly which local path corresponds to which product
@@ -153,7 +159,7 @@ def download_products(
             #  fsspec's TqdmCallback, which tends to just count files anyway and can be confusing when
             #  multiple groups exist.
             class PBarCallback(Callback):
-                def relative_update(self, inc=1):
+                def relative_update(self, inc: int = 1) -> None:
                     pbar.update(inc)
 
             cb = DEFAULT_CALLBACK if disable_progress else PBarCallback()
@@ -167,7 +173,7 @@ def download_products(
 
                 # If we get here without an exception, we assume the whole batch succeeded - update every
                 #  product in this group to point at its new local file, and mark it as downloaded
-                for cur_prod, local_path, cur_save_path in mapping:
+                for cur_prod, local_path, _cur_save_path in mapping:
                     cur_prod.path = local_path
                     cur_prod.local_file = True
                     cur_prod.downloaded = True
@@ -187,7 +193,8 @@ def download_products(
                         pbar.update(1)
                     except Exception as err:
                         # cur_prod.download() already sets cur_prod.usable = False and appends to
-                        #  cur_prod.not_usable_reasons internally on failure, so we just need to record the exception here
+                        #  cur_prod.not_usable_reasons internally on failure, so we just need to record the
+                        #  exception here
                         results[cur_prod] = err
                         pbar.update(1)
 
