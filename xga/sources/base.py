@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 2:40 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 2:52 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -1534,7 +1534,7 @@ class BaseSource:
 
         # We must re-check if the products we were going to load are usable, as some might have failed to download
         for tel in obs_dict:
-            for obs_id in obs_dict[tel]:
+            for obs_id in list(obs_dict[tel]):
                 # A shared (per-ObsID) attitude file is stored under the "combined" pseudo-instrument key;
                 # if it fails, every real instrument for this ObsID is untrustworthy, exactly as for local data.
                 shared_att_failed = False
