@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 1:49 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 2:40 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -1535,23 +1535,37 @@ class BaseSource:
         # We must re-check if the products we were going to load are usable, as some might have failed to download
         for tel in obs_dict:
             for obs_id in obs_dict[tel]:
+                # A shared (per-ObsID) attitude file is stored under the "combined" pseudo-instrument key;
+                # if it fails, every real instrument for this ObsID is untrustworthy, exactly as for local data.
+                shared_att_failed = False
+
                 for inst in list(obs_dict[tel][obs_id]):
+                    invalidate_inst = False
                     for prod_type in list(obs_dict[tel][obs_id][inst]):
                         prod = obs_dict[tel][obs_id][inst][prod_type]
-                        # This works for both single products and dictionaries of products (like Image/ExpMap)
                         if isinstance(prod, BaseProduct) and not prod.usable:
                             del obs_dict[tel][obs_id][inst][prod_type]
+                            if prod_type == "attitude" and inst == "combined":
+                                shared_att_failed = True
+                            elif prod_type in ("attitude", "badpix", "maskfile"):
+                                # Per-instrument attitude/badpix/mask - only this instrument is affected
+                                invalidate_inst = True
                         elif isinstance(prod, dict):
                             for bound_key in list(prod):
                                 if not prod[bound_key].usable:
                                     del obs_dict[tel][obs_id][inst][prod_type][bound_key]
-                    # If an instrument has no products left after our usability check, we remove it
+
+                    if invalidate_inst:
+                        obs_dict[tel][obs_id][inst] = {}
+
                     if len(obs_dict[tel][obs_id][inst]) == 0:
                         del obs_dict[tel][obs_id][inst]
-                # If an ObsID has no instruments left, we remove it
+
+                if shared_att_failed:
+                    obs_dict[tel][obs_id] = {}
+
                 if len(obs_dict[tel][obs_id]) == 0:
                     del obs_dict[tel][obs_id]
-            # If a telescope has no ObsIDs left, we remove it
             obs_dict[tel] = {o: v for o, v in obs_dict[tel].items() if len(v) != 0}
 
         return obs_dict, reg_dict
