@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 1:49 PM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -5471,6 +5471,11 @@ class BaseSource:
             raise ValueError(
                 f"Multiple attitude files have been identified for {telescope}-{obs_id}-{inst}, please "
                 "contact the developer."
+            )
+        elif len(filt_att_files) == 0:
+            raise NoProductAvailableError(
+                f"No attitude file has been identified for {telescope}-{obs_id}-{inst}, the "
+                f"{obs_id} dataset is incomplete and may need to be excluded from analysis"
             )
 
         # Now just return the path to the attitude file, so we're compatible with the behaviour of this method
