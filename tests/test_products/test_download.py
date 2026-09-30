@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:59 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 10:29 AM. Copyright (c) The Contributors.
 
 import os
 import tempfile
@@ -96,6 +96,43 @@ class TestDownloadProducts(unittest.TestCase):
         self.assertNotEqual(res[p1], res[p2])
         self.assertEqual(os.path.dirname(res[p1]) + os.sep, new_dir)
         self.assertEqual(os.path.dirname(res[p2]) + os.sep, new_dir)
+
+    def test_download_products_redundant_skip(self) -> None:
+        """Tests that download_products skips already downloaded local files and updates properties."""
+        p1 = BaseProduct(self.url_evt_path, "", "", "", "", "", check_exists=True)
+        # First download to establish the file
+        download_products([p1], save_path=self.shared_td.name, disable_progress=True)
+        self.assertTrue(p1.downloaded)
+        loc_path = p1.path
+
+        # Create a fresh product object pointing at the same remote, but not yet 'downloaded'
+        p2 = BaseProduct(self.url_evt_path, "", "", "", "", "", check_exists=True)
+        self.assertFalse(p2.downloaded)
+
+        # Run download_products again - it should find the existing file and skip network call
+        res = download_products([p2], save_path=self.shared_td.name, disable_progress=True)
+        self.assertIn(p2, res)
+        self.assertTrue(p2.downloaded)
+        self.assertTrue(p2.local_file)
+        self.assertEqual(p2.path, loc_path)
+        self.assertEqual(res[p2], loc_path)
+
+    def test_download_products_redownload(self) -> None:
+        """Tests the redownload argument in download_products."""
+        p1 = BaseProduct(self.url_evt_path, "", "", "", "", "", check_exists=True)
+        # First download to establish the file
+        download_products([p1], save_path=self.shared_td.name, disable_progress=True)
+        self.assertTrue(p1.downloaded)
+        loc_path = p1.path
+
+        # Create a fresh product object pointing at the same remote
+        p2 = BaseProduct(self.url_evt_path, "", "", "", "", "", check_exists=True)
+
+        # Run with redownload=True
+        res = download_products([p2], save_path=self.shared_td.name, redownload=True, disable_progress=True)
+        self.assertIn(p2, res)
+        self.assertTrue(p2.downloaded)
+        self.assertEqual(p2.path, loc_path)
 
 
 if __name__ == "__main__":

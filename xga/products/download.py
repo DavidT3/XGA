@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 4:25 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 10:29 AM. Copyright (c) The Contributors.
 """
 This submodule defines functions that relate to the downloading of multiple remote data files, with a focus
 on optimizing the efficiency/speed of transfers when compared to the convenience of each product instance's
@@ -21,7 +21,7 @@ def download_products(
     products: Sequence[BaseProduct],
     save_path: str | Sequence[str],
     remote_file_sys: AbstractFileSystem | None = None,
-    overwrite: bool = False,
+    redownload: bool = False,
     batch_size: int | None = None,
     disable_progress: bool = False,
 ) -> dict:
@@ -41,7 +41,7 @@ def download_products(
         treated as the save path for the corresponding product.
     :param remote_file_sys: An fsspec filesystem to use for every product. If None, one is built per unique
         protocol/fsspec_kwargs combination found in 'products'.
-    :param bool overwrite: Force re-download of already-downloaded products. Default False.
+    :param bool redownload: Force re-download of already-downloaded products. Default False.
     :param int batch_size: Passed through to fsspec's 'get' if the filesystem supports it, to cap
         concurrent transfers per group. Default None (filesystem default).
     :param bool disable_progress: Setting this to True turns off the download progress bar. Default False.
@@ -56,8 +56,11 @@ def download_products(
     if not isinstance(save_path, str) and len(save_path) != len(products):
         raise ValueError("The 'save_path' sequence must be the same length as the 'products' sequence.")
 
+    # We'll use this to cache directory listings for efficient local existence checks
+    local_dir_cache = {}
+
     # First pass over all the products - we're splitting them into those that don't need fetching at all
-    #  (already local, in-memory, or already downloaded and we're not forcing an overwrite) and those that
+    #  (already local, in-memory, or already downloaded and we're not forcing a redownload) and those that
     #  actually need to go and get a remote file. No point setting up filesystem connections for products
     #  we're not going to touch.
     to_fetch = []
@@ -65,12 +68,39 @@ def download_products(
         # We need to know which save path corresponds to which product, even if it's not being fetched
         cur_save_path = save_path if isinstance(save_path, str) else save_path[p_ind]
 
-        if cur_prod.not_from_file or cur_prod.remote_path is None or (cur_prod.downloaded and not overwrite):
+        if cur_prod.not_from_file or cur_prod.remote_path is None or (cur_prod.downloaded and not redownload):
             # Nothing to do for this one - if it's local/in-memory then cur_prod.path is already the right answer,
             #  and if it's already downloaded then cur_prod.path was updated to the local copy by a previous call
             results[cur_prod] = cur_prod.path
         else:
-            to_fetch.append((cur_prod, cur_save_path))
+            # 2. Determine target local path for remote products (to check if they already exist on disk)
+            _, remote_fs_path = url_to_fs(cur_prod.remote_path, **(cur_prod.fsspec_kwargs or {}))
+            cur_save_path_str = os.fspath(cur_save_path)
+            is_dir_like = cur_save_path_str.endswith(os.sep) or os.path.isdir(cur_save_path_str)
+
+            if is_dir_like:
+                local_path = os.path.join(cur_save_path_str, os.path.basename(remote_fs_path))
+            else:
+                local_path = cur_save_path_str
+
+            parent_dir = os.path.dirname(local_path)
+            filename = os.path.basename(local_path)
+
+            # 3. Perform batch listdir check for efficiency
+            if parent_dir not in local_dir_cache:
+                if os.path.exists(parent_dir):
+                    local_dir_cache[parent_dir] = set(os.listdir(parent_dir))
+                else:
+                    local_dir_cache[parent_dir] = set()
+
+            # 4. Final check: if file exists and we aren't redownloading, update product properties and skip
+            if filename in local_dir_cache[parent_dir] and not redownload:
+                cur_prod.path = local_path
+                cur_prod.local_file = True
+                cur_prod.downloaded = True
+                results[cur_prod] = local_path
+            else:
+                to_fetch.append((cur_prod, cur_save_path))
 
     # If literally everything was already handled in the loop above, we can bail out early
     if not to_fetch:
@@ -184,7 +214,7 @@ def download_products(
                 pbar.update(-len(mapping))
                 for cur_prod, _, cur_save_path in mapping:
                     try:
-                        cur_prod.download(cur_save_path, overwrite=overwrite, remote_file_sys=grp_fs, show_warn=False)
+                        cur_prod.download(cur_save_path, overwrite=redownload, remote_file_sys=grp_fs, show_warn=False)
                         results[cur_prod] = cur_prod.path
                         pbar.update(1)
                     except Exception as err:
