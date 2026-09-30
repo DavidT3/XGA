@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/28/26, 12:09 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 9/29/26, 9:00 PM. Copyright (c) The Contributors.
 
 import importlib.resources
 import json
@@ -830,6 +830,12 @@ def _extract_header_info(
         else:
             good_filt = True
 
+        # Obs mode check
+        if "OBS_MODE" in evts_header:
+            good_obs_mode = evts_header["OBS_MODE"] not in BANNED_OBS_MODES[tel]
+        else:
+            good_obs_mode = True
+
         if inst_from_evt:
             hdr_insts = [
                 evts_header[h_key]
@@ -838,10 +844,10 @@ def _extract_header_info(
             ]
             for i in ALLOWED_INST[tel]:
                 use_key = f"USE_{i.upper()}"
-                info[use_key] = "T" if (i.upper() in hdr_insts and good_filt) else "F"
+                info[use_key] = "T" if (i.upper() in hdr_insts and good_filt and good_obs_mode) else "F"
         else:
             use_key = f"USE_{evt_path_insts[evt_key_ind].upper()}"
-            info[use_key] = "T" if good_filt else "F"
+            info[use_key] = "T" if (good_filt and good_obs_mode) else "F"
 
     return info
 
@@ -1225,6 +1231,16 @@ BANNED_FILTS = {
     "xmm": ["CalClosed", "Closed"],
     "erosita": ["CALIB", "CLOSED"],
     "erass": ["CALIB", "CLOSED"],
+    "chandra": [],
+}
+
+# This defines observation modes that we do not allow to be used with XGA for particular telescopes.
+#  XMM slew mode is banned because dealing with slew data is so different to regular XMM data that
+#   we would make it an entirely separate mission/telescope entry for XGA.
+BANNED_OBS_MODES = {
+    "xmm": ["SLEW"],
+    "erosita": [],
+    "erass": [],
     "chandra": [],
 }
 
