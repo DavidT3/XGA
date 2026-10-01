@@ -1,23 +1,28 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/14/26, 9:59 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/1/26, 4:34 PM. Copyright (c) The Contributors.
 
-from typing import Union, List, Dict
 from warnings import warn
 
 import numpy as np
 from astropy.cosmology import Cosmology
-from astropy.units import Quantity, Unit, arcmin, UnitConversionError
+from astropy.units import Quantity, Unit, UnitConversionError, arcmin
 from matplotlib import pyplot as plt
 from numpy import ndarray
 from tqdm import tqdm
 
 from .. import DEFAULT_COSMO
-from ..exceptions import (NoMatchFoundError, ModelNotAssociatedError, ParameterNotAssociatedError, \
-                          NotAssociatedError, TelescopeNotAssociatedError, NoValidObservationsError,
-                          FitConfNotAssociatedError)
+from ..exceptions import (
+    FitConfNotAssociatedError,
+    ModelNotAssociatedError,
+    NoMatchFoundError,
+    NotAssociatedError,
+    NoValidObservationsError,
+    ParameterNotAssociatedError,
+    TelescopeNotAssociatedError,
+)
 from ..sources.base import BaseSource
 from ..sourcetools.misc import coord_to_name
-from ..utils import check_telescope_choices, PRETTY_TELESCOPE_NAMES
+from ..utils import PRETTY_TELESCOPE_NAMES, check_telescope_choices
 
 
 class BaseSample:
@@ -47,11 +52,20 @@ class BaseSample:
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
-    def __init__(self, ra: ndarray, dec: ndarray, redshift: ndarray = None, name: ndarray = None,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_products: bool = True,
-                 load_fits: bool = False, no_prog_bar: bool = False,
-                 telescope: Union[str, List[str]] = None,
-                 search_distance: Union[Quantity, dict] = None):
+
+    def __init__(
+        self,
+        ra: ndarray,
+        dec: ndarray,
+        redshift: ndarray | None = None,
+        name: ndarray | None = None,
+        cosmology: Cosmology = DEFAULT_COSMO,
+        load_products: bool = True,
+        load_fits: bool = False,
+        no_prog_bar: bool = False,
+        telescope: str | list[str] | None = None,
+        search_distance: Quantity | dict | None = None,
+    ):
         """
         The superclass for all sample classes. These store whole samples of sources, to make bulk analysis of
         interesting X-ray sources easy. This in particular creates samples of BaseSource object. It doesn't seem
@@ -90,8 +104,11 @@ class BaseSample:
         #  warnings for every source.
         # Instead, we check and warn just once here
         if type(search_distance) == dict and any([t not in search_distance for t in telescope]):
-            warn("A dictionary of search distances that did not contain all requested telescopes has been "
-                 "passed, default values have been used for the missing telescopes.", stacklevel=2)
+            warn(
+                "A dictionary of search distances that did not contain all requested telescopes has been "
+                "passed, default values have been used for the missing telescopes.",
+                stacklevel=2,
+            )
 
         # There used to be a set of attributes storing the basic information (ra, dec, and redshifts) about
         #  the sources in this sample, but for subclasses its actually way more convenient for the properties
@@ -129,9 +146,22 @@ class BaseSample:
                 try:
                     # We declare the source object, making sure to tell it that its part of a sample
                     #  using in_sample=True
-                    temp = BaseSource(r, d, z, n, cosmology, load_products, load_fits, True, telescope,
-                                      search_distance, null_load_products=False, load_regions=False,
-                                      load_spectra=False, load_profiles=False)
+                    temp = BaseSource(
+                        r,
+                        d,
+                        z,
+                        n,
+                        cosmology,
+                        load_products,
+                        load_fits,
+                        True,
+                        telescope,
+                        search_distance,
+                        null_load_products=False,
+                        load_regions=False,
+                        load_spectra=False,
+                        load_profiles=False,
+                    )
                     n = temp.name
                     self._sources[n] = temp
                     self._names.append(n)
@@ -142,7 +172,7 @@ class BaseSample:
                         # n = n.replace(" ", "")
                         pass
                     else:
-                        ra_dec = Quantity(np.array([r, d]), 'deg')
+                        ra_dec = Quantity(np.array([r, d]), "deg")
                         n = coord_to_name(ra_dec)
 
                     # We record that a particular source name was not successfully declared
@@ -153,22 +183,25 @@ class BaseSample:
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
             nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
-            raise NoValidObservationsError(f"No sources have been declared, likely meaning that none of the sample have"
-                                           f" valid {nice_tels} data.")
+            raise NoValidObservationsError(
+                f"No sources have been declared, likely meaning that none of the sample have valid {nice_tels} data."
+            )
 
         # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
         # HOWEVER - I only want this warning to appear in certain circumstances. For instance I wouldn't want it
         #  to be triggered here for a ClusterSample declaration that has called the super init (this method), as that
         #  class declaration does its own (somewhat different) check on which sources have data
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch']
+        no_data = [name for name in self._failed_sources if self._failed_sources[name] == "NoMatch"]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0 and type(self) == BaseSample:
             nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
             no_data_str = "/".join(no_data)
-            warn(f"The following do not appear to have any {nice_tels} data, and will not be included in the "
-                 f"sample (can also check .failed_names); {no_data_str}",
-                 stacklevel=2)
+            warn(
+                f"The following do not appear to have any {nice_tels} data, and will not be included in the "
+                f"sample (can also check .failed_names); {no_data_str}",
+                stacklevel=2,
+            )
 
         # This calls the method that checks for suppressed source-level warnings that occurred during declaration, but
         #  only if this init has been called for a BaseSample declaration, rather than by a sub-class
@@ -195,8 +228,7 @@ class BaseSample:
         :return: List of source RA-DEC positions as supplied at sample initialisation.
         :rtype: Quantity
         """
-
-        return Quantity([s.ra_dec.value for s in self._sources.values()], 'deg')
+        return Quantity([s.ra_dec.value for s in self._sources.values()], "deg")
 
     @property
     def peaks(self) -> Quantity:
@@ -208,14 +240,17 @@ class BaseSample:
         :return: A quantity containing the peak coordinates measured for the sources in the sample.
         :rtype: Quantity
         """
-        if not hasattr(self[0], 'peak'):
+        if not hasattr(self[0], "peak"):
             raise AttributeError("The sources making up this sample do not have a peak property.")
 
         if all([np.array_equal(s.ra_dec.value, s.peak.value) for s in self._sources.values()]):
-            warn("All user supplied ra-dec values are the same as the peak ra-dec values, likely means that peak "
-                 "finding was not run for this sample.", stacklevel=2)
+            warn(
+                "All user supplied ra-dec values are the same as the peak ra-dec values, likely means that peak "
+                "finding was not run for this sample.",
+                stacklevel=2,
+            )
 
-        return Quantity([s.peak.value for s in self._sources.values()], 'deg')
+        return Quantity([s.peak.value for s in self._sources.values()], "deg")
 
     @property
     def redshifts(self) -> ndarray:
@@ -281,8 +316,19 @@ class BaseSample:
             in this sample.
         :rtype: dict
         """
-
         return {n: {t: s.obs_ids[t] for t in s.telescopes} for n, s in self._sources.items()}
+
+    @property
+    def src_obs_separations(self) -> dict:
+        """
+        Retrieves the Haversine separations between user-defined source coordinates and observation pointing
+        coordinates for every source in this sample, for each observation of each telescope associated.
+
+        :return: A nested dictionary (where the top level keys are the source names, mid-level keys are telescope
+            names, lower-level keys are ObsIDs and values are astropy quantities in angular units.
+        :rtype: dict
+        """
+        return {n: s.obs_separations for n, s in self._sources.items()}
 
     @property
     def instruments(self) -> dict:
@@ -322,7 +368,7 @@ class BaseSample:
         return {n: any([any(s.detected[t].values()) for t in s.detected]) for n, s in self._sources.items()}
 
     @property
-    def failed_names(self) -> List[str]:
+    def failed_names(self) -> list[str]:
         """
         Yields the names of those sources that could not be declared for some reason.
 
@@ -332,7 +378,7 @@ class BaseSample:
         return list(self._failed_sources)
 
     @property
-    def failed_reasons(self) -> Dict[str, str]:
+    def failed_reasons(self) -> dict[str, str]:
         """
         Returns a dictionary containing sources that failed to be declared successfully, and a
         simple reason why they couldn't be.
@@ -343,7 +389,7 @@ class BaseSample:
         return self._failed_sources
 
     @property
-    def suppressed_warnings(self) -> Dict[str, List[str]]:
+    def suppressed_warnings(self) -> dict[str, list[str]]:
         """
         A property getter for a dictionary of the suppressed warnings that occurred during the declaration of
         sources for this sample.
@@ -362,8 +408,11 @@ class BaseSample:
         is to be called at the end of every sub-class init.
         """
         if any([len(src.suppressed_warnings) > 0 for src in self._sources.values()]):
-            warn("Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
-                 "suppressed_warnings property of this sample.", stacklevel=2)
+            warn(
+                "Non-fatal warnings occurred during the declaration of some sources, to access them please use the "
+                "suppressed_warnings property of this sample.",
+                stacklevel=2,
+            )
 
     def _del_data(self, key: int):
         """
@@ -374,10 +423,22 @@ class BaseSample:
         """
         pass
 
-    def Lx(self, outer_radius: Union[str, Quantity], telescope: str, model: str,
-           inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), lo_en: Quantity = Quantity(0.5, 'keV'),
-           hi_en: Quantity = Quantity(2.0, 'keV'), group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-           over_sample: float = None, quality_checks: bool = True, stacked_spectra: bool = False, fit_conf: Union[str, dict] = None):
+    def Lx(
+        self,
+        outer_radius: str | Quantity,
+        telescope: str,
+        model: str,
+        inner_radius: str | Quantity = Quantity(0, "arcsec"),
+        lo_en: Quantity = Quantity(0.5, "keV"),
+        hi_en: Quantity = Quantity(2.0, "keV"),
+        group_spec: bool = True,
+        min_counts: int = 5,
+        min_sn: float | None = None,
+        over_sample: float | None = None,
+        quality_checks: bool | None = True,
+        stacked_spectra: bool = False,
+        fit_conf: str | dict | None = None,
+    ):
         """
         A get method for luminosities measured for the constituent sources of this sample. An error will be
         thrown if luminosities haven't been measured for the given region and model, no default model has been
@@ -426,34 +487,50 @@ class BaseSample:
 
         # Have to check that the chosen telescope is actually valid for this sample
         if telescope not in self.telescopes:
-            raise NotAssociatedError("The {t} telescope is not associated with any source in this "
-                                     "sample.".format(t=telescope))
+            raise NotAssociatedError(f"The {telescope} telescope is not associated with any source in this sample.")
 
         # At one point we allowed the 'outer_radius' argument to be 'region', but we no longer
         #  support that
-        if outer_radius == 'region':
-            raise ValueError("The string 'region' is no longer a valid option for "
-                             "the 'outer_radius' argument.")
+        if outer_radius == "region":
+            raise ValueError("The string 'region' is no longer a valid option for the 'outer_radius' argument.")
 
         # This just parses the input inner and outer radii into something predictable
-        inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
+        inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, "")[1:]
 
         lums = []
         warns = []
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
-                lx_val = src.get_luminosities(out_rads[src_ind], telescope, model, inn_rads[src_ind], lo_en, hi_en,
-                                              group_spec, min_counts, min_sn, over_sample, stacked_spectra, fit_conf)
+                lx_val = src.get_luminosities(
+                    out_rads[src_ind],
+                    telescope,
+                    model,
+                    inn_rads[src_ind],
+                    lo_en,
+                    hi_en,
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    stacked_spectra,
+                    fit_conf,
+                )
                 frac_err = lx_val[1:] / lx_val[0]
                 # We check that no error is larger than the measured value, if quality checks are on
                 if quality_checks and len(frac_err[frac_err >= 1]) != 0:
-                    raise ValueError("{s} luminosity measurement's uncertainty greater than value.".format(s=src.name))
+                    raise ValueError(f"{src.name} luminosity measurement's uncertainty greater than value.")
                 else:
                     lums.append(lx_val)
 
-            except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
-                    NotAssociatedError, FitConfNotAssociatedError) as err:
+            except (
+                ValueError,
+                ModelNotAssociatedError,
+                ParameterNotAssociatedError,
+                TelescopeNotAssociatedError,
+                NotAssociatedError,
+                FitConfNotAssociatedError,
+            ):
                 # If any of the possible errors are thrown, we grab the name of the source and replace
                 #  that entry with a NaN - the names will be included in a warning at the end
                 # warn(str(err))
@@ -461,7 +538,7 @@ class BaseSample:
                 lums.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
-        lums = Quantity(np.array(lums), 'erg / s')
+        lums = Quantity(np.array(lums), "erg / s")
 
         # We're going to throw an error if all the luminosities are NaN, because obviously something is wrong
         check_lums = lums[~np.isnan(lums)]
@@ -470,13 +547,15 @@ class BaseSample:
 
         # If there were any errors for any of the sources, we include their names in a warning here
         if len(warns) > 0:
-            warn_text = ("Problems occurred (there may have been no successful model fit) while attempting to retrieve "
-                         "luminosities for the following sources; {}".format(",".join(warns)))
+            warn_text = (
+                "Problems occurred (there may have been no successful model fit) while attempting to retrieve "
+                "luminosities for the following sources; {}".format(",".join(warns))
+            )
             warn(warn_text, stacklevel=2)
 
         return lums
 
-    def check_spectra(self):
+    def check_spectra(self) -> None:
         """
         This method checks through the spectra associated with each source in the sample, printing a summary of which
         aren't usable and the reasons.
@@ -485,10 +564,11 @@ class BaseSample:
         print("\n-----------------------------------------------------")
         for s in self._sources:
             src = self._sources[s]
-            src: BaseSource
+
             spectra = src.get_products("spectrum")
-            spec_check = [(spec.obs_id, spec.instrument, spec.not_usable_reasons) for spec in spectra
-                          if not spec.usable]
+            spec_check = [
+                (spec.obs_id, spec.instrument, spec.not_usable_reasons) for spec in spectra if not spec.usable
+            ]
             if len(spec_check) > 0:
                 print(src.name, spec_check)
                 triggered = True
@@ -497,7 +577,7 @@ class BaseSample:
             print("All available spectra are okay")
         print("-----------------------------------------------------\n")
 
-    def offsets(self, off_unit: Union[Unit, str] = arcmin) -> Quantity:
+    def offsets(self, off_unit: Unit | str = arcmin) -> Quantity:
         """
         Uses the offset method built into the sources to fetch the offsets between ra_dec and peak for all
         sources in the sample.
@@ -515,10 +595,22 @@ class BaseSample:
 
         return offsets
 
-    def view_offset_dist(self, off_unit: Union[Unit, str] = arcmin, figsize: tuple = (6, 6),
-                         bins: Union[str, np.ndarray, int] = 'auto', x_lims: Quantity = None, x_scale: str = 'log',
-                         y_scale: str = 'log', colour: str = "cadetblue", alpha: float = 0.5, title: str = '',
-                         font_size: int = 13, data_label: str = '', y_label: str = "N", save_path: str = None):
+    def view_offset_dist(
+        self,
+        off_unit: Unit | str = arcmin,
+        figsize: tuple = (6, 6),
+        bins: str | np.ndarray | int = "auto",
+        x_lims: Quantity = None,
+        x_scale: str = "log",
+        y_scale: str = "log",
+        colour: str = "cadetblue",
+        alpha: float = 0.5,
+        title: str = "",
+        font_size: int = 13,
+        data_label: str = "",
+        y_label: str = "N",
+        save_path: str | None = None,
+    ) -> None:
         """
         A method to create a histogram of the offsets of user from peak coordinates for the objects in
         this sample. A range of options to customise the plot are supplied.
@@ -556,10 +648,10 @@ class BaseSample:
         # Set up the figure, with minorticks on and ticks facing inwards
         plt.figure(figsize=figsize)
         plt.minorticks_on()
-        plt.tick_params(which='both', top=True, right=True, direction='in')
+        plt.tick_params(which="both", top=True, right=True, direction="in")
 
         # Plot the histogram, stepfilled makes it look good when saved as a pdf
-        plt.hist(seps.value, color=colour, label=data_label, alpha=alpha, bins=bins, histtype='stepfilled')
+        plt.hist(seps.value, color=colour, label=data_label, alpha=alpha, bins=bins, histtype="stepfilled")
 
         # Set the y_label as the argument value
         plt.ylabel(y_label, fontsize=font_size)
@@ -569,7 +661,7 @@ class BaseSample:
             plt.xlim(*x_lims.value)
 
         # Setup the x-axis label, using the separation value units, then add to figure
-        off_label = r"Offset [{u}]".format(u=seps.unit.to_string())
+        off_label = rf"Offset [{seps.unit.to_string()}]"
         plt.xlabel(off_label, fontsize=font_size)
 
         # Set the axis scales to the arguments.
@@ -577,12 +669,12 @@ class BaseSample:
         plt.yscale(y_scale)
 
         # If the data_label argument was not empty, we must add a legend.
-        if data_label != '':
+        if data_label != "":
             plt.legend(fontsize=font_size)
 
         # If the title argument was not empty, we must add a legend
-        if title != '':
-            plt.title(title, fontsize=font_size*1.2)
+        if title != "":
+            plt.title(title, fontsize=font_size * 1.2)
 
         # Turn on tight layout to remove white space
         plt.tight_layout()
@@ -594,15 +686,15 @@ class BaseSample:
         # Show the figure
         plt.show()
 
-    def info(self):
+    def info(self) -> None:
         """
         Simple function to show basic information about the sample.
         """
         # TODO There must be more useful info I can add to this
 
         print("\n-----------------------------------------------------")
-        print("Number of Sources - {}".format(len(self)))
-        print("Redshift Information - {}".format(self.redshifts[0] is not None))
+        print(f"Number of Sources - {len(self)}")
+        print(f"Redshift Information - {self.redshifts[0] is not None}")
 
         # Have to try-except just in case someone for some reason declares a BaseSample and uses this method - as
         #  BaseSource objects don't have the ability to declare something detected or not
@@ -610,7 +702,7 @@ class BaseSample:
             # Finding the number of sources in the sample that have been detected in AT LEAST one ObsID
             num_det = sum(list(self.any_detection.values()))
             perc_det = int(round(num_det / len(self._sources), 2) * 100)
-            print("Sources with ≥1 detection - {n} [{p}%]".format(n=num_det, p=perc_det))
+            print(f"Sources with ≥1 detection - {num_det} [{perc_det}%]")
         except ValueError:
             pass
         print("-----------------------------------------------------\n")
@@ -644,7 +736,7 @@ class BaseSample:
         else:
             raise StopIteration
 
-    def __getitem__(self, key: Union[int, str]) -> BaseSource:
+    def __getitem__(self, key: int | str) -> BaseSource:
         """
         This returns the relevant source when a sample is addressed using the name of a source as the key,
         or using an integer index.
@@ -662,7 +754,7 @@ class BaseSample:
             raise ValueError("Only a source name or integer index may be used to address a sample object")
         return src
 
-    def __delitem__(self, key: Union[int, str]):
+    def __delitem__(self, key: int | str):
         """
         This deletes a source from the sample, along with all accompanying data, using the index or
         name of the source.
