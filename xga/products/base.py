@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 12:53 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 2:58 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -752,7 +752,9 @@ class BaseProduct:
             # The substrings we're looking for are different depending on if we're searching for
             #  errors or warnings
             if err_type == "error":
-                indicators = np.array(["**ERROR", "**STOP", "Fortran runtime error", "NoSuchFile", "syntax error"])
+                indicators = np.array(
+                    ["**ERROR", "**STOP", "Fortran runtime error", "NoSuchFile", "syntax error", "Library not loaded"]
+                )
             else:
                 indicators = np.array(["**WARN"])
 
@@ -921,7 +923,7 @@ class BaseProduct:
                     )
 
                 # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
-                #  they should), it is incredibly difficult to search for non-eSASS errors - thus I do not right now
+                #  they should), it is very difficult to search for non-eSASS errors - thus I do not right now
                 other_err_lines = []
 
             if len(tel_errs_msgs) > 0:
