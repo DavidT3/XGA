@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 2:52 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 9:28 AM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -1228,8 +1228,8 @@ class BaseSource:
             #  initial products that we want to load in, and constructs a set containing all of
             #  the file names. This makes it a lot faster to check that files exist, versus
             #  doing a bunch of 'os.path.exists' (or remote equivalent) calls.
-            cur_fs_info = ROOT_DIR_FS.get(tel, {})
-            cur_fs = cur_fs_info.get("file_system")
+            cur_fs_info = ROOT_DIR_FS[tel]
+            cur_fs = cur_fs_info["file_system"]
 
             cur_init_file_name_list: list[str] = []
             for cur_dir in set([os.path.dirname(file) for file in files.values()]):
