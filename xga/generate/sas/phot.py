@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 9/30/26, 3:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 10:08 AM. Copyright (c) The Contributors.
+"""
+The xga.generate.sas.phot module implements wrapper functions for SAS tools that generate 'photometric' (i.e. images
+and things related to images) data products. As these functions wrap SAS tools specifically, they are only
+compatible with source/sample instances that have XMM observations associated.
+"""
 
 import os
 from random import randint
@@ -75,9 +80,9 @@ def evselect_image(
     sources_extras = []
     sources_types = []
     for source in sources:
-        cmds = []
-        final_paths = []
-        extra_info = []
+        cmds: list[str] = []
+        final_paths: list[str] = []
+        extra_info: list[dict] = []
         # By this point we know that at least one of the sources has XMM data associated (we checked that at the
         #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
         #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
@@ -255,19 +260,10 @@ def eexpmap(
 
             os.makedirs(dest_dir)
             cmds.append(
-                "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; eexpmap eventset={e} "
-                "imageset={im} expimageset={eim} withdetcoords=no withvignetting=yes "
-                "attitudeset={att} pimin={l} pimax={u}; rm ccf.cif; mv * ../; cd ..; "
-                "rm -r {d}".format(
-                    e=evt_list.path,
-                    im=ref_im.path,
-                    eim=exp_map,
-                    att=att,
-                    l=lo_chan,
-                    u=hi_chan,
-                    d=dest_dir,
-                    ccf=dest_dir + "ccf.cif",
-                )
+                f"cd {dest_dir}; cp ../ccf.cif .; export SAS_CCF={os.path.join(dest_dir, 'ccf.cif')}; "
+                f"eexpmap eventset={evt_list.path} imageset={ref_im.path} expimageset={exp_map} withdetcoords=no "
+                f"withvignetting=yes attitudeset={att} pimin={lo_chan} pimax={hi_chan}; rm ccf.cif; mv * ../; "
+                f"cd ..; rm -r {dest_dir}"
             )
 
             # This is the products final resting place, if it exists at the end of this command
@@ -518,9 +514,7 @@ def psfgen(
     psf_model = psf_model.upper()
     allowed_models = ["ELLBETA", "LOW", "MEDIUM", "EXTENDED", "HIGH"]
     if psf_model not in allowed_models:
-        raise SASInputInvalid(
-            "{0} is not a valid PSF model. Allowed models are {1}".format(psf_model, ", ".join(allowed_models))
-        )
+        raise SASInputInvalid(f"{psf_model} is not a valid PSF model. Allowed models are {', '.join(allowed_models)}.")
 
     # Need a valid CIF for this task, so run cifbuild first
     cifbuild(sources, disable_progress=disable_progress, num_cores=num_cores)
@@ -545,9 +539,9 @@ def psfgen(
         sources_extras = []
         sources_types = []
         for source in sources:
-            cmds = []
-            final_paths = []
-            extra_info = []
+            cmds: list[str] = []
+            final_paths: list[str] = []
+            extra_info: list[dict] = []
             # By this point we know that at least one of the sources has XMM data associated (we checked that at the
             #  beginning of this function), we still need to append the empty cmds, paths, extrainfo, and ptypes to
             #  the final output, so that the cmd_list and input argument 'sources' have the same length, which avoids
@@ -652,8 +646,8 @@ def psfgen(
                     psf_files.append(os.path.join(OUTPUT, "xmm", obs_id, psf_file))
                     # Going with xsize and ysize as 400 pixels, I think its enough and quite a bit faster than 1000
                     total_cmd += (
-                        f"psfgen image={image.path} coordtype=EQPOS level={psf_model} energy=1000 xsize=400 ysize=400 x={ra} "
-                        f"y={dec} output={psf_file}; "
+                        f"psfgen image={image.path} coordtype=EQPOS level={psf_model} energy=1000 xsize=400 ysize=400 "
+                        f"x={ra} y={dec} output={psf_file}; "
                     )
 
                 total_cmd += f"rm ccf.cif; mv * ../; cd ..; rm -r {dest_dir}"
