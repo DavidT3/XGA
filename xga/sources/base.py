@@ -1,12 +1,12 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 9:28 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 9:37 AM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
 is set up here.
 """
 
-from xga.products.mission import BadPixels, MissionAttitude, MissionMask
+from xga.products.housekeeping import BadPixels, MissionAttitude, MissionMask
 
 try:
     # Python 3.11+ natively includes chdir in contextlib
