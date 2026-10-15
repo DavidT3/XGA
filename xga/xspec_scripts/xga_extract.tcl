@@ -285,6 +285,17 @@ proc xga_extract { args } {
         append col_list "," $lum_name
         append col_list "," $lum_min
         append col_list "," $lum_max
+
+        # Creating columns to store the ABSORBED luminosities
+        set abs_lum_name "Lx_abs"
+        set abs_lum_min "Lx_abs"
+        set abs_lum_max "Lx_abs"
+        append abs_lum_name "_" [lindex $p 0] "_" [lindex $p 1]
+        append abs_lum_min "_" [lindex $p 0] "_" [lindex $p 1] "-"
+        append abs_lum_max "_" [lindex $p 0] "_" [lindex $p 1] "+"
+        append col_list "," $abs_lum_name
+        append col_list "," $abs_lum_min
+        append col_list "," $abs_lum_max
     }
 
     #################################################
@@ -303,6 +314,9 @@ proc xga_extract { args } {
         append outstr "[tcloutr filename $spec_i]$comma[lindex $times $spec_i-1]$comma[lindex $rates $spec_i-1]$comma[lindex $rates_errs $spec_i-1]"
         for {set li 0} {$li < [llength $lums]} {incr li} {
             append outstr "$comma[lindex [lindex $lums $li] $spec_i-1]$comma[lindex [lindex $lums_min_err $li] $spec_i-1]$comma[lindex [lindex $lums_max_err $li] $spec_i-1]"
+
+            # Writing the ABSORBED luminosity to the file as well
+            append outstr "$comma[lindex [lindex $abs_lum $li] $spec_i-1]$comma[lindex [lindex $abs_lum_min_err $li] $spec_i-1]$comma[lindex [lindex $abs_lum_max_err $li] $spec_i-1]"
             }
         append outstr "\n"
         }
@@ -313,18 +327,3 @@ proc xga_extract { args } {
     close $fileid
     #################################################
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
