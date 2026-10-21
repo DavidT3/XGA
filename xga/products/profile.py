@@ -2556,7 +2556,9 @@ class HydrostaticMass(BaseProfile1D):
                 fill_value="extrapolate",
                 bounds_error=False,
             )
-            temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
             temp_der_interp = interp1d(
                 self.temperature_profile.radii,
@@ -2567,7 +2569,8 @@ class HydrostaticMass(BaseProfile1D):
                 bounds_error=False,
             )
             temp_der = Quantity(
-                temp_der_interp(radius).T, self.temperature_profile.values_unit / self.temperature_profile.radii_unit
+                temp_der_interp(radius.to(self.temperature_profile.radii_unit)).T,
+                self.temperature_profile.values_unit / self.temperature_profile.radii_unit
             ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
