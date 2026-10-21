@@ -2336,6 +2336,7 @@ class HydrostaticMass(BaseProfile1D):
 
         # Prints a warning if the radius at which to calculate the mass is outside the range of the data
         self.rad_check(radius)
+        radius = radius.to(self.radii_unit)
 
         # This is quite a specific check - different ways of calculating mass points have been now been
         #  included (other than using the smooth temperature and density models), and we will have to stop
@@ -2389,7 +2390,12 @@ class HydrostaticMass(BaseProfile1D):
 
         # If a particular radius+radius error (if passed) already has a result in the profiles storage structure
         #  then we'll just grab that rather than redoing a calculation unnecessarily.
-        if radius.isscalar and stor_key in self._masses:
+        sample_data_radii = (
+            radius_err is not None
+            and self._interp_data
+            and (self.density_model is None or self.temperature_model is None)
+        )
+        if radius.isscalar and stor_key in self._masses and not sample_data_radii:
             already_run = True
             mass_dist = self._masses[stor_key]
         else:
@@ -2435,6 +2441,22 @@ class HydrostaticMass(BaseProfile1D):
                 1,
             )
 
+        def interpolate_realisations(profile: BaseProfile1D, realisations: Quantity) -> Quantity:
+            if sample_data_radii:
+                sample_radii = calc_rad.to_value(profile.radii_unit)
+                radii_values = profile.radii.value
+                right = np.clip(np.searchsorted(radii_values, sample_radii), 1, len(profile) - 1)
+                fraction = (sample_radii - radii_values[right - 1]) / (radii_values[right] - radii_values[right - 1])
+                # Pair each sampled radius with the corresponding profile realisation.
+                sample = np.arange(self._num_samples)
+                left_values = realisations[sample, right - 1]
+                return left_values + fraction * (realisations[sample, right] - left_values)
+
+            interpolator = interp1d(
+                profile.radii, realisations, axis=1, assume_sorted=True, fill_value="extrapolate", bounds_error=False
+            )
+            return Quantity(interpolator(radius.to(profile.radii_unit)).T, realisations.unit)
+
         # Here, if we haven't already identified a previously calculated hydrostatic mass for the radius, we start to
         #  prepare the data we need (i.e. temperature and density). This is complicated slightly by the different
         #  ways of calculating the profile that we now support (using smooth models, using data points, using
@@ -2456,6 +2478,7 @@ class HydrostaticMass(BaseProfile1D):
         elif (
             not already_run
             and not one_rad
+            and not sample_data_radii
             and (len(self.density_profile) == len(self.temperature_profile))
             and (self.density_profile.radii == self.temperature_profile.radii).all()
         ):
@@ -2466,33 +2489,10 @@ class HydrostaticMass(BaseProfile1D):
             # This uses the density profile y-axis values (and their uncertainties) to draw N realizations of the
             #  data points - we'll use this to create N realizations of the interpolations as well
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
-            # TODO This unfortunately may be removed from scipy soon, but the np.interp linear interpolation method
-            #  doesn't currently support interpolating along a particular axis. Also considering more sophisticated
-            #  scipy interpolation methods (see issue #1168) but cubic splines don't seem to behave amazingly well
-            #  for temperature profiles with larger uncertainties on then outskirts, so we're doing this for now
-            # We make sure to turn on extrapolation, and make sure this is no out-of-bounds error issued
-            dens_interp = interp1d(
-                self.density_profile.radii,
-                dens_data_real,
-                axis=1,
-                assume_sorted=True,
-                fill_value="extrapolate",
-                bounds_error=False,
+            dens = interpolate_realisations(self.density_profile, dens_data_real)
+            dens_der = interpolate_realisations(
+                self.density_profile, np.gradient(dens_data_real, self.density_profile.radii, axis=1)
             )
-            # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(dens_interp(radius).T, self.density_profile.values_unit)
-
-            dens_der_interp = interp1d(
-                self.density_profile.radii,
-                np.gradient(dens_data_real, self.density_profile.radii, axis=1).T,
-                axis=0,
-                assume_sorted=True,
-                fill_value="extrapolate",
-                bounds_error=False,
-            )
-            dens_der = Quantity(
-                dens_der_interp(radius).T, self.density_profile.values_unit / self.density_profile.radii_unit
-            ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
@@ -2537,6 +2537,7 @@ class HydrostaticMass(BaseProfile1D):
         elif (
             not already_run
             and not one_rad
+            and not sample_data_radii
             and (len(self.density_profile) == len(self.temperature_profile))
             and (self.density_profile.radii == self.temperature_profile.radii).all()
         ):
@@ -2547,27 +2548,10 @@ class HydrostaticMass(BaseProfile1D):
             # This uses the temperature profile y-axis values (and their uncertainties) to draw N realizations of the
             #  data points - we'll use this to create N realizations of the interpolations as well
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
-            temp_interp = interp1d(
-                self.temperature_profile.radii,
-                temp_data_real,
-                axis=1,
-                assume_sorted=True,
-                fill_value="extrapolate",
-                bounds_error=False,
+            temp = interpolate_realisations(self.temperature_profile, temp_data_real)
+            temp_der = interpolate_realisations(
+                self.temperature_profile, np.gradient(temp_data_real, self.temperature_profile.radii, axis=1)
             )
-            temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
-
-            temp_der_interp = interp1d(
-                self.temperature_profile.radii,
-                np.gradient(temp_data_real, self.temperature_profile.radii, axis=1).T,
-                axis=0,
-                assume_sorted=True,
-                fill_value="extrapolate",
-                bounds_error=False,
-            )
-            temp_der = Quantity(
-                temp_der_interp(radius).T, self.temperature_profile.values_unit / self.temperature_profile.radii_unit
-            ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
         #  and that the temperature profile has more bins than the density (not going to happen often)
@@ -2599,7 +2583,9 @@ class HydrostaticMass(BaseProfile1D):
         # And now we do the actual mass calculation
         if not already_run:
             mass_radii = radius[..., None]
-            if radius_err is not None and self.density_model is not None and self.temperature_model is not None:
+            if radius_err is not None and (
+                self._interp_data or (self.density_model is not None and self.temperature_model is not None)
+            ):
                 mass_radii = calc_rad
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
             #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
