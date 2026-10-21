@@ -2336,6 +2336,7 @@ class HydrostaticMass(BaseProfile1D):
 
         # Prints a warning if the radius at which to calculate the mass is outside the range of the data
         self.rad_check(radius)
+        radius = radius.to(self.radii_unit)
 
         # This is quite a specific check - different ways of calculating mass points have been now been
         #  included (other than using the smooth temperature and density models), and we will have to stop
