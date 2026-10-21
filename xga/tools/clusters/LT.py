@@ -420,7 +420,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
             tx_all = samp.Tx(telescope, samp.get_radius(o_dens), inner_radius=samp.get_radius(o_dens)*core_rad_frac,
                              quality_checks=False, group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                              over_sample=over_sample, stacked_spectra=stacked_spectra,
-                             fit_conf={'freeze_nh': freeze_nh, 'freeze_met': freeze_met, 'start_temp': start_temp})
+                             fit_conf={'lum_en': lum_en,
+                                       'freeze_nh': freeze_nh, 'freeze_met': freeze_met, 'start_temp': start_temp})
             txs = tx_all[:, 0]
             tx_errs = tx_all[:, 1]
         # But, if the pipeline has been run in frozen temperature mode then there ARE no temperatures to read out, so
@@ -430,7 +431,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                              telescope=telescope, quality_checks=False, group_spec=group_spec, min_counts=min_counts,
                              min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
                              hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra,
-                             fit_conf={'freeze_nh': freeze_nh,
+                             fit_conf={'lum_en': lum_en,
+                                       'freeze_nh': freeze_nh,
                                        'freeze_met': freeze_met,
                                        'start_temp': start_temp,
                                        'freeze_temp': freeze_temp})
@@ -483,7 +485,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                              telescope=telescope, quality_checks=False, group_spec=group_spec,
                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample, lo_en=rel_lum_bounds[0],
                              hi_en=rel_lum_bounds[1], stacked_spectra=stacked_spectra,
-                             fit_conf={'freeze_nh': freeze_nh,
+                             fit_conf={'lum_en': lum_en,
+                                       'freeze_nh': freeze_nh,
                                        'freeze_met': freeze_met,
                                        'start_temp': start_temp,
                                        'freeze_temp': freeze_temp})
@@ -601,7 +604,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     vals += list(rel_src.get_temperature(rel_rad, telescope=telescope, group_spec=group_spec,
                                                          min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
                                                          stacked_spectra=stacked_spectra,
-                                                         fit_conf={'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
+                                                         fit_conf={'lum_en': lum_en,
+                                                                   'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
                                                                    'start_temp': start_temp}).value)
                     # We add columns with informative names
                     cols += ['Tx' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
@@ -620,7 +624,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                                               min_counts=min_counts, min_sn=min_sn,
                                                               over_sample=over_sample,
                                                               stacked_spectra=stacked_spectra,
-                                                              fit_conf={'freeze_nh': freeze_nh,
+                                                              fit_conf={'lum_en': lum_en,
+                                                                        'freeze_nh': freeze_nh,
                                                                         'freeze_met': freeze_met,
                                                                         'start_temp': start_temp,
                                                                         'freeze_temp': freeze_temp}).items():
@@ -634,7 +639,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 if not freeze_met:
                     met = rel_src.get_results(rel_rad, telescope=telescope, par='Abundanc', group_spec=group_spec,
                                               min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                                              fit_conf={'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
+                                              fit_conf={'lum_en': lum_en,
+                                                        'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
                                                         'start_temp': start_temp, 'freeze_temp': freeze_temp})
                     vals += list(met)
                     cols += ['Zmet' + o_dens[1:] + p_fix for p_fix in ['', '-', '+']]
@@ -642,7 +648,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 if not freeze_nh:
                     nh = rel_src.get_results(rel_rad, telescope=telescope, par='nH', group_spec=group_spec,
                                              min_counts=min_counts, min_sn=min_sn, over_sample=over_sample,
-                                             fit_conf={'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
+                                             fit_conf={'lum_en': lum_en,
+                                                       'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
                                                        'start_temp': start_temp, 'freeze_temp': freeze_temp}
                                              )
                     vals += list(nh)
@@ -662,7 +669,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                                          group_spec=group_spec, min_counts=min_counts,
                                                          min_sn=min_sn, over_sample=over_sample,
                                                          stacked_spectra=stacked_spectra,
-                                                         fit_conf={'freeze_nh': freeze_nh,
+                                                         fit_conf={'lum_en': lum_en,
+                                                                   'freeze_nh': freeze_nh,
                                                                    'freeze_met': freeze_met,
                                                                    'start_temp': start_temp}
                                                          ).value)
@@ -673,7 +681,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                 lce_res = rel_src.get_luminosities(rel_rad, telescope=telescope, inner_radius=core_rad_frac * rel_rad,
                                                    group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                                    over_sample=over_sample, stacked_spectra=stacked_spectra,
-                                                   fit_conf={'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
+                                                   fit_conf={'lum_en': lum_en,
+                                                             'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
                                                              'start_temp': start_temp, 'freeze_temp': freeze_temp}
                                                    )
                 for lum_name, lum in lce_res.items():
@@ -687,7 +696,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     metce = rel_src.get_results(rel_rad, telescope=telescope, inner_radius=core_rad_frac * rel_rad,
                                                 par='Abundanc', group_spec=group_spec, min_counts=min_counts,
                                                 min_sn=min_sn, over_sample=over_sample, stacked_spectra=stacked_spectra,
-                                                fit_conf={'freeze_nh': freeze_nh,
+                                                fit_conf={'lum_en': lum_en,
+                                                          'freeze_nh': freeze_nh,
                                                           'freeze_met': freeze_met,
                                                           'start_temp': start_temp,
                                                           'freeze_temp': freeze_temp}
@@ -699,7 +709,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                     nhce = rel_src.get_results(rel_rad, telescope=telescope, inner_radius=core_rad_frac * rel_rad, par='nH',
                                                group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
                                                over_sample=over_sample, stacked_spectra=stacked_spectra,
-                                               fit_conf={'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
+                                               fit_conf={'lum_en': lum_en,
+                                                         'freeze_nh': freeze_nh, 'freeze_met': freeze_met,
                                                          'start_temp': start_temp, 'freeze_temp': freeze_temp})
                     vals += list(nhce)
                     cols += ['fit_nH' + o_dens[1:] + 'ce' + p_fix for p_fix in ['', '-', '+']]
