@@ -195,8 +195,9 @@ def adaptive_smooth(
         similar XMM-SAS's asmooth (https://xmm-tools.cosmos.esa.int/external/sas/current/doc/asmooth/index.html),
         starting from largest kernel to smallest and applying the kernel which is gives SNR closest to the target. 
         "csmooth" is more like the method in Ciao (https://cxc.cfa.harvard.edu/ciao/ahelp/csmooth.html), works 
-        from smallest to largest kernel size and applies the smallest kernel with SNR >= the target SNR. csmooth 
-        avoids oversmoothing the data, for better or worse.
+        from smallest to largest kernel size and applies the smallest kernel with SNR >= the target SNR; if none of the tested kernel 
+        sizes reach the target SNR, then the largest available kernel is used. csmooth avoids oversmoothing the data, for better or 
+        worse.
     :param int/float max_size: The maxmimum width (in pixels) of the Gaussian kernel to use when smoothing. 
         If the target_snr cannot be recovered for a given pixel, this value will be used.
         The default is 30 pixels
@@ -295,34 +296,67 @@ def adaptive_smooth(
     else:
         raise XGADeveloperError("Only Image and RateMap instances are directly supported, contact "
                                 "the developers if you wish for us to support a sub-class of the Image class.")
-    
+
+    # Set default values for weights (ones of the same shape as the input image data) and the variance map (assuming
+    #   that the data are poissonian so using the input data as the variance).
     weights = weights if weights is not None else np.ones_like(data_to_smth)
     variance = variance if variance is not None else data_to_smth.copy()
 
-    # pad the arrays by 4 times the maximum width (this is the radius of a gaussian 2D kernel)
+    # Pad the arrays by 4 times the maximum width (this is the radius of a gaussian 2D kernel) to avoid boundary issues
+    #   when applying the smoothing.
     pad_width = int(np.ceil(4*max_size))
     img_pad = np.pad(data_to_smth, pad_width, 'reflect')
     weight_pad = np.pad(weights, pad_width, 'reflect')
     var_pad = np.pad(variance, pad_width, 'reflect')
 
-    # Precompute the constant arrays
+    # ===== Precompute the constant arrays =====
+    # num_base is the basic numerator for calculating the SNR and what will be convolved by each of the kernels to get
+    #   the final smoothed image. It is the product of the input image and the weights array.
     num_base = img_pad * weight_pad
+
+    # den_base is the equivalent of num_base for the denominator when calculating SNR for a given kernel. It is 
+    #   convolved with the kernel^2 when calculating SNR and is the product of the weights array squared and the 
+    #   provided variance map.
     den_base = (weight_pad**2) * var_pad
 
-    # Make a grid of widths
-    widths = np.geomspace(max_size, min_size, num_widths)
+    # Make a list of geometrically spaced kernel widths to use for smoothing. Sort in descending 
+    #   order if using 'asmooth' smoothing method, and ascending order if using 'csmooth'.
+    if method == 'asmooth':
+        widths = np.geomspace(max_size, min_size, num_widths)
+    else:
+        widths = np.geomspace(min_size, max_size, num_widths)
 
-    # Caches
+    # ====== Caches ====== 
+    # Stores the "best difference" between kernel SNR and target SNR at each pixel. In 'asmooth', this is the 
+    #   absolute difference between target SNR and the actual SNR provided by a given kernel. Used to check if 
+    #   currently tested kernel is an improvement on previous kernels when using the 'asmooth' method.
     best_diff = np.full(num_base.shape, np.inf)
+    
+    # Store the kernel sizes for each pixel that give the current "best difference" in SNR for that point in the loop.
+    #   Used later to specify which numerator index to use when selecting final pixel value.
     kernel_sizes = np.full(num_base.shape, max_size)
+
+    # Cache the "numerator", the result of smoothing the whole image with a kernel of some given width. Used later in 
+    #   the function to recover the final pixel values based on which kernel size gave the best SNR.
     num_cache = np.empty((len(widths),)+num_base.shape)
+
+    # Holding arrays for now, will be updated to produce the final image using values from the numerator cache above, 
+    #   and for the normalisation array to maintain consistent flux before and after smoothing.
     final_num = np.zeros_like(num_base)
     final_norm = np.zeros_like(num_base)
 
-    # Iterate over widths
+    # Iterate over kernel widths
     for wid, width in enumerate(tqdm.tqdm(widths)):
+        # Create astropy Guassian kernel, but take only the actual values from the array.
         kernel = Gaussian2DKernel(width).array
 
+        # Apply the astropy smoothing to the numerator base and the denominator base. Optionally uses fft (recommended)
+        #   to speed up the smoothing and reduce memory use. For the denominator, we are getting the square of the 
+        #   final result needed from this convolution step, so it needs to be rooted after.
+        #   
+        # Note that we also do not normalise the denominator kernel here and override the user-specified value of 
+        #   `norm_kernel`. Re-normalising the kernel would change the results of the SNR calculation and thus select 
+        #   the wrong kernel sizes to use for the final smoothing.
         if fft:
             num = convolve_fft(num_base, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
                                fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
@@ -339,10 +373,14 @@ def adaptive_smooth(
                                     normalization_zero_tol=normalization_zero_tol)
         denom = np.sqrt(denom_square)
 
+        # Calculate the SNR at each pixel for this kernel as the ratio of numerator and denominator
         snr = num/denom
+
+        # Find the absolute difference between the target SNR and the SNR at each pixel.
         diff = np.abs(snr-target_snr)
 
-        # If pixel SNR is closer to target SNR, update width in kernel sizes.
+        # If pixel SNR is closer to target SNR, update width in kernel sizes to match this new best width and store 
+        #   the numerator in num cache.
         better = diff < best_diff
         best_diff = np.where(better, diff, best_diff)
         kernel_sizes = np.where(better, width, kernel_sizes)
@@ -368,7 +406,7 @@ def adaptive_smooth(
                             normalization_zero_tol=normalization_zero_tol)
         final_norm[id_mask] = norm[id_mask]
 
-    # Normalise the final image
+    # Normalise the final image to maintain flux
     final_image = final_num / final_norm
 
     # Remove the padded borders
@@ -377,12 +415,12 @@ def adaptive_smooth(
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
     smoothed_info = {
-        "method": "adaptive",
+        "method": f"adaptive-{method}",
         "pars": {
             "kernel_widths": widths,
             "num_widths": num_widths,
             "min_size": min_size,
-            "max_size": max_size
+            "max_size": max_size,
         }
     }
     if type(prod) == Image:
