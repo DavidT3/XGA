@@ -1,7 +1,7 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 7/23/26, 3:17 PM. Copyright (c) The Contributors.
 
-from typing import Union, Optional
+from typing import Union, Optional, Literal
 
 import tqdm
 import numpy as np
@@ -157,7 +157,8 @@ def general_smooth(prod: Union[Image, RateMap], kernel: Kernel, mask: Optional[n
 
 def adaptive_smooth(
         prod: Union[Image, RateMap], 
-        target_snr: Union[int, float], 
+        target_snr: Union[int, float],
+        method: Literal["asmooth", "csmooth"] = "asmooth", 
         max_size: Union[int, float] = 30,
         min_size: Union[int, float] = 0.5,
         num_widths: int = 40,
@@ -190,6 +191,12 @@ def adaptive_smooth(
     :param Image/RateMap prod: The XGA Image/RateMap to be smoothed. If you pass a RateMap, please see the 'sm_im'
         argument for extra options.
     :param int/float target_snr: The target SNR for each pixel to have after smoothing.
+    :param Literal["asmooth", "csmooth"] method: Specify the adaptive smoothing method to use. "asmooth" uses a method
+        similar XMM-SAS's asmooth (https://xmm-tools.cosmos.esa.int/external/sas/current/doc/asmooth/index.html),
+        starting from largest kernel to smallest and applying the kernel which is gives SNR closest to the target. 
+        "csmooth" is more like the method in Ciao (https://cxc.cfa.harvard.edu/ciao/ahelp/csmooth.html), works 
+        from smallest to largest kernel size and applies the smallest kernel with SNR >= the target SNR. csmooth 
+        avoids oversmoothing the data, for better or worse.
     :param int/float max_size: The maxmimum width (in pixels) of the Gaussian kernel to use when smoothing. 
         If the target_snr cannot be recovered for a given pixel, this value will be used.
         The default is 30 pixels
@@ -253,6 +260,14 @@ def adaptive_smooth(
         raise ProductGenerationError("Input XGA Image or RateMap has already been smoothed, and "
                                         "will not be smoothed again. To override this check you may pass "
                                         "`force_resmooth=True`.")
+
+    # Catch for the smoothing method, raise a Value error if it is not an eligible method
+    #   (csmooth or asmooth)
+    if method not in ["csmooth", "asmooth"]:
+        raise ValueError(
+            f"Smoohting method '{method}' is not a valid adaptive smoothing method. Please use 'asmooth' "
+                "for XMM-SAS like smoothing, or 'csmooth' for Ciao-like smoothing."
+        )
 
     # Now we figure out what exactly needs to be smoothed.
     # If the input product is an Image, then it is very straightforward - we just copy
