@@ -33,7 +33,7 @@ from ..exceptions import (
 )
 from ..models import MODEL_PUBLICATION_NAMES, PROF_TYPE_MODELS, BaseModel1D
 from ..models.fitting import log_likelihood, log_prob
-from ..utils import OUTPUT, PRETTY_TELESCOPE_NAMES, SASERROR_LIST, SASWARNING_LIST, _deprecated
+from ..utils import OUTPUT, PRETTY_TELESCOPE_NAMES, SASERROR_LIST, SASWARNING_LIST, _deprecated, NHC, DEFAULT_ABUND_TABLE
 
 
 class BaseProduct:
@@ -1261,7 +1261,35 @@ class BaseProfile1D:
         # This attribute is null by default, and can only be set through a property - if set then (when profiles
         #  are combined into an BaseAggregateProfile1D for the purposes of plotting) the value will be used as the
         #  label for the profile, rather than just the name
-        self._custom_agg_label = None
+        self._custom_agg_label = None        
+
+    @property
+    def abund_table(self) -> str:
+        """
+        A getter for the abundance table of this profile.
+
+        :return: A string representation of XSPEC abundance table.
+        :rtype: str
+        """
+        return self._abund_table
+
+    @abund_table.setter
+    def abund_table(self, fit_conf: str) -> None:
+        """
+        Setter for the abundance table of this profile.
+
+        :param str fit_conf: The fit_conf parsed to the profile object.
+        """
+        if fit_conf is None:
+            self._abund_table = DEFAULT_ABUND_TABLE
+        else:
+            try:
+                abund_tab = [key for key in NHC.keys() if key in fit_conf][0]
+            except Exception as e:
+                abund_tab = DEFAULT_ABUND_TABLE
+                warn(f"No abundance table found for profile object. Defaulting to {DEFAULT_ABUND_TABLE}.")
+            self._abund_table = abund_tab
+
 
     def _model_allegiance(self, model: BaseModel1D):
         """
