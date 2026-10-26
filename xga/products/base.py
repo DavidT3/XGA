@@ -1593,18 +1593,24 @@ class BaseProfile1D:
                 bounds=(lower_bounds, upper_bounds),
             )
 
-            # If there is an infinite value in the covariance matrix, it means curve_fit was
+            # If there is a non-finite value in the covariance matrix, it means curve_fit was
             #  unable to estimate it properly
-            if np.inf in fit_cov:
-                warning_str = "Infinity in covariance matrix"
+            if not np.isfinite(fit_cov).all():
+                warning_str = "Non-finite values in covariance matrix"
                 success = False
+                fit_par_err = np.full(len(fit_par), np.nan)
             else:
+                cov_chol = np.linalg.cholesky(fit_cov)
                 # Grab the diagonal of the covariance matrix, then sqrt to get sigma values for each parameter
                 fit_par_err = np.sqrt(np.diagonal(fit_cov))
                 frac_err = np.divide(fit_par_err, fit_par, where=fit_par != 0)
                 if frac_err.max() > 10:
                     warning_str = "Very large parameter uncertainties"
                     success = False
+        except np.linalg.LinAlgError:
+            warning_str = "Covariance matrix is not positive definite"
+            success = False
+            fit_par_err = np.full(len(fit_par), np.nan)
         except RuntimeError as r_err:
             warn(f"{str(r_err)}, curve_fit has failed.", stacklevel=2)
             warning_str = str(r_err)
@@ -1623,11 +1629,8 @@ class BaseProfile1D:
         # Apparently this is what we should be using for random numbers from numpy now!
         rng = np.random.default_rng()
         if success:
-            # I generate num_samples random points from the distribution of each parameter
-            ext_model_par = np.repeat(fit_par[..., None], num_samples, axis=1).T
-            ext_model_par_err = np.repeat(fit_par_err[..., None], num_samples, axis=1).T
-            # This generates model_real random samples from the passed model parameters, assuming they are Gaussian
-            model_par_dists = rng.normal(ext_model_par, ext_model_par_err)
+            # Generate correlated Gaussian parameter samples using the Cholesky factor.
+            model_par_dists = fit_par + rng.standard_normal((num_samples, len(fit_par))) @ cov_chol.T
             par_dists = [
                 Quantity(model_par_dists[:, p_ind], model.par_units[p_ind]) for p_ind in range(0, len(fit_par))
             ]
