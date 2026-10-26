@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/25/26, 2:33 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/6/26, 2:58 PM. Copyright (c) The Contributors.
 """
 This module implements the bases for most XGA product classes.
 """
@@ -9,12 +9,13 @@ import os
 import pickle
 from copy import deepcopy
 from random import randint
-from typing import NoReturn
 from warnings import warn
 
 import emcee as em
 import numpy as np
 from astropy.units import Quantity, Unit, UnitConversionError, deg
+from fsspec import AbstractFileSystem
+from fsspec.core import split_protocol, url_to_fs
 from getdist import MCSamples, plots
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -111,18 +112,22 @@ class BaseProduct:
                 # Here the user has forced us to treat the path as remote
                 self._local_file = False
                 self._remote_type = "unknown"
-            elif path.startswith("s3://") or path.startswith("gs://"):
-                # Here we assume that the file is remote because it starts with the s3/gs/https identifier - this is for
-                #  use with resources like the HEASARC open S3 bucket
-                self._local_file = False
-                self._remote_type = "s3"
-            elif path.startswith("https://"):
-                self._local_file = False
-                self._remote_type = "https"
             else:
-                # Otherwise we decide that the file is local
-                self._local_file = True
-                self._remote_type = None
+                # Using the same fsspec protocol-splitting logic used elsewhere in XGA (e.g. for root data
+                #  directories in the config file) to determine whether this path is local or remote, and if
+                #  remote, what protocol it uses.
+                proto = split_protocol(path)[0]
+                if proto is None:
+                    # No protocol identifier means we consider the file local
+                    self._local_file = True
+                    self._remote_type = None
+                else:
+                    # Any protocol identifier (s3, gs, http, https, etc.) means we consider the file remote - we
+                    #  retain the previous behaviour of treating gs:// paths the same as s3:// paths for the
+                    #  purposes of default fsspec_kwargs, as both are commonly used for open-access
+                    #  astronomical archive buckets.
+                    self._local_file = False
+                    self._remote_type = proto
         else:
             # We will use the existing 'local_file' mechanism in the case of in-memory declarations, so that the
             #  init does not try to determine if the file exists.
@@ -135,13 +140,28 @@ class BaseProduct:
         #  may be required in some warning/error messages later on
         self._force_remote = force_remote
 
+        # Track whether this was declared with an in-memory (non-string) data structure
+        self._in_memory = not isinstance(path, str)
+
+        # Preserve the original remote URI even after a later successful download() overwrites self._path
+        #  with the local copy's path. None for local or in-memory products.
+        self._remote_path = path if (isinstance(path, str) and not self._local_file) else None
+
+        # Local and in-memory products have nothing to download, so they start off trivially "downloaded"
+        self._downloaded = self._local_file or self._in_memory
+
         # Also keep track of whether we're assuming that the files exist, or checking.
         self._check_exists = check_exists
 
         # We replace the default fsspec_kwargs value (None) with a dictionary indicating that no credentials are
         #  required to access the remote URL, which makes it instantly compatible with NASA archive S3 buckets.
-        if fsspec_kwargs is None and self._remote_type == "s3":
+        #  This default is applied for both 's3' and 'gs' protocols
+        if fsspec_kwargs is None and self._remote_type in ["s3", "gs"]:
             fsspec_kwargs = {"anon": True}
+        elif fsspec_kwargs is None and self._remote_type in ["https", "http"]:
+            # TODO CHECK IF THERE IS A BETTER WAY TO DO THIS, I DON'T LIKE DISABLING A SECURITY FEATURE.
+            fsspec_kwargs = {"ssl": False}
+
         # We store the optional keyword arguments that the user can pass to facilitate access to
         #  remote files in an attribute
         self._fsspec_kwargs = fsspec_kwargs
@@ -153,16 +173,39 @@ class BaseProduct:
         #  for different reasons, but the most important is that the file cannot be found
         self._usable = True
 
-        # Try to determine if the file exists (if this init has been told to, at
-        #  least) - this will not currently check remote files.
-        if self._local_file and (not check_exists or os.path.exists(path)):
+        # Try to determine if the file exists (if this init has been told to, at least)
+        if self._local_file:
+            if not check_exists or os.path.exists(path):
+                self._path = path
+            else:
+                self._path = None
+                self._usable = False
+                self._why_unusable.append("ProductPathDoesNotExist")
+        elif not isinstance(path, str):
+            # In-memory declarations (non-string path) skip existence checking entirely, as there is
+            #  no file path to check
             self._path = path
-        elif self._local_file:
-            self._path = None
-            self._usable = False
-            self._why_unusable.append("ProductPathDoesNotExist")
+        elif not check_exists:
+            # The user has explicitly told us not to check, so we trust that the path is valid
+            self._path = path
         else:
-            self._path = path
+            # This is the remote-file existence check, using fsspec to resolve a filesystem for the
+            #  path's protocol and query whether the file actually exists there
+            try:
+                fs, fs_path = url_to_fs(path, **(self._fsspec_kwargs or {}))
+
+                if fs.exists(fs_path):
+                    self._path = path
+                else:
+                    self._path = None
+                    self._usable = False
+                    self._why_unusable.append("ProductPathDoesNotExist")
+            except OSError:
+                # A failure here (e.g. network issue, credential problem) means we cannot confirm the file
+                #  exists, so we treat it cautiously as unusable, rather than optimistically assuming it's fine
+                self._path = None
+                self._usable = False
+                self._why_unusable.append("ProductPathCouldNotBeChecked")
 
         # Turning null stderr and stdouts (for instance, if the product is just being loaded in, as opposed to it
         #  being generated by XGA and needing to be checked for process success) into empty strings
@@ -212,6 +255,18 @@ class BaseProduct:
         """
         return self._usable
 
+    @usable.setter
+    def usable(self, is_usable: bool):
+        """
+        Setter for the usable property.
+
+        :param bool is_usable: A boolean flag describing if the product should be used.
+        """
+        if isinstance(is_usable, bool):
+            self._usable = is_usable
+        else:
+            raise TypeError("The 'usable' property must be set with a boolean variable.")
+
     @property
     def path(self) -> str:
         """
@@ -247,6 +302,18 @@ class BaseProduct:
         :rtype: bool
         """
         return self._local_file
+
+    @local_file.setter
+    def local_file(self, is_local: bool):
+        """
+        Setter for the local_file property.
+
+        :param bool is_local: A boolean flag describing if the product is pointed at a local file.
+        """
+        if isinstance(is_local, bool):
+            self._local_file = is_local
+        else:
+            raise TypeError("The 'local_file' property must be set with a boolean variable.")
 
     @property
     def force_remote(self) -> bool:
@@ -405,6 +472,18 @@ class BaseProduct:
         """
         return self._why_unusable
 
+    @not_usable_reasons.setter
+    def not_usable_reasons(self, reasons: list):
+        """
+        Setter for the not_usable_reasons property.
+
+        :param list reasons: A list of strings indicating why a product is unusable.
+        """
+        if isinstance(reasons, list):
+            self._why_unusable = reasons
+        else:
+            raise TypeError("The 'not_usable_reasons' property must be set with a list.")
+
     # This needs a setter, as this property only becomes not-None when the product is added to a source object.
     @property
     def sas_command(self) -> str:
@@ -458,9 +537,155 @@ class BaseProduct:
                 f"or 'radec_wcs' property to retrieve the RA-DEC equinox from."
             )
 
+    @property
+    def downloaded(self) -> bool:
+        """Whether this product's remote file has been downloaded locally (or was never remote)."""
+        return self._downloaded
+
+    @downloaded.setter
+    def downloaded(self, is_downloaded: bool):
+        """
+        Setter for the downloaded property.
+
+        :param bool is_downloaded: A boolean flag describing whether the product has been downloaded locally.
+        """
+        if isinstance(is_downloaded, bool):
+            self._downloaded = is_downloaded
+        else:
+            raise TypeError("The 'downloaded' property must be set with a boolean variable.")
+
+    @property
+    def remote_path(self) -> str | None:
+        """The original remote URI, preserved even after download() updates 'path'. None if never remote."""
+        return self._remote_path
+
+    @property
+    def not_from_file(self) -> bool:
+        """
+        Indicates whether this product was assembled in memory rather than being read from a file.
+
+        :return: A boolean value. True if the product was assembled in-memory, False if read from a file.
+        :rtype: bool
+        """
+        return self._in_memory
+
+    @property
+    def remote_type(self) -> str | None:
+        """
+        If this product was declared to interface with a remote file, this property describes the 'type' of
+        remote file. If None, then the file is considered local, otherwise the return may be 's3', 'gs', 'http',
+        or 'https'.
+
+        :return: Remote file type - None if local, otherwise a string such as 's3' or 'https'.
+        :rtype: str | None
+        """
+        return self._remote_type
+
     # --------- Define internal functions ---------
 
     # --------- Define external functions ---------
+    def download(
+        self,
+        save_path: str,
+        overwrite: bool = False,
+        remote_file_sys: AbstractFileSystem | None = None,
+        show_warn: bool = True,
+    ) -> None:
+        """
+        Downloads this product's remote file to local storage, then updates 'path' to point at the local
+        copy. The original remote URI remains available via the 'remote_path' property.
+
+        'save_path' should PREFERABLY be a DIRECTORY, not a complete file path - this preserves the remote
+        file's name locally, which is a prerequisite for any future cross-session "already downloaded"
+        detection (not yet implemented; only the in-session 'downloaded' flag is checked currently).
+
+        :param str save_path: A local directory (preferred) or complete destination file path. Treated as a
+            directory if it exists as one, ends with a path separator, or has no file extension.
+        :param bool overwrite: Forces a re-download even if 'downloaded' is already True. Default False.
+        :param AbstractFileSystem remote_file_sys: An existing fsspec filesystem to use instead of constructing one from 'fsspec_kwargs' -
+            mainly for reuse by download_products().
+        :param bool show_warn: Whether to show a warning if this product is already local. Default True.
+        :rtype: None
+        """
+        # In-memory products were never associated with a remote (or any) file path, so there is nothing
+        #  for this method to fetch - we warn rather than raising, since calling download() on the wrong
+        #  kind of product shouldn't be a fatal mistake, just a no-op
+        if self._in_memory:
+            if show_warn:
+                warn("Product declared from in-memory data, there is no remote file to download.", stacklevel=2)
+
+        # A None remote_path means this product was already local at declaration time (see the __init__
+        #  logic that only sets remote_path for genuinely remote, string-path products) - so again, nothing
+        #  to download, we just hand back the existing local path
+        elif self._remote_path is None:
+            if show_warn:
+                warn(f"This product's file is already local ({self._path}), download() skipped.", stacklevel=2)
+
+        # If we've already downloaded this product's file (and the user hasn't explicitly asked us to
+        #  overwrite it), there's no need to hit the remote filesystem again - self._path was updated to
+        #  the local copy the last time this succeeded, so we just return that
+        elif self._downloaded and not overwrite:
+            if show_warn:
+                warn(
+                    f"Already downloaded to {self._path}, download() skipped (pass overwrite=True to force).",
+                    stacklevel=2,
+                )
+
+        else:
+            try:
+                # If the caller hasn't handed us an existing filesystem (e.g. from download_products(), which
+                #  builds and reuses one filesystem per group of products), we build one ourselves here, using
+                #  this product's own fsspec_kwargs (credentials, anon access, etc.)
+                # TODO NOPE WE SHOULD JUST USE THE ONE WE CONSTRUCT IN THE INIT
+                built_fs, remote_fs_path = url_to_fs(self._remote_path, **(self._fsspec_kwargs or {}))
+                if remote_file_sys is None:
+                    remote_file_sys = built_fs
+
+                # Grabbing just the file name portion of the remote path, so that if the user has given us a
+                #  destination directory we can preserve the original remote file name locally
+                remote_name = os.path.basename(remote_fs_path)
+
+                # Now working out whether the save_path the user gave us should be treated as a directory (the
+                #  preferred usage) or as a complete destination file path. We consider it directory-like if it
+                #  already exists as a directory or ends with a path separator.
+                save_path = os.fspath(save_path)
+                is_dir_like = (
+                    save_path.endswith(os.sep) or os.path.isdir(save_path) or os.path.splitext(save_path)[1] == ""
+                )
+
+                if is_dir_like:
+                    # Make sure the destination directory exists, then keep the remote file's own name so that
+                    #  future calls/instances can recognise this same file was already fetched here
+                    os.makedirs(save_path, exist_ok=True)
+                    local_path = os.path.join(save_path, remote_name)
+                else:
+                    # The user gave us a complete file path instead - we still make sure the parent directory
+                    #  exists, but we use their exact requested name rather than the remote one
+                    if os.path.dirname(save_path):
+                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    local_path = save_path
+
+                # This is the actual transfer - fsspec handles streaming the remote bytes down to the local path
+                remote_file_sys.get(remote_fs_path, local_path)
+
+            except Exception as err:
+                # Anything going wrong above (bad credentials, network failure, missing remote file, etc.) means
+                #  this product should now be considered unusable for analysis, in keeping with how the rest of
+                #  BaseProduct already records file-related problems via _usable/_why_unusable. We re-raise
+                #  afterwards so the caller of a single download() call is still informed immediately - it's only
+                #  download_products() that chooses to catch this and continue with the rest of a batch
+                self._usable = False
+                if "ProductDownloadFailed" not in self._why_unusable:
+                    self._why_unusable.append("ProductDownloadFailed")
+                raise err
+
+            # Only once the download has genuinely succeeded do we update this instance to point at the new
+            #  local copy - self._remote_path is deliberately left untouched, so it remains as a permanent record
+            #  of where the file originally came from
+            self._path = local_path
+            self._local_file = True
+            self._downloaded = True
+
     def parse_stderr(self) -> tuple[list[str], list[dict], list]:
         """
         This method parses the stderr associated with the generation of a product into errors confirmed to have
@@ -527,7 +752,9 @@ class BaseProduct:
             # The substrings we're looking for are different depending on if we're searching for
             #  errors or warnings
             if err_type == "error":
-                indicators = np.array(["**ERROR", "**STOP", "Fortran runtime error", "NoSuchFile", "syntax error"])
+                indicators = np.array(
+                    ["**ERROR", "**STOP", "Fortran runtime error", "NoSuchFile", "syntax error", "Library not loaded"]
+                )
             else:
                 indicators = np.array(["**WARN"])
 
@@ -696,7 +923,7 @@ class BaseProduct:
                     )
 
                 # Unfortunately, because eSASS pumps everything into stdout (rather than errors going to stderr as
-                #  they should), it is incredibly difficult to search for non-eSASS errors - thus I do not right now
+                #  they should), it is very difficult to search for non-eSASS errors - thus I do not right now
                 other_err_lines = []
 
             if len(tel_errs_msgs) > 0:
@@ -741,7 +968,7 @@ class BaseProduct:
 
         return tel_errs_msgs, parsed_tel_warns, other_err_lines
 
-    def raise_errors(self) -> NoReturn:
+    def raise_errors(self) -> None:
         """
         Method to raise the errors parsed from std_err string.
         """
@@ -766,7 +993,7 @@ class BaseAggregateProduct:
     :param str telescope: The telescope that this product is derived from. Default is None.
     """
 
-    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str = None):
+    def __init__(self, file_paths: list, prod_type: str, obs_id: str, instrument: str, telescope: str | None = None):
         """
         The init method for the BaseAggregateProduct class
 
@@ -898,7 +1125,7 @@ class BaseAggregateProduct:
     @property
     def errors(self) -> list[list[str]]:
         """
-        Equivelant to the BaseProduct errors property, but reports any non-telescope software errors stored in the
+        Equivalent to the BaseProduct errors property, but reports any non-telescope software errors stored in the
         component products.
 
         :return: A list of non-telescope software errors related to component products.
@@ -913,7 +1140,7 @@ class BaseAggregateProduct:
     @property
     def unprocessed_stderr(self) -> list:
         """
-        Equivelant to the BaseProduct gen_errors unprocessed_stderr, but returns a list of all the unprocessed
+        Equivalent to the BaseProduct gen_errors unprocessed_stderr, but returns a list of all the unprocessed
         standard error outputs.
 
         :return: List of stderr outputs.
@@ -1979,7 +2206,7 @@ class BaseProfile1D:
 
         return chains
 
-    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple = None) -> None:
+    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple | None = None) -> None:
         """
         Simple view method to quickly look at the MCMC chains for a given model fit.
 
@@ -2119,17 +2346,17 @@ class BaseProfile1D:
         main_ax: Axes,
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
         models: bool = True,
         back_sub: bool = True,
         just_models: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool | Quantity = False,
         y_norm: bool | Quantity = False,
-        x_label: str = None,
-        y_label: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
         data_colour: str = "black",
         model_colour: str | list[str] = "seagreen",
         show_legend: bool = True,
@@ -2137,7 +2364,7 @@ class BaseProfile1D:
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         joined_points: bool = False,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
     ):
         """
         A get method for an axes (or multiple axes) showing this profile and model fits. The idea of this get method
@@ -2571,17 +2798,17 @@ class BaseProfile1D:
         figsize=(10, 7),
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
         models: bool = True,
         back_sub: bool = True,
         just_models: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool | Quantity = False,
         y_norm: bool | Quantity = False,
-        x_label: str = None,
-        y_label: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
         data_colour: str = "black",
         model_colour: str | list[str] = "seagreen",
         show_legend: bool = True,
@@ -2589,7 +2816,7 @@ class BaseProfile1D:
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         joined_points: bool = False,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
     ) -> None:
         """
         A method that allows us to view the current profile, as well as any models that have been fitted to it,
@@ -2687,17 +2914,17 @@ class BaseProfile1D:
         figsize=(10, 7),
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
         models: bool = True,
         back_sub: bool = True,
         just_models: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool | Quantity = False,
         y_norm: bool | Quantity = False,
-        x_label: str = None,
-        y_label: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
         data_colour: str = "black",
         model_colour: str | list[str] = "seagreen",
         show_legend: bool = True,
@@ -2705,7 +2932,7 @@ class BaseProfile1D:
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         joined_points: bool = False,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
     ) -> None:
         """
         A method that allows us to save a view of the current profile, as well as any models that have been
@@ -3463,22 +3690,22 @@ class BaseAggregateProfile1D:
         figsize: tuple = (10, 7),
         xscale: str = "log",
         yscale: str = "log",
-        xlim: tuple = None,
-        ylim: tuple = None,
-        model: str = None,
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
+        model: str | None = None,
         back_sub: bool = True,
         show_legend: bool = True,
         just_model: bool = False,
-        custom_title: str = None,
+        custom_title: str | None = None,
         draw_rads: dict | None = None,
         x_norm: bool = False,
         y_norm: bool = False,
-        x_label: str = None,
-        y_label: str = None,
-        save_path: str = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        save_path: str | None = None,
         draw_vals: dict | None = None,
         auto_legend: bool = True,
-        axis_formatters: dict = None,
+        axis_formatters: dict | None = None,
         show_residual_ax: bool = True,
         joined_points: bool = False,
     ) -> None:
