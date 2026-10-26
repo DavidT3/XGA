@@ -20,7 +20,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.interpolate import interp1d
 
-from xga import ABUND_TABLES, MEAN_MOL_WEIGHT, NHC
+from xga import ABUND_TABLES, MEAN_MOL_WEIGHT, NHC, DEFAULT_ABUND_TABLE
 from xga.exceptions import (
     ModelNotAssociatedError,
     MultipleMatchError,
@@ -458,6 +458,8 @@ class GasMass1D(BaseProfile1D):
 
         # The profile from which the densities here were inferred
         self._gen_prof = associated_prof
+        
+        self.abund_table = fit_conf
 
         if isinstance(associated_prof, SurfaceBrightness1D):
             # Make a copy of the brightness profile storage key, as we want to modify it
@@ -645,6 +647,9 @@ class GasDensity3D(BaseProfile1D):
 
         # The profile from which the densities here were inferred
         self._gen_prof = associated_prof
+        
+        self.abund_table = fit_conf
+        
 
         if isinstance(self._gen_prof, SurfaceBrightness1D):
             # Make a copy of the brightness profile storage key, as we want to modify it
@@ -1246,9 +1251,12 @@ class APECNormalisation1D(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "APEC Normalisation"
+        
+        self.abund_table = fit_conf
+        
 
     def _gen_profile_setup(
-        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr"
+        self, redshift: float, cosmo: Cosmology, abund_table: str = DEFAULT_ABUND_TABLE
     ) -> tuple[Quantity, Quantity, float]:
         """
         There are many common steps in the gas_density_profile and emission_measure_profile methods, so I decided to
@@ -1305,7 +1313,7 @@ class APECNormalisation1D(BaseProfile1D):
         self,
         redshift: float,
         cosmo: Quantity,
-        abund_table: str = "angr",
+        abund_table: str = DEFAULT_ABUND_TABLE,
         num_real: int = 10000,
         sigma: int = 1,
         num_dens: bool = True,
@@ -1389,7 +1397,7 @@ class APECNormalisation1D(BaseProfile1D):
         return dens_prof
 
     def emission_measure_profile(
-        self, redshift: float, cosmo: Cosmology, abund_table: str = "angr", num_real: int = 100, sigma: int = 2
+        self, redshift: float, cosmo: Cosmology, abund_table: str = DEFAULT_ABUND_TABLE, num_real: int = 100, sigma: int = 2
     ) -> EmissionMeasure1D:
         """
         A method to calculate the emission measure profile from the APEC normalisation profile, which in turn was
@@ -1761,6 +1769,8 @@ class GasTemperature3D(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "3D Temperature"
+        
+
 
 
 # TODO WRITE CUSTOM STORAGE KEY HERE AS WELL
@@ -1870,6 +1880,8 @@ class BaryonFraction(BaseProfile1D):
 
         # This is what the y-axis is labelled as during plotting
         self._y_axis_name = "Baryon Fraction"
+        
+        self.abund_table = fit_conf
 
 
 class HydrostaticMass(BaseProfile1D):
@@ -2061,6 +2073,9 @@ class HydrostaticMass(BaseProfile1D):
             warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
         elif temperature_profile.instrument != density_profile.instrument:
             warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
+        elif temperature_profile.abund_table != density_profile.abund_table:
+            warn("The temperature and density profiles do not have the same associated abundance table."
+                 " Assigning the temperature profile abundance table to hydrostatic mass profile.", stacklevel=2)
 
         # Now we check whether the right combination of information has been passed depending on whether we are
         #  going to be using model fits or not (we need passed radii if a model is to be used).
@@ -2117,7 +2132,7 @@ class HydrostaticMass(BaseProfile1D):
         # Set the attribute which lets the hydrostatic mass calculation method know whether to interpolate any
         #  data points or not, if smooth fitted models are not going to be used
         self._interp_data = interp_data
-
+        
         # We see if either of the profiles have an associated spectrum
         if temperature_profile.set_ident is None and density_profile.set_ident is None:
             set_id = None
@@ -2308,6 +2323,8 @@ class HydrostaticMass(BaseProfile1D):
 
         # Setting up a dictionary to store mass results in.
         self._masses: dict[str, Quantity] = {}
+        
+        self.abund_table = self.temperature_profile.abund_table
 
     def mass(
         self, radius: Quantity, conf_level: float = 68.2, radius_err: Quantity | None = None
@@ -3485,6 +3502,9 @@ class SpecificEntropy(BaseProfile1D):
             warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
         elif temperature_profile.instrument != density_profile.instrument:
             warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
+        elif temperature_profile.abund_table != density_profile.abund_table:
+            warn("The temperature and density profiles do not have the same associated abundance table."
+                 " Assigning the temperature profile abundance table to hydrostatic mass profile.", stacklevel=2)
 
         # Now we check whether the right combination of information has been passed depending on whether we are
         #  going to be using model fits or not (we need passed radii if a model is to be used).
@@ -3729,6 +3749,9 @@ class SpecificEntropy(BaseProfile1D):
 
         # Setting up a dictionary to store entropy results in.
         self._entropies: dict[Quantity, Quantity] = {}
+        
+        self.abund_table = self.temperature_profile.abund_table
+
 
     def entropy(self, radius: Quantity, conf_level: float = 68.2) -> tuple[Quantity, Quantity]:
         """
@@ -4220,6 +4243,9 @@ class ThermalPressure(BaseProfile1D):
             warn("The temperature and density profiles do not have the same associated ObsID.", stacklevel=2)
         elif temperature_profile.instrument != density_profile.instrument:
             warn("The temperature and density profiles do not have the same associated instrument.", stacklevel=2)
+        elif temperature_profile.abund_table != density_profile.abund_table:
+            warn("The temperature and density profiles do not have the same associated abundance table."
+                 " Assigning the temperature profile abundance table to hydrostatic mass profile.", stacklevel=2)
 
         # Now we check whether the right combination of information has been passed depending on whether we are
         #  going to be using model fits or not (we need passed radii if a model is to be used).
@@ -4465,6 +4491,8 @@ class ThermalPressure(BaseProfile1D):
 
         # Setting up a dictionary to store pressure results in.
         self._pressures: dict[Quantity, Quantity] = {}
+        
+        self.abund_table = self.temperature_profile.abund_table
 
     def pressure(self, radius: Quantity, conf_level: float = 68.2) -> tuple[Quantity, Quantity]:
         """
