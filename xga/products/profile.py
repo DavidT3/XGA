@@ -2336,6 +2336,7 @@ class HydrostaticMass(BaseProfile1D):
 
         # Prints a warning if the radius at which to calculate the mass is outside the range of the data
         self.rad_check(radius)
+        radius = radius.to(self.radii_unit)
 
         # This is quite a specific check - different ways of calculating mass points have been now been
         #  included (other than using the smooth temperature and density models), and we will have to stop
@@ -2555,7 +2556,9 @@ class HydrostaticMass(BaseProfile1D):
                 fill_value="extrapolate",
                 bounds_error=False,
             )
-            temp = Quantity(temp_interp(radius).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
             temp_der_interp = interp1d(
                 self.temperature_profile.radii,
@@ -2566,7 +2569,8 @@ class HydrostaticMass(BaseProfile1D):
                 bounds_error=False,
             )
             temp_der = Quantity(
-                temp_der_interp(radius).T, self.temperature_profile.values_unit / self.temperature_profile.radii_unit
+                temp_der_interp(radius.to(self.temperature_profile.radii_unit)).T,
+                self.temperature_profile.values_unit / self.temperature_profile.radii_unit
             ).T
 
         # This particular combination means that we are doing a data-point based profile, but without interpolation,
