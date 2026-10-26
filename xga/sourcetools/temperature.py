@@ -871,7 +871,7 @@ def onion_deproj_temp_prof(sources: Union[GalaxyCluster, ClusterSample], outer_r
                 # Also make an Emission Measure profile, used for weighting the contributions from different
                 #  shells to annuli
                 em_prof = apec_norm_prof.emission_measure_profile(src.redshift, src.cosmo, abund_table,
-                                                                num_data_real, conf_level)
+                                                                num_data_real, sigma=1)
                 src.update_products(em_prof)
 
                 # Need to make sure the annular boundaries are a) in a proper distance unit rather than degrees, and b)
