@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/27/26, 9:24 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/27/26, 9:49 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -109,6 +109,82 @@ class TestXSPECSingleSource(unittest.TestCase):
                 npt.assert_array_equal(all_tel_res[tel][1], all_tel_res[next_tel][1])
             with self.assertRaises(AssertionError):
                 npt.assert_array_equal(all_tel_res[tel][2], all_tel_res[next_tel][2])
+
+    def test_global_single_temp_apec_diff_lum_fitconf(self) -> None:
+        """
+        Fits several versions of a single temperature apec model, with different
+        luminosity energy band settings passed, and checks that the luminosity results
+        can be retrieved.
+        """
+        stacked_spectra = True
+
+        # Run with default settings, 0.5-2.0 and 0.01-100.0 luminosities are passed, and the luminosity confidence
+        #  level is set to 68.
+        single_temp_apec(self.no_fits_src, self.out_rad, stacked_spectra=stacked_spectra)
+
+        # Now we use the same default energy bands, but increase the lum_conf to 90 - we can check that
+        #  the errors are larger, but values essentially the same (some small difference is expected due
+        #  to random fitting processes).
+        single_temp_apec(self.no_fits_src, self.out_rad, stacked_spectra=stacked_spectra, lum_conf=90.0)
+
+        # Now we alter the luminosity energy bands, keeping just one of the two default energy bands
+        single_temp_apec(
+            self.no_fits_src, self.out_rad, stacked_spectra=stacked_spectra, lum_en=Quantity([[0.5, 2.0]], "keV")
+        )
+
+        # Finally, we test the case of passing many different energy bands for luminosity measurement.
+        many_lum_ens = Quantity([[0.3, 1.3], [1.3, 2.0], [2.0, 2.9], [2.9, 3.8], [3.8, 9.0]], "keV")
+        single_temp_apec(self.no_fits_src, self.out_rad, stacked_spectra=stacked_spectra, lum_en=many_lum_ens)
+
+        all_tel_res = {}
+        for tel in self.no_fits_src.telescopes:
+            with self.assertRaises(ValueError):
+                self.no_fits_src.get_luminosities(self.out_rad, telescope=tel, stacked_spectra=stacked_spectra)
+
+            default_lxs = self.no_fits_src.get_luminosities(
+                self.out_rad, telescope=tel, stacked_spectra=stacked_spectra, fit_conf={}
+            )
+
+            larger_conf_lxs = self.no_fits_src.get_luminosities(
+                self.out_rad, telescope=tel, stacked_spectra=stacked_spectra, fit_conf={"lum_conf": 90.0}
+            )
+
+            single_band_lx = self.no_fits_src.get_luminosities(
+                self.out_rad,
+                telescope=tel,
+                stacked_spectra=stacked_spectra,
+                fit_conf={"lum_en": Quantity([[0.5, 2.0]], "keV")},
+            )
+
+            many_band_lx = self.no_fits_src.get_luminosities(
+                self.out_rad, telescope=tel, stacked_spectra=stacked_spectra, fit_conf={"lum_en": many_lum_ens}
+            )
+
+            # First, we can test if each retrieval returned the number of luminosity entries we expected.
+            self.assertEqual(len(default_lxs), 2)
+            self.assertEqual(len(larger_conf_lxs), 2)
+            self.assertEqual(len(single_band_lx), 1)
+            self.assertEqual(len(many_band_lx), len(many_lum_ens))
+
+            # Now we can check that the larger confidence interval Lx measurements for the default energy bands
+            #  return luminosities that have larger uncertainties than the 'default_lxs'.
+            npt.assert_array_less(default_lxs["0.5-2.0"][1:], larger_conf_lxs["0.5-2.0"][1:])
+            npt.assert_array_less(default_lxs["0.01-100.0"][1:], larger_conf_lxs["0.01-100.0"][1:])
+
+            all_tel_res[tel] = [default_lxs, larger_conf_lxs, single_band_lx, many_band_lx]
+
+        # Finally, we perform a like-for-like comparison of luminosities measured using the same configuration
+        #  but from different telescope's data. We assert that they should NOT be identical arrays, because
+        #  the possibility of that happening is vanishingly small. We are testing for whether one telescope's
+        #  luminosity measurements have been assigned to another telescope as well.
+        for tel_ind, tel in enumerate(list(all_tel_res.keys())[:-1]):
+            next_tel = list(all_tel_res.keys())[tel_ind + 1]
+
+            for cur_res_key, cur_res in all_tel_res[tel]:
+                next_tel_res = all_tel_res[next_tel][cur_res_key]
+
+                with self.assertRaises(AssertionError):
+                    npt.assert_array_equal(cur_res, next_tel_res)
 
     def test_global_single_temp_apec_view(self) -> None:
         """Tests the view method of the Spectrum class after fitting several versions of the
