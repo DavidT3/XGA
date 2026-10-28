@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/30/26, 2:04 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 8:37 AM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -6391,6 +6391,7 @@ class BaseSource:
                 group_spec=group_spec,
                 min_counts=min_counts,
                 min_sn=min_sn,
+                over_sample=over_sample,
                 telescope=telescope,
             )
         else:
@@ -6882,37 +6883,40 @@ class BaseSource:
                 f"{self.telescopes}) so no luminosities can be retrieved."
             ) from err
 
-        if not stacked_spectra:
-            # If the user doesn't want the stacked spectra result, then we retrieve the spec objects
-            # from the get_spectra method
-            specs = self.get_spectra(
-                outer_radius, None, None, inner_radius, group_spec, min_counts, min_sn, over_sample, telescope=telescope
-            )
-        elif stacked_spectra and telescope in ["erass", "erosita"] and len(self.obs_ids[telescope]) > 1:
-            # Multi-obs eROSITA: retrieve multi-obs + multi-inst combined spectrum (Scenario 3)
+        # Correctly determine which spectra were used for the fit based on the telescope and stacking preference
+        if telescope in ["erosita", "erass"] and (len(self.obs_ids[telescope]) > 1):
+            # For eROSITA/eRASS with multiple observations, we check for combined-observation spectra
+            if stacked_spectra:
+                # Multi-obs + multi-inst combined
+                search_inst = "combined"
+            else:
+                # Multi-obs + individual instruments
+                search_inst = None
+
             specs = self.get_spectra(
                 outer_radius,
-                "combined",
-                "combined",
-                inner_radius,
-                group_spec,
-                min_counts,
-                min_sn,
-                over_sample,
+                obs_id="combined",
+                inst=search_inst,
+                inner_radius=inner_radius,
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
                 telescope=telescope,
             )
         else:
-            # Single obs (any telescope) or single-obs eROSITA: retrieve multi-inst combined (Scenario 1)
+            #
+            search_inst = None
+
             specs = self.get_spectra(
                 outer_radius,
-                None,
-                "combined",
-                inner_radius,
-                group_spec,
-                min_counts,
-                min_sn,
-                over_sample,
+                inner_radius=inner_radius,
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
                 telescope=telescope,
+                inst=search_inst,
             )
 
         # # First I want to retrieve the spectra that were fitted to produce the result they're looking for,
