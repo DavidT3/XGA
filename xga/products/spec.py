@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:09 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:31 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1419,15 +1419,16 @@ class Spectrum(BaseProduct):
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
             raise ValueError("The low energy limit cannot be greater than the high energy limit")
         elif lo_en is not None and hi_en is not None:
-            en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+            en_key = f"bound_{lo_en.to('keV').value}-{hi_en.to('keV').value}"
         else:
             en_key = None
 
         # Checks that the requested energy band actually exists
-        if en_key is not None and en_key not in self._luminosities[model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model].keys()])
+        if en_key is not None and en_key not in self._luminosities[model][fit_conf]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model][fit_conf].keys()])
             raise ParameterNotAssociatedError(
-                f"{lo_en.to('keV').value}-{hi_en.to('keV').value}keV was not an energy band for the fit with {model}; available energy bands are {av_bands}"
+                f"{lo_en.to('keV').value}-{hi_en.to('keV').value}keV luminosities were not measured for the {model} "
+                f"fit with {fit_conf}; available energy bands are {av_bands}."
             )
 
         # The default behavior is to return the unabsorbed luminosities
