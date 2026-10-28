@@ -12,53 +12,53 @@ from astropy.units import Quantity
 #  actual fit function. We will also check the arguments of each fit function against these entries to see whether
 #  an argument has been added that is not accounted for here.
 FIT_FUNC_ARGS = {
-    'single_temp_apec': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
+    'single_temp_apec': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': True,
                          'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
-                         'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
+                         'par_fit_stat': True, 'lum_conf': True, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
                          'stacked_spectra': False, 'telescope': False, 'force_gen': False},
 
     'double_temp_apec': {'inner_radius': False, 'start_temp_one': True, 'start_temp_two': True,
-                         'start_met_one': True, 'start_met_two': True, 'lum_en': False, 'freeze_nh': True,
+                         'start_met_one': True, 'start_met_two': True, 'lum_en': True, 'freeze_nh': True,
                          'freeze_met_one': True, 'freeze_met_two': True, 'freeze_temp_one': True,
                          'freeze_temp_two': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True,
-                         'lum_conf': False, 'abund_table': True, 'fit_method': True,
+                         'lum_conf': True, 'abund_table': True, 'fit_method': True,
                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
                          'stacked_spectra': False, 'telescope': False},
 
-    'single_temp_mekal': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': False,
+    'single_temp_mekal': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': True,
                           'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
-                          'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
+                          'par_fit_stat': True, 'lum_conf': True, 'abund_table': True, 'fit_method': True,
                           'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
                           'stacked_spectra': False, 'telescope': False},
 
     'multi_temp_dem_apec': {'inner_radius': False, 'start_max_temp': True, 'start_met': True, 'start_t_rat': True,
-                            'start_inv_em_slope': True, 'lum_en': False, 'freeze_nh': True, 'freeze_met': True,
-                            'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
+                            'start_inv_em_slope': True, 'lum_en': True, 'freeze_nh': True, 'freeze_met': True,
+                            'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': True,
                             'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False,
                             'min_sn': False, 'over_sample': False, 'one_rmf': False, 'num_cores': False,
-                            'spectrum_checking': False, 'timeout': False, 'stacked_spectra': False, 'telescope': False},
+                            'spectrum_checking': True, 'timeout': False, 'stacked_spectra': False, 'telescope': False},
 
-    'power_law': {'inner_radius': False, 'redshifted': False, 'lum_en': False, 'start_pho_index': True,
-                  'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
+    'power_law': {'inner_radius': False, 'redshifted': False, 'lum_en': True, 'start_pho_index': True,
+                  'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': True,
                   'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
                   'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False,
                   'stacked_spectra': False, 'telescope': False},
 
-    'blackbody': {'inner_radius': False, 'redshifted': False, 'lum_en': False, 'start_temp': True,
-                  'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': False,
+    'blackbody': {'inner_radius': False, 'redshifted': False, 'lum_en': True, 'start_temp': True,
+                  'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': True,
                   'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
                   'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False,
                   'stacked_spectra': False, 'telescope': False},
 
-    'single_temp_apec_profile': {'start_temp': True, 'start_met': True, 'lum_en': False,
+    'single_temp_apec_profile': {'start_temp': True, 'start_met': True, 'lum_en': True,
                                  'freeze_nh': True, 'freeze_met': True, 'lo_en': True, 'hi_en': True,
-                                 'par_fit_stat': True, 'lum_conf': False, 'abund_table': True, 'fit_method': True,
+                                 'par_fit_stat': True, 'lum_conf': True, 'abund_table': True, 'fit_method': True,
                                  'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                                 'one_rmf': False, 'num_cores': False, 'spectrum_checking': False, 'timeout': False,
+                                 'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
                                  'use_cross_arf': True, 'first_fit_start_pars': True, 'detmap_bin': True,
                                  'stacked_spectra': False, 'telescope': False}
 }
@@ -152,7 +152,12 @@ def _gen_fit_conf(key_comps: dict) -> str:
         mod_kn = kn.replace("_", "")
 
         # Depending on the data type of the argument in question we will treat it differently
-        if isinstance(cur_val, (int, float, bool)):
+        if kn == 'lum_en':
+            bands = cur_val.to_value('keV')
+            cur_val = mod_kn + ';'.join(':'.join(str(float(en)) for en in band) for band in bands) + 'keV'
+        elif kn == 'lum_conf':
+            cur_val = mod_kn + str(float(cur_val))
+        elif isinstance(cur_val, (int, float, bool)):
             cur_val = mod_kn+str(cur_val)
         # We make our own string version of quantities because the version you get when applying str() to a quantity
         #  instance has a space between value and unit and we don't want that

@@ -1,27 +1,32 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/27/26, 3:45 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:31 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
-from typing import Tuple, Union, List, Dict
 from warnings import warn
 
 import numpy as np
 from astropy.io import fits
 from astropy.units import Quantity, Unit, UnitConversionError
-from fitsio import hdu, FITS, read, read_header, FITSHDR
+from fitsio import FITS, FITSHDR, hdu, read, read_header
 from matplotlib import legend_handler
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.ticker import ScalarFormatter, FuncFormatter
+from matplotlib.ticker import FuncFormatter, ScalarFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.mplot3d import Axes3D
 
-from . import BaseProduct, BaseAggregateProduct, BaseProfile1D
-from ..exceptions import ModelNotAssociatedError, ParameterNotAssociatedError, XGASetIDError, NotAssociatedError, \
-    FailedProductError, ProductNotUsableError
-from ..products.profile import ProjectedGasTemperature1D, ProjectedGasMetallicity1D, Generic1D, APECNormalisation1D
+from ..exceptions import (
+    FailedProductError,
+    ModelNotAssociatedError,
+    NotAssociatedError,
+    ParameterNotAssociatedError,
+    ProductNotUsableError,
+    XGASetIDError,
+)
+from ..products.profile import APECNormalisation1D, Generic1D, ProjectedGasMetallicity1D, ProjectedGasTemperature1D
 from ..utils import dict_search
+from . import BaseAggregateProduct, BaseProduct, BaseProfile1D
 
 
 class Spectrum(BaseProduct):
@@ -58,10 +63,31 @@ class Spectrum(BaseProduct):
         many products from the same directory/directory structure, it can be more performant to run listdir
         or scandir and confirm files exist externally, than one by one in each product declaration.
     """
-    def __init__(self, path: str, rmf_path: str, arf_path: str, b_path: str, central_coord: Quantity, inn_rad: Quantity,
-                 out_rad: Quantity, obs_id: str, instrument: str, grouped: bool, min_counts: int | None, min_sn: float | None,
-                 over_sample: int | None, stdout_str: str, stderr_str: str, gen_cmd: str, region: bool = False,
-                 b_rmf_path: str = '', b_arf_path: str = '', telescope: str | None = None, check_exists: bool = True):
+
+    def __init__(
+        self,
+        path: str,
+        rmf_path: str,
+        arf_path: str,
+        b_path: str,
+        central_coord: Quantity,
+        inn_rad: Quantity,
+        out_rad: Quantity,
+        obs_id: str,
+        instrument: str,
+        grouped: bool,
+        min_counts: int | None,
+        min_sn: float | None,
+        over_sample: int | None,
+        stdout_str: str,
+        stderr_str: str,
+        gen_cmd: str,
+        region: bool = False,
+        b_rmf_path: str = "",
+        b_arf_path: str = "",
+        telescope: str | None = None,
+        check_exists: bool = True,
+    ):
         """
         The init of the Spectrum class, sets up both the base product behind the Spectrum and the specific
         information/abilities that a spectrum needs.
@@ -93,46 +119,47 @@ class Spectrum(BaseProduct):
             many products from the same directory/directory structure, it can be more performant to run listdir
             or scandir and confirm files exist externally, than one by one in each product declaration.
         """
-        super().__init__(path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope,
-                         check_exists=check_exists)
+        super().__init__(
+            path, obs_id, instrument, stdout_str, stderr_str, gen_cmd, telescope=telescope, check_exists=check_exists
+        )
         self._prod_type = "spectrum"
 
         if not check_exists or os.path.exists(rmf_path):
             self._rmf = rmf_path
         else:
-            self._rmf = ''
+            self._rmf = ""
             self._usable = False
             self._why_unusable.append("RMFPathDoesNotExist")
 
         if not check_exists or os.path.exists(arf_path):
             self._arf = arf_path
         else:
-            self._arf = ''
+            self._arf = ""
             self._usable = False
             self._why_unusable.append("ARFPathDoesNotExist")
 
         if not check_exists or os.path.exists(b_path):
             self._back_spec = b_path
         else:
-            self._back_spec = ''
+            self._back_spec = ""
             self._usable = False
             self._why_unusable.append("BackSpecPathDoesNotExist")
 
-        if b_rmf_path != '' and os.path.exists(b_rmf_path):
+        if b_rmf_path != "" and os.path.exists(b_rmf_path):
             self._back_rmf = b_rmf_path
-        elif b_rmf_path == '':
+        elif b_rmf_path == "":
             self._back_rmf = None
         else:
-            self._back_rmf = ''
+            self._back_rmf = ""
             self._usable = False
             self._why_unusable.append("BackRMFPathDoesNotExist")
 
-        if b_arf_path != '' and (not check_exists or os.path.exists(b_arf_path)):
+        if b_arf_path != "" and (not check_exists or os.path.exists(b_arf_path)):
             self._back_arf = b_arf_path
-        elif b_arf_path == '':
+        elif b_arf_path == "":
             self._back_arf = None
         else:
-            self._back_arf = ''
+            self._back_arf = ""
             self._usable = False
             self._why_unusable.append("BackARFPathDoesNotExist")
 
@@ -143,16 +170,16 @@ class Spectrum(BaseProduct):
         # Firstly, we'll ensure that those radii have been passed in the right kind of units, and then convert
         #  them to degrees - all XGA spectrum filenames have degree radii in them, and more importantly the source
         #  storage structures all expect the storage keys to have degree radii
-        if not all([inn_rad.unit.is_equivalent('deg'), out_rad.unit.is_equivalent('deg')]):
+        if not all([inn_rad.unit.is_equivalent("deg"), out_rad.unit.is_equivalent("deg")]):
             raise UnitConversionError("The 'inn_rad' and 'out_rad' arguments must be in angular distance units.")
 
-        self._inner_rad = inn_rad.to('deg')
-        self._outer_rad = out_rad.to('deg')
+        self._inner_rad = inn_rad.to("deg")
+        self._outer_rad = out_rad.to("deg")
         # And also the shape of the region
         if self._inner_rad.isscalar:
-            self._shape = 'circular'
+            self._shape = "circular"
         else:
-            self._shape = 'elliptical'
+            self._shape = "elliptical"
 
         # If this spectrum has just been generated by XGA then we'll set the headers, otherwise its
         #  too slow and must be avoided. I am assuming here that the gen_cmd will be "" if the object
@@ -161,7 +188,7 @@ class Spectrum(BaseProduct):
             try:
                 self._update_spec_headers("main")
                 self._update_spec_headers("back")
-            except OSError as err:
+            except OSError:
                 self._usable = False
                 self._why_unusable.append("FITSIOOSError")
 
@@ -169,6 +196,7 @@ class Spectrum(BaseProduct):
         self._exp = None
         self._plot_data = {}
         self._luminosities = {}
+        self._abs_luminosities = {}
         self._count_rate = {}
         # self._fit_stat = {}
         # self._test_stat = {}
@@ -182,9 +210,9 @@ class Spectrum(BaseProduct):
         self._min_counts = min_counts
         self._min_sn = min_sn
         if self._grouped and self._min_counts is not None:
-            self._grouped_on = 'counts'
+            self._grouped_on = "counts"
         elif self._grouped and self._min_sn is not None:
-            self._grouped_on = 'signal to noise'
+            self._grouped_on = "signal to noise"
         else:
             self._grouped_on = None
 
@@ -197,30 +225,37 @@ class Spectrum(BaseProduct):
         # Here we generate the storage key for this object, its just convenient to do it in here
         # Sets up the extra part of the storage key name depending on if grouping is enabled
         if grouped and min_counts is not None:
-            extra_name = "_mincnt{}".format(min_counts)
+            extra_name = f"_mincnt{min_counts}"
         elif grouped and min_sn is not None:
-            extra_name = "_minsn{}".format(min_sn)
+            extra_name = f"_minsn{min_sn}"
         else:
-            extra_name = ''
+            extra_name = ""
 
         # And if it was oversampled during generation then we need to include that as well
         if over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=over_sample)
+            extra_name += f"_ovsamp{over_sample}"
 
         spec_storage_name = "ra{ra}_dec{dec}_ri{ri}_ro{ro}_grp{gr}"
         if not self._region and self.inner_rad.isscalar:
-            spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
-                                                         dec=self.central_coord[1].value,
-                                                         ri=self._inner_rad.value, ro=self._outer_rad.value,
-                                                         gr=grouped)
+            spec_storage_name = spec_storage_name.format(
+                ra=self.central_coord[0].value,
+                dec=self.central_coord[1].value,
+                ri=self._inner_rad.value,
+                ro=self._outer_rad.value,
+                gr=grouped,
+            )
         elif not self._region and not self._inner_rad.isscalar:
-            inn_rad_str = 'and'.join(self._inner_rad.value.astype(str))
-            out_rad_str = 'and'.join(self._outer_rad.value.astype(str))
-            spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
-                                                         dec=self.central_coord[1].value, ri=inn_rad_str,
-                                                         ro=out_rad_str, gr=grouped)
+            inn_rad_str = "and".join(self._inner_rad.value.astype(str))
+            out_rad_str = "and".join(self._outer_rad.value.astype(str))
+            spec_storage_name = spec_storage_name.format(
+                ra=self.central_coord[0].value,
+                dec=self.central_coord[1].value,
+                ri=inn_rad_str,
+                ro=out_rad_str,
+                gr=grouped,
+            )
         else:
-            spec_storage_name = "region_grp{gr}".format(gr=grouped)
+            spec_storage_name = f"region_grp{grouped}"
 
         spec_storage_name += extra_name
         # And we save the completed key to an attribute
@@ -284,7 +319,7 @@ class Spectrum(BaseProduct):
         #  actually exist. This will have been checked already
         if which_spec == "main" and self.usable:
             # Currently having to use astropy's fits interface, I don't really want to because of risk of segfaults
-            with fits.open(self._path, mode='update') as spec_fits:
+            with fits.open(self._path, mode="update") as spec_fits:
                 # I delete the headers first, as I've found issues with XSPEC not being able to read the
                 #  path if the SAS version I'm using adds entries for the headers before I do. See issue #745
                 # Do have to check that the offending headers are actually present, as they won't be introduced by
@@ -302,13 +337,13 @@ class Spectrum(BaseProduct):
                 spec_fits["SPECTRUM"].header["BACKFILE"] = self._back_spec
 
         elif which_spec == "back" and self.usable:
-            with fits.open(self._back_spec, mode='update') as spec_fits:
+            with fits.open(self._back_spec, mode="update") as spec_fits:
                 if self._back_rmf is not None:
-                    if 'RESPFILE' in spec_fits["SPECTRUM"].header:
+                    if "RESPFILE" in spec_fits["SPECTRUM"].header:
                         del spec_fits["SPECTRUM"].header["RESPFILE"]
                     spec_fits["SPECTRUM"].header["RESPFILE"] = self._back_rmf
                 if self._back_arf is not None:
-                    if 'ANCRFILE' in spec_fits["SPECTRUM"].header:
+                    if "ANCRFILE" in spec_fits["SPECTRUM"].header:
                         del spec_fits["SPECTRUM"].header["ANCRFILE"]
                     spec_fits["SPECTRUM"].header["ANCRFILE"] = self._back_arf
 
@@ -321,7 +356,6 @@ class Spectrum(BaseProduct):
             is read into memory. If True (the default) then the source spectrum is read, otherwise the background
             spectrum is read.
         """
-
         # Usable flag to check that nothing went wrong in the spectrum generation
         if self.usable:
             try:
@@ -329,15 +363,15 @@ class Spectrum(BaseProduct):
                 if src_spec:
                     # Make this variable so the FileNotFoundError can work
                     rel_path = self.path
-                    all_dat = read(rel_path, 'SPECTRUM')
-                    self._spec_counts = all_dat['COUNTS']
-                    self._spec_channels = all_dat['CHANNEL']
+                    all_dat = read(rel_path, "SPECTRUM")
+                    self._spec_counts = all_dat["COUNTS"]
+                    self._spec_channels = all_dat["CHANNEL"]
                     # If the spectrum has not been grouped it may not have this column
                     if "GROUPING" in all_dat.dtype.names:
-                        self._spec_group = all_dat['GROUPING']
+                        self._spec_group = all_dat["GROUPING"]
 
                     if "QUALITY" in all_dat.dtype.names:
-                        self._spec_quality = all_dat['QUALITY']
+                        self._spec_quality = all_dat["QUALITY"]
                     else:
                         # If there is no quality information then we just have to assume every channel is okay
                         #  to use - otherwise the get_grouped_data method will fall over
@@ -346,23 +380,27 @@ class Spectrum(BaseProduct):
                 # And if not then the only other option is to populate the background spectrum attributes
                 else:
                     rel_path = self.background
-                    all_dat = read(rel_path, 'SPECTRUM')
-                    self._back_counts = all_dat['COUNTS']
-                    self._back_channels = all_dat['CHANNEL']
+                    all_dat = read(rel_path, "SPECTRUM")
+                    self._back_counts = all_dat["COUNTS"]
+                    self._back_channels = all_dat["CHANNEL"]
 
                     # Background spectra do not necessarily have these entries
                     if "GROUPING" in all_dat.dtype.names:
-                        self._back_group = all_dat['GROUPING']
+                        self._back_group = all_dat["GROUPING"]
                     if "QUALITY" in all_dat.dtype.names:
-                        self._back_quality = all_dat['QUALITY']
+                        self._back_quality = all_dat["QUALITY"]
 
             except OSError:
-                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
+                raise FileNotFoundError(
+                    f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
+                )
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
-                                     f"access data from it; the reason given is: {reasons}.")
+            raise FailedProductError(
+                f"This product appears to have failed to generate successfully, so you cannot "
+                f"access data from it; the reason given is: {reasons}."
+            )
 
     def _read_header_on_demand(self, src_spec: bool = True, primary_header: bool = True):
         """
@@ -375,7 +413,6 @@ class Spectrum(BaseProduct):
         :param bool primary_header: Whether the header from the primary table (the default) should be read. The
             alternative is to read the header of the SPECTRUM table.
         """
-
         # Usable flag to check that nothing went wrong in the spectrum generation
         if self.usable:
             try:
@@ -387,21 +424,25 @@ class Spectrum(BaseProduct):
                     self._prim_spec_header = read_header(rel_path)
                 elif src_spec and not primary_header:
                     rel_path = self.path
-                    self._spec_spec_header = read_header(rel_path, 'SPECTRUM')
+                    self._spec_spec_header = read_header(rel_path, "SPECTRUM")
                 elif not src_spec and primary_header:
                     rel_path = self.background
                     self._prim_back_header = read_header(rel_path)
                 elif not src_spec and not primary_header:
                     rel_path = self.background
-                    self._spec_back_header = read_header(rel_path, 'SPECTRUM')
+                    self._spec_back_header = read_header(rel_path, "SPECTRUM")
 
             except OSError:
-                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
+                raise FileNotFoundError(
+                    f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
+                )
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
-                                     f"access data from it; the reason given is: {reasons}.")
+            raise FailedProductError(
+                f"This product appears to have failed to generate successfully, so you cannot "
+                f"access data from it; the reason given is: {reasons}."
+            )
 
     def _read_response_on_demand(self, rmf: bool = True):
         """
@@ -412,7 +453,6 @@ class Spectrum(BaseProduct):
         :param bool rmf: Whether the RMF information should be read into memory, default True. If False, the ARF
             information will be read into memory.
         """
-
         # Usable flag to check that nothing went wrong in the spectrum generation
         if self.usable:
             try:
@@ -423,13 +463,13 @@ class Spectrum(BaseProduct):
                     # I'm reading the whole fits file because there are two tables I'm interested in
                     all_dat = FITS(rel_path)
                     # This stores the matrix table as a numpy array with named columns
-                    self._redist_matrix_info = all_dat['MATRIX'].read().copy()
+                    self._redist_matrix_info = all_dat["MATRIX"].read().copy()
                     # Reading out the second table containing the conversions between energy and channel
-                    chan_dat = all_dat['EBOUNDS'].read()
+                    chan_dat = all_dat["EBOUNDS"].read()
                     # Setting up arrays of RMF channels with their equivelant lower and upper energy bounds
-                    self._rmf_channels = chan_dat['CHANNEL']
-                    self._rmf_channels_lo_en = Quantity(chan_dat['E_MIN'], 'keV')
-                    self._rmf_channels_hi_en = Quantity(chan_dat['E_MAX'], 'keV')
+                    self._rmf_channels = chan_dat["CHANNEL"]
+                    self._rmf_channels_lo_en = Quantity(chan_dat["E_MIN"], "keV")
+                    self._rmf_channels_hi_en = Quantity(chan_dat["E_MAX"], "keV")
                     all_dat.close()
                 # And if not then the only other option is to populate the ARF attributes
                 else:
@@ -437,20 +477,24 @@ class Spectrum(BaseProduct):
                     # Read in the ARF fits file from the arf property
                     arf_read = FITS(rel_path)
                     # Read out the data from the ARF table into attributes
-                    self._arf_lo_en = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
-                    self._arf_hi_en = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
-                    self._arf_eff_area = Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+                    self._arf_lo_en = Quantity(arf_read[1]["ENERG_LO"].read(), "keV")
+                    self._arf_hi_en = Quantity(arf_read[1]["ENERG_HI"].read(), "keV")
+                    self._arf_eff_area = Quantity(arf_read[1]["SPECRESP"].read(), "cm^2")
 
                     # And make sure to close the arf file after reading
                     arf_read.close()
 
             except OSError:
-                raise FileNotFoundError(f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}.")
+                raise FileNotFoundError(
+                    f"FITSIO read cannot open {rel_path} - this product is associated with {self.src_name}."
+                )
 
         else:
             reasons = ", ".join(self.not_usable_reasons)
-            raise FailedProductError(f"This product appears to have failed to generate successfully, so you cannot "
-                                     f"access data from it; the reason given is: {reasons}.")
+            raise FailedProductError(
+                f"This product appears to have failed to generate successfully, so you cannot "
+                f"access data from it; the reason given is: {reasons}."
+            )
 
     @property
     def header(self) -> FITSHDR:
@@ -473,7 +517,7 @@ class Spectrum(BaseProduct):
 
         :rtype: FITSHDR
         :return: The PRIMARY (overall) fits file header.
-                """
+        """
         # Check whether the specific header has been read in yet, if not then trigger that
         if self._prim_spec_header is None:
             self._read_header_on_demand(src_spec=True, primary_header=True)
@@ -493,7 +537,7 @@ class Spectrum(BaseProduct):
         if self._spec_counts is None:
             self._read_on_demand(True)
 
-        return Quantity([self._spec_counts, np.sqrt(self._spec_counts)], 'ct').T
+        return Quantity([self._spec_counts, np.sqrt(self._spec_counts)], "ct").T
 
     @property
     def exposure(self) -> Quantity:
@@ -505,7 +549,7 @@ class Spectrum(BaseProduct):
         :return: The exposure time for the source spectrum, in units of seconds.
         """
         # Fetch the exposure time from the header and create a quantity
-        exp_time = Quantity(float(self.header['EXPOSURE']), 's')
+        exp_time = Quantity(float(self.header["EXPOSURE"]), "s")
         return exp_time
 
     @property
@@ -518,8 +562,7 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         :return: The counts/second quantity in units of 'ct/s'.
         """
-
-        return self.counts/self.exposure
+        return self.counts / self.exposure
 
     @property
     def channels(self) -> Quantity:
@@ -544,7 +587,6 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         :return: An array of channel energy midpoints, in keV.
         """
-
         return self.conv_channel_energy(self.channels)
 
     @property
@@ -557,8 +599,9 @@ class Spectrum(BaseProduct):
         :return: An array of group IDs.
         """
         if not self.grouped:
-            raise ValueError("This spectrum was generated without grouping, and so you cannot "
-                             "retrieve grouping information.")
+            raise ValueError(
+                "This spectrum was generated without grouping, and so you cannot retrieve grouping information."
+            )
 
         # Checks whether the initial value of the attribute has been overwritten, if not then I run
         #  the read on demand method to grab the information from the file.
@@ -603,7 +646,7 @@ class Spectrum(BaseProduct):
 
         :rtype: FITSHDR
         :return: The PRIMARY (overall) fits file header.
-                """
+        """
         # Check whether the specific header has been read in yet, if not then trigger that
         if self._prim_back_header is None:
             self._read_header_on_demand(src_spec=False, primary_header=True)
@@ -624,7 +667,7 @@ class Spectrum(BaseProduct):
             # Passing false means it won't read the source spectrum, but instead the background spectrum
             self._read_on_demand(False)
 
-        return Quantity([self._back_counts, np.sqrt(self._back_counts)], 'ct').T
+        return Quantity([self._back_counts, np.sqrt(self._back_counts)], "ct").T
 
     @property
     def back_exposure(self) -> Quantity:
@@ -636,7 +679,7 @@ class Spectrum(BaseProduct):
         :return: The exposure time for the background spectrum, in units of seconds.
         """
         # Fetch the exposure time from the header and create a quantity
-        exp_time = Quantity(float(self.back_header['EXPOSURE']), 's')
+        exp_time = Quantity(float(self.back_header["EXPOSURE"]), "s")
         return exp_time
 
     @property
@@ -649,7 +692,6 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         :return: The counts/second quantity in units of 'ct/s'.
         """
-
         return self.back_counts / self.back_exposure
 
     @property
@@ -1041,7 +1083,7 @@ class Spectrum(BaseProduct):
         return self._min_counts
 
     @property
-    def min_sn(self) -> Union[float, int]:
+    def min_sn(self) -> float | int:
         """
         A property stating the minimum signal to noise allowed in a grouped channel.
 
@@ -1149,7 +1191,7 @@ class Spectrum(BaseProduct):
         :rtype: dict
         """
         from ..xspec.fit import FIT_FUNC_MODEL_NAMES
-        from ..xspec.fitconfgen import fit_conf_from_function, FIT_FUNC_ARGS
+        from ..xspec.fitconfgen import FIT_FUNC_ARGS, fit_conf_from_function
 
         diffs = {}
         for mod in self.fitted_models:
@@ -1157,20 +1199,24 @@ class Spectrum(BaseProduct):
             fit_func = FIT_FUNC_MODEL_NAMES[mod]
             def_fit_conf = fit_conf_from_function(fit_func)
 
-            mod_args = [in_arg for in_arg in FIT_FUNC_ARGS[fit_func.__name__]
-                        if FIT_FUNC_ARGS[fit_func.__name__][in_arg]]
+            mod_args = [
+                in_arg for in_arg in FIT_FUNC_ARGS[fit_func.__name__] if FIT_FUNC_ARGS[fit_func.__name__][in_arg]
+            ]
 
             for cur_fit_conf in self.fitted_model_configurations[mod]:
                 diffs[mod][cur_fit_conf] = {}
-                for par in cur_fit_conf.split('_'):
+                for par in cur_fit_conf.split("_"):
                     if par not in def_fit_conf:
                         # We are trying to split the fitconf key into parname and value - but there is no easy way to
                         #  do that without knowing the parname. Thus we identify candidates (candidates because it
                         #  is conceivable that there are parnames for the function that are substrings of each other),
                         #  and then split on those names, determining which results in the shortest string value (which
                         #  would be the correct name)
-                        cands = {in_arg: par.split(in_arg.replace("_", ''))[-1] for in_arg in mod_args
-                                 if in_arg.replace("_", '') in par}
+                        cands = {
+                            in_arg: par.split(in_arg.replace("_", ""))[-1]
+                            for in_arg in mod_args
+                            if in_arg.replace("_", "") in par
+                        }
                         if len(cands) != 0:
                             chos_arg = np.argmin(np.array([len(val) for val in list(cands.values())]))
                             final_par = np.array(list(cands.keys()))[chos_arg]
@@ -1180,7 +1226,7 @@ class Spectrum(BaseProduct):
 
         return diffs
 
-    def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU, fit_conf: str):
+    def add_fit_data(self, model: str, tab_line, plot_data: hdu.table.TableHDU, fit_conf: str) -> None:
         """
         Method that adds information specific to a spectrum from an XSPEC fit to this object. This includes
         individual spectrum exposure and count rate, as well as calculated luminosities, and plotting
@@ -1211,33 +1257,60 @@ class Spectrum(BaseProduct):
         # Constructs a dictionary of luminosities and their errors for the different energy bands
         #  in this XSPEC fit.
         lx_dict = {}
+        abs_lx_dict = {}
         for col in lx_cols:
+            # As we now store absorbed luminosities, as well as the unabsorbed ones, we
+            #  need to make a distinction here. The distinction will a) alter how we split the
+            #  column name, and b) decide which dictionary the result goes in (we don't store
+            #  absorbed and unabsorbed luminosities in the same place).
             lx_info = col.split("_")
-            if lx_info[2][-1] == "-" or lx_info[2][-1] == "+":
-                en_band = "bound_{l}-{u}".format(l=lx_info[1], u=lx_info[2][:-1])
-                err_type = lx_info[-1][-1]
+            if "abs" not in col:
+                # Column name format for primary, unabsorbed, luminosity is Lx_{lo_en}_{hi_en}
+                cur_lo_en = lx_info[1]
+                cur_hi_en = lx_info[2]
+                cur_stor_dict = lx_dict
             else:
-                en_band = "bound_{l}-{u}".format(l=lx_info[1], u=lx_info[2])
+                # Column name format for secondary, absorbed, luminosity is Lx_abs_{lo_en}_{hi_en}
+                cur_lo_en = lx_info[2]
+                cur_hi_en = lx_info[3]
+                cur_stor_dict = abs_lx_dict
+
+            if cur_hi_en[-1] == "-" or cur_hi_en[-1] == "+":
+                err_type = cur_hi_en[-1]
+                cur_hi_en = cur_hi_en[:-1]
+            else:
                 err_type = ""
 
-            if en_band not in lx_dict:
-                lx_dict[en_band] = [0, 0, 0]
+            en_band = f"bound_{cur_lo_en}-{cur_hi_en}"
+
+            if en_band not in cur_stor_dict:
+                cur_stor_dict[en_band] = [0, 0, 0]
 
             if err_type == "":
-                lx_dict[en_band][0] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
+                cur_stor_dict[en_band][0] = Quantity(float(tab_line[col]) * (10**44), "erg s^-1")
             elif err_type == "-":
-                lx_dict[en_band][1] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
+                cur_stor_dict[en_band][1] = Quantity(float(tab_line[col]) * (10**44), "erg s^-1")
             elif err_type == "+":
-                lx_dict[en_band][2] = Quantity(float(tab_line[col])*(10**44), "erg s^-1")
+                cur_stor_dict[en_band][2] = Quantity(float(tab_line[col]) * (10**44), "erg s^-1")
 
+        # For the 'primary' unabsorbed luminosities
         self._luminosities.setdefault(model, {})
         self._luminosities[model][fit_conf] = lx_dict
-        self._plot_data.setdefault(model, {})
-        self._plot_data[model][fit_conf] = {"x": plot_data["X"][:], "x_err": plot_data["XERR"][:],
-                                            "y": plot_data["Y"][:], "y_err": plot_data["YERR"][:],
-                                            "model": plot_data["YMODEL"][:]}
 
-    def _get_fit_checks(self, model: str = None, fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
+        # For the absorbed luminosities
+        self._abs_luminosities.setdefault(model, {})
+        self._abs_luminosities[model][fit_conf] = abs_lx_dict
+
+        self._plot_data.setdefault(model, {})
+        self._plot_data[model][fit_conf] = {
+            "x": plot_data["X"][:],
+            "x_err": plot_data["XERR"][:],
+            "y": plot_data["Y"][:],
+            "y_err": plot_data["YERR"][:],
+            "model": plot_data["YMODEL"][:],
+        }
+
+    def _get_fit_checks(self, model: str = None, fit_conf: str | dict = None) -> tuple[str, str]:
         """
         An internal function to perform input checks and pre-processing for get methods that access fit results, or
         other related information such as fit statistic.
@@ -1259,35 +1332,44 @@ class Spectrum(BaseProduct):
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this Spectrum object.")
         elif model is None and len(self.fitted_models) != 1:
             av_mods = ", ".join(self.fitted_models)
-            raise ValueError("Multiple models have been fit to this spectrum, so model=None is not "
-                             "valid; available models are {a}".format(m=model, a=av_mods))
+            raise ValueError(
+                "Multiple models have been fit to this spectrum, so model=None is not "
+                f"valid; available models are {av_mods}"
+            )
         elif model is None:
             # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
             #  automatically select it for them
             model = self.fitted_models[0]
         elif model is not None and model not in self.fitted_models:
             av_mods = ", ".join(self.fitted_models)
-            raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
-                                          "models are {a}".format(m=model, a=av_mods))
+            raise ModelNotAssociatedError(
+                f"{model} has not been fitted to this Spectrum; available models are {av_mods}"
+            )
 
         # Checks the input fit configuration values - if they are completely illegal we throw an error
         if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
-            raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
-                            "changed-from-default fit function arguments as keys and changed values as items.")
+            raise TypeError(
+                "'fit_conf' must be a string fit configuration key, or a dictionary with "
+                "changed-from-default fit function arguments as keys and changed values as items."
+            )
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
             fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
         elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
             av_fconfs = ", ".join(self.fitted_model_configurations[model])
-            raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to this "
-                                          "spectrum; available fit configurations are "
-                                          "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+            raise ModelNotAssociatedError(
+                f"The {fit_conf} fit configuration has not been used for any {model} fit to this "
+                "spectrum; available fit configurations are "
+                f"{av_fconfs}"
+            )
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[model]) != 1:
             av_fconfs = ", ".join(self.fitted_model_configurations[model])
-            raise ValueError("The {m} model has been fit with multiple configuration, so fit_conf=None is not "
-                             "valid; available fit configurations are {a}".format(m=model, a=av_fconfs))
+            raise ValueError(
+                f"The {model} model has been fit with multiple configuration, so fit_conf=None is not "
+                f"valid; available fit configurations are {av_fconfs}"
+            )
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
         elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
@@ -1301,8 +1383,14 @@ class Spectrum(BaseProduct):
 
         return model, fit_conf
 
-    def get_luminosities(self, model: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                         fit_conf: Union[str, dict] = None):
+    def get_luminosities(
+        self,
+        model: str | None = None,
+        lo_en: Quantity | None = None,
+        hi_en: Quantity | None = None,
+        fit_conf: str | dict | None = None,
+        absorbed_lum: bool = False,
+    ):
         """
         Returns the luminosities measured for this spectrum from a given model.
 
@@ -1316,6 +1404,8 @@ class Spectrum(BaseProduct):
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
             representation of the fit configuration that is being requested.
+        :param bool absorbed_lum: Whether to return the absorbed luminosity or not. The primary, unabsorbed,
+            luminosity will be returned by default.
         :return: Luminosity measurement, either for all energy bands, or the one requested with the energy
             limit parameters. Luminosity measurements are presented as three column numpy arrays, with column 0
             being the value, column 1 being err-, and column 2 being err+.
@@ -1329,24 +1419,31 @@ class Spectrum(BaseProduct):
         if lo_en is not None and hi_en is not None and lo_en > hi_en:
             raise ValueError("The low energy limit cannot be greater than the high energy limit")
         elif lo_en is not None and hi_en is not None:
-            en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
+            en_key = f"bound_{lo_en.to('keV').value}-{hi_en.to('keV').value}"
         else:
             en_key = None
 
         # Checks that the requested energy band actually exists
-        if en_key is not None and en_key not in self._luminosities[model]:
-            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model].keys()])
-            raise ParameterNotAssociatedError("{l}-{u}keV was not an energy band for the fit with {m}; available "
-                                              "energy bands are {b}".format(l=lo_en.to("keV").value,
-                                                                            u=hi_en.to("keV").value,
-                                                                            m=model, b=av_bands))
+        if en_key is not None and en_key not in self._luminosities[model][fit_conf]:
+            av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[model][fit_conf].keys()])
+            raise ParameterNotAssociatedError(
+                f"{lo_en.to('keV').value}-{hi_en.to('keV').value}keV luminosities were not measured for the {model} "
+                f"fit with {fit_conf}; available energy bands are {av_bands}."
+            )
 
-        if en_key is None:
+        # The default behavior is to return the unabsorbed luminosities
+        if en_key is None and not absorbed_lum:
             return self._luminosities[model][fit_conf]
-        else:
+        elif en_key is not None and not absorbed_lum:
             return self._luminosities[model][fit_conf][en_key]
 
-    def get_rate(self, model: str = None, fit_conf: Union[str, dict] = None) -> Quantity:
+        # But if absorbed_lumin=True, we will fetch the luminosities from the absorbed luminosity dictionary
+        elif en_key is None and absorbed_lum:
+            return self._abs_luminosities[model][fit_conf]
+        else:
+            return self._abs_luminosities[model][fit_conf][en_key]
+
+    def get_rate(self, model: str = None, fit_conf: str | dict = None) -> Quantity:
         """
         Fetches the count rate for a particular model fitted to this spectrum.
 
@@ -1362,13 +1459,14 @@ class Spectrum(BaseProduct):
         :rtype: Quantity
         """
         model, fit_conf = self._get_fit_checks(model, fit_conf)
-        rate = Quantity(self._count_rate[model][fit_conf], 'ct/s')
+        rate = Quantity(self._count_rate[model][fit_conf], "ct/s")
 
         return rate
 
     # TODO Should this take parameter values as arguments too? - It definitely should
-    def add_conv_factors(self, lo_ens: np.ndarray, hi_ens: np.ndarray, rates: np.ndarray,
-                         lums: np.ndarray, model: str):
+    def add_conv_factors(
+        self, lo_ens: np.ndarray, hi_ens: np.ndarray, rates: np.ndarray, lums: np.ndarray, model: str
+    ) -> None:
         """
         Method used to store countrate to luminosity conversion factors derived from fakeit spectra, as well as
         the actual countrate and luminosity measured in case the user wants to create a combined factor for multiple
@@ -1387,7 +1485,7 @@ class Spectrum(BaseProduct):
         for row_ind, lo_en in enumerate(lo_ens):
             # Define the key with energy information under which to store this information
             hi_en = hi_ens[row_ind]
-            en_key = "bound_{l}-{u}".format(l=lo_en, u=hi_en)
+            en_key = f"bound_{lo_en}-{hi_en}"
 
             # Split out the rate and lum for this particular set of energy limits
             rate = Quantity(rates[row_ind], "ct/s")
@@ -1401,7 +1499,7 @@ class Spectrum(BaseProduct):
 
             self._conv_factors[model][en_key] = {"rate": rate, "lum": lum, "factor": factor}
 
-    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str) -> Tuple[Quantity, Quantity, Quantity]:
+    def get_conv_factor(self, lo_en: Quantity, hi_en: Quantity, model: str) -> tuple[Quantity, Quantity, Quantity]:
         """
         Retrieves a conversion factor between count rate and luminosity for a given energy range, if one
         has been calculated.
@@ -1415,17 +1513,18 @@ class Spectrum(BaseProduct):
         en_key = "bound_{l}-{u}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value)
         if model not in self._conv_factors:
             mods = ", ".join(list(self._conv_factors.keys()))
-            raise ModelNotAssociatedError("{0} is not associated with this spectrum, only {1} "
-                                          "are available.".format(model, mods))
+            raise ModelNotAssociatedError(f"{model} is not associated with this spectrum, only {mods} are available.")
         elif en_key not in self._conv_factors[model]:
-            raise ParameterNotAssociatedError("The conversion factor for {m} in {l}-{u}keV has not been "
-                                              "calculated".format(m=model, l=lo_en.to("keV").value,
-                                                                  u=hi_en.to("keV").value))
+            raise ParameterNotAssociatedError(
+                "The conversion factor for {m} in {l}-{u}keV has not been calculated".format(
+                    m=model, l=lo_en.to("keV").value, u=hi_en.to("keV").value
+                )
+            )
 
         rel_vals = self._conv_factors[model][en_key]
         return rel_vals["factor"], rel_vals["lum"], rel_vals["rate"]
 
-    def get_plot_data(self, model: str = None, fit_conf: Union[str, dict] = None) -> dict:
+    def get_plot_data(self, model: str = None, fit_conf: str | dict = None) -> dict:
         """
         Simply grabs the plot data dictionary for a given model, if the spectrum has had a fit performed on it.
 
@@ -1456,9 +1555,11 @@ class Spectrum(BaseProduct):
         :return: The converted value, either as a channel (for energy input) or an energy (for channel input).
         """
         if not to_convert.unit.is_equivalent("keV") and to_convert.unit != "":
-            raise UnitConversionError("The to_convert argument must be in units of energy (e.g. convertible to keV) or "
-                                      "unitless (for instance Quantity(50) would be a unitless quantity).")
-        elif to_convert.unit.is_equivalent('keV'):
+            raise UnitConversionError(
+                "The to_convert argument must be in units of energy (e.g. convertible to keV) or "
+                "unitless (for instance Quantity(50) would be a unitless quantity)."
+            )
+        elif to_convert.unit.is_equivalent("keV"):
             # If only one value is passed in then we make it iterable for now because its easier to write the
             #  rest of the code - I'll change it back at the end
             if to_convert.isscalar:
@@ -1468,13 +1569,15 @@ class Spectrum(BaseProduct):
 
             # Checking that energies are within a valid range
             if not np.all((ens > self.rmf_channels_lo_en.min()) & (ens <= self.rmf_channels_hi_en.max())):
-                raise UnitConversionError("Some energies in to_convert are outside the range of this spectrum's "
-                                          "instrument, please enter values between {l} "
-                                          "and {u}".format(l=self.rmf_channels_lo_en.min(),
-                                                           u=self.rmf_channels_hi_en.max()))
+                raise UnitConversionError(
+                    "Some energies in to_convert are outside the range of this spectrum's "
+                    f"instrument, please enter values between {self.rmf_channels_lo_en.min()} "
+                    f"and {self.rmf_channels_hi_en.max()}"
+                )
             # Finding the index of the energy bin that brackets the input energy value(s)
-            rel_inds = np.array([np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0]
-                                 for e in ens])
+            rel_inds = np.array(
+                [np.where((e > self.rmf_channels_lo_en) & (e <= self.rmf_channels_hi_en))[0][0] for e in ens]
+            )
             # Getting the equivelant channel
             converted_vals = Quantity(self.rmf_channels[rel_inds])
 
@@ -1492,9 +1595,11 @@ class Spectrum(BaseProduct):
             # Checking that channels are within a valid range
             test_in = np.isin(int_chans, self.rmf_channels)
             if not all(test_in):
-                raise UnitConversionError("Some channels in to_convert are outside the range of this spectrum's "
-                                          "instrument, please enter values between {l} and "
-                                          "{u}".format(l=self.rmf_channels.min(), u=self.rmf_channels.max()))
+                raise UnitConversionError(
+                    "Some channels in to_convert are outside the range of this spectrum's "
+                    f"instrument, please enter values between {self.rmf_channels.min()} and "
+                    f"{self.rmf_channels.max()}"
+                )
 
             # I would rather use some clever numpy solution, but this will do for now. Although I am almost certain
             #  that channels and indices of self.rmf_channels will always be the same I can't guarantee that channels
@@ -1504,14 +1609,14 @@ class Spectrum(BaseProduct):
             rel_lo_ens = self.rmf_channels_lo_en[rel_inds]
             rel_hi_ens = self.rmf_channels_hi_en[rel_inds]
             # Calculate the midpoint of the energy bins
-            converted_vals = (rel_hi_ens + rel_lo_ens)/2
+            converted_vals = (rel_hi_ens + rel_lo_ens) / 2
             # If only one value was passed in then we change our array back into a single quantity
             if len(converted_vals) == 1:
                 converted_vals = converted_vals[0]
 
         return converted_vals
 
-    def get_grouped_data(self, count_rate: bool = True) -> Tuple[Quantity]:
+    def get_grouped_data(self, count_rate: bool = True) -> tuple[Quantity]:
         """
         In many cases a spectrum is 'grouped' after generation, which involves combining sequential channels to
         increase the signal-to-noise. This method reads any grouping information in the spectrum associated with
@@ -1531,8 +1636,7 @@ class Spectrum(BaseProduct):
         """
         # Check whether this spectrum was actually grouped on generation
         if not self.grouped:
-            raise ValueError("This spectrum was generated without grouping, and so you cannot "
-                             "retrieve grouped data.")
+            raise ValueError("This spectrum was generated without grouping, and so you cannot retrieve grouped data.")
 
         # This is the mask which accepts only those channels with a quality flag of zero.
         notice = self.quality == 0
@@ -1553,15 +1657,15 @@ class Spectrum(BaseProduct):
         grp_bnds = np.append(grp_bnds, len(grouping))
 
         # Setting up empty quantities to store the grouped counts in later, both source and background
-        src_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), 'ct')
-        bck_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), 'ct')
+        src_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), "ct")
+        bck_grpd_cnts = Quantity(np.zeros(len(grp_bnds) - 1), "ct")
 
         # Setting up empty quantities to store the lower and upper energy bounds for the groups
-        bins_lo_en = Quantity(np.zeros((len(grp_bnds) - 1)), 'keV')
-        bins_hi_en = Quantity(np.zeros((len(grp_bnds) - 1)), 'keV')
+        bins_lo_en = Quantity(np.zeros(len(grp_bnds) - 1), "keV")
+        bins_hi_en = Quantity(np.zeros(len(grp_bnds) - 1), "keV")
         # Empty quantities (with two columns now) to store central energy and channel values, along with
         #  an 'uncertainty' column that gives the width of the group
-        en_cens = Quantity(np.zeros((len(grp_bnds) - 1, 2)), 'keV')
+        en_cens = Quantity(np.zeros((len(grp_bnds) - 1, 2)), "keV")
         chans = Quantity(np.zeros((len(grp_bnds) - 1, 2)))
 
         # I really did try to figure out a more efficient way to do this, but this is what I'm resorting to for now
@@ -1574,8 +1678,8 @@ class Spectrum(BaseProduct):
             # Simply grab the channels which are a part of the current group (both for the source and background
             #  spectra), and then add the raw counts together to retrieve the start and background counts for
             #  this group
-            src_grpd_cnts[grp_start_ind] = start_cnt[grp_start: next_grp_start].sum()
-            bck_grpd_cnts[grp_start_ind] = start_bck_cnt[grp_start: next_grp_start].sum()
+            src_grpd_cnts[grp_start_ind] = start_cnt[grp_start:next_grp_start].sum()
+            bck_grpd_cnts[grp_start_ind] = start_bck_cnt[grp_start:next_grp_start].sum()
 
             # Finding the lower and upper energy bounds of the group
             bins_lo_en[grp_start_ind] = lo_energies[grp_start]
@@ -1597,12 +1701,12 @@ class Spectrum(BaseProduct):
 
             # Always calculate the energy midpoint and width of a group, even if there is only one entry, because
             #  we know the upper and lower energy bounds of every channel from the RMF
-            en_mid = (bins_lo_en[grp_start_ind] + bins_hi_en[grp_start_ind])/2
-            en_width = (bins_hi_en[grp_start_ind] - bins_lo_en[grp_start_ind])/2
+            en_mid = (bins_lo_en[grp_start_ind] + bins_hi_en[grp_start_ind]) / 2
+            en_width = (bins_hi_en[grp_start_ind] - bins_lo_en[grp_start_ind]) / 2
             en_cens[grp_start_ind] = Quantity([en_mid, en_width])
 
-        src_grpd_cnts = Quantity([src_grpd_cnts, Quantity(np.sqrt(src_grpd_cnts.value), 'ct')]).T
-        bck_grpd_cnts = Quantity([bck_grpd_cnts, Quantity(np.sqrt(bck_grpd_cnts.value), 'ct')]).T
+        src_grpd_cnts = Quantity([src_grpd_cnts, Quantity(np.sqrt(src_grpd_cnts.value), "ct")]).T
+        bck_grpd_cnts = Quantity([bck_grpd_cnts, Quantity(np.sqrt(bck_grpd_cnts.value), "ct")]).T
 
         # Simple enough, if the user wants a count rate then divide by exposure, if just counts then don't
         if count_rate:
@@ -1615,8 +1719,14 @@ class Spectrum(BaseProduct):
         # Return all the useful information that we have calculated.
         return src_grpd, bck_grpd, bins_lo_en, bins_hi_en, chans, en_cens
 
-    def view_arf(self, figsize: Tuple = (8, 6), xscale: str = 'log', yscale: str = 'linear',
-                 lo_en: Quantity = Quantity(0.01, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+    def view_arf(
+        self,
+        figsize: tuple = (8, 6),
+        xscale: str = "log",
+        yscale: str = "linear",
+        lo_en: Quantity = Quantity(0.01, "keV"),
+        hi_en: Quantity = Quantity(16.0, "keV"),
+    ) -> None:
         """
         Plots the response curve for this spectrum.
 
@@ -1633,7 +1743,7 @@ class Spectrum(BaseProduct):
         # Calculate the energy values by finding the midpoints of the bins - this is done up here so that the minimum
         #  and maximum values of energy (lo_en and hi_en) passed by the user can be set to minimum and maximum
         #  values available if they are higher or lower
-        ens = (self.eff_area_hi_en+self.eff_area_lo_en)/2
+        ens = (self.eff_area_hi_en + self.eff_area_lo_en) / 2
 
         # Have to check the input energy bounds to make sure that they are sensible
         if lo_en >= hi_en:
@@ -1652,21 +1762,23 @@ class Spectrum(BaseProduct):
 
         # As we know, log scales don't like zero values, so I make a change if the user has set the minimum
         #  energy to be zero and set an x-axis log scale
-        if xscale == 'log' and lo_en == 0:
-            warn("The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 "
-                 "keV.", stacklevel=2)
+        if xscale == "log" and lo_en == 0:
+            warn(
+                "The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 keV.",
+                stacklevel=2,
+            )
             lo_en = 0.01
 
         plt.figure(figsize=figsize)
         # Set the plot up to look nice and professional.
         ax = plt.gca()
         ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         # Get the data and plot it - we select the data to plot first because then matplotlib selects a nice upper
         #  y-axis limit for us
         sel_ens = (ens.value >= lo_en) & (ens.value <= hi_en)
-        plt.plot(ens[sel_ens], self.eff_area[sel_ens], color='black')
+        plt.plot(ens[sel_ens], self.eff_area[sel_ens], color="black")
 
         # Set the lower y-lim to be 1, and then the user supplied x-lims (supplementing the fact that we've already
         #  used those limits to select the data to plot
@@ -1680,21 +1792,35 @@ class Spectrum(BaseProduct):
         # Title and axis labels
         plt.ylabel("Effective Area [cm$^{2}$]", fontsize=12)
         plt.xlabel("Energy [keV]", fontsize=12)
-        plt.title("{o}-{i} Sensitivity Curve".format(o=self.obs_id, i=self.instrument.upper()), fontsize=14)
+        plt.title(f"{self.obs_id}-{self.instrument.upper()} Sensitivity Curve", fontsize=14)
 
         # This makes sure that the tick labels are formatted as 0.1, 1, 10, etc. keV on the x-axis (if logged) and
         #  10, 100, 100, 1000, etc. cm^2 on the y-axis if logged
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
 
         # Aaaand finally actually plot it
         plt.tight_layout()
         plt.show()
 
-    def get_view(self, ax: Axes, lo_lim: Quantity = Quantity(0.3, "keV"), hi_lim: Quantity = Quantity(7.9, "keV"),
-                 back_sub: bool = True, energy: bool = True, src_colour: str = 'black', bck_colour: str = 'firebrick',
-                 grouped: bool = True, xscale: str = "log", yscale: str = "linear", fontsize: Union[int, float] = 14,
-                 show_model_fits: bool = True, model: str = None, fit_conf: Union[str, dict] = None, show_residuals: bool = False,) -> Axes:
+    def get_view(
+        self,
+        ax: Axes,
+        lo_lim: Quantity = Quantity(0.3, "keV"),
+        hi_lim: Quantity = Quantity(7.9, "keV"),
+        back_sub: bool = True,
+        energy: bool = True,
+        src_colour: str = "black",
+        bck_colour: str = "firebrick",
+        grouped: bool = True,
+        xscale: str = "log",
+        yscale: str = "linear",
+        fontsize: int | float = 14,
+        show_model_fits: bool = True,
+        model: str = None,
+        fit_conf: str | dict = None,
+        show_residuals: bool = False,
+    ) -> Axes:
         """
         The method that creates and populates the view axes, separate from actual view so outside methods
         can add a view to other matplotlib axes.
@@ -1753,13 +1879,13 @@ class Spectrum(BaseProduct):
 
         # These just make sure that limits in units of either channel or energy are converted appropriately to what
         #  we're plotting on the x-axis, channels or energies.
-        if not energy and lo_lim.unit != '':
+        if not energy and lo_lim.unit != "":
             lo_lim = self.conv_channel_energy(lo_lim)
-        if not energy and hi_lim.unit != '':
+        if not energy and hi_lim.unit != "":
             hi_lim = self.conv_channel_energy(hi_lim)
-        if energy and not lo_lim.unit.is_equivalent('keV'):
+        if energy and not lo_lim.unit.is_equivalent("keV"):
             lo_lim = self.conv_channel_energy(lo_lim)
-        if energy and not hi_lim.unit.is_equivalent('keV'):
+        if energy and not hi_lim.unit.is_equivalent("keV"):
             hi_lim = self.conv_channel_energy(hi_lim)
 
         # Reads out the values of the limits as matplotlib sometimes gets upset by astropy quantities
@@ -1776,14 +1902,18 @@ class Spectrum(BaseProduct):
             # If there are no model data to plot, we set this to False
             show_model_fits = False
         elif show_model_fits and not energy:
-            raise ValueError("As fitted spectra are extracted from XSPEC, and only spectra with energy x-axes are "
-                             "extracted, plotting against channel is not supported.")
+            raise ValueError(
+                "As fitted spectra are extracted from XSPEC, and only spectra with energy x-axes are "
+                "extracted, plotting against channel is not supported."
+            )
 
         # Now we deal with the different models/model fit configurations that can and cannot be specified
         if show_model_fits and model is None and fit_conf is not None:
-            raise ValueError("Specifying a fit configuration ('fit_conf') is not supported without setting the "
-                             "'model' argument; use the 'fitted_model_configurations' property of this Spectrum to "
-                             "see which models and configurations are available.")
+            raise ValueError(
+                "Specifying a fit configuration ('fit_conf') is not supported without setting the "
+                "'model' argument; use the 'fitted_model_configurations' property of this Spectrum to "
+                "see which models and configurations are available."
+            )
         elif show_model_fits and model is None and fit_conf is None:
             model = self.fitted_models
             fit_conf = self.fitted_model_configurations
@@ -1791,8 +1921,9 @@ class Spectrum(BaseProduct):
             # I indent this check because it is just a bit easier for me that way
             if model not in self.fitted_models:
                 av_mods = ", ".join(self.fitted_models)
-                raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
-                                              "models are {a}".format(m=model, a=av_mods))
+                raise ModelNotAssociatedError(
+                    f"{model} has not been fitted to this Spectrum; available models are {av_mods}"
+                )
 
             # If we're here then the model is valid, and in this case no fit configuration has been specified, so
             #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
@@ -1802,8 +1933,9 @@ class Spectrum(BaseProduct):
         elif show_model_fits and model is not None and fit_conf is not None:
             if model not in self.fitted_models:
                 av_mods = ", ".join(self.fitted_models)
-                raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
-                                              "models are {a}".format(m=model, a=av_mods))
+                raise ModelNotAssociatedError(
+                    f"{model} has not been fitted to this Spectrum; available models are {av_mods}"
+                )
 
             # If the configuration is a dictionary we need to try to turn that into a proper fit configuration key
             if isinstance(fit_conf, dict):
@@ -1812,9 +1944,11 @@ class Spectrum(BaseProduct):
             # And now we check if the fit configuration is available to this Spectrum instance
             if fit_conf not in self.fitted_model_configurations[model]:
                 av_fconfs = ", ".join(self.fitted_model_configurations[model])
-                raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to this "
-                                              "spectrum; available fit configurations are "
-                                              "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+                raise ModelNotAssociatedError(
+                    f"The {fit_conf} fit configuration has not been used for any {model} fit to this "
+                    "spectrum; available fit configurations are "
+                    f"{av_fconfs}"
+                )
 
             fit_conf = {model: [fit_conf]}
             model = [model]
@@ -1899,11 +2033,11 @@ class Spectrum(BaseProduct):
         # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
         #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
         #  effectively scale the exposure time by dividing the count rate by it
-        src_rate = sct / self.header['AREASCAL']
+        src_rate = sct / self.header["AREASCAL"]
 
         # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
         #  values, which scales the background flux to the same area as the source
-        bck_rate = (self.header['BACKSCAL'] / self.back_header['BACKSCAL']) * (bct / self.back_header['AREASCAL'])
+        bck_rate = (self.header["BACKSCAL"] / self.back_header["BACKSCAL"]) * (bct / self.back_header["AREASCAL"])
 
         # And finally subtracting one from the other - they both have error columns which are also subtracted
         #  here (which is completely meaningless of course), but don't worry we'll fix that on the next line!
@@ -1916,7 +2050,7 @@ class Spectrum(BaseProduct):
 
         # Set the plot up to look nice and professional.
         ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         # This is an ugly way of doing this, but I hope that in the future I'll be able to implement this 'properly'
         #  and just undo this
@@ -1924,17 +2058,38 @@ class Spectrum(BaseProduct):
             # Plotting the data, accounting for the different combinations of x-axis and y-axis
             if back_sub:
                 # If we're going for background subtracted data, then that is all we plot
-                ax.errorbar(x_dat, src_sub_bck_rate.value[:, 0] / per_x, xerr=x_wid,
-                            yerr=src_sub_bck_rate.value[:, 1] / per_x, fmt="+", color=src_colour,
-                            label="Background subtracted source data", zorder=1)
+                ax.errorbar(
+                    x_dat,
+                    src_sub_bck_rate.value[:, 0] / per_x,
+                    xerr=x_wid,
+                    yerr=src_sub_bck_rate.value[:, 1] / per_x,
+                    fmt="+",
+                    color=src_colour,
+                    label="Background subtracted source data",
+                    zorder=1,
+                )
             else:
                 # But if we're not wanting background subtracted, we need to plot the source and background spectra
-                ax.errorbar(x_dat, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x,
-                            fmt="+",
-                            color=src_colour, label="Source data", zorder=1)
-                ax.errorbar(x_dat, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x,
-                            fmt="x",
-                            color=bck_colour, label="Background data", zorder=1)
+                ax.errorbar(
+                    x_dat,
+                    src_rate.value[:, 0] / per_x,
+                    xerr=x_wid,
+                    yerr=src_rate.value[:, 1] / per_x,
+                    fmt="+",
+                    color=src_colour,
+                    label="Source data",
+                    zorder=1,
+                )
+                ax.errorbar(
+                    x_dat,
+                    bck_rate.value[:, 0] / per_x,
+                    xerr=x_wid,
+                    yerr=bck_rate.value[:, 1] / per_x,
+                    fmt="x",
+                    color=bck_colour,
+                    label="Background data",
+                    zorder=1,
+                )
 
         # In this case the user wants the fitted spectra, and there ARE fits to plot, so rather than plot our own
         #  calculated values we plot the normalised counts/s/keV (or channel) that were extracted from XSPEC
@@ -1960,8 +2115,15 @@ class Spectrum(BaseProduct):
                         plot_yerr = cur_fit_data["y_err"][sel_x]
                         plot_mod = cur_fit_data["model"][sel_x]
 
-                        ax.errorbar(plot_x, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
-                                    label="Background subtracted source data", zorder=1)
+                        ax.errorbar(
+                            plot_x,
+                            plot_y,
+                            xerr=plot_xerr,
+                            yerr=plot_yerr,
+                            fmt="k+",
+                            label="Background subtracted source data",
+                            zorder=1,
+                        )
                         plot_cnt += 1
                     else:
                         # Don't want to re-plot data points as they should be identical, so if there is another model
@@ -1973,36 +2135,58 @@ class Spectrum(BaseProduct):
                     fc_str = "; ".join([par + "=" + val for par, val in changed.items()])
                     # Plot the model line, capturing the return so we can make the residual data
                     #  points the same colour as the model line (if the user wants to plot residuals).
-                    mod_line = ax.plot(plot_x, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
+                    mod_line = ax.plot(plot_x, plot_mod, label=mod + "; " + fc_str, linewidth=1.5)
 
                     # Plot residuals if requested
                     if show_residuals:
                         residuals = plot_mod - plot_y
-                        ax_res.errorbar(plot_x, residuals, xerr=plot_xerr, yerr=plot_yerr,
-                                        fmt="+", capsize=1.2, zorder=1, color=mod_line[0].get_color())
-                        ax_res.axhline(0, color='black', linewidth=1, linestyle='--')
+                        ax_res.errorbar(
+                            plot_x,
+                            residuals,
+                            xerr=plot_xerr,
+                            yerr=plot_yerr,
+                            fmt="+",
+                            capsize=1.2,
+                            zorder=1,
+                            color=mod_line[0].get_color(),
+                        )
+                        ax_res.axhline(0, color="black", linewidth=1, linestyle="--")
                         ax_res.set_ylabel("Residuals", fontsize=fontsize - 2)
                         ax_res.set_xlabel("Energy [keV]", fontsize=fontsize)
                         ax_res.minorticks_on()
-                        ax_res.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+                        ax_res.tick_params(axis="both", direction="in", which="both", top=True, right=True)
                         ax_res.set_xscale(xscale)
-                        ax_res.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-                        ax_res.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+                        ax_res.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+                        ax_res.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
 
         # Setting up the scaling aspects of the plot
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
         ax.xaxis.set_major_formatter(ScalarFormatter())
-        ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.xaxis.set_minor_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
 
         return ax
 
-    def view(self, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
-             hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-             src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True, xscale: str = "log",
-             yscale: str = "linear", fontsize: Union[int, float] = 14, show_model_fits: bool = True,
-             save_path: str = None, model: str = None, fit_conf: Union[str, dict] = None, show_residuals: bool = False):
+    def view(
+        self,
+        figsize: tuple = (10, 7),
+        lo_lim: Quantity = Quantity(0.3, "keV"),
+        hi_lim: Quantity = Quantity(7.9, "keV"),
+        back_sub: bool = True,
+        energy: bool = True,
+        src_colour: str = "black",
+        bck_colour: str = "firebrick",
+        grouped: bool = True,
+        xscale: str = "log",
+        yscale: str = "linear",
+        fontsize: int | float = 14,
+        show_model_fits: bool = True,
+        save_path: str = None,
+        model: str = None,
+        fit_conf: str | dict = None,
+        show_residuals: bool = False,
+    ) -> None:
         """
         A method for viewing the data associated with this Spectrum instance.
 
@@ -2043,17 +2227,32 @@ class Spectrum(BaseProduct):
         :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
             the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         """
-
         # Create figure object
         plt.figure(figsize=figsize)
         ax = plt.gca()
 
-        ax = self.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
-                           fontsize, show_model_fits, model, fit_conf, show_residuals)
+        ax = self.get_view(
+            ax,
+            lo_lim,
+            hi_lim,
+            back_sub,
+            energy,
+            src_colour,
+            bck_colour,
+            grouped,
+            xscale,
+            yscale,
+            fontsize,
+            show_model_fits,
+            model,
+            fit_conf,
+            show_residuals,
+        )
 
         # Set the title with all relevant information about the spectrum object in it
-        ax.set_title("{n} - {t} {o}{i} Spectrum".format(n=self.src_name, o=self.obs_id, i=self.instrument.upper(), t=self.telescope),
-                     fontsize=fontsize + 1)
+        ax.set_title(
+            f"{self.src_name} - {self.telescope} {self.obs_id}{self.instrument.upper()} Spectrum", fontsize=fontsize + 1
+        )
 
         # Generate the legend for the data and model(s)
         plt.legend(loc="best", fontsize=fontsize - 1)
@@ -2080,7 +2279,8 @@ class AnnularSpectra(BaseAggregateProduct):
 
     :param List[Spectrum] spectra: A list of XGA spectrum objects which make up this set.
     """
-    def __init__(self, spectra: List[Spectrum]):
+
+    def __init__(self, spectra: list[Spectrum]):
         """
         The init method for the AnnularSpectra class, performs checks and organizes the spectra which
         have been passed in, for easy retrieval.
@@ -2096,8 +2296,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Currently we only support one telescope per AnnularSpectra
         elif len(all_spec_tels) > 1:
-            raise NotImplementedError(f"AnnularSpectra comprised of spectra from multiple telescopes ({all_spec_tels}) are not "
-                                      "supported yet.")
+            raise NotImplementedError(
+                f"AnnularSpectra comprised of spectra from multiple telescopes ({all_spec_tels}) are not supported yet."
+            )
         else:
             # Given the check above, we know that all the spectra are from the same telescope, so we just take
             #  the telescope name from the first one
@@ -2109,17 +2310,20 @@ class AnnularSpectra(BaseAggregateProduct):
         #  instances already did.
         not_usable_reasons = {s: s.not_usable_reasons for s in spectra if not s.usable}
         if len(not_usable_reasons) != 0:
-            not_usable_formatted = "\n".join([f"{os.path.basename(s.path)}: \n{nur}"
-                                              for s, nur in not_usable_reasons.items()])
+            not_usable_formatted = "\n".join(
+                [f"{os.path.basename(s.path)}: \n{nur}" for s, nur in not_usable_reasons.items()]
+            )
             raise ProductNotUsableError(f"Not all component spectra are usable:\n {not_usable_formatted}")
 
-        super().__init__([s.path for s in spectra], 'annular_spectrum', "combined", "combined", telescope=telescope)
+        super().__init__([s.path for s in spectra], "annular_spectrum", "combined", "combined", telescope=telescope)
 
         # There shouldn't be any way this can happen, but it doesn't hurt to check that all of the spectra
         #  have the same set ID
         set_idents = set([s.set_ident for s in spectra])
         if len(set_idents) != 1:
-            raise XGASetIDError(f"All annular spectrum components must have matching set IDs, the following are present - ({set_idents}).")
+            raise XGASetIDError(
+                f"All annular spectrum components must have matching set IDs, the following are present - ({set_idents})."
+            )
 
         # Just put the set ID into an attribute in case anyone ever wants to know it
         self._set_id = list(set_idents)[0]
@@ -2129,9 +2333,11 @@ class AnnularSpectra(BaseAggregateProduct):
         uniq_ann_ids = list(set([s.annulus_ident for s in spectra]))
 
         if min(uniq_ann_ids) != 0 or max(uniq_ann_ids) != (len(uniq_ann_ids) - 1):
-            raise ValueError("Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
-                             "Spectra with IDs {p} have been "
-                             "passed.".format(p=', '.join([str(i) for i in uniq_ann_ids])))
+            raise ValueError(
+                "Some expected annulus IDs are missing from the spectra passed to this AnnularSpectra. "
+                "Spectra with IDs {p} have been "
+                "passed.".format(p=", ".join([str(i) for i in uniq_ann_ids]))
+            )
         # Now we've made certain that the input annuli IDs are making sense, we can just use the length of the
         #  list of unique IDs to set the number of annuli
         self._num_ann = len(uniq_ann_ids)
@@ -2152,8 +2358,9 @@ class AnnularSpectra(BaseAggregateProduct):
         # I want to grab the radii out of the spectra, then put them in order, just so I have them
         radii = sorted(list(set([s.inner_rad for s in spectra] + [s.outer_rad for s in spectra])))
         self._radii = Quantity([r.value for r in radii], self._rad_unit)
-        self._ann_centres = Quantity([(self._radii[r_ind] + self._radii[r_ind + 1]) / 2 for r_ind in
-                                      range(len(self._radii) - 1)], self._rad_unit)
+        self._ann_centres = Quantity(
+            [(self._radii[r_ind] + self._radii[r_ind + 1]) / 2 for r_ind in range(len(self._radii) - 1)], self._rad_unit
+        )
 
         # This can be set through a property, as products shouldn't have any knowledge of their source
         #  other than the name. And someone might define one of these source-lessly. It will contain radii
@@ -2184,9 +2391,9 @@ class AnnularSpectra(BaseAggregateProduct):
         self._min_counts = spectra[0].min_counts
         self._min_sn = spectra[0].min_sn
         if self._grouped and self._min_counts is not None:
-            self._grouped_on = 'counts'
+            self._grouped_on = "counts"
         elif self._grouped and self._min_sn is not None:
-            self._grouped_on = 'signal to noise'
+            self._grouped_on = "signal to noise"
         else:
             self._grouped_on = None
 
@@ -2199,22 +2406,23 @@ class AnnularSpectra(BaseAggregateProduct):
         # Here we generate the storage key for this object, its just convenient to do it in here
         # Sets up the extra part of the storage key name depending on if grouping is enabled
         if self._grouped and self._min_counts is not None:
-            extra_name = "_mincnt{}".format(self._min_counts)
+            extra_name = f"_mincnt{self._min_counts}"
         elif self._grouped and self._min_sn is not None:
-            extra_name = "_minsn{}".format(self._min_sn)
+            extra_name = f"_minsn{self._min_sn}"
         else:
-            extra_name = ''
+            extra_name = ""
 
         # And if it was oversampled during generation then we need to include that as well
         if self._over_sample is not None:
-            extra_name += "_ovsamp{ov}".format(ov=self._over_sample)
+            extra_name += f"_ovsamp{self._over_sample}"
 
         # Combines the annular radii into a string
         ann_rad_str = "_".join(self._radii.value.astype(str))
 
         spec_storage_name = "ra{ra}_dec{dec}_ar{ar}_grp{gr}"
-        spec_storage_name = spec_storage_name.format(ra=self.central_coord[0].value,
-                                                     dec=self.central_coord[1].value, ar=ann_rad_str, gr=self._grouped)
+        spec_storage_name = spec_storage_name.format(
+            ra=self.central_coord[0].value, dec=self.central_coord[1].value, ar=ann_rad_str, gr=self._grouped
+        )
 
         spec_storage_name += extra_name
         # And we save the completed key to an attribute
@@ -2253,22 +2461,38 @@ class AnnularSpectra(BaseAggregateProduct):
         # This dictionary will store the paths to cross-arfs that might be generated for this annular spectrum. That
         #  is why there are two layers of annulus identifiers - each annulus gets one arf per every OTHER annulus
         #  (not itself)
-        self._cross_arfs = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
-                                    for ai in range(self._num_ann)}
-                                for i in self._instruments[o]} for o in self.obs_ids}
+        self._cross_arfs = {
+            o: {
+                i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
+                for i in self._instruments[o]
+            }
+            for o in self.obs_ids
+        }
         # If at any point the user decides that they want to actually access the data in the cross-arfs, which they
         #  might do to plot the response curves for instance, then the 'read on demand' method for the cross-arfs will
         #  store them in these attributes - the key structure is the same as the above _cross_arfs attribute that
         #  stores the paths to the files
-        self._cross_arf_lo_ens = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
-                                          for ai in range(self._num_ann)} for i in self._instruments[o]}
-                                  for o in self.obs_ids}
-        self._cross_arf_hi_ens = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
-                                          for ai in range(self._num_ann)}
-                                  for i in self._instruments[o]} for o in self.obs_ids}
-        self._cross_arf_eff_areas = {o: {i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai}
-                                              for ai in range(self._num_ann)}
-                                     for i in self._instruments[o]} for o in self.obs_ids}
+        self._cross_arf_lo_ens = {
+            o: {
+                i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
+                for i in self._instruments[o]
+            }
+            for o in self.obs_ids
+        }
+        self._cross_arf_hi_ens = {
+            o: {
+                i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
+                for i in self._instruments[o]
+            }
+            for o in self.obs_ids
+        }
+        self._cross_arf_eff_areas = {
+            o: {
+                i: {ai: {aii: None for aii in range(self._num_ann) if aii != ai} for ai in range(self._num_ann)}
+                for i in self._instruments[o]
+            }
+            for o in self.obs_ids
+        }
 
         # Attributes to store ARF information
         # The actual effective area information will live in this attribute
@@ -2344,7 +2568,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: Path of the background spectrum.
         :rtype: str
         """
-        return self.get_spectra(self._num_ann-1, obs_id, inst).background
+        return self.get_spectra(self._num_ann - 1, obs_id, inst).background
 
     def background_rmf(self, obs_id: str, inst: str) -> str:
         """
@@ -2356,7 +2580,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: Path of the background spectrum RMF.
         :rtype: str
         """
-        return self.get_spectra(self._num_ann-1, obs_id, inst).background_rmf
+        return self.get_spectra(self._num_ann - 1, obs_id, inst).background_rmf
 
     def background_arf(self, obs_id: str, inst: str) -> str:
         """
@@ -2392,7 +2616,7 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return self._instruments
 
-    def get_spectra(self, annulus_ident, obs_id: str = None, inst: str = None) -> Union[List[Spectrum], Spectrum]:
+    def get_spectra(self, annulus_ident, obs_id: str = None, inst: str = None) -> list[Spectrum] | Spectrum:
         """
         This is the getter for the spectra stored in the AnnularSpectra data storage structure. They can
         be retrieved based on annulus identifier, ObsID, and instrument.
@@ -2403,6 +2627,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: List of matching spectra, or just a Spectrum object if one match is found.
         :rtype: Union[List[Spectrum], Spectrum]
         """
+
         def unpack_list(to_unpack: list):
             """
             A recursive function to go through every layer of a nested list and flatten it all out. It
@@ -2424,13 +2649,16 @@ class AnnularSpectra(BaseAggregateProduct):
 
         if annulus_ident not in np.array(range(0, self._num_ann)):
             ann_str = ", ".join(np.array(range(0, self._num_ann)).astype(str))
-            raise IndexError("{i} is not an annulus ID associated with this AnnularSpectra object. "
-                             "Allowed annulus IDs are; {a}".format(i=annulus_ident, a=ann_str))
+            raise IndexError(
+                f"{annulus_ident} is not an annulus ID associated with this AnnularSpectra object. "
+                f"Allowed annulus IDs are; {ann_str}"
+            )
         elif obs_id not in self._component_products and obs_id is not None:
-            raise NotAssociatedError("ObsID {0} is not associated with this AnnularSpectra.".format(obs_id))
-        elif (obs_id is not None and obs_id in self._component_products) and \
-                (inst is not None and inst not in self._component_products[obs_id]):
-            raise NotAssociatedError("Instrument {1} is not associated with {0}".format(obs_id, inst))
+            raise NotAssociatedError(f"ObsID {obs_id} is not associated with this AnnularSpectra.")
+        elif (obs_id is not None and obs_id in self._component_products) and (
+            inst is not None and inst not in self._component_products[obs_id]
+        ):
+            raise NotAssociatedError(f"Instrument {inst} is not associated with {obs_id}")
 
         matches = []
         for match in dict_search(annulus_ident, self._component_products):
@@ -2445,7 +2673,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return matches
 
     @property
-    def all_spectra(self) -> List[Spectrum]:
+    def all_spectra(self) -> list[Spectrum]:
         """
         Simple extra wrapper for get_spectra that allows the user to retrieve every single spectrum associated
         with this AnnularSpectra instance, for all annulus IDs.
@@ -2493,7 +2721,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: Quantity
         """
         if self._proper_radii is not None:
-            to_return = self._proper_radii.to('kpc')
+            to_return = self._proper_radii.to("kpc")
         else:
             to_return = self._proper_radii
 
@@ -2506,13 +2734,15 @@ class AnnularSpectra(BaseAggregateProduct):
 
         :param Quantity new_vals: The new values for proper radii, must be convertible to kpc.
         """
-        if not new_vals.unit.is_equivalent('kpc'):
+        if not new_vals.unit.is_equivalent("kpc"):
             raise UnitConversionError("Proper radii passed into this object must be convertable to kpc.")
         elif new_vals.isscalar:
             raise ValueError("A radii quantity for an AnnularSpectra object cannot be scalar")
         elif len(new_vals) != len(self._radii):
-            raise ValueError("The proper radii quantity you have passed isn't the same length as the radii "
-                             "attribute of this object, there should be {} entries.".format(len(self._radii)))
+            raise ValueError(
+                "The proper radii quantity you have passed isn't the same length as the radii "
+                f"attribute of this object, there should be {len(self._radii)} entries."
+            )
 
         self._proper_radii = new_vals
         pr = self.proper_radii.value
@@ -2586,7 +2816,7 @@ class AnnularSpectra(BaseAggregateProduct):
         return self._min_counts
 
     @property
-    def min_sn(self) -> Union[float, int]:
+    def min_sn(self) -> float | int:
         """
         A property stating the minimum signal to noise allowed in a grouped channel for the spectra in this set.
 
@@ -2629,8 +2859,9 @@ class AnnularSpectra(BaseAggregateProduct):
         """
         return {m: list(self._fit_results[0][m].keys()) for m in self.fitted_models}
 
-    def add_cross_arf(self, arf: Union[BaseProduct, str], obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int,
-                      set_ident: int):
+    def add_cross_arf(
+        self, arf: BaseProduct | str, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int, set_ident: int
+    ) -> None:
         """
         This method allows you to add cross-arfs generated for this annular spectrum to a storage structure in
         the object. That means that other processes that make use of them, such as spectral fitting, will be able
@@ -2650,32 +2881,42 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int set_ident: The set_ident that the cross-arf was generated for, it is checked against the
             set identifier of this object.
         """
-
         # Hopefully this is never triggered, and obviously you could just grab the set_ident from the object you're
         #  adding too if you want to get past this, but I mean this more as a check for the development of the
         #  cross_arfs function to ensure I'm adding the right cross-arfs to the right annular spectra.
         if set_ident != self.set_ident:
-            raise ValueError("The passed 'set_ident' ({s}) does not match the identifier of this object "
-                             "({ri}).".format(s=set_ident, ri=self.set_ident))
+            raise ValueError(
+                f"The passed 'set_ident' ({set_ident}) does not match the identifier of this object ({self.set_ident})."
+            )
 
         # I check whether the specified ObsID is actually a part of this AnnularSpectra, and raise a hopefully
         #  informative error if it is not.
         if obs_id not in self.obs_ids:
-            raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
-                                     "({ol})".format(o=obs_id, ol=', '.join(self.obs_ids)))
+            raise NotAssociatedError(
+                "The passed 'obs_id' ({o}) is not associated with this annular spectrum ({ol})".format(
+                    o=obs_id, ol=", ".join(self.obs_ids)
+                )
+            )
         # If we've passed the first check, and the passed arf is an XGA product instance, we perform a sanity check
         #  to ensure that the ObsID passed by the user matches the one in the product
         elif isinstance(arf, BaseProduct) and obs_id != arf.obs_id:
-            raise ValueError("The 'obs_id' ({o}) argument does not match the ObsID set for the XGA product containing "
-                             "the cross-arf ({po}).".format(o=obs_id, po=arf.obs_id))
+            raise ValueError(
+                f"The 'obs_id' ({obs_id}) argument does not match the ObsID set for the XGA product containing "
+                f"the cross-arf ({arf.obs_id})."
+            )
 
         # We then repeat the exact same checks as above, but with the instrument
         if inst not in self.instruments[obs_id]:
-            raise NotAssociatedError("The passed 'inst' ({i}) is not associated with the ObsID in this annular "
-                                     "spectrum ({il}).".format(i=inst, il=', '.join(self.instruments[obs_id])))
+            raise NotAssociatedError(
+                "The passed 'inst' ({i}) is not associated with the ObsID in this annular spectrum ({il}).".format(
+                    i=inst, il=", ".join(self.instruments[obs_id])
+                )
+            )
         elif isinstance(arf, BaseProduct) and inst != arf.instrument:
-            raise ValueError("The 'inst' ({i}) argument does not match the instrument set for the XGA product "
-                             "containing the cross-arf ({pi}).".format(i=inst, pi=arf.inst))
+            raise ValueError(
+                f"The 'inst' ({inst}) argument does not match the instrument set for the XGA product "
+                f"containing the cross-arf ({arf.inst})."
+            )
 
         # I think I will allow either a string path, or a product (as I am declaring these arfs in BaseProducts in
         #  the execute_cmd function) - as such I need to account for both. In this case we know that everything is fine
@@ -2684,11 +2925,14 @@ class AnnularSpectra(BaseAggregateProduct):
             arf = arf.path
         # In this case though something has obviously gone wrong, so we'll tell the user about it
         elif isinstance(arf, BaseProduct) and not arf.usable:
-            raise FailedProductError("The specified cross-arf is not usable for the following reasons; "
-                                     "{}".format(', '.join(arf.not_usable_reasons)))
+            raise FailedProductError(
+                "The specified cross-arf is not usable for the following reasons; {}".format(
+                    ", ".join(arf.not_usable_reasons)
+                )
+            )
         # In this case we assume that the string was the path, and if it doesn't exist we say so.
         elif isinstance(arf, str) and not os.path.exists(arf):
-            raise FileNotFoundError("The specified cross-arf file ({}) cannot be found.".format(arf))
+            raise FileNotFoundError(f"The specified cross-arf file ({arf}) cannot be found.")
 
         # We make absolutely sure that the input annulus identifiers are integer representations, not strings, just
         #  to be safe as it could screw things up downstream from here
@@ -2701,16 +2945,20 @@ class AnnularSpectra(BaseAggregateProduct):
         #  validity of the src_ann_id and cross_ann_id values. Firstly they have to actually be identifying annuli
         #  present in this object
         if src_ann_id not in self.annulus_ids or cross_ann_id not in self.annulus_ids:
-            raise NotAssociatedError("The 'src_ann_id' and 'cross_ann_id' arguments must be annulus identifiers "
-                                     "associated with this AnnularSpectra, allowed values "
-                                     "are; {}".format(', '.join([str(i) for i in self.annulus_ids])))
+            raise NotAssociatedError(
+                "The 'src_ann_id' and 'cross_ann_id' arguments must be annulus identifiers "
+                "associated with this AnnularSpectra, allowed values "
+                "are; {}".format(", ".join([str(i) for i in self.annulus_ids]))
+            )
         # Having the same value for both isn't allowed, because that doesn't make sense. Cross arfs represent the
         #  contribution of one annulus to another, so what use would an arf be that represents the contribution of one
         #  annulus to itself?
         elif src_ann_id == cross_ann_id:
-            raise ValueError("The 'src_ann_id' and 'cross_ann_id' arguments have the same value ({}). They must be "
-                             "different as cross-arfs represent the contribution of one annulus to "
-                             "another.".format(str(src_ann_id)))
+            raise ValueError(
+                f"The 'src_ann_id' and 'cross_ann_id' arguments have the same value ({str(src_ann_id)}). They must be "
+                "different as cross-arfs represent the contribution of one annulus to "
+                "another."
+            )
 
         # Now we actually store the PATH to the file in the attribute that was set up in the init of this
         #  class - This one is four layers deep, as every source annulus will have a cross arf for every
@@ -2734,20 +2982,28 @@ class AnnularSpectra(BaseAggregateProduct):
         :rtype: dict
         """
         if obs_id not in self.obs_ids:
-            raise NotAssociatedError("The passed 'obs_id' ({o}) is not associated with this annular spectrum "
-                                     "({ol})".format(o=obs_id, ol=', '.join(self.obs_ids)))
+            raise NotAssociatedError(
+                "The passed 'obs_id' ({o}) is not associated with this annular spectrum ({ol})".format(
+                    o=obs_id, ol=", ".join(self.obs_ids)
+                )
+            )
         elif inst not in self.instruments[obs_id]:
-            raise NotAssociatedError("The passed 'inst' ({i}) is not associated with the ObsID in this annular "
-                                     "spectrum ({il}).".format(i=inst, il=', '.join(self.instruments[obs_id])))
+            raise NotAssociatedError(
+                "The passed 'inst' ({i}) is not associated with the ObsID in this annular spectrum ({il}).".format(
+                    i=inst, il=", ".join(self.instruments[obs_id])
+                )
+            )
         elif src_ann_id not in self.annulus_ids:
-            raise NotAssociatedError("The passed 'src_ann_id' ({si}) is not an annulus ID associated with this annular"
-                                     " spectrum ({ls}).".format(si=src_ann_id,
-                                                                ls=', '.join([str(i) for i in self.annulus_ids])))
+            raise NotAssociatedError(
+                "The passed 'src_ann_id' ({si}) is not an annulus ID associated with this annular"
+                " spectrum ({ls}).".format(si=src_ann_id, ls=", ".join([str(i) for i in self.annulus_ids]))
+            )
         elif cross_ann_id is not None and cross_ann_id not in self.annulus_ids:
-            raise NotAssociatedError("The passed 'cross_ann_id' ({si}) is not an annulus ID associated with this "
-                                     "annular spectrum "
-                                     "({ls}).".format(si=cross_ann_id,
-                                                      ls=', '.join([str(i) for i in self.annulus_ids])))
+            raise NotAssociatedError(
+                "The passed 'cross_ann_id' ({si}) is not an annulus ID associated with this "
+                "annular spectrum "
+                "({ls}).".format(si=cross_ann_id, ls=", ".join([str(i) for i in self.annulus_ids]))
+            )
 
         if cross_ann_id is None:
             # If we pass those checks we can grab the requested cross-ARFs.
@@ -2759,8 +3015,9 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # We do a final check to make sure that no None values sneak through
         if None in rel_arfs.values():
-            raise NotAssociatedError("One or more cross-arfs for your selection have not been assigned to this "
-                                     "annular spectrum.")
+            raise NotAssociatedError(
+                "One or more cross-arfs for your selection have not been assigned to this annular spectrum."
+            )
         return rel_arfs
 
     def get_cross_arf_lo_ens(self, obs_id: str, inst: str, src_ann_id: int, cross_ann_id: int = None) -> dict:
@@ -2901,15 +3158,16 @@ class AnnularSpectra(BaseAggregateProduct):
             arf_read = FITS(rel_path)
             # Now store the array of lower energy limits, upper energy limits, and effective areas in the attributes
             #  that were set up with an ObsID-Instrument-src_ann_id-cross_ann_id structure in the init of this class
-            self._cross_arf_lo_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]['ENERG_LO'].read(), 'keV')
-            self._cross_arf_hi_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]['ENERG_HI'].read(), 'keV')
-            self._cross_arf_eff_areas[obs_id][inst][src_ann_id][c_a_id] = \
-                Quantity(arf_read[1]['SPECRESP'].read(), 'cm^2')
+            self._cross_arf_lo_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]["ENERG_LO"].read(), "keV")
+            self._cross_arf_hi_ens[obs_id][inst][src_ann_id][c_a_id] = Quantity(arf_read[1]["ENERG_HI"].read(), "keV")
+            self._cross_arf_eff_areas[obs_id][inst][src_ann_id][c_a_id] = Quantity(
+                arf_read[1]["SPECRESP"].read(), "cm^2"
+            )
 
             # And make sure to close the arf file after reading
             arf_read.close()
 
-    def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict, fit_conf: str):
+    def add_fit_data(self, model: str, tab_line: dict, lums: dict, obs_order: dict, fit_conf: str) -> None:
         """
         An equivalent to the add_fit_data method built into all source objects. The final fit results
         and luminosities are housed in a storage structure within the AnnularSpectra, which makes sense
@@ -2930,20 +3188,32 @@ class AnnularSpectra(BaseAggregateProduct):
             do not expect the user to be adding fit data, so this will be a key generated by the fit function.
         """
         # Just headers that will always be present in tab_line that are not fit parameters
-        not_par = ['MODEL', 'TOTAL_EXPOSURE', 'TOTAL_COUNT_RATE', 'TOTAL_COUNT_RATE_ERR',
-                   'NUM_UNLINKED_THAWED_VARS', 'FIT_STATISTIC', 'TEST_STATISTIC', 'DOF']
+        not_par = [
+            "MODEL",
+            "TOTAL_EXPOSURE",
+            "TOTAL_COUNT_RATE",
+            "TOTAL_COUNT_RATE_ERR",
+            "NUM_UNLINKED_THAWED_VARS",
+            "FIT_STATISTIC",
+            "TEST_STATISTIC",
+            "DOF",
+        ]
 
         # Checking that we have the expected amount of data passed in
         if len(tab_line) != self._num_ann:
-            raise ValueError(f"Fit results information passed to the 'tab_line' argument has {len(tab_line)} "
-                             f"entries, but this AnnularSpectra has {self._num_ann} annuli."
-                             f"Received 'tab_line': {tab_line}")
+            raise ValueError(
+                f"Fit results information passed to the 'tab_line' argument has {len(tab_line)} "
+                f"entries, but this AnnularSpectra has {self._num_ann} annuli."
+                f"Received 'tab_line': {tab_line}"
+            )
 
         # Same check for luminosity input
         elif len(lums) != self._num_ann:
-            raise ValueError(f"Fit luminosity information passed to the 'lums' argument has {len(lums)} "
-                             f"entries, but this AnnularSpectra has {self._num_ann} annuli."
-                             f"Received 'lums': {lums}")
+            raise ValueError(
+                f"Fit luminosity information passed to the 'lums' argument has {len(lums)} "
+                f"entries, but this AnnularSpectra has {self._num_ann} annuli."
+                f"Received 'lums': {lums}"
+            )
 
         for ai in range(0, self._num_ann):
             # Various global values of interest
@@ -2951,8 +3221,10 @@ class AnnularSpectra(BaseAggregateProduct):
             # If the model isn't already a key in the nested dictionary, this will add a dictionary entry (neatest
             #  way I could find of doing this).
             self._total_count_rate[ai].setdefault(model, {})
-            self._total_count_rate[ai][model][fit_conf] = [float(tab_line[ai]["TOTAL_COUNT_RATE"]),
-                                                           float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"])]
+            self._total_count_rate[ai][model][fit_conf] = [
+                float(tab_line[ai]["TOTAL_COUNT_RATE"]),
+                float(tab_line[ai]["TOTAL_COUNT_RATE_ERR"]),
+            ]
             self._test_stat[ai].setdefault(model, {})
             self._test_stat[ai][model][fit_conf] = float(tab_line[ai]["TEST_STATISTIC"])
             self._fit_stat[ai].setdefault(model, {})
@@ -2997,8 +3269,9 @@ class AnnularSpectra(BaseAggregateProduct):
             self._luminosities[ai].setdefault(model, {})
             self._luminosities[ai][model][fit_conf] = lums[ai]
 
-    def _get_fit_checks(self, annulus_ident: int, model: str = None, par: str = None,
-                        fit_conf: Union[str, dict] = None) -> Tuple[str, str]:
+    def _get_fit_checks(
+        self, annulus_ident: int, model: str = None, par: str = None, fit_conf: str | dict = None
+    ) -> tuple[str, str]:
         """
         An internal function to perform input checks and pre-processing for get methods that access fit results, or
         other related information such as fit statistic.
@@ -3023,8 +3296,10 @@ class AnnularSpectra(BaseAggregateProduct):
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object.")
         elif model is None and len(self.fitted_models) != 1:
             av_mods = ", ".join(self._fit_results[annulus_ident].keys())
-            raise ValueError("Multiple models have been fit to this annular spectrum, so model=None is not "
-                             "valid; available models are {a}".format(m=model, a=av_mods))
+            raise ValueError(
+                "Multiple models have been fit to this annular spectrum, so model=None is not "
+                f"valid; available models are {av_mods}"
+            )
         else:
             # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
             #  automatically select it for them
@@ -3032,22 +3307,28 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # Checks the input fit configuration values - if they are completely illegal we throw an error
         if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
-            raise TypeError("'fit_conf' must be a string fit configuration key, or a dictionary with "
-                            "changed-from-default fit function arguments as keys and changed values as items.")
+            raise TypeError(
+                "'fit_conf' must be a string fit configuration key, or a dictionary with "
+                "changed-from-default fit function arguments as keys and changed values as items."
+            )
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
             fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
         elif isinstance(fit_conf, str) and fit_conf not in self._fit_results[0][model]:
             av_fconfs = ", ".join(self._fit_results[annulus_ident][model].keys())
-            raise ModelNotAssociatedError("The {fc} fit configuration has not been used for any {m} fit to this "
-                                          "annular spectrum; available fit configurations are "
-                                          "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+            raise ModelNotAssociatedError(
+                f"The {fit_conf} fit configuration has not been used for any {model} fit to this "
+                "annular spectrum; available fit configurations are "
+                f"{av_fconfs}"
+            )
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[model]) != 1:
             av_fconfs = ", ".join(self._fit_results[annulus_ident][model].keys())
-            raise ValueError("The {m} model has been fit with multiple configuration, so fit_conf=None is not "
-                             "valid; available fit configurations are {a}".format(m=model, a=av_fconfs))
+            raise ValueError(
+                f"The {model} model has been fit with multiple configuration, so fit_conf=None is not "
+                f"valid; available fit configurations are {av_fconfs}"
+            )
         # However here they passed no fit configuration, and only one has been used for the model, so we're all good
         #  and will select it for them
         elif fit_conf is None and len(self.fitted_model_configurations[model]) == 1:
@@ -3058,26 +3339,33 @@ class AnnularSpectra(BaseAggregateProduct):
         if annulus_ident is not None and annulus_ident < 0:
             raise ValueError("Annulus IDs can only be positive.")
         elif annulus_ident is not None and annulus_ident >= self.num_annuli:
-            raise ValueError("Annulus indexing starts at zero, and this AnnularSpectra only has {} "
-                             "annuli.".format(self._num_ann))
+            raise ValueError(
+                f"Annulus indexing starts at zero, and this AnnularSpectra only has {self._num_ann} annuli."
+            )
 
         # Bunch of checks to make sure the requested results actually exist
         if annulus_ident is not None and len(self._fit_results[annulus_ident]) == 0:
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object.")
         elif annulus_ident is not None and model not in self._fit_results[annulus_ident]:
             av_mods = ", ".join(self._fit_results[annulus_ident].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; available "
-                                          "models are {a}".format(m=model, a=av_mods))
-        elif (annulus_ident is not None and par is not None and
-              par not in self._fit_results[annulus_ident][model][fit_conf]):
+            raise ModelNotAssociatedError(
+                f"{model} has not been fitted to this AnnularSpectra; available models are {av_mods}"
+            )
+        elif (
+            annulus_ident is not None
+            and par is not None
+            and par not in self._fit_results[annulus_ident][model][fit_conf]
+        ):
             av_pars = ", ".join(self._fit_results[annulus_ident][model][fit_conf].keys())
-            raise ParameterNotAssociatedError("{p} was not a free parameter in the {m}-{fc} fit to this "
-                                              "AnnularSpectra; available parameters are "
-                                              "{a}".format(p=par, m=model, a=av_pars, fc=fit_conf))
+            raise ParameterNotAssociatedError(
+                f"{par} was not a free parameter in the {model}-{fit_conf} fit to this "
+                "AnnularSpectra; available parameters are "
+                f"{av_pars}"
+            )
 
         return model, fit_conf
 
-    def get_results(self, annulus_ident: int, model: str = None, par: str = None, fit_conf: Union[str, dict] = None):
+    def get_results(self, annulus_ident: int, model: str = None, par: str = None, fit_conf: str | dict = None):
         """
         Important method that will retrieve fit results from the AnnularSpectra object. Either for a specific
         parameter of the supplied model combination, or for all of them. If a specific parameter is requested,
@@ -3127,7 +3415,7 @@ class AnnularSpectra(BaseAggregateProduct):
         else:
             return proc_data[par]
 
-    def get_fit_statistic(self, annulus_ident: int, model: str = None, fit_conf: Union[str, dict] = None):
+    def get_fit_statistic(self, annulus_ident: int, model: str = None, fit_conf: str | dict = None):
         """
         Method that will retrieve fit statistic from the AnnularSpectra object. If no model name is supplied, but
         only one model has been fit to this annular spectrum, then that model will be automatically selected - this
@@ -3146,7 +3434,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return self._fit_stat[annulus_ident][model][fit_conf]
 
-    def get_test_statistic(self, annulus_ident: int, model: str = None, fit_conf: Union[str, dict] = None):
+    def get_test_statistic(self, annulus_ident: int, model: str = None, fit_conf: str | dict = None):
         """
         Method that will retrieve test statistic from the AnnularSpectra object. If no model name is supplied, but
         only one model has been fit to this annular spectrum, then that model will be automatically selected - this
@@ -3165,8 +3453,14 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return self._test_stat[annulus_ident][model][fit_conf]
 
-    def get_luminosities(self, annulus_ident: int, model: str = None, lo_en: Quantity = None, hi_en: Quantity = None,
-                         fit_conf: Union[str, dict] = None) -> Union[Quantity, Dict[str, Quantity]]:
+    def get_luminosities(
+        self,
+        annulus_ident: int,
+        model: str = None,
+        lo_en: Quantity = None,
+        hi_en: Quantity = None,
+        fit_conf: str | dict = None,
+    ) -> Quantity | dict[str, Quantity]:
         """
         This will retrieve luminosities of specific annuli from fits performed on this AnnularSpectra object.
         A model name must be supplied, and if a luminosity from a specific energy range is desired then lower
@@ -3206,14 +3500,16 @@ class AnnularSpectra(BaseAggregateProduct):
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra")
         elif model not in self._luminosities[annulus_ident]:
             av_mods = ", ".join(self._luminosities[annulus_ident].keys())
-            raise ModelNotAssociatedError("{m} has not been fitted to this AnnularSpectra; "
-                                          "available models are {a}".format(m=model, a=av_mods))
+            raise ModelNotAssociatedError(
+                f"{model} has not been fitted to this AnnularSpectra; available models are {av_mods}"
+            )
         elif en_key is not None and en_key not in self._luminosities[annulus_ident][model]:
             av_bands = ", ".join([en.split("_")[-1] + "keV" for en in self._luminosities[annulus_ident][model].keys()])
-            raise ParameterNotAssociatedError("A luminosity within {l}-{u}keV was not measured for the fit "
-                                              "with {m}; available energy bands are "
-                                              "{b}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value, m=model,
-                                                           b=av_bands))
+            raise ParameterNotAssociatedError(
+                "A luminosity within {l}-{u}keV was not measured for the fit "
+                "with {m}; available energy bands are "
+                "{b}".format(l=lo_en.to("keV").value, u=hi_en.to("keV").value, m=model, b=av_bands)
+            )
 
         # If no limits specified,the user gets all the luminosities, otherwise they get the one they asked for
         if en_key is None:
@@ -3228,8 +3524,9 @@ class AnnularSpectra(BaseAggregateProduct):
             parsed_lum = Quantity([lum.value for lum in lum_value], lum_value[0].unit)
             return parsed_lum
 
-    def generate_profile(self, model: str, par: str, par_unit: Union[Unit, str], fit_conf: Union[str, dict] = None) \
-            -> Union[BaseProfile1D, ProjectedGasTemperature1D, ProjectedGasMetallicity1D]:
+    def generate_profile(
+        self, model: str, par: str, par_unit: Unit | str, fit_conf: str | dict = None
+    ) -> BaseProfile1D | ProjectedGasTemperature1D | ProjectedGasMetallicity1D:
         """
         This generates a radial profile of the requested fit parameter using the stored results from
         an XSPEC model fit run on this AnnularSpectra. The profile is added to AnnularSpectra internal
@@ -3250,8 +3547,10 @@ class AnnularSpectra(BaseAggregateProduct):
             par_unit = Unit(par_unit)
 
         if self.proper_radii is None:
-            raise UnitConversionError("Currently proper radius units are required to generate "
-                                      "profiles, please assign some using the proper_radii property.")
+            raise UnitConversionError(
+                "Currently proper radius units are required to generate "
+                "profiles, please assign some using the proper_radii property."
+            )
 
         # This is somewhat redundant, as we run get_results in the loop, but we want the checked fit_conf value
         model, fit_conf = self._get_fit_checks(None, model, par, fit_conf)
@@ -3274,10 +3573,10 @@ class AnnularSpectra(BaseAggregateProduct):
                     else:
                         par_data[obs_inst].append(cur_data[i, :])
             # If the quantity of interest was linked across spectra then we just store it under a 'combined' key
-            elif cur_data.ndim == 1 and 'combined' not in par_data:
-                par_data['combined'] = [cur_data]
-            elif cur_data.ndim == 1 and 'combined' in par_data:
-                par_data['combined'].append(cur_data)
+            elif cur_data.ndim == 1 and "combined" not in par_data:
+                par_data["combined"] = [cur_data]
+            elif cur_data.ndim == 1 and "combined" in par_data:
+                par_data["combined"].append(cur_data)
 
         # For storing the profiles generated here
         profs = []
@@ -3294,37 +3593,92 @@ class AnnularSpectra(BaseAggregateProduct):
             mid_radii = self.proper_annulus_centres.to("kpc")
             mid_radii_deg = self.annulus_centres.to("deg")
             # calculates radii errors, basically the extent of the bins
-            rad_errors = Quantity(np.diff(self.proper_radii.to('kpc').value, axis=0) / 2, 'kpc')
+            rad_errors = Quantity(np.diff(self.proper_radii.to("kpc").value, axis=0) / 2, "kpc")
 
             # Here we set up the ObsID and instrument information
-            if obs_key == 'combined':
-                obs_id = 'combined'
-                inst = 'combined'
+            if obs_key == "combined":
+                obs_id = "combined"
+                inst = "combined"
             else:
                 # The obs key was made up of the ObsID and instrument joined by a -
-                obs_id, inst = obs_key.split('-')
+                obs_id, inst = obs_key.split("-")
 
             try:
-                if par == 'kT':
-                    new_prof = ProjectedGasTemperature1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                         inst, rad_errors, par_errs, associated_set_id=self.set_ident,
-                                                         set_storage_key=self.storage_key, deg_radii=mid_radii_deg,
-                                                         auto_save=True, telescope=self.telescope, spec_model=model,
-                                                         fit_conf=fit_conf)
-                elif par == 'Abundanc':
-                    new_prof = ProjectedGasMetallicity1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id,
-                                                         inst, rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                         mid_radii_deg, auto_save=True, telescope=self.telescope, spec_model=model,
-                                                         fit_conf=fit_conf)
-                elif par == 'norm':
-                    new_prof = APECNormalisation1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst,
-                                                   rad_errors, par_errs, self.set_ident, self.storage_key,
-                                                   mid_radii_deg, auto_save=True, telescope=self.telescope, spec_model=model, fit_conf=fit_conf)
+                if par == "kT":
+                    new_prof = ProjectedGasTemperature1D(
+                        mid_radii,
+                        par_val,
+                        self.central_coord,
+                        self.src_name,
+                        obs_id,
+                        inst,
+                        rad_errors,
+                        par_errs,
+                        associated_set_id=self.set_ident,
+                        set_storage_key=self.storage_key,
+                        deg_radii=mid_radii_deg,
+                        auto_save=True,
+                        telescope=self.telescope,
+                        spec_model=model,
+                        fit_conf=fit_conf,
+                    )
+                elif par == "Abundanc":
+                    new_prof = ProjectedGasMetallicity1D(
+                        mid_radii,
+                        par_val,
+                        self.central_coord,
+                        self.src_name,
+                        obs_id,
+                        inst,
+                        rad_errors,
+                        par_errs,
+                        self.set_ident,
+                        self.storage_key,
+                        mid_radii_deg,
+                        auto_save=True,
+                        telescope=self.telescope,
+                        spec_model=model,
+                        fit_conf=fit_conf,
+                    )
+                elif par == "norm":
+                    new_prof = APECNormalisation1D(
+                        mid_radii,
+                        par_val,
+                        self.central_coord,
+                        self.src_name,
+                        obs_id,
+                        inst,
+                        rad_errors,
+                        par_errs,
+                        self.set_ident,
+                        self.storage_key,
+                        mid_radii_deg,
+                        auto_save=True,
+                        telescope=self.telescope,
+                        spec_model=model,
+                        fit_conf=fit_conf,
+                    )
                 else:
                     prof_type = "1d_proj_{}"
-                    new_prof = Generic1D(mid_radii, par_val, self.central_coord, self.src_name, obs_id, inst, par,
-                                         prof_type.format(par), rad_errors, par_errs, self.set_ident, self.storage_key,
-                                         mid_radii_deg, auto_save=True, telescope=self.telescope, spec_model=model, fit_conf=fit_conf)
+                    new_prof = Generic1D(
+                        mid_radii,
+                        par_val,
+                        self.central_coord,
+                        self.src_name,
+                        obs_id,
+                        inst,
+                        par,
+                        prof_type.format(par),
+                        rad_errors,
+                        par_errs,
+                        self.set_ident,
+                        self.storage_key,
+                        mid_radii_deg,
+                        auto_save=True,
+                        telescope=self.telescope,
+                        spec_model=model,
+                        fit_conf=fit_conf,
+                    )
 
                 profs.append(new_prof)
 
@@ -3338,9 +3692,18 @@ class AnnularSpectra(BaseAggregateProduct):
 
         return profs
 
-    def view_cross_arfs(self, src_ann_id: int, obs_id: str, inst: str, src_arf_norm: bool = False,
-                        figsize: tuple = (8, 6), xscale: str = 'log', yscale: str = 'linear',
-                        lo_en: Quantity = Quantity(0.01, 'keV'), hi_en: Quantity = Quantity(16.0, 'keV')):
+    def view_cross_arfs(
+        self,
+        src_ann_id: int,
+        obs_id: str,
+        inst: str,
+        src_arf_norm: bool = False,
+        figsize: tuple = (8, 6),
+        xscale: str = "log",
+        yscale: str = "linear",
+        lo_en: Quantity = Quantity(0.01, "keV"),
+        hi_en: Quantity = Quantity(16.0, "keV"),
+    ) -> None:
         """
         A method that produces a plot of the cross-arf curves for a specified source annulus spectrum, for a specified
         ObsID and instrument. The original source spectrum will also be plotted as a reference. This method can also
@@ -3365,7 +3728,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # Set the plot up to look nice and professional.
         ax = plt.gca()
         ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         # I retrieve the energies and effective areas for the source arf from the source spectrum specified by the
         #  user input of src_ann_id, ObsID, and instrument. This will be used to provide context to the cross-arf
@@ -3393,9 +3756,11 @@ class AnnularSpectra(BaseAggregateProduct):
 
         # As we know, log scales don't like zero values, so I make a change if the user has set the minimum
         #  energy to be zero and set an x-axis log scale
-        if xscale == 'log' and lo_en == 0:
-            warn("The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 "
-                 "keV.", stacklevel=2)
+        if xscale == "log" and lo_en == 0:
+            warn(
+                "The x-axis scale has been set to log, and 'lo_en' cannot be zero - it has been set to 0.01 keV.",
+                stacklevel=2,
+            )
             lo_en = 0.01
 
         # Now I grab the dictionaries of lower/upper energy bounds, and effective areas, for the cross-arfs that we
@@ -3406,16 +3771,24 @@ class AnnularSpectra(BaseAggregateProduct):
 
         if not src_arf_norm:
             # Before I get to plotting the cross-arf curves, I plot the original source arf as a dashed black line
-            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
-                     src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
-                     color='black', linestyle='dashed', label='Source annulus')
+            plt.plot(
+                src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)],
+                color="black",
+                linestyle="dashed",
+                label="Source annulus",
+            )
         # In this case though we are going to normalize the cross-arfs by the source arf, so actually we just
         #  want to plot a straight line with 1 on the y-axis
         else:
             # As I'm normalising by the source ARF here, I just plot a line at 1
-            plt.plot(src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)].value,
-                     [1]*len(src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)]),
-                     color='black', linestyle='dashed', label='Source reference')
+            plt.plot(
+                src_ens[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)].value,
+                [1] * len(src_eff_areas[(src_ens.value >= lo_en) & (src_ens.value <= hi_en)]),
+                color="black",
+                linestyle="dashed",
+                label="Source reference",
+            )
 
         min_norm = 1
         for cross_ann_id, eff_area in all_eff_areas.items():
@@ -3424,11 +3797,11 @@ class AnnularSpectra(BaseAggregateProduct):
             # Get the data and plot it
             sel_ens = (ens.value >= lo_en) & (ens.value <= hi_en)
             if not src_arf_norm:
-                plt.plot(ens[sel_ens], eff_area[sel_ens], label='Annulus {} contribution'.format(cross_ann_id))
+                plt.plot(ens[sel_ens], eff_area[sel_ens], label=f"Annulus {cross_ann_id} contribution")
             else:
                 norm_area = Quantity(np.zeros(len(eff_area)))
                 np.divide(eff_area, src_eff_areas, out=norm_area, where=src_eff_areas != 0)
-                plt.plot(ens[sel_ens], norm_area[sel_ens], label='Annulus {} normalised'.format(cross_ann_id))
+                plt.plot(ens[sel_ens], norm_area[sel_ens], label=f"Annulus {cross_ann_id} normalised")
                 # We compare to the global min norm area to see whether we have a smaller value here or not - this
                 #  will be used to set the minimum y value
                 min_norm = min(min(norm_area[norm_area > 0]), min_norm)
@@ -3453,26 +3826,39 @@ class AnnularSpectra(BaseAggregateProduct):
             plt.ylabel("Normalised Effective Area", fontsize=12)
 
         plt.xlabel("Energy [keV]", fontsize=12)
-        plt.title("Annulus {ai} {o}-{i} Cross-ARFs".format(o=obs_id, i=inst.upper(), ai=src_ann_id), fontsize=14)
+        plt.title(f"Annulus {src_ann_id} {obs_id}-{inst.upper()} Cross-ARFs", fontsize=14)
 
         # This makes sure that the tick labels are formatted as 0.1, 1, 10, etc. keV on the x-axis (if logged) and
         #  10, 100, 100, 1000, etc. cm^2 on the y-axis if logged
-        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: '{:g}'.format(inp)))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda inp, _: f"{inp:g}"))
 
         # Make sure we add the legend in, it has a lot of context regarding which curve is for which cross-annulus
-        plt.legend(loc='best', fontsize=12)
+        plt.legend(loc="best", fontsize=12)
 
         # Aaaand finally actually plot it
         plt.tight_layout()
         plt.show()
 
-    def view_annulus(self, ann_ident: int, figsize: Tuple = (10, 7), lo_lim: Quantity = Quantity(0.3, "keV"),
-                     hi_lim: Quantity = Quantity(7.9, "keV"), back_sub: bool = True, energy: bool = True,
-                     src_colour: str = 'black', bck_colour: str = 'firebrick', grouped: bool = True,
-                     xscale: str = "log", yscale: str = "linear", fontsize: Union[int, float] = 14,
-                     show_model_fits: bool = True, save_path: str = None, model: str = None,
-                     fit_conf: Union[str, dict] = None):
+    def view_annulus(
+        self,
+        ann_ident: int,
+        figsize: tuple = (10, 7),
+        lo_lim: Quantity = Quantity(0.3, "keV"),
+        hi_lim: Quantity = Quantity(7.9, "keV"),
+        back_sub: bool = True,
+        energy: bool = True,
+        src_colour: str = "black",
+        bck_colour: str = "firebrick",
+        grouped: bool = True,
+        xscale: str = "log",
+        yscale: str = "linear",
+        fontsize: int | float = 14,
+        show_model_fits: bool = True,
+        save_path: str = None,
+        model: str = None,
+        fit_conf: str | dict = None,
+    ) -> None:
         """
         A view method that allows all spectra from a particular annulus to be displayed on the same axis.
 
@@ -3520,8 +3906,22 @@ class AnnularSpectra(BaseAggregateProduct):
         fig = plt.figure(figsize=figsize)
         ax = plt.gca()
         for sp in rel_spec:
-            ax = sp.get_view(ax, lo_lim, hi_lim, back_sub, energy, src_colour, bck_colour, grouped, xscale, yscale,
-                             fontsize, show_model_fits, model, fit_conf)
+            ax = sp.get_view(
+                ax,
+                lo_lim,
+                hi_lim,
+                back_sub,
+                energy,
+                src_colour,
+                bck_colour,
+                grouped,
+                xscale,
+                yscale,
+                fontsize,
+                show_model_fits,
+                model,
+                fit_conf,
+            )
 
         # Generate the legend for the data and model(s)
         # plt.legend(loc="best", fontsize=fontsize - 1)
@@ -3539,11 +3939,24 @@ class AnnularSpectra(BaseAggregateProduct):
         # Wipe the figure
         plt.close("all")
 
-    def view_annuli(self, obs_id: str, inst: str, model: str = None, fit_conf: Union[str, dict] = None,
-                    elevation_angle: int = 30, azimuthal_angle: int = -60, figsize: Tuple = (12, 8),
-                    lo_lim: Quantity = Quantity(0.3, "keV"), hi_lim: Quantity = Quantity(7.9, "keV"),
-                    back_sub: bool = True, energy: bool = True, src_colour: str = 'black',
-                    bck_colour: str = 'firebrick', grouped: bool = True, fontsize: Union[int, float] = 14):
+    def view_annuli(
+        self,
+        obs_id: str,
+        inst: str,
+        model: str = None,
+        fit_conf: str | dict = None,
+        elevation_angle: int = 30,
+        azimuthal_angle: int = -60,
+        figsize: tuple = (12, 8),
+        lo_lim: Quantity = Quantity(0.3, "keV"),
+        hi_lim: Quantity = Quantity(7.9, "keV"),
+        back_sub: bool = True,
+        energy: bool = True,
+        src_colour: str = "black",
+        bck_colour: str = "firebrick",
+        grouped: bool = True,
+        fontsize: int | float = 14,
+    ) -> None:
         """
         This view method is one of several in the AnnularSpectra class, and will display data and associated model
         fits for a single ObsID-Instrument combination for all annuli in this AnnularSpectra, in a 3D plot. The
@@ -3589,11 +4002,11 @@ class AnnularSpectra(BaseAggregateProduct):
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
         # This subplot with a 3D projection is what allows us to make a 3-axis plot
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
         # We use the user's passed in angle values to set the perspective that we have on the plot.
         ax.view_init(elevation_angle, azimuthal_angle)
         # Set a relevant title
-        plt.title("{sn} - {o}-{i} Annular Spectra".format(sn=self.src_name, o=obs_id, i=inst))
+        plt.title(f"{self.src_name} - {obs_id}-{inst} Annular Spectra")
 
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
         #  associated with this Spectrum instance has actually been grouped - if not then we automatically
@@ -3629,13 +4042,13 @@ class AnnularSpectra(BaseAggregateProduct):
 
             # These just make sure that limits in units of either channel or energy are converted appropriately to what
             #  we're plotting on the x-axis, channels or energies.
-            if not energy and lo_lim.unit != '':
+            if not energy and lo_lim.unit != "":
                 lo_lim = spec.conv_channel_energy(lo_lim)
-            if not energy and hi_lim.unit != '':
+            if not energy and hi_lim.unit != "":
                 hi_lim = spec.conv_channel_energy(hi_lim)
-            if energy and not lo_lim.unit.is_equivalent('keV'):
+            if energy and not lo_lim.unit.is_equivalent("keV"):
                 lo_lim = spec.conv_channel_energy(lo_lim)
-            if energy and not hi_lim.unit.is_equivalent('keV'):
+            if energy and not hi_lim.unit.is_equivalent("keV"):
                 hi_lim = spec.conv_channel_energy(hi_lim)
 
             # Reads out the values of the limits as matplotlib sometimes gets upset by astropy quantities
@@ -3653,9 +4066,11 @@ class AnnularSpectra(BaseAggregateProduct):
 
             # Now we deal with the different models/model fit configurations that can and cannot be specified
             if show_model_fits and model is None and fit_conf is not None:
-                raise ValueError("Specifying a fit configuration ('fit_conf') is not supported without setting the "
-                                 "'model' argument; use the 'fitted_model_configurations' property of this Spectrum to "
-                                 "see which models and configurations are available.")
+                raise ValueError(
+                    "Specifying a fit configuration ('fit_conf') is not supported without setting the "
+                    "'model' argument; use the 'fitted_model_configurations' property of this Spectrum to "
+                    "see which models and configurations are available."
+                )
             elif show_model_fits and model is None and fit_conf is None:
                 model = self.fitted_models
                 fit_conf = self.fitted_model_configurations
@@ -3663,8 +4078,9 @@ class AnnularSpectra(BaseAggregateProduct):
                 # I indent this check because it is just a bit easier for me that way
                 if model not in self.fitted_models:
                     av_mods = ", ".join(self.fitted_models)
-                    raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
-                                                  "models are {a}".format(m=model, a=av_mods))
+                    raise ModelNotAssociatedError(
+                        f"{model} has not been fitted to this Spectrum; available models are {av_mods}"
+                    )
 
                 # If we're here then the model is valid, and in this case no fit configuration has been specified, so
                 #  we grab ALL OF THEM - making sure that the structure of the parameters is the same (model in a list,
@@ -3674,8 +4090,9 @@ class AnnularSpectra(BaseAggregateProduct):
             elif show_model_fits and model is not None and fit_conf is not None:
                 if model not in self.fitted_models:
                     av_mods = ", ".join(self.fitted_models)
-                    raise ModelNotAssociatedError("{m} has not been fitted to this Spectrum; available "
-                                                  "models are {a}".format(m=model, a=av_mods))
+                    raise ModelNotAssociatedError(
+                        f"{model} has not been fitted to this Spectrum; available models are {av_mods}"
+                    )
 
                 # If the configuration is a dictionary we need to try to turn that into a proper fit configuration key
                 if isinstance(fit_conf, dict):
@@ -3685,9 +4102,10 @@ class AnnularSpectra(BaseAggregateProduct):
                 if fit_conf not in self.fitted_model_configurations[model]:
                     av_fconfs = ", ".join(self.fitted_model_configurations[model])
                     raise ModelNotAssociatedError(
-                        "The {fc} fit configuration has not been used for any {m} fit to this "
+                        f"The {fit_conf} fit configuration has not been used for any {model} fit to this "
                         "spectrum; available fit configurations are "
-                        "{a}".format(fc=fit_conf, m=model, a=av_fconfs))
+                        f"{av_fconfs}"
+                    )
 
                 fit_conf = {model: [fit_conf]}
                 model = [model]
@@ -3736,11 +4154,11 @@ class AnnularSpectra(BaseAggregateProduct):
             # This uses the AREASCAL keyword (the product of EXPOSURE times AREASCAL is the exposure duration for any
             #  fully exposed pixels in each channel - my experience is that this is normally 1 for XMM products) to
             #  effectively scale the exposure time by dividing the count rate by it
-            src_rate = sct / spec.header['AREASCAL']
+            src_rate = sct / spec.header["AREASCAL"]
 
             # This scales the background count rates by the AREASCAL (as above), but also by the ratio of BACKSCAL
             #  values, which scales the background flux to the same area as the source
-            bck_rate = (spec.header['BACKSCAL'] / spec.back_header['BACKSCAL']) * (bct / spec.back_header['AREASCAL'])
+            bck_rate = (spec.header["BACKSCAL"] / spec.back_header["BACKSCAL"]) * (bct / spec.back_header["AREASCAL"])
 
             # And finally subtracting one from the other - they both have error columns which are also subtracted
             #  here (which is completely meaningless of course), but don't worry we'll fix that on the next line!
@@ -3771,17 +4189,41 @@ class AnnularSpectra(BaseAggregateProduct):
                 # Plotting the data, accounting for the different combinations of x-axis and y-axis
                 if back_sub:
                     # If we're going for background subtracted data, then that is all we plot
-                    ax.errorbar(x_dat, ys, src_sub_bck_rate.value[:, 0] / per_x, xerr=x_wid,
-                                yerr=src_sub_bck_rate.value[:, 1] / per_x, fmt="+", color=src_colour,
-                                label="Background subtracted source data", zorder=1)
+                    ax.errorbar(
+                        x_dat,
+                        ys,
+                        src_sub_bck_rate.value[:, 0] / per_x,
+                        xerr=x_wid,
+                        yerr=src_sub_bck_rate.value[:, 1] / per_x,
+                        fmt="+",
+                        color=src_colour,
+                        label="Background subtracted source data",
+                        zorder=1,
+                    )
                 else:
                     # But if we're not wanting background subtracted, we need to plot the source and background spectra
-                    ax.errorbar(x_dat, ys, src_rate.value[:, 0] / per_x, xerr=x_wid, yerr=src_rate.value[:, 1] / per_x,
-                                fmt="+",
-                                color=src_colour, label="Source data", zorder=1)
-                    ax.errorbar(x_dat, ys, bck_rate.value[:, 0] / per_x, xerr=x_wid, yerr=bck_rate.value[:, 1] / per_x,
-                                fmt="x",
-                                color=bck_colour, label="Background data", zorder=1)
+                    ax.errorbar(
+                        x_dat,
+                        ys,
+                        src_rate.value[:, 0] / per_x,
+                        xerr=x_wid,
+                        yerr=src_rate.value[:, 1] / per_x,
+                        fmt="+",
+                        color=src_colour,
+                        label="Source data",
+                        zorder=1,
+                    )
+                    ax.errorbar(
+                        x_dat,
+                        ys,
+                        bck_rate.value[:, 0] / per_x,
+                        xerr=x_wid,
+                        yerr=bck_rate.value[:, 1] / per_x,
+                        fmt="x",
+                        color=bck_colour,
+                        label="Background data",
+                        zorder=1,
+                    )
 
                 # Energy vs channel has already been encoded in the x data, but we still need to plot different
                 #  axis labels
@@ -3804,7 +4246,6 @@ class AnnularSpectra(BaseAggregateProduct):
                     # We also iterate through the different fit configurations for the current model, and plot them
                     #  separately - currently with the only the model name in the legend
                     for fc in fit_conf[mod]:
-
                         cur_fit_data = spec.get_plot_data(mod, fc)
 
                         # Extract the x values which we gathered from XSPEC (they will be in keV)
@@ -3823,8 +4264,16 @@ class AnnularSpectra(BaseAggregateProduct):
                             plot_yerr = cur_fit_data["y_err"][sel_x]
                             plot_mod = cur_fit_data["model"][sel_x]
                             if ann_ident == 0:
-                                ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+",
-                                            label="Background subtracted source data", zorder=1)
+                                ax.errorbar(
+                                    plot_x,
+                                    ys,
+                                    plot_y,
+                                    xerr=plot_xerr,
+                                    yerr=plot_yerr,
+                                    fmt="k+",
+                                    label="Background subtracted source data",
+                                    zorder=1,
+                                )
                             else:
                                 ax.errorbar(plot_x, ys, plot_y, xerr=plot_xerr, yerr=plot_yerr, fmt="k+", zorder=1)
                             plot_cnt += 1
@@ -3836,7 +4285,7 @@ class AnnularSpectra(BaseAggregateProduct):
                         # The model line is put on
                         changed = spec.fitted_model_configuration_diffs[mod][fc]
                         fc_str = "; ".join([par + " - " + val for par, val in changed.items()])
-                        ax.plot(plot_x, ys, plot_mod, label=mod + '; ' + fc_str, linewidth=1.5)
+                        ax.plot(plot_x, ys, plot_mod, label=mod + "; " + fc_str, linewidth=1.5)
 
             # data_line = ax.plot(plot_x, ys, all_plot_data['y'], '+', alpha=0.5)
             # mod_line = ax.plot(plot_x, ys, plot_mod, alpha=0.5, linewidth=2, color=data_line[0].get_color())
@@ -3851,7 +4300,7 @@ class AnnularSpectra(BaseAggregateProduct):
         ax.set_zlabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
 
         # Setting up y label (with dynamic unit) and the correct radius limits
-        ax.set_ylabel("Radius [{u}]".format(u=chosen_unit.to_string()))
+        ax.set_ylabel(f"Radius [{chosen_unit.to_string()}]")
         if self.proper_radii is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
@@ -3862,10 +4311,16 @@ class AnnularSpectra(BaseAggregateProduct):
         plt.legend()
         ax.set_box_aspect(aspect=(5.5, 4, 3), zoom=0.86)
         plt.show()
-        plt.close('all')
+        plt.close("all")
 
-    def view(self, model: str = None, fit_conf: Union[str, dict] = None, figsize: tuple = (12, 8),
-             elevation_angle: int = 30, azimuthal_angle: int = -60):
+    def view(
+        self,
+        model: str = None,
+        fit_conf: str | dict = None,
+        figsize: tuple = (12, 8),
+        elevation_angle: int = 30,
+        azimuthal_angle: int = -60,
+    ) -> None:
         """
         This view method is one of several in the AnnularSpectra class, and will display model fits to
         all spectra for each annuli in a 3D plot. No data is displayed in this viewing method, primarily
@@ -3884,7 +4339,6 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int elevation_angle: The elevation angle in the z plane, in degrees.
         :param int azimuthal_angle: The azimuth angle in the x,y plane, in degrees.
         """
-
         # This is a complete bodge, but just putting it here stops my IDE (PyCharm), from removing the import when it
         #  commits, because it's trying to be clever. It's a behaviour I normally appreciate, but not here.
         Axes3D
@@ -3892,11 +4346,11 @@ class AnnularSpectra(BaseAggregateProduct):
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
         # This subplot with a 3D projection is what allows us to make a 3-axis plot
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
         # We use the user's passed in angle values to set the perspective that we have on the plot.
         ax.view_init(elevation_angle, azimuthal_angle)
         # Set a relevant title
-        plt.title("{sn} - Annular Spectra Folded Models".format(sn=self.src_name))
+        plt.title(f"{self.src_name} - Annular Spectra Folded Models")
 
         # Storing the original model and fit_conf values
         og_model = deepcopy(model)
@@ -3946,10 +4400,10 @@ class AnnularSpectra(BaseAggregateProduct):
                     if self.proper_radii is not None:
                         # Need to set up an array for the y axis (the radius axis) which is the same dimensions
                         #  as the x and z arrays
-                        ys = np.full(shape=(len(plot_x), ), fill_value=self.proper_annulus_centres[ann_ident].value)
+                        ys = np.full(shape=(len(plot_x),), fill_value=self.proper_annulus_centres[ann_ident].value)
                         chosen_unit = self.proper_radii.unit
                     else:
-                        ys = np.full(shape=(len(plot_x), ), fill_value=self.annulus_centres[ann_ident].value)
+                        ys = np.full(shape=(len(plot_x),), fill_value=self.annulus_centres[ann_ident].value)
                         chosen_unit = self.radii.unit
 
                     # If we've not already plotted a line for this ObsID-Instrument combo, the behaviour is different
@@ -3961,7 +4415,7 @@ class AnnularSpectra(BaseAggregateProduct):
                         #  only needs to happen once because we only want one entry in the legend per
                         #  ObsID-Instrument combo
                         handlers.append(mod_line[0])
-                        labels.append("{o}-{i}".format(o=spec.obs_id, i=spec.instrument))
+                        labels.append(f"{spec.obs_id}-{spec.instrument}")
                     else:
                         ax.plot(plot_x, ys, plot_mod, color=colour_dict[o][i], alpha=0.6, linewidth=1.5)
 
@@ -3975,7 +4429,7 @@ class AnnularSpectra(BaseAggregateProduct):
         ax.set_zlabel("Normalised Counts s$^{-1}$ keV$^{-1}$")
 
         # Setting up y label (with dynamic unit) and the correct radius limits
-        ax.set_ylabel("Radius [{u}]".format(u=chosen_unit.to_string()))
+        ax.set_ylabel(f"Radius [{chosen_unit.to_string()}]")
         if self.proper_radii is not None:
             y_lims = [self.proper_annulus_centres.value[0], self.proper_radii.value[-1]]
         else:
@@ -3983,13 +4437,13 @@ class AnnularSpectra(BaseAggregateProduct):
         ax.set_ylim3d(y_lims)
 
         # Sets up the legend so that matching data point and models are on the same line in the legend
-        ax.legend(handles=handlers, labels=labels, handler_map={tuple: legend_handler.HandlerTuple(None)}, loc='best')
+        ax.legend(handles=handlers, labels=labels, handler_map={tuple: legend_handler.HandlerTuple(None)}, loc="best")
 
         # plt.tight_layout()
         ax.set_box_aspect(aspect=(5.5, 4, 3), zoom=0.86)
         plt.show()
 
-        plt.close('all')
+        plt.close("all")
 
     def __len__(self) -> int:
         """
