@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 8:41 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:31 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -189,6 +189,40 @@ class TestXSPECSingleSource(unittest.TestCase):
 
                     with self.assertRaises(AssertionError):
                         npt.assert_array_equal(cur_res, next_tel_res)
+
+    def test_global_single_temp_apec_abslum_retrieval(self) -> None:
+        """Tests that secondary, absorbed, luminosities can be retrieved from Spectrum instances."""
+        # Fit a couple of versions of APEC
+        fit_confs = [{"start_temp": Quantity(4.32, "keV")}, {"start_temp": Quantity(4.32, "keV"), "start_met": 0.5}]
+
+        single_temp_apec(self.no_fits_src, self.out_rad, telescope="xmm", **fit_confs[0])
+        single_temp_apec(self.no_fits_src, self.out_rad, telescope="xmm", **fit_confs[1])
+
+        # TODO This test should really be in test_products, as it is a mechanism of the Spectrum class rather
+        #  than an particular test of XSPEC, but this is being added very quickly
+        specs = self.no_fits_src.get_spectra(self.out_rad, telescope="xmm")
+
+        # There should definitely be multiple spectra returned for our test
+        #  source, so they should be in a list
+        self.assertIsInstance(specs, list)
+
+        # We fit multiple versions of the model to these spectra, so if we try to retrieve a luminosity value from
+        #  a spectrum instance WITHOUT passing a fit configuration, it should raise an error.
+        with self.assertRaises(ValueError):
+            specs[0].get_luminosities(absorbed_lum=True)
+
+        # Now we iterate through the spectra, and the fit configurations, retrieving both absorbed and unabsorbed
+        #  luminosities, and asserting that the absorbed luminosity MUST be less than the absorbed.
+        for cur_sp in specs:
+            for cur_fit_conf in fit_confs:
+                cur_lx = cur_sp.get_luminosities(
+                    fit_conf=cur_fit_conf, absorbed_lum=False, lo_en=Quantity(0.5, "keV"), hi_en=Quantity(2.0, "keV")
+                )
+                cur_abs_lx = cur_sp.get_luminosities(
+                    fit_conf=cur_fit_conf, absorbed_lum=True, lo_en=Quantity(0.5, "keV"), hi_en=Quantity(2.0, "keV")
+                )
+
+                self.assertLess(cur_abs_lx[0], cur_lx[0])
 
     def test_global_single_temp_apec_view(self) -> None:
         """Tests the view method of the Spectrum class after fitting several versions of the
