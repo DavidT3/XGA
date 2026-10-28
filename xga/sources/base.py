@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 8:37 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:55 AM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -628,6 +628,7 @@ class BaseSource:
         self._total_count_rate: dict[str, dict] = {tel: {} for tel in self.telescopes}
         self._total_exp: dict[str, dict] = {tel: {} for tel in self.telescopes}
         self._luminosities: dict[str, dict] = {tel: {} for tel in self.telescopes}
+        self._abs_luminosities: dict[str, dict] = {tel: {} for tel in self.telescopes}
         self._failed_fits: dict[str, dict] = {tel: {} for tel in self.telescopes}
 
         # Initialisation of attributes related to Extended and GalaxyCluster sources
@@ -6241,6 +6242,7 @@ class BaseSource:
         self._dof.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
         self._fit_results.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
         self._luminosities.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
+        self._abs_luminosities.setdefault(telescope, {}).setdefault(spec_storage_key, {}).setdefault(model, {})
 
         # Now we start actually storing things
         self._total_count_rate[telescope][spec_storage_key][model][fit_conf] = [
@@ -6284,8 +6286,9 @@ class BaseSource:
         self._fit_results[telescope][spec_storage_key][model][fit_conf] = mod_res
 
         # And now storing the luminosity results - same deal as _fit_results, we know the structure
-        #  exists already
+        #  exists already. Also do the same for absorbed luminosities.
         self._luminosities[telescope][spec_storage_key][model][fit_conf] = lums
+        # self._abs_luminosities[telescope][spec_storage_key][model][fit_conf] = abs_lums
 
     def add_fit_failure(self, model: str, spec_storage_key: str, telescope: str, fit_conf: str) -> None:
         """
