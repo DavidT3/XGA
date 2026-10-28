@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 8:54 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:09 AM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1389,7 +1389,7 @@ class Spectrum(BaseProduct):
         lo_en: Quantity | None = None,
         hi_en: Quantity | None = None,
         fit_conf: str | dict | None = None,
-        absorbed_lumin: bool = False,
+        absorbed_lum: bool = False,
     ):
         """
         Returns the luminosities measured for this spectrum from a given model.
@@ -1404,7 +1404,7 @@ class Spectrum(BaseProduct):
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the fit method
             and values being the changed values (only values changed-from-default need be included) or a full string
             representation of the fit configuration that is being requested.
-        :param bool absorbed_lumin: Whether to return the absorbed luminosity or not. The primary, unabsorbed,
+        :param bool absorbed_lum: Whether to return the absorbed luminosity or not. The primary, unabsorbed,
             luminosity will be returned by default.
         :return: Luminosity measurement, either for all energy bands, or the one requested with the energy
             limit parameters. Luminosity measurements are presented as three column numpy arrays, with column 0
@@ -1431,13 +1431,13 @@ class Spectrum(BaseProduct):
             )
 
         # The default behavior is to return the unabsorbed luminosities
-        if en_key is None and not absorbed_lumin:
+        if en_key is None and not absorbed_lum:
             return self._luminosities[model][fit_conf]
-        elif en_key is not None and not absorbed_lumin:
+        elif en_key is not None and not absorbed_lum:
             return self._luminosities[model][fit_conf][en_key]
 
         # But if absorbed_lumin=True, we will fetch the luminosities from the absorbed luminosity dictionary
-        elif en_key is None and absorbed_lumin:
+        elif en_key is None and absorbed_lum:
             return self._abs_luminosities[model][fit_conf]
         else:
             return self._abs_luminosities[model][fit_conf][en_key]
