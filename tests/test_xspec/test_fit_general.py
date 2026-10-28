@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/27/26, 9:49 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 8:41 AM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -168,10 +168,13 @@ class TestXSPECSingleSource(unittest.TestCase):
 
             # Now we can check that the larger confidence interval Lx measurements for the default energy bands
             #  return luminosities that have larger uncertainties than the 'default_lxs'.
-            npt.assert_array_less(default_lxs["0.5-2.0"][1:], larger_conf_lxs["0.5-2.0"][1:])
-            npt.assert_array_less(default_lxs["0.01-100.0"][1:], larger_conf_lxs["0.01-100.0"][1:])
+            self.assertLess(default_lxs["bound_0.5-2.0"][1], larger_conf_lxs["bound_0.5-2.0"][1])
+            self.assertLess(default_lxs["bound_0.5-2.0"][2], larger_conf_lxs["bound_0.5-2.0"][2])
 
-            all_tel_res[tel] = [default_lxs, larger_conf_lxs, single_band_lx, many_band_lx]
+            self.assertLess(default_lxs["bound_0.01-100.0"][1], larger_conf_lxs["bound_0.01-100.0"][1])
+            self.assertLess(default_lxs["bound_0.01-100.0"][2], larger_conf_lxs["bound_0.01-100.0"][2])
+
+            all_tel_res[tel] = [default_lxs, larger_conf_lxs, many_band_lx]
 
         # Finally, we perform a like-for-like comparison of luminosities measured using the same configuration
         #  but from different telescope's data. We assert that they should NOT be identical arrays, because
@@ -180,11 +183,12 @@ class TestXSPECSingleSource(unittest.TestCase):
         for tel_ind, tel in enumerate(list(all_tel_res.keys())[:-1]):
             next_tel = list(all_tel_res.keys())[tel_ind + 1]
 
-            for cur_res_key, cur_res in all_tel_res[tel]:
-                next_tel_res = all_tel_res[next_tel][cur_res_key]
+            for cur_res_set_ind, cur_res_set in enumerate(all_tel_res[tel]):
+                for cur_res_key, cur_res in cur_res_set.items():
+                    next_tel_res = all_tel_res[next_tel][cur_res_set_ind][cur_res_key]
 
-                with self.assertRaises(AssertionError):
-                    npt.assert_array_equal(cur_res, next_tel_res)
+                    with self.assertRaises(AssertionError):
+                        npt.assert_array_equal(cur_res, next_tel_res)
 
     def test_global_single_temp_apec_view(self) -> None:
         """Tests the view method of the Spectrum class after fitting several versions of the
