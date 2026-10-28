@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:31 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 12:33 PM. Copyright (c) The Contributors.
 
 import os
 import unittest
@@ -34,12 +34,15 @@ class TestXSPECSingleSource(unittest.TestCase):
             {"stacked_spectra": False},
         ]
 
+        # Set a fit configuration
+        fit_conf = {"start_temp": Quantity(2.97, "keV")}
+
         for cur_pc in par_combs:
             with self.subTest(msg=f"Test global single_temp_apec with {cur_pc}", **cur_pc):
-                single_temp_apec(self.test_src, self.out_rad, **cur_pc)
+                single_temp_apec(self.test_src, self.out_rad, **cur_pc, **fit_conf)
 
                 for cur_tel in self.test_src.telescopes:
-                    cur_tx = self.test_src.get_temperature(self.out_rad, cur_tel, **cur_pc)
+                    cur_tx = self.test_src.get_temperature(self.out_rad, cur_tel, **cur_pc, fit_conf=fit_conf)
 
     def test_global_single_temp_apec_diff_fitconf(self) -> None:
         """
