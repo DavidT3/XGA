@@ -325,6 +325,9 @@ def adaptive_smooth(
         widths = np.geomspace(max_size, min_size, num_widths)
     else:
         widths = np.geomspace(min_size, max_size, num_widths)
+        # We also need a boolean array for the csmooth-like approach to flag which pixels have already met the 
+        #   target SNR
+        target_met = np.zeros_like(img_pad)
 
     # ====== Caches ====== 
     # Stores the "best difference" between kernel SNR and target SNR at each pixel. In 'asmooth', this is the 
@@ -344,6 +347,8 @@ def adaptive_smooth(
     #   and for the normalisation array to maintain consistent flux before and after smoothing.
     final_num = np.zeros_like(num_base)
     final_norm = np.zeros_like(num_base)
+    final_image = np.zeros_like(num_base)
+    final_snrs = np.zeros_like(num_base)
 
     # Iterate over kernel widths
     for wid, width in enumerate(tqdm.tqdm(widths)):
@@ -364,6 +369,9 @@ def adaptive_smooth(
             denom_square = convolve_fft(den_base, kernel**2, mask=mask, normalize_kernel=False, boundary=boundary,
                                         fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
                                         normalization_zero_tol=normalization_zero_tol)
+            norm = convolve_fft(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+                                fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
+                                normalization_zero_tol=normalization_zero_tol)
         else:
             num = convolve(num_base, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
                            fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
@@ -371,43 +379,68 @@ def adaptive_smooth(
             denom_square = convolve(den_base, kernel**2, mask=mask, normalize_kernel=False, boundary=boundary,
                                     fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
                                     normalization_zero_tol=normalization_zero_tol)
+            norm = convolve(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+                            fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
+                            normalization_zero_tol=normalization_zero_tol)
         denom = np.sqrt(denom_square)
 
         # Calculate the SNR at each pixel for this kernel as the ratio of numerator and denominator
         snr = num/denom
 
-        # Find the absolute difference between the target SNR and the SNR at each pixel.
-        diff = np.abs(snr-target_snr)
+        # Differentiate handling based on smoothing method. First using csmooth-like smoothing (first kernel to meet or 
+        #   exceed the target snr)
+        if method == "csmooth":
+            if width != widths[-1]:
+                # Get an array of new pixels that meet the target SNR with a finite result if it is not the last kernel
+                pixels_meeting_target = (snr >= target_snr) & ~target_met & np.isfinite(snr)
+            else:
+                # Otherwise, use the largest kernel for all pixels that have not yet met the target SNR.
+                pixels_meeting_target = ~target_met
 
-        # If pixel SNR is closer to target SNR, update width in kernel sizes to match this new best width and store 
-        #   the numerator in num cache.
-        better = diff < best_diff
-        best_diff = np.where(better, diff, best_diff)
-        kernel_sizes = np.where(better, width, kernel_sizes)
-        num_cache[wid] = num
+            # Update the final image, and other holding arrays (e.g. kernel_sizes)
+            final_image[pixels_meeting_target] = num[pixels_meeting_target] / norm[pixels_meeting_target]
+            kernel_sizes[pixels_meeting_target] = width
+            final_snrs[pixels_meeting_target] = snr[pixels_meeting_target]
 
-    # Assign pixels to widths
-    nearest_idx = np.argmin(np.abs(kernel_sizes[None] - widths[:, None, None]), axis=0)
-    
-    # Iterate over widths again and select the best pixels for the final image
-    for wid, width in enumerate(tqdm.tqdm(widths)):
-        id_mask = (nearest_idx == wid)
-        if not np.any(id_mask):
-            continue  # if no pixels use this width (unlikely)
-        kernel = Gaussian2DKernel(width).array
-        final_num[id_mask] = num_cache[wid][id_mask]
-        if fft:
-            norm = convolve_fft(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
-                                fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
-                                normalization_zero_tol=normalization_zero_tol)
+            # Update the target_met array to mark which pixels have met their goal.
+            target_met[pixels_meeting_target] = True
+
+        # Now handle for the asmooth case (taking the kernel with width closest to the target SNR)
         else:
-            norm = convolve(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
-                            fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
-                            normalization_zero_tol=normalization_zero_tol)
-        final_norm[id_mask] = norm[id_mask]
+            # Find the absolute difference between the target SNR and the SNR at each pixel.
+            diff = np.abs(snr-target_snr)
 
-    # Normalise the final image to maintain flux
-    final_image = final_num / final_norm
+            # If pixel SNR is closer to target SNR, update the best_diff array to store that new diffence
+            better = diff < best_diff
+            best_diff = np.where(better, diff, best_diff)
+
+            # Update final image and other holding arrays
+            final_image[better] = num[better] / norm[better]
+            kernel_sizes = np.where(better, width, kernel_sizes)
+            final_snrs[better] = snr[better]
+
+    # # Assign pixels to widths
+    # nearest_idx = np.argmin(np.abs(kernel_sizes[None] - widths[:, None, None]), axis=0)
+    # 
+    # # Iterate over widths again and select the best pixels for the final image
+    # for wid, width in enumerate(tqdm.tqdm(widths)):
+    #     id_mask = (nearest_idx == wid)
+    #     if not np.any(id_mask):
+    #         continue  # if no pixels use this width (unlikely)
+    #     kernel = Gaussian2DKernel(width).array
+    #     final_num[id_mask] = num_cache[wid][id_mask]
+    #     if fft:
+    #         norm = convolve_fft(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+    #                             fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
+    #                             normalization_zero_tol=normalization_zero_tol)
+    #     else:
+    #         norm = convolve(weight_pad, kernel, mask=mask, normalize_kernel=norm_kernel, boundary=boundary,
+    #                         fill_value=fill_value, nan_treatment=nan_treatment, preserve_nan=preserve_nan,
+    #                         normalization_zero_tol=normalization_zero_tol)
+    #     final_norm[id_mask] = norm[id_mask]
+ 
+    # # Normalise the final image to maintain flux
+    # final_image = final_num / final_norm
 
     # Remove the padded borders
     sm_data = final_image[int(pad_width):int(-pad_width), int(pad_width):int(-pad_width)]
