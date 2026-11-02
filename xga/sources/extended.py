@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 7/28/26, 11:21 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 10/27/26, 4:40 PM. Copyright (c) The Contributors.
 """This module defines XGA source classes representing specific extended astrophysical sources (e.g. GalaxyCluster)."""
 
 from typing import overload
@@ -804,18 +804,18 @@ class GalaxyCluster(ExtendedSource):
         :rtype: Quantity
         """
         return super().get_luminosities(
-            outer_radius,
-            telescope,
-            model,
-            inner_radius,
-            lo_en,
-            hi_en,
-            group_spec,
-            min_counts,
-            min_sn,
-            over_sample,
-            stacked_spectra,
-            fit_conf,
+            outer_radius=outer_radius,
+            telescope=telescope,
+            model=model,
+            inner_radius=inner_radius,
+            lo_en=lo_en,
+            hi_en=hi_en,
+            group_spec=group_spec,
+            min_counts=min_counts,
+            min_sn=min_sn,
+            over_sample=over_sample,
+            stacked_spectra=stacked_spectra,
+            fit_conf=fit_conf,
         )
 
     def get_temperature(

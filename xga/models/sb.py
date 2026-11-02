@@ -58,7 +58,7 @@ class BetaProfile1D(BaseModel1D):
         # TODO MAKE THE NEW START PARAMETERS MORE SENSIBLE
         norm_starts = [Quantity(1, 'ct/(s*arcmin**2)'), Quantity(1, 'ct/(s*kpc**2)'), Quantity(1, 'ct/(s*pix**2)')]
 
-        start_pars = [Quantity(1, ''), r_core_starts[xu_ind], norm_starts[yu_ind]]
+        start_pars = [Quantity(1, ''), r_core_starts[xu_ind].to(x_unit), norm_starts[yu_ind]]
         if cust_start_pars is not None:
             # If the custom start parameters can run this gauntlet without tripping an error then we're all good
             # This method also returns the custom start pars converted to exactly the same units as the default
@@ -237,8 +237,8 @@ class DoubleBetaProfile1D(BaseModel1D):
         r_core2_starts = [Quantity(400, 'kpc'), Quantity(0.5, 'deg'), Quantity(0.2, r200), Quantity(0.4, r500),
                           Quantity(1, r2500)]
 
-        start_pars = [Quantity(1, ''), r_core1_starts[xu_ind], norm_starts[yu_ind], Quantity(0.5, ''),
-                      r_core2_starts[xu_ind], norm_starts[yu_ind]*0.5]
+        start_pars = [Quantity(1, ''), r_core1_starts[xu_ind].to(x_unit), norm_starts[yu_ind], Quantity(0.5, ''),
+                      r_core2_starts[xu_ind].to(x_unit), norm_starts[yu_ind]*0.5]
         if cust_start_pars is not None:
             # If the custom start parameters can run this gauntlet without tripping an error then we're all good
             # This method also returns the custom start pars converted to exactly the same units as the default

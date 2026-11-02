@@ -170,7 +170,7 @@ def _gen_detmap_cmd(source: BaseSource, obs_id: str, inst: str, bin_size: int = 
         #  from the same observation then for MOS2 we select MOS1, and for MOS1 we select MOS2 (as they
         #  are rotated wrt one another it is still semi-valid), and failing that MOS2 will get MOS2 and MOS1
         #  will get MOS1.
-        if inst[-1] == 1:
+        if inst[-1] == '1':
             cur = '1'
             opp = '2'
         else:

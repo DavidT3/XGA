@@ -27,6 +27,11 @@
     ],
     "contributors": [
         {
+            "name": "Rooney, Phillip",
+            "affiliation": "Department of Physics and Astronomy, University of Sussex, Brighton, UK",
+            "type": "ProjectMember"
+        },
+        {
             "name": "Donahue, Megan",
             "orcid": "0000-0002-2808-0853",
             "affiliation": "Department of Physics and Astronomy, Michigan State University, Lansing, Michigan, USA",
