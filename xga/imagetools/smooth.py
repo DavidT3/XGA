@@ -173,7 +173,8 @@ def adaptive_smooth(
         fill_value: Union[int, float] = 0.0,
         nan_treatment: str = 'interpolate', 
         preserve_nan: bool = False,
-        normalization_zero_tol: Union[float, int] = 1e-8
+        normalization_zero_tol: Union[float, int] = 1e-8,
+        xlim: Optional[tuple] = None, ylim: Optional[tuple] = None
     ) -> Union[Image, RateMap]:
     """
     Performs adaptive smoothing on XGA image data using a technique similar to XMM SAS's asmooth function. Uses a grid of possible
@@ -235,6 +236,12 @@ def adaptive_smooth(
     :param float/int normalization_zero_tol: The absolute tolerance on whether the kernel is different from zero. If
         the kernel sums to zero to within this precision, it cannot be normalized. Passed through to the Astropy
         convolution function's `normalization_zero_tol` argument. The default is 1e-8.
+    :param tuple xlim: A tuple of the minimum and maximum x-limits to use for this smoothing in pixel coordinates. The smoothing will
+        only be applied within these limits (plus needed padding to deal with boundary conditions). Default is None, which will smooth
+        the whole image instead of just a cutout.
+    :param tuple ylim: A tuple of the minimum and maximum y-limits to use for this smoothing in pixel coordinates. The smoothing will
+        only be applied within these limits (plus needed padding to deal with boundary conditions). Default is None, which will smooth
+        the whole image instead of just a cutout.
     :return: An XGA product with the smoothed Image or RateMap.
     :rtype: Image/RateMap
     """
@@ -302,6 +309,12 @@ def adaptive_smooth(
     weights = weights if weights is not None else np.ones_like(data_to_smth)
     variance = variance if variance is not None else data_to_smth.copy()
 
+    # Set the x and y limits if provided, or set to smooth over full image if not explicitly passed by the user.
+    xlim = xlim if xlim is not None else (0, len(data_to_smth[0]))
+    ylim = ylim if ylim is not None else (0, len(data_to_smth))
+    xlo, xhi = xlim[0], xlim[1]
+    ylo, yhi = ylim[0], ylim[1]
+
     # Pad the arrays by 4 times the maximum width (this is the radius of a gaussian 2D kernel) to avoid boundary issues
     #   when applying the smoothing.
     pad_width = int(np.ceil(4*max_size))
@@ -309,15 +322,21 @@ def adaptive_smooth(
     weight_pad = np.pad(weights, pad_width, 'reflect')
     var_pad = np.pad(variance, pad_width, 'reflect')
 
+    # Crop the padded arrays to only be applied within the provided x and y limits, accounting for the kernel required
+    #   pad widths as well.
+    cropped_im = img_pad[ylo:yhi+2*pad_width, xlo:xhi+2*pad_width].copy()
+    cropped_weight = weight_pad[ylo:yhi+2*pad_width, xlo:xhi+2*pad_width].copy()
+    cropped_var = var_pad[ylo:yhi+2*pad_width, xlo:xhi+2*pad_width].copy()
+
     # ===== Precompute the constant arrays =====
     # num_base is the basic numerator for calculating the SNR and what will be convolved by each of the kernels to get
     #   the final smoothed image. It is the product of the input image and the weights array.
-    num_base = img_pad * weight_pad
+    num_base = cropped_im * cropped_weight
 
     # den_base is the equivalent of num_base for the denominator when calculating SNR for a given kernel. It is 
     #   convolved with the kernel^2 when calculating SNR and is the product of the weights array squared and the 
     #   provided variance map.
-    den_base = (weight_pad**2) * var_pad
+    den_base = (cropped_weight**2) * cropped_var
 
     # Make a list of geometrically spaced kernel widths to use for smoothing. Sort in descending 
     #   order if using 'asmooth' smoothing method, and ascending order if using 'csmooth'.
@@ -442,8 +461,11 @@ def adaptive_smooth(
     # # Normalise the final image to maintain flux
     # final_image = final_num / final_norm
 
+    # Reinsert smoothed data on final image
+    img_pad[ylo:yhi+2*pad_width, xlo:xhi+2*pad_width] = final_image
+
     # Remove the padded borders
-    sm_data = final_image[int(pad_width):int(-pad_width), int(pad_width):int(-pad_width)]
+    sm_data = img_pad[int(pad_width):int(-pad_width), int(pad_width):int(-pad_width)]
 
     # Now we construct the new XGA product instance that houses the smoothed data
     #  In the case of an Image being passed in, we make an image to send back out
