@@ -1,10 +1,11 @@
 CLAUDE.md
+.claude
 /docs/source/notebooks/tutorials/whole_sample.csv
 /docs/source/notebooks/advanced_tutorials/random_brightness_profile.xga
 .coverage
 .pytest_cache
-xga_output
-daxa_output
+*xga_output
+*daxa_output
 *census*
 *blacklist*
 .idea
