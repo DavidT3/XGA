@@ -1,36 +1,52 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:14 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/3/26, 1:24 PM. Copyright (c) The Contributors.
 
 from copy import deepcopy
-from inspect import signature, Parameter
-from typing import List, Union
+from inspect import Parameter, signature
 from warnings import warn
 
 import astropy.units as u
 import numpy as np
 from astropy.units import Quantity
 
-from ._common import _check_inputs, _write_xspec_script, _pregen_spectra, _spec_obj_setup
-from ..fitconfgen import _gen_fit_conf, FIT_FUNC_ARGS
-from ..run import xspec_call
 from ... import NUM_CORES
-from ...exceptions import ModelNotAssociatedError, XGADeveloperError, FitConfNotAssociatedError
+from ...exceptions import FitConfNotAssociatedError, ModelNotAssociatedError, XGADeveloperError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
+from ..fitconfgen import FIT_FUNC_ARGS, _gen_fit_conf
+from ..run import xspec_call
+from ._common import _check_inputs, _pregen_spectra, _spec_obj_setup, _write_xspec_script
 
 
 @xspec_call
-def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                     start_temp: Quantity = Quantity(3.0, "keV"), start_met: Union[float, List] = 0.3,
-                     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
-                     freeze_met: bool = True, freeze_temp: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
-                     hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
-                     min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                     spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
-                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None,
-                     force_gen: bool = False) -> Union[BaseSource, BaseSample, List[BaseSource]]:
+def single_temp_apec(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    start_temp: Quantity = Quantity(3.0, "keV"),
+    start_met: float | list = 0.3,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    freeze_nh: bool = True,
+    freeze_met: bool = True,
+    freeze_temp: bool = False,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: int | float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    spectrum_checking: bool = True,
+    timeout: Quantity = Quantity(1, "hr"),
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+    force_gen: bool = False,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting an absorbed single temperature apec model (constant*tbabs*apec) to an
     object. If there are no existing spectra with the passed settings, then they will be generated automatically.
@@ -97,14 +113,21 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     :return: The source object(s) passed in.
     :rtype: Union[BaseSource, BaseSample, List[BaseSource]]
     """
-
     # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
-                                                                                     inner_radius, group_spec,
-                                                                                     min_counts, min_sn, over_sample,
-                                                                                     one_rmf,
-                                                                                     num_cores, stacked_spectra,
-                                                                                     telescope, force_gen)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        stacked_spectra,
+        telescope,
+        force_gen,
+    )
 
     # Confirms that input parameters are legal, and nothing silly has been passed
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
@@ -112,8 +135,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     # TODO REPLACE THESE REPEATED CHECKS/PREPARATION OF START TEMP/MET WITH A FUNCTION - SEE ISSUE #1509
     # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
     if not start_temp.isscalar and len(start_temp) != len(sources):
-        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
-                         "source. It currently has {n} for {s} sources.".format(n=len(start_temp), s=len(sources)))
+        raise ValueError(
+            "If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+            f"source. It currently has {len(start_temp)} for {len(sources)} sources."
+        )
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
@@ -126,8 +151,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     # TODO WHEN IMPLEMENTING THE ABOVE TODO, MAKE THIS CHECK SUPPORT QUANTITY AS WELL
     # We repeat the above, but for the starting metallicity value(s)
     if isinstance(start_met, (list, np.ndarray)) and len(start_met) != len(sources):
-        raise ValueError("If a list or array is passed to 'start_met', it must have one entry for each "
-                         "source. It currently has {n} for {s} sources.".format(n=len(start_met), s=len(sources)))
+        raise ValueError(
+            "If a list or array is passed to 'start_met', it must have one entry for each "
+            f"source. It currently has {len(start_met)} for {len(sources)} sources."
+        )
     elif isinstance(start_met, (list, np.ndarray)):
         all_start_mets = deepcopy(start_met)
     # Want to make sure that the start_met variable is always a list with an entry for every source
@@ -147,7 +174,7 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['single_temp_apec']
+    rel_args = FIT_FUNC_ARGS["single_temp_apec"]
 
     sig = signature(single_temp_apec)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
@@ -157,8 +184,10 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
 
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     script_paths = []
     outfile_paths = []
@@ -173,8 +202,18 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             if tel not in telescope:
                 continue
             # retrieving the spectrum objects needed for each source/ tel combo
-            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind, inn_rad_vals,
-                                                 group_spec, min_counts, min_sn, over_sample)
+            specs, storage_key = _spec_obj_setup(
+                stacked_spectra,
+                tel,
+                source,
+                out_rad_vals,
+                src_ind,
+                inn_rad_vals,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+            )
 
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
@@ -184,14 +223,15 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
             start_met = all_start_mets[src_ind]
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp.value,
-                                                          start_met, source.redshift, 1.)
+            par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(
+                1.0, source.nH.to("10^22 cm^-2").value, start_temp.value, start_met, source.redshift, 1.0
+            )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
             #  include the temperature, if the user wants it fixed at the start value
-            freezing = "{{F {n} {t} {a} T F}}".format(n="T" if freeze_nh else "F",
-                                                      t="T" if freeze_temp else "F",
-                                                      a="T" if freeze_met else "F")
+            freezing = "{{F {n} {t} {a} T F}}".format(
+                n="T" if freeze_nh else "F", t="T" if freeze_temp else "F", a="T" if freeze_met else "F"
+            )
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -226,16 +266,48 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+                res = source.get_results(
+                    out_rad_vals[src_ind],
+                    tel,
+                    model,
+                    inn_rad_vals[src_ind],
+                    "norm",
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    eff_stack_spec[tel],
+                    fit_conf,
+                )
             except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                     fit_method, specs, lo_en, hi_en, par_names, par_values,
-                                                                     linking, freezing, par_fit_stat, lum_low_lims,
-                                                                     lum_upp_lims, lum_conf, source.redshift,
-                                                                     spectrum_checking, check_list, check_lo_lims,
-                                                                     check_hi_lims, check_err_lims, True, tel, fit_conf,
-                                                                     nh_to_zero)
+                out_file, script_file, inv_ent = _write_xspec_script(
+                    source,
+                    storage_key,
+                    model,
+                    abund_table,
+                    fit_method,
+                    specs,
+                    lo_en,
+                    hi_en,
+                    par_names,
+                    par_values,
+                    linking,
+                    freezing,
+                    par_fit_stat,
+                    lum_low_lims,
+                    lum_upp_lims,
+                    lum_conf,
+                    source.redshift,
+                    spectrum_checking,
+                    check_list,
+                    check_lo_lims,
+                    check_hi_lims,
+                    check_err_lims,
+                    True,
+                    tel,
+                    fit_conf,
+                    nh_to_zero,
+                )
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
@@ -247,17 +319,33 @@ def single_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
 
 @xspec_call
-def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                      inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                      start_temp: Quantity = Quantity(3.0, "keV"), start_met: float = 0.3,
-                      lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                      freeze_nh: bool = True, freeze_met: bool = True, freeze_temp: bool = False,
-                      lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-                      par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
-                      fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-                      over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                      spectrum_checking: bool = True, timeout: Quantity = Quantity(1, 'hr'),
-                      stacked_spectra: bool = False, telescope: Union[str, List[str]] = None):
+def single_temp_mekal(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    start_temp: Quantity = Quantity(3.0, "keV"),
+    start_met: float = 0.3,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    freeze_nh: bool = True,
+    freeze_met: bool = True,
+    freeze_temp: bool = False,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    spectrum_checking: bool = True,
+    timeout: Quantity = Quantity(1, "hr"),
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+):
     """
     This is a convenience function for fitting an absorbed single temperature mekal model(constant*tbabs*mekal) to an
     object. If there are no existing spectra with the passed settings, then they will be generated automatically.
@@ -320,19 +408,28 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
-                                                                                     inner_radius, group_spec,
-                                                                                     min_counts, min_sn, over_sample,
-                                                                                     one_rmf,
-                                                                                     num_cores, stacked_spectra,
-                                                                                     telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        stacked_spectra,
+        telescope,
+    )
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # TODO REPLACE THESE REPEATED CHECKS/PREPARATION OF START TEMP/MET WITH A FUNCTION - SEE ISSUE #1509
     # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
     if not start_temp.isscalar and len(start_temp) != len(sources):
-        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
-                         "source. It currently has {n} for {s} sources.".format(n=len(start_temp), s=len(sources)))
+        raise ValueError(
+            "If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+            f"source. It currently has {len(start_temp)} for {len(sources)} sources."
+        )
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
@@ -345,14 +442,16 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     # TODO WHEN IMPLEMENTING THE ABOVE TODO, MAKE THIS CHECK SUPPORT QUANTITY AS WELL
     # We repeat the above, but for the starting metallicity value(s)
     if isinstance(start_met, (list, np.ndarray)) and len(start_met) != len(sources):
-        raise ValueError("If a list or array is passed to 'start_met', it must have one entry for each "
-                         "source. It currently has {n} for {s} sources.".format(n=len(start_met), s=len(sources)))
+        raise ValueError(
+            "If a list or array is passed to 'start_met', it must have one entry for each "
+            f"source. It currently has {len(start_met)} for {len(sources)} sources."
+        )
     elif isinstance(start_met, (list, np.ndarray)):
         all_start_mets = deepcopy(start_met)
     # Want to make sure that the start_met variable is always a list with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif isinstance(start_met, (float, int)):
-        all_start_mets = [start_met]*len(sources)
+        all_start_mets = [start_met] * len(sources)
     else:
         raise ValueError("'start_met' must be either a list/array with an entry for each source, or a float/integer.")
 
@@ -366,7 +465,7 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['single_temp_mekal']
+    rel_args = FIT_FUNC_ARGS["single_temp_mekal"]
     sig = signature(single_temp_mekal)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
 
@@ -374,8 +473,10 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     script_paths = []
     outfile_paths = []
@@ -388,8 +489,18 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             if tel not in telescope:
                 continue
             # retrieving the spectrum objects needed for each source/ tel combo
-            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                                 inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+            specs, storage_key = _spec_obj_setup(
+                stacked_spectra,
+                tel,
+                source,
+                out_rad_vals,
+                src_ind,
+                inn_rad_vals,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+            )
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift to this model.")
@@ -399,14 +510,14 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             # We also fetch the start metallicity
             start_met = all_start_mets[src_ind]
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(1., source.nH.to("10^22 cm^-2").value,
-                                                                      start_temp.value, 1, start_met, source.redshift,
-                                                                      1, 1.)
+            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(
+                1.0, source.nH.to("10^22 cm^-2").value, start_temp.value, 1, start_met, source.redshift, 1, 1.0
+            )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
-            freezing = "{{F {n} {t} T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
-                                                           t='T' if freeze_temp else 'F',
-                                                           ab='T' if freeze_met else 'F')
+            freezing = "{{F {n} {t} T {ab} T T F}}".format(
+                n="T" if freeze_nh else "F", t="T" if freeze_temp else "F", ab="T" if freeze_met else "F"
+            )
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -441,16 +552,48 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
             # If the fit has already been performed, we do not wish to perform it again
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+                res = source.get_results(
+                    out_rad_vals[src_ind],
+                    tel,
+                    model,
+                    inn_rad_vals[src_ind],
+                    "norm",
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    eff_stack_spec[tel],
+                    fit_conf,
+                )
             except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                     fit_method, specs, lo_en, hi_en, par_names,
-                                                                     par_values, linking, freezing, par_fit_stat,
-                                                                     lum_low_lims, lum_upp_lims, lum_conf,
-                                                                     source.redshift, spectrum_checking, check_list,
-                                                                     check_lo_lims, check_hi_lims, check_err_lims, True,
-                                                                     tel, fit_conf, nh_to_zero)
+                out_file, script_file, inv_ent = _write_xspec_script(
+                    source,
+                    storage_key,
+                    model,
+                    abund_table,
+                    fit_method,
+                    specs,
+                    lo_en,
+                    hi_en,
+                    par_names,
+                    par_values,
+                    linking,
+                    freezing,
+                    par_fit_stat,
+                    lum_low_lims,
+                    lum_upp_lims,
+                    lum_conf,
+                    source.redshift,
+                    spectrum_checking,
+                    check_list,
+                    check_lo_lims,
+                    check_hi_lims,
+                    check_err_lims,
+                    True,
+                    tel,
+                    fit_conf,
+                    nh_to_zero,
+                )
 
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
@@ -463,18 +606,34 @@ def single_temp_mekal(sources: Union[BaseSource, BaseSample], outer_radius: Unio
 
 
 @xspec_call
-def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                        inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                        start_max_temp: Quantity = Quantity(5.0, "keV"), start_met: float = 0.3,
-                        start_t_rat: float = 0.1, start_inv_em_slope: float = 0.25,
-                        lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-                        freeze_nh: bool = True, freeze_met: bool = True, lo_en: Quantity = Quantity(0.3, "keV"),
-                        hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                        abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-                        min_counts: int = 5, min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True,
-                        num_cores: int = NUM_CORES, spectrum_checking: bool = True,
-                        timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
-                        telescope: Union[str, List[str]] = None) -> Union[BaseSource, BaseSample, List[BaseSource]]:
+def multi_temp_dem_apec(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    start_max_temp: Quantity = Quantity(5.0, "keV"),
+    start_met: float = 0.3,
+    start_t_rat: float = 0.1,
+    start_inv_em_slope: float = 0.25,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    freeze_nh: bool = True,
+    freeze_met: bool = True,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: int | float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    spectrum_checking: bool = True,
+    timeout: Quantity = Quantity(1, "hr"),
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting an absorbed multi temperature apec model (constant*tbabs*wdem) to
     spectra generated for XGA sources. The wdem model uses a power law distribution of the differential emission
@@ -530,12 +689,19 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
-                                                                                     inner_radius, group_spec,
-                                                                                     min_counts, min_sn, over_sample,
-                                                                                     one_rmf,
-                                                                                     num_cores, stacked_spectra,
-                                                                                     telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        stacked_spectra,
+        telescope,
+    )
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, absorbed apec, so I can hard code all of this stuff.
@@ -548,7 +714,7 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['multi_temp_dem_apec']
+    rel_args = FIT_FUNC_ARGS["multi_temp_dem_apec"]
     sig = signature(multi_temp_dem_apec)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
 
@@ -556,8 +722,10 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -577,8 +745,18 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             if tel not in telescope:
                 continue
             # retrieving the spectrum objects needed for each source/ tel combo
-            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                    inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+            specs, storage_key = _spec_obj_setup(
+                stacked_spectra,
+                tel,
+                source,
+                out_rad_vals,
+                src_ind,
+                inn_rad_vals,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+            )
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift to this model.")
@@ -587,13 +765,21 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
             t = start_max_temp.to("keV", equivalencies=u.temperature_energy()).value
 
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
-                                                                              start_t_rat, start_inv_em_slope,
-                                                                              1, start_met, source.redshift, 2, 1.)
+            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(
+                1.0,
+                source.nH.to("10^22 cm^-2").value,
+                t,
+                start_t_rat,
+                start_inv_em_slope,
+                1,
+                start_met,
+                source.redshift,
+                2,
+                1.0,
+            )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
-            freezing = "{{F {n} F F F T {ab} T T F}}".format(n='T' if freeze_nh else 'F',
-                                                             ab='T' if freeze_met else 'F')
+            freezing = "{{F {n} F F F T {ab} T T F}}".format(n="T" if freeze_nh else "F", ab="T" if freeze_met else "F")
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -622,18 +808,50 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'Tmax', group_spec,
-                                         min_counts, min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+                res = source.get_results(
+                    out_rad_vals[src_ind],
+                    tel,
+                    model,
+                    inn_rad_vals[src_ind],
+                    "Tmax",
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    eff_stack_spec[tel],
+                    fit_conf,
+                )
             except (ModelNotAssociatedError, FitConfNotAssociatedError):
                 # This internal function writes out the XSPEC script with all the information we've assembled in this
                 #  function - filling out the XSPEC template and writing to disk
-                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                     fit_method, specs, lo_en, hi_en, par_names,
-                                                                     par_values, linking, freezing, par_fit_stat,
-                                                                     lum_low_lims, lum_upp_lims, lum_conf, source.redshift,
-                                                                     spectrum_checking, check_list, check_lo_lims,
-                                                                     check_hi_lims, check_err_lims, True, tel, fit_conf,
-                                                                     nh_to_zero)
+                out_file, script_file, inv_ent = _write_xspec_script(
+                    source,
+                    storage_key,
+                    model,
+                    abund_table,
+                    fit_method,
+                    specs,
+                    lo_en,
+                    hi_en,
+                    par_names,
+                    par_values,
+                    linking,
+                    freezing,
+                    par_fit_stat,
+                    lum_low_lims,
+                    lum_upp_lims,
+                    lum_conf,
+                    source.redshift,
+                    spectrum_checking,
+                    check_list,
+                    check_lo_lims,
+                    check_hi_lims,
+                    check_err_lims,
+                    True,
+                    tel,
+                    fit_conf,
+                    nh_to_zero,
+                )
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
@@ -645,15 +863,30 @@ def multi_temp_dem_apec(sources: Union[BaseSource, BaseSample], outer_radius: Un
 
 
 @xspec_call
-def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-              inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
-              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), start_pho_index: float = 1.,
-              lo_en: Quantity = Quantity(0.3, "keV"), hi_en: Quantity = Quantity(7.9, "keV"),
-              freeze_nh: bool = True, par_fit_stat: float = 1., lum_conf: float = 68., abund_table: str = "angr",
-              fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5, min_sn: float = None,
-              over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-              timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
-              telescope: Union[str, List[str]] = None):
+def power_law(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    redshifted: bool = False,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    start_pho_index: float = 1.0,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    freeze_nh: bool = True,
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    timeout: Quantity = Quantity(1, "hr"),
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+):
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -701,12 +934,19 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
-                                                                                     inner_radius, group_spec,
-                                                                                     min_counts, min_sn, over_sample,
-                                                                                     one_rmf,
-                                                                                     num_cores, stacked_spectra,
-                                                                                     telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        stacked_spectra,
+        telescope,
+    )
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed powerlaw or absorbed zpowerlw
@@ -723,7 +963,7 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['power_law']
+    rel_args = FIT_FUNC_ARGS["power_law"]
     sig = signature(power_law)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
 
@@ -731,8 +971,10 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -751,16 +993,27 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             if tel not in telescope:
                 continue
             # retrieving the spectrum objects needed for each source/ tel combo
-            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                                 inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+            specs, storage_key = _spec_obj_setup(
+                stacked_spectra,
+                tel,
+                source,
+                out_rad_vals,
+                src_ind,
+                inn_rad_vals,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+            )
             # For this model, we have to know the redshift of the source.
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zpowerlw.")
             elif redshifted and source.redshift is not None:
-                par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, start_pho_index,
-                                                              source.redshift, 1.)
+                par_values = "{{{0} {1} {2} {3} {4}}}".format(
+                    1.0, source.nH.to("10^22 cm^-2").value, start_pho_index, source.redshift, 1.0
+                )
             else:
-                par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, start_pho_index, 1.)
+                par_values = "{{{0} {1} {2} {3}}}".format(1.0, source.nH.to("10^22 cm^-2").value, start_pho_index, 1.0)
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
             if redshifted and freeze_nh:
@@ -785,8 +1038,11 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                 z = source.redshift
             else:
                 z = 1
-                warn(f"{source.name} has no redshift information associated, so luminosities from this fit"
-                     f" will be invalid, as redshift has been set to one.", stacklevel=2)
+                warn(
+                    f"{source.name} has no redshift information associated, so luminosities from this fit"
+                    f" will be invalid, as redshift has been set to one.",
+                    stacklevel=2,
+                )
 
             # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed
             #  luminosities. I am only specifying parameter 2 here (though there will likely be multiple models
@@ -796,14 +1052,48 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                         min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+                res = source.get_results(
+                    out_rad_vals[src_ind],
+                    tel,
+                    model,
+                    inn_rad_vals[src_ind],
+                    None,
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    eff_stack_spec[tel],
+                    fit_conf,
+                )
             except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                     fit_method, specs, lo_en, hi_en, par_names, par_values,
-                                                                     linking, freezing, par_fit_stat, lum_low_lims,
-                                                                     lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
-                                                                     "{}", True, tel, fit_conf, nh_to_zero)
+                out_file, script_file, inv_ent = _write_xspec_script(
+                    source,
+                    storage_key,
+                    model,
+                    abund_table,
+                    fit_method,
+                    specs,
+                    lo_en,
+                    hi_en,
+                    par_names,
+                    par_values,
+                    linking,
+                    freezing,
+                    par_fit_stat,
+                    lum_low_lims,
+                    lum_upp_lims,
+                    lum_conf,
+                    z,
+                    False,
+                    "{}",
+                    "{}",
+                    "{}",
+                    "{}",
+                    True,
+                    tel,
+                    fit_conf,
+                    nh_to_zero,
+                )
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
@@ -815,15 +1105,30 @@ def power_law(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
 
 @xspec_call
-def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-              inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), redshifted: bool = False,
-              lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
-              start_temp: Quantity = Quantity(1, "keV"), lo_en: Quantity = Quantity(0.3, "keV"),
-              hi_en: Quantity = Quantity(7.9, "keV"), freeze_nh: bool = True, par_fit_stat: float = 1.,
-              lum_conf: float = 68., abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True,
-              min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-              num_cores: int = NUM_CORES, timeout: Quantity = Quantity(1, 'hr'), stacked_spectra: bool = False,
-              telescope: Union[str, List[str]] = None):
+def blackbody(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    redshifted: bool = False,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    start_temp: Quantity = Quantity(1, "keV"),
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    freeze_nh: bool = True,
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    timeout: Quantity = Quantity(1, "hr"),
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+):
     """
     This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -871,12 +1176,19 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for. Default is None, in which
         case the XSPEC fit will be performed individually for all telescopes associated with a source.
     """
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
-                                                                                     inner_radius, group_spec,
-                                                                                     min_counts, min_sn, over_sample,
-                                                                                     one_rmf,
-                                                                                     num_cores, stacked_spectra,
-                                                                                     telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        stacked_spectra,
+        telescope,
+    )
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # This function is for a set model, either absorbed blackbody or absorbed zbbody
@@ -894,8 +1206,10 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     # TODO REPLACE THESE REPEATED CHECKS/PREPARATION OF START TEMP/MET WITH A FUNCTION - SEE ISSUE #1509
     # Have to check that every source has a start temperature entry, if the user decided to pass a set of them
     if not start_temp.isscalar and len(start_temp) != len(sources):
-        raise ValueError("If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
-                         "source. It currently has {n} for {s} sources.".format(n=len(start_temp), s=len(sources)))
+        raise ValueError(
+            "If a non-scalar Quantity is passed for 'start_temp', it must have one entry for each "
+            f"source. It currently has {len(start_temp)} for {len(sources)} sources."
+        )
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
     #  after this point, it means we normalise how we deal with it.
     elif start_temp.isscalar:
@@ -907,7 +1221,7 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['blackbody']
+    rel_args = FIT_FUNC_ARGS["blackbody"]
     sig = signature(blackbody)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
 
@@ -915,8 +1229,10 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     # We generate the fit configuration key - in this case there are no relevant variables that can have different
     #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
@@ -935,8 +1251,18 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             if tel not in telescope:
                 continue
             # retrieving the spectrum objects needed for each source/ tel combo
-            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind,
-                                                 inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
+            specs, storage_key = _spec_obj_setup(
+                stacked_spectra,
+                tel,
+                source,
+                out_rad_vals,
+                src_ind,
+                inn_rad_vals,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+            )
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
             t = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy()).value
@@ -945,10 +1271,11 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
             elif redshifted and source.redshift is not None:
-                par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
-                                                              source.redshift, 1.)
+                par_values = "{{{0} {1} {2} {3} {4}}}".format(
+                    1.0, source.nH.to("10^22 cm^-2").value, t, source.redshift, 1.0
+                )
             else:
-                par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1.)
+                par_values = "{{{0} {1} {2} {3}}}".format(1.0, source.nH.to("10^22 cm^-2").value, t, 1.0)
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
             if redshifted and freeze_nh:
@@ -973,8 +1300,11 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                 z = source.redshift
             else:
                 z = 1
-                warn(f"{source.name} has no redshift information associated, so luminosities from this fit"
-                     f" will be invalid, as redshift has been set to one.", stacklevel=2)
+                warn(
+                    f"{source.name} has no redshift information associated, so luminosities from this fit"
+                    f" will be invalid, as redshift has been set to one.",
+                    stacklevel=2,
+                )
 
             # This sets the list of parameter IDs which should be zeroed at the end to calculate unabsorbed luminosities. I
             #  am only specifying parameter 2 here (though there will likely be multiple models because there are likely
@@ -984,14 +1314,48 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
             # If the fit has already been performed, we do not wish to perform it again
             try:
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], None, group_spec, min_counts,
-                                         min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+                res = source.get_results(
+                    out_rad_vals[src_ind],
+                    tel,
+                    model,
+                    inn_rad_vals[src_ind],
+                    None,
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    eff_stack_spec[tel],
+                    fit_conf,
+                )
             except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                     fit_method, specs, lo_en, hi_en, par_names, par_values,
-                                                                     linking, freezing, par_fit_stat, lum_low_lims,
-                                                                     lum_upp_lims, lum_conf, z, False, "{}", "{}", "{}",
-                                                                     "{}", True, tel, fit_conf, nh_to_zero)
+                out_file, script_file, inv_ent = _write_xspec_script(
+                    source,
+                    storage_key,
+                    model,
+                    abund_table,
+                    fit_method,
+                    specs,
+                    lo_en,
+                    hi_en,
+                    par_names,
+                    par_values,
+                    linking,
+                    freezing,
+                    par_fit_stat,
+                    lum_low_lims,
+                    lum_upp_lims,
+                    lum_conf,
+                    z,
+                    False,
+                    "{}",
+                    "{}",
+                    "{}",
+                    "{}",
+                    True,
+                    tel,
+                    fit_conf,
+                    nh_to_zero,
+                )
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
@@ -1003,18 +1367,37 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
 
 
 @xspec_call
-def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                     inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'),
-                     start_temp_one: Quantity = Quantity(3.0, "keV"),
-                     start_temp_two: Quantity = Quantity(5.0, "keV"), start_met_one: float = 0.3,
-                     start_met_two: float = 0.3, lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"), freeze_nh: bool = True,
-                     freeze_met_one: bool = True, freeze_met_two: bool = True, freeze_temp_one: bool = False,
-                     freeze_temp_two: bool = False, lo_en: Quantity = Quantity(0.3, "keV"),
-                     hi_en: Quantity = Quantity(7.9, "keV"), par_fit_stat: float = 1., lum_conf: float = 68.,
-                     abund_table: str = "angr", fit_method: str = "leven", group_spec: bool = True, min_counts: int = 5,
-                     min_sn: float = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                     spectrum_checking: bool = False, timeout: Quantity = Quantity(1, 'hr'),
-                     stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) -> Union[BaseSource, BaseSample, List[BaseSource]]:
+def double_temp_apec(
+    sources: BaseSource | BaseSample,
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity = Quantity(0, "arcsec"),
+    start_temp_one: Quantity = Quantity(3.0, "keV"),
+    start_temp_two: Quantity = Quantity(5.0, "keV"),
+    start_met_one: float = 0.3,
+    start_met_two: float = 0.3,
+    lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+    freeze_nh: bool = True,
+    freeze_met_one: bool = True,
+    freeze_met_two: bool = True,
+    freeze_temp_one: bool = False,
+    freeze_temp_two: bool = False,
+    lo_en: Quantity = Quantity(0.3, "keV"),
+    hi_en: Quantity = Quantity(7.9, "keV"),
+    par_fit_stat: float = 1.0,
+    lum_conf: float = 68.0,
+    abund_table: str = "angr",
+    fit_method: str = "leven",
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: float = None,
+    over_sample: float = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    spectrum_checking: bool = False,
+    timeout: Quantity = Quantity(1, "hr"),
+    stacked_spectra: bool = False,
+    telescope: str | list[str] = None,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting an absorbed double-temperature apec model (constant*tbabs*(apec+apec))
     to an object's spectrum. If there are no existing spectra with the passed settings, then they will be
@@ -1089,26 +1472,37 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     #  is super inconsistent with double_temp_apec - presumably just because the greater number of parameters
     #  makes estimating errors much less stable for individual spectral fits
     if spectrum_checking:
-        raise NotImplementedError("The double_temp_apec function does not currently support "
-                                  "'spectrum_checking=True', as it exhibits very unstable behaviour.")
+        raise NotImplementedError(
+            "The double_temp_apec function does not currently support "
+            "'spectrum_checking=True', as it exhibits very unstable behaviour."
+        )
 
     # We need to make sure that the spectra we're going to be fitting the model to with XSPEC actually exist
-    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(sources, outer_radius,
-                                                                                     inner_radius, group_spec,
-                                                                                     min_counts, min_sn,
-                                                                                     over_sample,
-                                                                                     one_rmf,
-                                                                                     num_cores, stacked_spectra,
-                                                                                     telescope)
+    sources, inn_rad_vals, out_rad_vals, telescope, eff_stack_spec = _pregen_spectra(
+        sources,
+        outer_radius,
+        inner_radius,
+        group_spec,
+        min_counts,
+        min_sn,
+        over_sample,
+        one_rmf,
+        num_cores,
+        stacked_spectra,
+        telescope,
+    )
     sources = _check_inputs(sources, lum_en, lo_en, hi_en, fit_method, abund_table, timeout)
 
     # Have to check that every source has start temperature entries, if the user decided to pass a set of them - this
     #  is identical to the checks we perform at the beginning of 'single_temp_apec'
-    if ((not start_temp_one.isscalar and len(start_temp_one) != len(sources)) or
-            (not start_temp_two.isscalar and len(start_temp_two) != len(sources))):
-        raise ValueError("If a non-scalar Quantity is passed for 'start_temp_one' or 'start_temp_two', there must be "
-                         "one entry for each source. They currently have {n1} and {n2} respectively, for {s} "
-                         "sources.".format(n1=len(start_temp_one), n2=len(start_temp_two), s=len(sources)))
+    if (not start_temp_one.isscalar and len(start_temp_one) != len(sources)) or (
+        not start_temp_two.isscalar and len(start_temp_two) != len(sources)
+    ):
+        raise ValueError(
+            "If a non-scalar Quantity is passed for 'start_temp_one' or 'start_temp_two', there must be "
+            f"one entry for each source. They currently have {len(start_temp_one)} and {len(start_temp_two)} respectively, for {len(sources)} "
+            "sources."
+        )
 
     # TODO REPLACE THESE REPEATED CHECKS/PREPARATION OF START TEMP/MET WITH A FUNCTION - SEE ISSUE #1509
     # Want to make sure that the start_temp variable is always a non-scalar Quantity with an entry for every source
@@ -1116,7 +1510,7 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     if start_temp_one.isscalar:
         # Doing it like this, defining a new variable and then redeclaring the start_temp in each bit of the loop
         #  below is important, as the fit_conf generation code accesses the current value of start_temp specifically
-        all_start_temp_ones = Quantity([start_temp_one.value.copy()]*len(sources), start_temp_one.unit)
+        all_start_temp_ones = Quantity([start_temp_one.value.copy()] * len(sources), start_temp_one.unit)
     else:
         all_start_temp_ones = start_temp_one.copy()
 
@@ -1124,15 +1518,17 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     if start_temp_two.isscalar:
         # Doing it like this, defining a new variable and then redeclaring the start_temp in each bit of the loop
         #  below is important, as the fit_conf generation code accesses the current value of start_temp specifically
-        all_start_temp_twos = Quantity([start_temp_two.value.copy()]*len(sources), start_temp_two.unit)
+        all_start_temp_twos = Quantity([start_temp_two.value.copy()] * len(sources), start_temp_two.unit)
     else:
         all_start_temp_twos = start_temp_two.copy()
 
     # TODO MAKE THIS CHECK SUPPORT QUANTITY AS WELL - issue #1509 is semi-relevant
     # We repeat the above, but for the starting metallicity value(s)
     if isinstance(start_met_one, (list, np.ndarray)) and len(start_met_one) != len(sources):
-        raise ValueError(f"If a list or array is passed to 'start_met_one', it must have one entry for each "
-                         f"source. It currently has {len(start_met_one)} for {len(sources)} sources.")
+        raise ValueError(
+            f"If a list or array is passed to 'start_met_one', it must have one entry for each "
+            f"source. It currently has {len(start_met_one)} for {len(sources)} sources."
+        )
     elif isinstance(start_met_one, (list, np.ndarray)):
         all_start_met_ones = deepcopy(start_met_one)
     # Want to make sure that the start_met variable is always a list with an entry for every source
@@ -1141,13 +1537,16 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         all_start_met_ones = [start_met_one] * len(sources)
     else:
         raise ValueError(
-            "'start_met_one' must be either a list/array with an entry for each source, or a float/integer.")
+            "'start_met_one' must be either a list/array with an entry for each source, or a float/integer."
+        )
 
     # TODO MAKE THIS CHECK SUPPORT QUANTITY AS WELL - issue #1509 is semi-relevant
     # We repeat the above, but for the starting metallicity value(s)
     if isinstance(start_met_two, (list, np.ndarray)) and len(start_met_two) != len(sources):
-        raise ValueError(f"If a list or array is passed to 'start_met_two', it must have one entry for each "
-                         f"source. It currently has {len(start_met_two)} for {len(sources)} sources.")
+        raise ValueError(
+            f"If a list or array is passed to 'start_met_two', it must have one entry for each "
+            f"source. It currently has {len(start_met_two)} for {len(sources)} sources."
+        )
     elif isinstance(start_met_two, (list, np.ndarray)):
         all_start_met_twos = deepcopy(start_met_two)
     # Want to make sure that the start_met variable is always a list with an entry for every source
@@ -1156,7 +1555,8 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
         all_start_met_twos = [start_met_two] * len(sources)
     else:
         raise ValueError(
-            "'start_met_two' must be either a list/array with an entry for each source, or a float/integer.")
+            "'start_met_two' must be either a list/array with an entry for each source, or a float/integer."
+        )
 
     # This function is for a set model, absorbed double apec, so I can hard code all of this stuff.
     model = "constant*tbabs*(apec+apec)"
@@ -1168,7 +1568,7 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
     # Here we generate the fit configuration storage key from those arguments to this function that control the fit
     #  and how it behaves
-    rel_args = FIT_FUNC_ARGS['double_temp_apec']
+    rel_args = FIT_FUNC_ARGS["double_temp_apec"]
 
     sig = signature(double_temp_apec)
     cur_args = {k: v.default for k, v in sig.parameters.items() if v.default is not Parameter.empty}
@@ -1177,8 +1577,10 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
     #  signature of this function is altered.
     if set(list(rel_args.keys())) != set(list(cur_args.keys())):
         problem_pars = set(list(cur_args.keys())) - set(list(rel_args.keys()))
-        raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
-                                f"match - unmatched arguments are {", ".join(problem_pars)}.")
+        raise XGADeveloperError(
+            f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
+            f"match - unmatched arguments are {', '.join(problem_pars)}."
+        )
 
     script_paths = []
     outfile_paths = []
@@ -1194,8 +1596,18 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
                 continue
 
             # retrieving the spectrum objects needed for each source/ tel combo
-            specs, storage_key = _spec_obj_setup(stacked_spectra, tel, source, out_rad_vals, src_ind, inn_rad_vals,
-                                                 group_spec, min_counts, min_sn, over_sample)
+            specs, storage_key = _spec_obj_setup(
+                stacked_spectra,
+                tel,
+                source,
+                out_rad_vals,
+                src_ind,
+                inn_rad_vals,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+            )
 
             # For this model, we have to know the redshift of the source.
             if source.redshift is None:
@@ -1209,17 +1621,28 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             start_met_two = all_start_met_twos[src_ind]
 
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = ("{{{0} {1} {2} {3} {4} {5} {6} {7} {8} "
-                          "{9}}}").format(1., source.nH.to("10^22 cm^-2").value, start_temp_one.value, start_met_one,
-                                          source.redshift, 1., start_temp_two.value, start_met_two, source.redshift, 1.)
+            par_values = ("{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}").format(
+                1.0,
+                source.nH.to("10^22 cm^-2").value,
+                start_temp_one.value,
+                start_met_one,
+                source.redshift,
+                1.0,
+                start_temp_two.value,
+                start_met_two,
+                source.redshift,
+                1.0,
+            )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
             #  include the temperature, if the user wants it fixed at the start value
-            freezing = "{{F {n} {t1} {a2} T F {t2} {a2} T F}}".format(n="T" if freeze_nh else "F",
-                                                                      t1="T" if freeze_temp_one else "F",
-                                                                      a1="T" if freeze_met_one else "F",
-                                                                      t2="T" if freeze_temp_two else "F",
-                                                                      a2="T" if freeze_met_two else "F")
+            freezing = "{{F {n} {t1} {a1} T F {t2} {a2} T F}}".format(
+                n="T" if freeze_nh else "F",
+                t1="T" if freeze_temp_one else "F",
+                a1="T" if freeze_met_one else "F",
+                t2="T" if freeze_temp_two else "F",
+                a2="T" if freeze_met_two else "F",
+            )
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -1254,16 +1677,48 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-                res = source.get_results(out_rad_vals[src_ind], tel, model, inn_rad_vals[src_ind], 'norm', group_spec,
-                                         min_counts, min_sn, over_sample, eff_stack_spec[tel], fit_conf)
+                res = source.get_results(
+                    out_rad_vals[src_ind],
+                    tel,
+                    model,
+                    inn_rad_vals[src_ind],
+                    "norm",
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    eff_stack_spec[tel],
+                    fit_conf,
+                )
             except (ModelNotAssociatedError, FitConfNotAssociatedError):
-                out_file, script_file, inv_ent = _write_xspec_script(source, storage_key, model, abund_table,
-                                                                     fit_method, specs, lo_en, hi_en, par_names, par_values,
-                                                                     linking, freezing, par_fit_stat, lum_low_lims,
-                                                                     lum_upp_lims, lum_conf, source.redshift,
-                                                                     spectrum_checking, check_list, check_lo_lims,
-                                                                     check_hi_lims, check_err_lims, True, tel, fit_conf,
-                                                                     nh_to_zero)
+                out_file, script_file, inv_ent = _write_xspec_script(
+                    source,
+                    storage_key,
+                    model,
+                    abund_table,
+                    fit_method,
+                    specs,
+                    lo_en,
+                    hi_en,
+                    par_names,
+                    par_values,
+                    linking,
+                    freezing,
+                    par_fit_stat,
+                    lum_low_lims,
+                    lum_upp_lims,
+                    lum_conf,
+                    source.redshift,
+                    spectrum_checking,
+                    check_list,
+                    check_lo_lims,
+                    check_hi_lims,
+                    check_err_lims,
+                    True,
+                    tel,
+                    fit_conf,
+                    nh_to_zero,
+                )
                 script_paths.append(script_file)
                 outfile_paths.append(out_file)
                 src_inds.append(src_ind)
@@ -1275,11 +1730,13 @@ def double_temp_apec(sources: Union[BaseSource, BaseSample], outer_radius: Union
 
 
 # This allows us to make a link between the model that was fit and the XGA function
-FIT_FUNC_MODEL_NAMES = {'constant*tbabs*apec': single_temp_apec,
-                        'constant*tbabs*mekal': single_temp_mekal,
-                        'constant*tbabs*wdem': multi_temp_dem_apec,
-                        'constant*tbabs*zpowerlw': power_law,
-                        'constant*tbabs*powerlaw': power_law,
-                        'constant*tbabs*zbbody': blackbody,
-                        'constant*tbabs*bbody': blackbody,
-                        'constant*tbabs*(apec+apec)': double_temp_apec}
+FIT_FUNC_MODEL_NAMES = {
+    "constant*tbabs*apec": single_temp_apec,
+    "constant*tbabs*mekal": single_temp_mekal,
+    "constant*tbabs*wdem": multi_temp_dem_apec,
+    "constant*tbabs*zpowerlw": power_law,
+    "constant*tbabs*powerlaw": power_law,
+    "constant*tbabs*zbbody": blackbody,
+    "constant*tbabs*bbody": blackbody,
+    "constant*tbabs*(apec+apec)": double_temp_apec,
+}
