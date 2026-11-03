@@ -3751,7 +3751,7 @@ class SpecificEntropy(BaseProfile1D):
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
-        if radius.isscalar and radius in self._entropies:
+        if radius.isscalar and radius in self._entropies and self._entropies[radius].ndim == 1:
             already_run = True
             ent_dist = self._entropies[radius]
         else:
@@ -3772,12 +3772,12 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self.density_model.get_realisations(radius)
 
-        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
-        #  temperature and density profiles are identical, and so we just get some realisations
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.density_profile)
+            and (radius == self.density_profile.radii).all()
         ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
@@ -3799,20 +3799,21 @@ class SpecificEntropy(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realisations to an astropy quantity array
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+            dens = Quantity(dens_interp(radius.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit)
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
-        #  just read out the density data points (and make N realisations of them) with no funny business required
-        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            dens = self.density_profile.generate_data_realisations(self._num_samples).T
-        else:
+        elif not already_run:
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
-            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+            d_match = (radius[..., None] >= d_bnds[:, 0]) & (radius[..., None] < d_bnds[:, 1])
+            d_match[..., -1] |= radius == d_bnds[-1, 1]
+            d_inds = np.where(d_match)[-1]
+            if len(d_inds) != radius.size:
+                raise ValueError("Some radii are outside the density profile's annular bounds.")
 
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
+            if radius.isscalar:
+                dens = dens[0]
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent("1/cm^3"):
@@ -3831,12 +3832,12 @@ class SpecificEntropy(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self.temperature_model.get_realisations(radius)
 
-        # In this rare case (inspired by how ACCEPT packaged their profiles, see issue #1176) the radii for the
-        #  temperature and density profiles are identical, and so we just get some realisations
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.temperature_profile)
+            and (radius == self.temperature_profile.radii).all()
         ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
@@ -3853,25 +3854,25 @@ class SpecificEntropy(BaseProfile1D):
                 bounds_error=False,
             )
 
-            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the temperature profile has more bins than the density (not going to happen often)
-        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
-        # And here, the final option, we're doing a data-point based profile without interpolation, and we need
-        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
-        #  temperature value - in practise this means that each density will be paired with the temperature
-        #  realisations whose radial coverage they fall within.
-        else:
+        elif not already_run:
             t_bnds = np.vstack(
                 [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
             ).T
 
-            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+            t_match = (radius[..., None] >= t_bnds[:, 0]) & (radius[..., None] < t_bnds[:, 1])
+            t_match[..., -1] |= radius == t_bnds[-1, 1]
+            t_inds = np.where(t_match)[-1]
+            if len(t_inds) != radius.size:
+                raise ValueError("Some radii are outside the temperature profile's annular bounds.")
 
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp = temp_data_real[:, t_inds].T
+            if radius.isscalar:
+                temp = temp[0]
 
         # We ensure the temperatures are in the right unit
         if not already_run and not temp.unit.is_equivalent("keV"):
@@ -4488,7 +4489,7 @@ class ThermalPressure(BaseProfile1D):
 
         # If a particular radius already has a result in the profiles storage structure then we'll just grab that
         #  rather than redoing a calculation unnecessarily.
-        if radius.isscalar and radius in self._pressures:
+        if radius.isscalar and radius in self._pressures and self._pressures[radius].ndim == 1:
             already_run = True
             press_dist = self._pressures[radius]
         else:
@@ -4509,12 +4510,12 @@ class ThermalPressure(BaseProfile1D):
             #  the definition of this source of the model.
             dens = self.density_model.get_realisations(radius)
 
-        # In this rare case the radii for the temperature and density profiles are identical, and so we just
-        #  get some realisations.
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.density_profile)
+            and (radius == self.density_profile.radii).all()
         ):
             dens = self.density_profile.generate_data_realisations(self._num_samples).T
 
@@ -4536,20 +4537,21 @@ class ThermalPressure(BaseProfile1D):
                 bounds_error=False,
             )
             # Restore the interpolated density profile realizations to an astropy quantity array
-            dens = Quantity(dens_interp(self.radii).T, self.density_profile.values_unit)
+            dens = Quantity(dens_interp(radius.to(self.density_profile.radii_unit)).T, self.density_profile.values_unit)
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the density profile has more bins than the temperature (going to be true in most cases). So we
-        #  just read out the density data points (and make N realizations of them) with no funny business required
-        elif not already_run and not self._interp_data and len(self.density_profile) == len(self.radii):
-            dens = self.density_profile.generate_data_realisations(self._num_samples).T
-        else:
+        elif not already_run:
             d_bnds = np.vstack([self.density_profile.annulus_bounds[0:-1], self.density_profile.annulus_bounds[1:]]).T
 
-            d_inds = np.where((self.radii[..., None] >= d_bnds[:, 0]) & (self.radii[..., None] < d_bnds[:, 1]))[1]
+            d_match = (radius[..., None] >= d_bnds[:, 0]) & (radius[..., None] < d_bnds[:, 1])
+            d_match[..., -1] |= radius == d_bnds[-1, 1]
+            d_inds = np.where(d_match)[-1]
+            if len(d_inds) != radius.size:
+                raise ValueError("Some radii are outside the density profile's annular bounds.")
 
             dens_data_real = self.density_profile.generate_data_realisations(self._num_samples)
             dens = dens_data_real[:, d_inds].T
+            if radius.isscalar:
+                dens = dens[0]
 
         # Finally, whatever way we got the densities, we make sure they are in the right unit
         if not already_run and not dens.unit.is_equivalent("1/cm^3"):
@@ -4568,12 +4570,12 @@ class ThermalPressure(BaseProfile1D):
             #  the definition of this source of the model.
             temp = self.temperature_model.get_realisations(radius)
 
-        # In this rare case the radii for the temperature and density profiles are identical, and so we
-        #  just get some realizations
+        # Use the data directly when the requested radii match the profile's sampling.
         elif (
             not already_run
-            and (len(self.density_profile) == len(self.temperature_profile))
-            and (self.density_profile.radii == self.temperature_profile.radii).all()
+            and not radius.isscalar
+            and len(radius) == len(self.temperature_profile)
+            and (radius == self.temperature_profile.radii).all()
         ):
             temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
 
@@ -4589,25 +4591,25 @@ class ThermalPressure(BaseProfile1D):
                 fill_value="extrapolate",
                 bounds_error=False,
             )
-            temp = Quantity(temp_interp(self.radii).T, self.temperature_profile.values_unit)
+            temp = Quantity(
+                temp_interp(radius.to(self.temperature_profile.radii_unit)).T, self.temperature_profile.values_unit
+            )
 
-        # This particular combination means that we are doing a data-point based profile, but without interpolation,
-        #  and that the temperature profile has more bins than the density (not going to happen often)
-        elif not already_run and not self._interp_data and len(self.temperature_profile) == len(self.radii):
-            temp = self.temperature_profile.generate_data_realisations(self._num_samples).T
-        # And here, the final option, we're doing a data-point based profile without interpolation, and we need
-        #  to make sure that the density values (here N_denspoints > N_temppoints) each have a corresponding
-        #  temperature value - in practise this means that each density will be paired with the temperature
-        #  realizations whose radial coverage they fall within.
-        else:
+        elif not already_run:
             t_bnds = np.vstack(
                 [self.temperature_profile.annulus_bounds[0:-1], self.temperature_profile.annulus_bounds[1:]]
             ).T
 
-            t_inds = np.where((self.radii[..., None] >= t_bnds[:, 0]) & (self.radii[..., None] < t_bnds[:, 1]))[1]
+            t_match = (radius[..., None] >= t_bnds[:, 0]) & (radius[..., None] < t_bnds[:, 1])
+            t_match[..., -1] |= radius == t_bnds[-1, 1]
+            t_inds = np.where(t_match)[-1]
+            if len(t_inds) != radius.size:
+                raise ValueError("Some radii are outside the temperature profile's annular bounds.")
 
             temp_data_real = self.temperature_profile.generate_data_realisations(self._num_samples)
             temp = temp_data_real[:, t_inds].T
+            if radius.isscalar:
+                temp = temp[0]
 
         # We ensure the temperatures are in the right unit
         if not already_run and not temp.unit.is_equivalent("keV"):
