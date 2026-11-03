@@ -2598,10 +2598,13 @@ class HydrostaticMass(BaseProfile1D):
 
         # And now we do the actual mass calculation
         if not already_run:
+            mass_radii = radius[..., None]
+            if radius_err is not None and self.density_model is not None and self.temperature_model is not None:
+                mass_radii = calc_rad
             # Please note that this is just the vanilla hydrostatic mass equation, but not written in the "standard
             #  form". Here there are no logs in the derivatives, because it's easier to take advantage of astropy's
             #  quantities that way.
-            mass_dist = ((-1 * k_B * np.power(radius[..., None], 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G)) * (
+            mass_dist = ((-1 * k_B * np.power(mass_radii, 2)) / (dens * (MEAN_MOL_WEIGHT * m_p) * G)) * (
                 (dens * temp_der) + (temp * dens_der)
             )
 
