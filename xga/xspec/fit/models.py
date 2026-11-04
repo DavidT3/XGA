@@ -1,16 +1,21 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/03/2026, 20:25. Copyright (c) The Contributors
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:01 AM. Copyright (c) The Contributors.
 """Validation, tokenisation, and parameter inspection utilities for XSPEC model expressions."""
 
 import re
+from collections.abc import Callable
+from inspect import Parameter, Signature
 from typing import Any
 from warnings import warn
 
+import numpy as np
 from astropy.units import Quantity, Unit
 from tabulate import tabulate
 
-from ... import utils
+from ... import NUM_CORES, utils
 from ...exceptions import XSPECFitError, XSPECNotFoundError
+from ...samples.base import BaseSample
+from ...sources import BaseSource
 
 # Valid characters in an XSPEC model expression (model names, '+', '*', and parentheses)
 _VALID_EXPR_RE = re.compile(r"^[a-zA-Z0-9_.*+()]+$")
@@ -449,3 +454,309 @@ def describe_xspec_model(
         print(tabulate(table_rows, headers=headers, tablefmt="simple"))
 
     return start_pars, freeze_pars, link_pars
+
+
+def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseSource | BaseSample | list[BaseSource]]:
+    """
+    A factory function that validates an XSPEC model expression and dynamically generates a tailored XGA fitting
+    function with explicit ``start_<par>``, ``freeze_<par>``, and ``link_<par>`` keyword arguments (and corresponding
+    Sphinx docstring entries) for every parameter of the model.
+
+    This allows users working in Jupyter notebooks or IDEs (such as PyCharm or VSCode) to inspect the exact
+    parameter names, units, default values, and hard/soft limits via ``Shift+Tab`` or hover tooltips, while
+    delegating the underlying spectral fit execution to :func:`~xga.xspec.fit.general_model_fit`.
+
+    :param str model: The XSPEC model expression (e.g. 'tbabs*apec', 'tbabs*(apec+powerlaw)').
+    :param bool norm_scale: Whether 'constant*' cross-calibration scaling is prepended to the model expression.
+        Default is True.
+    :return: A dynamically constructed fitting function with an explicit signature and docstring for the requested
+        XSPEC model.
+    :rtype: Callable[..., BaseSource | BaseSample | list[BaseSource]]
+    """
+    clean_model, flat_pars, auto_nh_to_zero = validate_and_parse_model(model, norm_scale=norm_scale)
+
+    # Filter out the leading cross-calibration constant factor (if norm_scale=True), as that is managed
+    #  automatically by general_xspec_fit.xcm just like in single_temp_apec
+    user_pars = [p for p in flat_pars if not p["is_leading_norm_scale"]]
+
+    sig_params: list[Parameter] = [
+        Parameter(
+            "sources",
+            Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=BaseSource | BaseSample | list[BaseSource],
+        ),
+        Parameter("outer_radius", Parameter.POSITIONAL_OR_KEYWORD, annotation=str | Quantity),
+        Parameter(
+            "inner_radius",
+            Parameter.POSITIONAL_OR_KEYWORD,
+            default=Quantity(0, "arcsec"),
+            annotation=str | Quantity,
+        ),
+    ]
+
+    default_start_map: dict[str, Quantity | float | None] = {}
+    default_freeze_map: dict[str, bool] = {}
+    default_link_map: dict[str, bool] = {}
+    doc_param_lines: list[str] = []
+
+    # 1. Add start_<par> parameters
+    for p in user_pars:
+        pk = p["par_key"]
+        comp = p["component"]
+        unit_obj: Unit = p["unit"]
+        raw_unit: str = p["raw_unit"]
+
+        if p["hard_min"] is not None and p["hard_max"] is not None:
+            lims_desc = (
+                f"soft limits [{p['soft_min']}, {p['soft_max']}], hard limits [{p['hard_min']}, {p['hard_max']}]"
+            )
+        else:
+            lims_desc = "fixed/switch parameter"
+
+        if p["is_galactic_nh"]:
+            def_val: Quantity | float | None = None
+            ann: Any = float | int | Quantity | list | np.ndarray | None
+            doc_param_lines.append(
+                f"    :param float/int/Quantity/list/np.ndarray start_{pk}: Initial value for the {comp} '{pk}' "
+                f"parameter. Default is None, which automatically substitutes source.nH (in 10^22 cm^-2; "
+                f"model.dat default is {p['default']} {raw_unit}, {lims_desc})."
+            )
+        elif p["is_redshift"]:
+            def_val = None
+            ann = float | int | list | np.ndarray | None
+            doc_param_lines.append(
+                f"    :param float/int/list/np.ndarray start_{pk}: Initial value for the {comp} '{pk}' "
+                f"parameter. Default is None, which automatically substitutes source.redshift "
+                f"(model.dat default is {p['default']}, {lims_desc})."
+            )
+        elif unit_obj != Unit(""):
+            def_val = Quantity(p["default"], unit_obj)
+            ann = Quantity | float | int | list | np.ndarray
+            doc_param_lines.append(
+                f"    :param Quantity/float/int/list/np.ndarray start_{pk}: Initial value for the {comp} '{pk}' "
+                f"parameter in units convertible to {unit_obj} (default is Quantity({p['default']}, '{unit_obj}'), "
+                f"{lims_desc})."
+            )
+        else:
+            def_val = float(p["default"])
+            ann = float | int | list | np.ndarray
+            unit_note = f" (raw XSPEC unit '{raw_unit}')" if raw_unit else ""
+            doc_param_lines.append(
+                f"    :param float/int/list/np.ndarray start_{pk}: Initial value for the {comp} '{pk}' "
+                f"parameter{unit_note} (default is {def_val}, {lims_desc})."
+            )
+
+        default_start_map[pk] = def_val
+        sig_params.append(Parameter(f"start_{pk}", Parameter.POSITIONAL_OR_KEYWORD, default=def_val, annotation=ann))
+
+    # 2. Add freeze_<par> parameters
+    for p in user_pars:
+        pk = p["par_key"]
+        comp = p["component"]
+        def_fr = bool(p["frozen"])
+        default_freeze_map[pk] = def_fr
+        sig_params.append(Parameter(f"freeze_{pk}", Parameter.POSITIONAL_OR_KEYWORD, default=def_fr, annotation=bool))
+        doc_param_lines.append(
+            f"    :param bool freeze_{pk}: Whether the {comp} '{pk}' parameter should be frozen during the fit. "
+            f"Default is {def_fr}."
+        )
+
+    # 3. Add link_<par> parameters
+    for p in user_pars:
+        pk = p["par_key"]
+        comp = p["component"]
+        def_lk = bool(p["linked"])
+        default_link_map[pk] = def_lk
+        sig_params.append(Parameter(f"link_{pk}", Parameter.POSITIONAL_OR_KEYWORD, default=def_lk, annotation=bool))
+        doc_param_lines.append(
+            f"    :param bool link_{pk}: Whether the {comp} '{pk}' parameter should be linked across spectra "
+            f"during the fit. Default is {def_lk}."
+        )
+
+    # 4. Add standard XGA fitting configuration arguments
+    standard_params = [
+        Parameter("nh_to_zero", Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=list[str | int] | None),
+        Parameter(
+            "lum_en",
+            Parameter.POSITIONAL_OR_KEYWORD,
+            default=Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
+            annotation=Quantity,
+        ),
+        Parameter("lo_en", Parameter.POSITIONAL_OR_KEYWORD, default=Quantity(0.3, "keV"), annotation=Quantity),
+        Parameter("hi_en", Parameter.POSITIONAL_OR_KEYWORD, default=Quantity(7.9, "keV"), annotation=Quantity),
+        Parameter("par_fit_stat", Parameter.POSITIONAL_OR_KEYWORD, default=1.0, annotation=float),
+        Parameter("lum_conf", Parameter.POSITIONAL_OR_KEYWORD, default=68.0, annotation=float),
+        Parameter("abund_table", Parameter.POSITIONAL_OR_KEYWORD, default="angr", annotation=str),
+        Parameter("fit_method", Parameter.POSITIONAL_OR_KEYWORD, default="leven", annotation=str),
+        Parameter("group_spec", Parameter.POSITIONAL_OR_KEYWORD, default=True, annotation=bool),
+        Parameter("min_counts", Parameter.POSITIONAL_OR_KEYWORD, default=5, annotation=int),
+        Parameter("min_sn", Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=int | float | None),
+        Parameter("over_sample", Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=float | None),
+        Parameter("one_rmf", Parameter.POSITIONAL_OR_KEYWORD, default=True, annotation=bool),
+        Parameter("num_cores", Parameter.POSITIONAL_OR_KEYWORD, default=NUM_CORES, annotation=int),
+        Parameter("spectrum_checking", Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
+        Parameter("check_pars", Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=str | list[str] | None),
+        Parameter(
+            "check_lo_lims",
+            Parameter.POSITIONAL_OR_KEYWORD,
+            default=None,
+            annotation=float | int | Quantity | list[float | int | Quantity] | None,
+        ),
+        Parameter(
+            "check_hi_lims",
+            Parameter.POSITIONAL_OR_KEYWORD,
+            default=None,
+            annotation=float | int | Quantity | list[float | int | Quantity] | None,
+        ),
+        Parameter(
+            "check_err_lims",
+            Parameter.POSITIONAL_OR_KEYWORD,
+            default=None,
+            annotation=float | int | Quantity | list[float | int | Quantity] | None,
+        ),
+        Parameter("timeout", Parameter.POSITIONAL_OR_KEYWORD, default=Quantity(1, "hr"), annotation=Quantity),
+        Parameter("stacked_spectra", Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
+        Parameter("telescope", Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=str | list[str] | None),
+        Parameter("force_gen", Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
+    ]
+    sig_params.extend(standard_params)
+
+    custom_sig = Signature(parameters=sig_params, return_annotation=BaseSource | BaseSample | list[BaseSource])
+
+    def _values_equal(
+        v1: float | int | Quantity | list | np.ndarray | None,
+        v2: float | int | Quantity | list | np.ndarray | None,
+    ) -> bool:
+        """Safely compare default parameter values (including Quantities, lists, and arrays) for equality."""
+        if v1 is None and v2 is None:
+            return True
+        if v1 is None or v2 is None:
+            return False
+        if type(v1) is not type(v2):
+            return False
+        if isinstance(v1, Quantity) and isinstance(v2, Quantity):
+            if v1.unit != v2.unit or v1.shape != v2.shape:
+                return False
+            return bool(np.all(v1.value == v2.value))
+        if isinstance(v1, (list, np.ndarray)):
+            return False
+        return bool(v1 == v2)
+
+    def _custom_fit_wrapper(*args: object, **kwargs: object) -> BaseSource | BaseSample | list[BaseSource]:
+        from .general import general_model_fit
+
+        bound = custom_sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        b_args = bound.arguments
+
+        start_overrides: dict[str, Any] = {}
+        freeze_overrides: dict[str, bool] = {}
+        link_overrides: dict[str, bool] = {}
+
+        for p in user_pars:
+            pk = p["par_key"]
+            cur_start = b_args[f"start_{pk}"]
+            if not _values_equal(cur_start, default_start_map[pk]):
+                start_overrides[pk] = cur_start
+
+            cur_freeze = bool(b_args[f"freeze_{pk}"])
+            if cur_freeze != default_freeze_map[pk]:
+                freeze_overrides[pk] = cur_freeze
+
+            cur_link = bool(b_args[f"link_{pk}"])
+            if cur_link != default_link_map[pk]:
+                link_overrides[pk] = cur_link
+
+        res: BaseSource | BaseSample | list[BaseSource] = general_model_fit(
+            sources=b_args["sources"],
+            outer_radius=b_args["outer_radius"],
+            model=model,
+            inner_radius=b_args["inner_radius"],
+            norm_scale=norm_scale,
+            start_pars=start_overrides if start_overrides else None,
+            freeze_pars=freeze_overrides if freeze_overrides else None,
+            link_pars=link_overrides if link_overrides else None,
+            nh_to_zero=b_args["nh_to_zero"],
+            lum_en=b_args["lum_en"],
+            lo_en=b_args["lo_en"],
+            hi_en=b_args["hi_en"],
+            par_fit_stat=b_args["par_fit_stat"],
+            lum_conf=b_args["lum_conf"],
+            abund_table=b_args["abund_table"],
+            fit_method=b_args["fit_method"],
+            group_spec=b_args["group_spec"],
+            min_counts=b_args["min_counts"],
+            min_sn=b_args["min_sn"],
+            over_sample=b_args["over_sample"],
+            one_rmf=b_args["one_rmf"],
+            num_cores=b_args["num_cores"],
+            spectrum_checking=b_args["spectrum_checking"],
+            check_pars=b_args["check_pars"],
+            check_lo_lims=b_args["check_lo_lims"],
+            check_hi_lims=b_args["check_hi_lims"],
+            check_err_lims=b_args["check_err_lims"],
+            timeout=b_args["timeout"],
+            stacked_spectra=b_args["stacked_spectra"],
+            telescope=b_args["telescope"],
+            force_gen=b_args["force_gen"],
+        )
+        return res
+
+    _custom_fit_wrapper.__signature__ = custom_sig  # type: ignore[attr-defined]
+    safe_func_suffix = re.sub(r"[^a-zA-Z0-9]+", "_", clean_model).strip("_")
+    _custom_fit_wrapper.__name__ = f"fit_{safe_func_suffix}"
+    _custom_fit_wrapper.__qualname__ = f"fit_{safe_func_suffix}"
+    _custom_fit_wrapper.__annotations__ = {
+        param.name: param.annotation for param in sig_params if param.annotation is not Parameter.empty
+    }
+    _custom_fit_wrapper.__annotations__["return"] = BaseSource | BaseSample | list[BaseSource]
+
+    nh_zero_doc = (
+        f"Default is None, which automatically zeroes parameter index(es) {auto_nh_to_zero}."
+        if auto_nh_to_zero
+        else "Default is None (no absorption nH parameters identified to zero)."
+    )
+    dynamic_params_doc = "\n".join(doc_param_lines)
+    _custom_fit_wrapper.__doc__ = (
+        f"Dynamically generated XGA convenience function for fitting the XSPEC model ``{clean_model}`` "
+        f"(``norm_scale={norm_scale}``) to source spectra.\n\n"
+        f"    If there are no existing spectra with the passed settings, then they will be generated automatically.\n"
+        f"    This function delegates execution to :func:`~xga.xspec.fit.general_model_fit`.\n\n"
+        f"    :param BaseSource/BaseSample sources: A single source object, or a sample of sources.\n"
+        f"    :param str/Quantity outer_radius: The name or value of the outer radius of the region that the\n"
+        f"        desired spectrum covers (for instance 'r200' would be acceptable for a GalaxyCluster,\n"
+        f"        or Quantity(1000, 'kpc')).\n"
+        f"    :param str/Quantity inner_radius: The name or value of the inner radius of the region that the\n"
+        f"        desired spectrum covers. By default this is zero arcseconds, resulting in a circular spectrum.\n"
+        f"{dynamic_params_doc}\n"
+        f"    :param list nh_to_zero: List of parameter names or 1-based indices to zero when computing unabsorbed\n"
+        f"        luminosities. {nh_zero_doc}\n"
+        f"    :param Quantity lum_en: Energy bands in which to measure luminosity.\n"
+        f"    :param Quantity lo_en: The lower energy limit for the data to be fitted.\n"
+        f"    :param Quantity hi_en: The upper energy limit for the data to be fitted.\n"
+        f"    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0.\n"
+        f"    :param float lum_conf: The confidence level for XSPEC luminosity measurements.\n"
+        f"    :param str abund_table: The abundance table to use for the fit.\n"
+        f"    :param str fit_method: The XSPEC fit method to use.\n"
+        f"    :param bool group_spec: A boolean flag that sets whether generated spectra are grouped or not.\n"
+        f"    :param int min_counts: If generating a grouped spectrum, this is the minimum number of counts per "
+        f"channel.\n"
+        f"    :param int/float min_sn: If generating a grouped spectrum, this is the minimum signal-to-noise in each "
+        f"channel.\n"
+        f"    :param float over_sample: The minimum energy resolution for each group, set to None to disable.\n"
+        f"    :param bool one_rmf: Whether to generate only one RMF per ObsID-instrument combination.\n"
+        f"    :param int num_cores: The number of cores to use (if running locally).\n"
+        f"    :param bool spectrum_checking: Whether the individual spectrum checking step should be run.\n"
+        f"    :param str/list[str] check_pars: Parameter name(s) to check if spectrum_checking is enabled.\n"
+        f"    :param float/int/Quantity/list check_lo_lims: Lower acceptable limit(s) for check_pars.\n"
+        f"    :param float/int/Quantity/list check_hi_lims: Upper acceptable limit(s) for check_pars.\n"
+        f"    :param float/int/Quantity/list check_err_lims: Upper acceptable uncertainty limit(s) for check_pars.\n"
+        f"    :param Quantity timeout: The amount of time each individual fit is allowed to run for.\n"
+        f"    :param bool stacked_spectra: Whether stacked spectra should be used where supported.\n"
+        f"    :param str/List[str] telescope: Telescope(s) to perform the XSPEC operations for.\n"
+        f"    :param bool force_gen: Whether to force regeneration of spectra even if they already exist.\n"
+        f"    :return: The source object(s) passed in.\n"
+        f"    :rtype: Union[BaseSource, BaseSample, List[BaseSource]]\n"
+    )
+
+    return _custom_fit_wrapper

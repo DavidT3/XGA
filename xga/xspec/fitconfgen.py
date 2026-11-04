@@ -1,10 +1,11 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 1:15 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:01 AM. Copyright (c) The Contributors.
+"""Functions and constants for generating deterministic XSPEC fit configuration keys."""
 
-from inspect import signature, Parameter
+from inspect import Parameter, signature
 from types import FunctionType
-from typing import Union
 
+import numpy as np
 from astropy.units import Quantity
 
 # This constant very importantly defines whether each argument to the XGA XSPEC fitting functions should be included
@@ -12,59 +13,216 @@ from astropy.units import Quantity
 #  actual fit function. We will also check the arguments of each fit function against these entries to see whether
 #  an argument has been added that is not accounted for here.
 FIT_FUNC_ARGS = {
-    'single_temp_apec': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': True,
-                         'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
-                         'par_fit_stat': True, 'lum_conf': True, 'abund_table': True, 'fit_method': True,
-                         'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
-                         'stacked_spectra': False, 'telescope': False, 'force_gen': False},
-
-    'double_temp_apec': {'inner_radius': False, 'start_temp_one': True, 'start_temp_two': True,
-                         'start_met_one': True, 'start_met_two': True, 'lum_en': True, 'freeze_nh': True,
-                         'freeze_met_one': True, 'freeze_met_two': True, 'freeze_temp_one': True,
-                         'freeze_temp_two': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True,
-                         'lum_conf': True, 'abund_table': True, 'fit_method': True,
-                         'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                         'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
-                         'stacked_spectra': False, 'telescope': False},
-
-    'single_temp_mekal': {'inner_radius': False, 'start_temp': True, 'start_met': True, 'lum_en': True,
-                          'freeze_nh': True, 'freeze_met': True, 'freeze_temp': True, 'lo_en': True, 'hi_en': True,
-                          'par_fit_stat': True, 'lum_conf': True, 'abund_table': True, 'fit_method': True,
-                          'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                          'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
-                          'stacked_spectra': False, 'telescope': False},
-
-    'multi_temp_dem_apec': {'inner_radius': False, 'start_max_temp': True, 'start_met': True, 'start_t_rat': True,
-                            'start_inv_em_slope': True, 'lum_en': True, 'freeze_nh': True, 'freeze_met': True,
-                            'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': True,
-                            'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False,
-                            'min_sn': False, 'over_sample': False, 'one_rmf': False, 'num_cores': False,
-                            'spectrum_checking': True, 'timeout': False, 'stacked_spectra': False, 'telescope': False},
-
-    'power_law': {'inner_radius': False, 'redshifted': False, 'lum_en': True, 'start_pho_index': True,
-                  'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': True,
-                  'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
-                  'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False,
-                  'stacked_spectra': False, 'telescope': False},
-
-    'blackbody': {'inner_radius': False, 'redshifted': False, 'lum_en': True, 'start_temp': True,
-                  'freeze_nh': True, 'lo_en': True, 'hi_en': True, 'par_fit_stat': True, 'lum_conf': True,
-                  'abund_table': True, 'fit_method': True, 'group_spec': False, 'min_counts': False, 'min_sn': False,
-                  'over_sample': False, 'one_rmf': False, 'num_cores': False, 'timeout': False,
-                  'stacked_spectra': False, 'telescope': False},
-
-    'single_temp_apec_profile': {'start_temp': True, 'start_met': True, 'lum_en': True,
-                                 'freeze_nh': True, 'freeze_met': True, 'lo_en': True, 'hi_en': True,
-                                 'par_fit_stat': True, 'lum_conf': True, 'abund_table': True, 'fit_method': True,
-                                 'group_spec': False, 'min_counts': False, 'min_sn': False, 'over_sample': False,
-                                 'one_rmf': False, 'num_cores': False, 'spectrum_checking': True, 'timeout': False,
-                                 'use_cross_arf': True, 'first_fit_start_pars': True, 'detmap_bin': True,
-                                 'stacked_spectra': False, 'telescope': False}
+    "single_temp_apec": {
+        "inner_radius": False,
+        "start_temp": True,
+        "start_met": True,
+        "lum_en": True,
+        "freeze_nh": True,
+        "freeze_met": True,
+        "freeze_temp": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "spectrum_checking": True,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+        "force_gen": False,
+    },
+    "double_temp_apec": {
+        "inner_radius": False,
+        "start_temp_one": True,
+        "start_temp_two": True,
+        "start_met_one": True,
+        "start_met_two": True,
+        "lum_en": True,
+        "freeze_nh": True,
+        "freeze_met_one": True,
+        "freeze_met_two": True,
+        "freeze_temp_one": True,
+        "freeze_temp_two": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "spectrum_checking": True,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+    },
+    "single_temp_mekal": {
+        "inner_radius": False,
+        "start_temp": True,
+        "start_met": True,
+        "lum_en": True,
+        "freeze_nh": True,
+        "freeze_met": True,
+        "freeze_temp": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "spectrum_checking": True,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+    },
+    "multi_temp_dem_apec": {
+        "inner_radius": False,
+        "start_max_temp": True,
+        "start_met": True,
+        "start_t_rat": True,
+        "start_inv_em_slope": True,
+        "lum_en": True,
+        "freeze_nh": True,
+        "freeze_met": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "spectrum_checking": True,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+    },
+    "power_law": {
+        "inner_radius": False,
+        "redshifted": False,
+        "lum_en": True,
+        "start_pho_index": True,
+        "freeze_nh": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+    },
+    "blackbody": {
+        "inner_radius": False,
+        "redshifted": False,
+        "lum_en": True,
+        "start_temp": True,
+        "freeze_nh": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+    },
+    "single_temp_apec_profile": {
+        "start_temp": True,
+        "start_met": True,
+        "lum_en": True,
+        "freeze_nh": True,
+        "freeze_met": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "spectrum_checking": True,
+        "timeout": False,
+        "use_cross_arf": True,
+        "first_fit_start_pars": True,
+        "detmap_bin": True,
+        "stacked_spectra": False,
+        "telescope": False,
+    },
+    "general_model_fit": {
+        "inner_radius": False,
+        "norm_scale": True,
+        "start_pars": True,
+        "freeze_pars": True,
+        "link_pars": True,
+        "nh_to_zero": True,
+        "lum_en": True,
+        "lo_en": True,
+        "hi_en": True,
+        "par_fit_stat": True,
+        "lum_conf": True,
+        "abund_table": True,
+        "fit_method": True,
+        "group_spec": False,
+        "min_counts": False,
+        "min_sn": False,
+        "over_sample": False,
+        "one_rmf": False,
+        "num_cores": False,
+        "spectrum_checking": True,
+        "check_pars": True,
+        "check_lo_lims": True,
+        "check_hi_lims": True,
+        "check_err_lims": True,
+        "timeout": False,
+        "stacked_spectra": False,
+        "telescope": False,
+        "force_gen": False,
+    },
 }
 
 
-def fit_conf_from_function(fit_func: FunctionType, changed_pars: Union[dict, str] = None) -> str:
+def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict | str | None = None) -> str:
     """
     This function is a convenient way to assemble a fit configuration key without adding together all the function
     arguments yourself, and is used in various parts of XGA to make it easier to retrieve non-default model fits. It
@@ -107,9 +265,11 @@ def fit_conf_from_function(fit_func: FunctionType, changed_pars: Union[dict, str
         elif changed_pars is not None and any([ch_par_key not in rel_args for ch_par_key in changed_pars]):
             not_pres = ", ".join([ch_par_key for ch_par_key in changed_pars if ch_par_key not in def_args])
             all_args = ". ".join([kn for kn in rel_args if rel_args[kn]])
-            raise KeyError("Some entries in 'changed_pars' ({be}) do not correspond to a keyword argument that is "
-                           "included in the fit configuration key for {f}; the keyword arguments are "
-                           "{kw}.".format(be=not_pres, kw=all_args, f=fit_func.__name__))
+            raise KeyError(
+                f"Some entries in 'changed_pars' ({not_pres}) do not correspond to a keyword argument that is "
+                f"included in the fit configuration key for {fit_func.__name__}; the keyword arguments are "
+                f"{all_args}."
+            )
 
         # Here we set up the dictionary that will make the default key - if the user passed information on parameters
         #  they changed then we're going to replace them in this dictionary, but if they didn't pass anything then
@@ -125,6 +285,44 @@ def fit_conf_from_function(fit_func: FunctionType, changed_pars: Union[dict, str
         fit_conf = _gen_fit_conf(in_fit_conf)
 
     return fit_conf
+
+
+def _format_fit_conf_value(val: int | float | bool | str | Quantity | np.ndarray | dict | list | tuple | None) -> str:
+    """
+    Convert an individual value into a deterministic, compact string for a fit configuration key.
+
+    This is used for formatting parameter dictionaries, lists, or None values passed to general_model_fit. Any
+    underscores in dictionary keys or string values are replaced with '~' so that downstream methods which split
+    fit configuration keys on '_' do not fracture a single parameter entry, while still distinguishing disambiguated
+    parameter names (e.g. 'kT_1' -> 'kT~1') from native parameter names (e.g. 'kT1').
+
+    :param int/float/bool/str/Quantity/np.ndarray/dict/list/tuple val: The value to format as a string.
+    :return: The formatted string representation of the value.
+    :rtype: str
+    """
+    if isinstance(val, Quantity):
+        if val.isscalar:
+            return f"{val.value}{val.unit.to_string()}"
+        else:
+            vals_str = ";".join(str(v) for v in np.asarray(val.value).flatten())
+            return f"[{vals_str}]{val.unit.to_string()}"
+    elif isinstance(val, np.ndarray):
+        return "[" + ";".join(_format_fit_conf_value(elem) for elem in val.tolist()) + "]"
+    elif isinstance(val, dict):
+        return (
+            "{"
+            + ";".join(
+                f"{str(k).replace('_', '~')}:{_format_fit_conf_value(v)}"
+                for k, v in sorted(val.items(), key=lambda x: str(x[0]))
+            )
+            + "}"
+        )
+    elif isinstance(val, (list, tuple)):
+        return "[" + ";".join(_format_fit_conf_value(elem) for elem in val) + "]"
+    elif isinstance(val, str):
+        return val.replace("_", "~")
+    else:
+        return str(val)
 
 
 def _gen_fit_conf(key_comps: dict) -> str:
@@ -152,17 +350,21 @@ def _gen_fit_conf(key_comps: dict) -> str:
         mod_kn = kn.replace("_", "")
 
         # Depending on the data type of the argument in question we will treat it differently
-        if kn == 'lum_en':
-            bands = cur_val.to_value('keV')
-            cur_val = mod_kn + ';'.join(':'.join(str(float(en)) for en in band) for band in bands) + 'keV'
-        elif kn == 'lum_conf':
+        if kn == "lum_en":
+            bands = cur_val.to_value("keV")
+            cur_val = mod_kn + ";".join(":".join(str(float(en)) for en in band) for band in bands) + "keV"
+        elif kn == "lum_conf":
             cur_val = mod_kn + str(float(cur_val))
         elif isinstance(cur_val, (int, float, bool)):
-            cur_val = mod_kn+str(cur_val)
+            cur_val = mod_kn + str(cur_val)
         # We make our own string version of quantities because the version you get when applying str() to a quantity
         #  instance has a space between value and unit and we don't want that
         elif isinstance(cur_val, Quantity):
-            cur_val = mod_kn+str(cur_val.value) + cur_val.unit.to_string()
+            cur_val = mod_kn + str(cur_val.value) + cur_val.unit.to_string()
+        # General model fits accept optional dictionaries and lists (or None when using model.dat defaults) for
+        #  parameter overrides and spectrum checking limits, so we serialise them deterministically here
+        elif cur_val is None or isinstance(cur_val, (dict, list, tuple, np.ndarray)):
+            cur_val = mod_kn + _format_fit_conf_value(cur_val)
 
         # The components of the fit configuration key are appended to a string
         fit_conf_key_parts.append(cur_val)
