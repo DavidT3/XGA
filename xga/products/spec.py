@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:31 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
 
 import os
 from copy import deepcopy
@@ -1190,13 +1190,13 @@ class Spectrum(BaseProduct):
             dictionaries of parameters-changed-from-default as values.
         :rtype: dict
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, general_model_fit
         from ..xspec.fitconfgen import FIT_FUNC_ARGS, fit_conf_from_function
 
         diffs = {}
         for mod in self.fitted_models:
             diffs.setdefault(mod, {})
-            fit_func = FIT_FUNC_MODEL_NAMES[mod]
+            fit_func = FIT_FUNC_MODEL_NAMES.get(mod, general_model_fit)
             def_fit_conf = fit_conf_from_function(fit_func)
 
             mod_args = [
@@ -1323,7 +1323,7 @@ class Spectrum(BaseProduct):
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, general_model_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -1355,7 +1355,7 @@ class Spectrum(BaseProduct):
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
-            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES.get(model, general_model_fit), fit_conf)
         elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
             av_fconfs = ", ".join(self.fitted_model_configurations[model])
             raise ModelNotAssociatedError(
@@ -1860,7 +1860,7 @@ class Spectrum(BaseProduct):
         :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
             the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, general_model_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
@@ -1939,7 +1939,7 @@ class Spectrum(BaseProduct):
 
             # If the configuration is a dictionary we need to try to turn that into a proper fit configuration key
             if isinstance(fit_conf, dict):
-                fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+                fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES.get(model, general_model_fit), fit_conf)
 
             # And now we check if the fit configuration is available to this Spectrum instance
             if fit_conf not in self.fitted_model_configurations[model]:
@@ -3286,7 +3286,7 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, general_model_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -3319,7 +3319,7 @@ class AnnularSpectra(BaseAggregateProduct):
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
-            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES.get(model, general_model_fit), fit_conf)
         elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
             av_fconfs = ", ".join(self.fitted_model_configurations[model])
             raise ModelNotAssociatedError(

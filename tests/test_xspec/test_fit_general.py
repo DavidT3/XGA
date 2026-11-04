@@ -1,15 +1,17 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 12:33 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
+"""Integration tests for XGA's XSPEC spectral fitting functions on single sources and samples."""
 
 import os
 import unittest
+from typing import Any
 
 import numpy as np
 import numpy.testing as npt
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit
 
 from xga.samples import ClusterSample
-from xga.xspec.fit.general import single_temp_apec
+from xga.xspec.fit import custom_xspec_fit, general_model_fit, single_temp_apec
 
 from .. import CLUSTER_SMP, MISC_OUTPUT_TESTS, get_test_source
 
@@ -20,8 +22,13 @@ class TestXSPECSingleSource(unittest.TestCase):
     sample class instances.
     """
 
+    test_src: Any
+    no_fits_src: Any
+    out_rad: Quantity
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
+        """Initialise shared and unshared test sources for single-source XSPEC fitting tests."""
         cls.test_src = get_test_source("all")
 
         cls.no_fits_src = get_test_source("all", shared=False, load_fits=False)
@@ -29,20 +36,21 @@ class TestXSPECSingleSource(unittest.TestCase):
         cls.out_rad = Quantity(500, "kpc")
 
     def test_global_single_temp_apec(self) -> None:
-        par_combs = [
+        """Tests fitting a global single-temperature APEC model with stacked and non-stacked spectra."""
+        par_combs: list[dict[str, Any]] = [
             {"stacked_spectra": True},
             {"stacked_spectra": False},
         ]
 
         # Set a fit configuration
-        fit_conf = {"start_temp": Quantity(2.97, "keV")}
+        fit_conf: dict[str, Any] = {"start_temp": Quantity(2.97, "keV")}
 
         for cur_pc in par_combs:
             with self.subTest(msg=f"Test global single_temp_apec with {cur_pc}", **cur_pc):
                 single_temp_apec(self.test_src, self.out_rad, **cur_pc, **fit_conf)
 
                 for cur_tel in self.test_src.telescopes:
-                    cur_tx = self.test_src.get_temperature(self.out_rad, cur_tel, **cur_pc, fit_conf=fit_conf)
+                    _ = self.test_src.get_temperature(self.out_rad, cur_tel, **cur_pc, fit_conf=fit_conf)
 
     def test_global_single_temp_apec_diff_fitconf(self) -> None:
         """
@@ -351,39 +359,99 @@ class TestXSPECSingleSource(unittest.TestCase):
                     ),
                 )
 
+    def test_general_model_fit_and_custom_xspec_fit(self) -> None:
+        """Tests fitting an arbitrary XSPEC model via general_model_fit and custom_xspec_fit, and retrieving
+        results with and without units.
+        """
+        general_model_fit(
+            self.no_fits_src,
+            self.out_rad,
+            model="tbabs*bremss",
+            start_pars={"kT": Quantity(3.0, "keV")},
+            telescope="xmm",
+        )
+
+        custom_fit_fn = custom_xspec_fit("tbabs*bremss")
+        custom_fit_fn(
+            self.no_fits_src,
+            self.out_rad,
+            start_kT=Quantity(4.5, "keV"),
+            telescope="xmm",
+        )
+
+        res_raw = self.no_fits_src.get_results(
+            self.out_rad,
+            telescope="xmm",
+            model="constant*tbabs*bremss",
+            fit_conf={"start_pars": {"kT": Quantity(3.0, "keV")}},
+            with_units=False,
+        )
+        self.assertIsInstance(res_raw, dict)
+        self.assertIn("kT", res_raw)
+        self.assertIn("norm", res_raw)
+        self.assertIsInstance(res_raw["kT"], np.ndarray)
+
+        res_units = self.no_fits_src.get_results(
+            self.out_rad,
+            telescope="xmm",
+            model="constant*tbabs*bremss",
+            fit_conf={"start_pars": {"kT": Quantity(4.5, "keV")}},
+            with_units=True,
+        )
+        self.assertIsInstance(res_units, dict)
+        self.assertIsInstance(res_units["kT"], Quantity)
+        self.assertEqual(res_units["kT"].unit, Unit("keV"))
+        self.assertIsInstance(res_units["norm"], Quantity)
+        self.assertEqual(res_units["norm"].unit, Unit(""))
+
+        lxs = self.no_fits_src.get_luminosities(
+            self.out_rad,
+            telescope="xmm",
+            model="constant*tbabs*bremss",
+            fit_conf={"start_pars": {"kT": Quantity(3.0, "keV")}},
+        )
+        self.assertEqual(len(lxs), 2)
+
 
 class TestBaseSample(unittest.TestCase):
+    """Tests for XSPEC fitting functions operating on ClusterSample instances."""
+
+    test_smp: ClusterSample
+    smp_odd_tels: ClusterSample
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
+        """Initialise test ClusterSample instances for sample-level XSPEC tests."""
         cls.test_smp = ClusterSample(
-            CLUSTER_SMP["ra"].values,
-            CLUSTER_SMP["dec"].values,
-            CLUSTER_SMP["z"].values,
-            CLUSTER_SMP["name"].values,
-            r500=Quantity(CLUSTER_SMP["r500"].values, "kpc"),
+            CLUSTER_SMP["ra"].to_numpy(),
+            CLUSTER_SMP["dec"].to_numpy(),
+            CLUSTER_SMP["z"].to_numpy(),
+            CLUSTER_SMP["name"].to_numpy(),
+            r500=Quantity(CLUSTER_SMP["r500"].to_numpy(), "kpc"),
             use_peak=False,
             search_distance={"erass": Quantity(3.6, "deg")},
         )
 
         cls.smp_odd_tels = ClusterSample(
-            CLUSTER_SMP["ra"].values,
-            CLUSTER_SMP["dec"].values,
-            CLUSTER_SMP["z"].values,
-            CLUSTER_SMP["name"].values,
-            r500=Quantity(CLUSTER_SMP["r500"].values, "kpc"),
+            CLUSTER_SMP["ra"].to_numpy(),
+            CLUSTER_SMP["dec"].to_numpy(),
+            CLUSTER_SMP["z"].to_numpy(),
+            CLUSTER_SMP["name"].to_numpy(),
+            r500=Quantity(CLUSTER_SMP["r500"].to_numpy(), "kpc"),
             use_peak=False,
             search_distance={"erass": Quantity(3.6, "deg")},
         )
         cls.smp_odd_tels[0].disassociate_obs("erass")
 
-    def test_Lx_w_stacked_spectra(self) -> None:
+    def test_lx_w_stacked_spectra(self) -> None:
+        """Tests retrieving stacked-spectra luminosities from a ClusterSample."""
         single_temp_apec(self.test_smp, "r500", stacked_spectra=True, spectrum_checking=False)
-        Lx = self.test_smp.Lx("r500", "erass", stacked_spectra=True)
+        lx = self.test_smp.Lx("r500", "erass", stacked_spectra=True)
 
-        assert len(Lx) == 2
-        assert isinstance(Lx, Quantity)
+        self.assertEqual(len(lx), 2)
+        self.assertIsInstance(lx, Quantity)
 
-    def test_Lx_Tx_w_odd_telescope_sample(self) -> None:
+    def test_lx_tx_w_odd_telescope_sample(self) -> None:
         """
         Testing that for samples where sources don't have the same telescopes assigned, the Lx and Tx
         can be retrieved.
@@ -392,6 +460,6 @@ class TestBaseSample(unittest.TestCase):
 
         cur_lx = self.smp_odd_tels.Lx("r500", "erass", stacked_spectra=True)
 
-        assert isinstance(cur_lx, Quantity)
-        assert len(cur_lx) == 2
-        assert np.isnan(cur_lx[0][0].value)
+        self.assertIsInstance(cur_lx, Quantity)
+        self.assertEqual(len(cur_lx), 2)
+        self.assertTrue(np.isnan(cur_lx[0][0].value))

@@ -3886,7 +3886,7 @@ class BaseSource:
         if telescope not in self.telescopes:
             raise NotAssociatedError(f"The {telescope} telescope is not associated with {self.name}.")
 
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, general_model_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -3923,7 +3923,7 @@ class BaseSource:
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
-            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
+            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES.get(model, general_model_fit), fit_conf)
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[telescope][spec_storage_key][model]) != 1:
             av_fconfs = ", ".join(self.fitted_model_configurations[telescope][spec_storage_key][model])
@@ -6510,7 +6510,7 @@ class BaseSource:
         self,
         outer_radius: str | Quantity,
         telescope: str,
-        model: str,
+        model: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         par: str | None = None,
         group_spec: bool = True,
@@ -6519,13 +6519,15 @@ class BaseSource:
         over_sample: float | None = None,
         stacked_spectra: bool = False,
         fit_conf: str | dict | None = None,
-    ) -> dict | Quantity:
+        with_units: bool = False,
+    ) -> dict | np.ndarray | Quantity:
         """
         Important method that will retrieve fit results from the source object. Either for a specific
         parameter of a given region-model combination or for all of them. If a specific parameter is requested,
         all matching values from the fit will be returned in an N row, 3 column numpy array (column 0 is the value,
-        column 1 is err-, and column 2 is err+). If no parameter is specified, the return will be a dictionary
-        of such numpy arrays, with the keys corresponding to parameter names.
+        column 1 is err-, and column 2 is err+), or an equivalent Astropy Quantity if ``with_units=True``. If no
+        parameter is specified, the return will be a dictionary of such numpy arrays (or Quantities), with the
+        keys corresponding to parameter names.
 
         If no model name is supplied, but only one model was fit to the spectrum of interest, then that model
         will be automatically selected - this behavior also applies to the fit configuration (fit_conf) parameter; if
@@ -6555,8 +6557,10 @@ class BaseSource:
         :param str/dict fit_conf: Either a dictionary with keys being the names of parameters passed to the
             spectrum fitting function and values being the changed values (only values changed-from-default need
             be included) or a full string representation of the fit configuration that is being requested.
+        :param bool with_units: Whether the returned parameter array(s) should be converted to Astropy Quantity
+            objects with their corresponding XSPEC model parameter units attached. Default is False.
         :return: The requested result value, and uncertainties.
-        :rtype: Union[dict, Quantity]
+        :rtype: Union[dict, np.ndarray, Quantity]
         """
         # Have to check that the passed telescope is associated with this source
         if telescope not in self._fit_results:
@@ -6617,9 +6621,16 @@ class BaseSource:
 
         model, fit_conf = self._get_fit_checks(storage_key, telescope, model, par, fit_conf)
 
+        par_units: dict[str, Unit] = {}
+        if with_units:
+            from ..xspec.fit.models import validate_and_parse_model
+
+            _, flat_pars, _ = validate_and_parse_model(model, norm_scale=False)
+            par_units = {p["par_key"]: p["unit"] for p in flat_pars}
+
         # Read out into variable for readabilities sake
         fit_data = self._fit_results[telescope][storage_key][model][fit_conf]
-        proc_data = {}  # Where the output will ive
+        proc_data: dict[str, np.ndarray | Quantity] = {}  # Where the output will live
         for p_key in fit_data:
             # Used to shape the numpy array the data is transferred into
             num_entries = len(fit_data[p_key])
@@ -6634,9 +6645,15 @@ class BaseSource:
 
             # Just makes the output a little nicer if there is only one entry
             if new_data.shape[0] == 1:
-                proc_data[p_key] = new_data[0]
+                out_arr = new_data[0]
             else:
-                proc_data[p_key] = new_data
+                out_arr = new_data
+
+            if with_units:
+                par_unit = par_units.get(p_key, Unit(""))
+                proc_data[p_key] = Quantity(out_arr, par_unit)
+            else:
+                proc_data[p_key] = out_arr
 
         # If no specific parameter was requested, the user gets all of them
         if par is None:

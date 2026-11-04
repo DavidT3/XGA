@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:01 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
 """Validation, tokenisation, and parameter inspection utilities for XSPEC model expressions."""
 
 import re
@@ -668,9 +668,9 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
                 link_overrides[pk] = cur_link
 
         res: BaseSource | BaseSample | list[BaseSource] = general_model_fit(
-            sources=b_args["sources"],
-            outer_radius=b_args["outer_radius"],
-            model=model,
+            b_args["sources"],
+            b_args["outer_radius"],
+            model,
             inner_radius=b_args["inner_radius"],
             norm_scale=norm_scale,
             start_pars=start_overrides if start_overrides else None,

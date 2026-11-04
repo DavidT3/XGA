@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:07 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
 """
 This module implements global XSPEC spectral fitting functions for XGA sources and samples, including both
 dedicated convenience functions for common models (e.g. single_temp_apec, power_law) and the generic
@@ -2002,24 +2002,38 @@ def general_model_fit(
 
     # Pre-process and broadcast any user-supplied start_pars across the sources in the sample (or single source).
     #  We convert Quantities to the target XSPEC unit floats and validate against hard limits upfront so errors are
-    #  caught immediately.
+    #  caught immediately. We also keep a parallel dict preserving Quantity units for fit_conf key generation so that
+    #  fit_conf_from_function(general_model_fit, {"start_pars": ...}) produces matching keys.
     per_source_start_overrides: list[dict[str, float]] = [{} for _ in range(len(sources))]
+    per_source_fit_conf_start: list[dict[str, float | Quantity]] = [{} for _ in range(len(sources))]
     if start_pars is not None:
         for par_key, raw_val in start_pars.items():
             # A value of None (as returned by describe_xspec_model for nH/Redshift) means "keep default/auto-value"
             if raw_val is None:
                 continue
             p_meta = par_lookup[par_key]
-            if isinstance(raw_val, Quantity) and not raw_val.isscalar:
-                if len(raw_val) != len(sources):
-                    raise ValueError(
-                        f"If a non-scalar Quantity is passed in 'start_pars' for '{par_key}', it must have one "
-                        f"entry for each source ({len(raw_val)} supplied for {len(sources)} sources)."
-                    )
-                for s_idx in range(len(sources)):
-                    conv_v = _convert_par_val_to_xspec(raw_val[s_idx], p_meta, par_key)
+            p_unit = p_meta["unit"]
+            if isinstance(raw_val, Quantity):
+                if not raw_val.isscalar:
+                    if len(raw_val) != len(sources):
+                        raise ValueError(
+                            f"If a non-scalar Quantity is passed in 'start_pars' for '{par_key}', it must have one "
+                            f"entry for each source ({len(raw_val)} supplied for {len(sources)} sources)."
+                        )
+                    for s_idx in range(len(sources)):
+                        conv_v = _convert_par_val_to_xspec(raw_val[s_idx], p_meta, par_key)
+                        _validate_par_hard_limits(conv_v, p_meta, par_key)
+                        per_source_start_overrides[s_idx][par_key] = conv_v
+                        per_source_fit_conf_start[s_idx][par_key] = (
+                            Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
+                        )
+                else:
+                    conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                     _validate_par_hard_limits(conv_v, p_meta, par_key)
-                    per_source_start_overrides[s_idx][par_key] = conv_v
+                    fc_val: float | Quantity = Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
+                    for s_idx in range(len(sources)):
+                        per_source_start_overrides[s_idx][par_key] = conv_v
+                        per_source_fit_conf_start[s_idx][par_key] = fc_val
             elif isinstance(raw_val, (list, np.ndarray)):
                 if len(raw_val) != len(sources):
                     raise ValueError(
@@ -2027,14 +2041,19 @@ def general_model_fit(
                         f"entry for each source ({len(raw_val)} supplied for {len(sources)} sources)."
                     )
                 for s_idx in range(len(sources)):
-                    conv_v = _convert_par_val_to_xspec(raw_val[s_idx], p_meta, par_key)
+                    elem_val = raw_val[s_idx]
+                    conv_v = _convert_par_val_to_xspec(elem_val, p_meta, par_key)
                     _validate_par_hard_limits(conv_v, p_meta, par_key)
                     per_source_start_overrides[s_idx][par_key] = conv_v
+                    per_source_fit_conf_start[s_idx][par_key] = (
+                        Quantity(conv_v, p_unit) if isinstance(elem_val, Quantity) and p_unit != u.Unit("") else conv_v
+                    )
             else:
                 conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                 _validate_par_hard_limits(conv_v, p_meta, par_key)
                 for s_idx in range(len(sources)):
                     per_source_start_overrides[s_idx][par_key] = conv_v
+                    per_source_fit_conf_start[s_idx][par_key] = conv_v
 
     # Normalise freeze_pars and link_pars to only include non-None cleaned boolean dicts for fit_conf
     clean_freeze_overrides: dict[str, bool] | None = (
@@ -2084,9 +2103,10 @@ def general_model_fit(
 
     for src_ind, source in enumerate(sources):
         src_overrides = per_source_start_overrides[src_ind]
+        src_fc_start = per_source_fit_conf_start[src_ind]
         # Rebind start_pars in locals() for this source so _gen_fit_conf records the source-specific overrides
         #  (or None if no overrides were provided), matching how single_temp_apec handles per-source start_temp
-        start_pars = dict(src_overrides) if src_overrides else None  # noqa: F841
+        start_pars = dict(src_fc_start) if src_fc_start else None  # noqa: F841
 
         for tel in source.telescopes:
             if tel not in telescope:
