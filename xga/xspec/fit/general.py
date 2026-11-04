@@ -1,5 +1,10 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:01 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:07 PM. Copyright (c) The Contributors.
+"""
+This module implements global XSPEC spectral fitting functions for XGA sources and samples, including both
+dedicated convenience functions for common models (e.g. single_temp_apec, power_law) and the generic
+general_model_fit function for fitting arbitrary XSPEC model expressions.
+"""
 
 from copy import deepcopy
 from inspect import Parameter, signature
@@ -28,7 +33,7 @@ from .models import validate_and_parse_model
 
 @xspec_call
 def single_temp_apec(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     start_temp: Quantity = Quantity(3.0, "keV"),
@@ -45,14 +50,14 @@ def single_temp_apec(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     spectrum_checking: bool = True,
     timeout: Quantity = Quantity(1, "hr"),
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
     force_gen: bool = False,
 ) -> BaseSource | BaseSample | list[BaseSource]:
     """
@@ -231,14 +236,14 @@ def single_temp_apec(
             start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
             start_met = all_start_mets[src_ind]
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5}}}".format(
-                1.0, source.nH.to("10^22 cm^-2").value, start_temp.value, start_met, source.redshift, 1.0
+            par_values = (
+                f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {start_temp.value} {start_met} {source.redshift} {1.0}}}"
             )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
             #  include the temperature, if the user wants it fixed at the start value
-            freezing = "{{F {n} {t} {a} T F}}".format(
-                n="T" if freeze_nh else "F", t="T" if freeze_temp else "F", a="T" if freeze_met else "F"
+            freezing = (
+                f"{{F {'T' if freeze_nh else 'F'} {'T' if freeze_temp else 'F'} {'T' if freeze_met else 'F'} T F}}"
             )
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
@@ -274,7 +279,7 @@ def single_temp_apec(
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-                res = source.get_results(
+                source.get_results(
                     out_rad_vals[src_ind],
                     tel,
                     model,
@@ -323,12 +328,12 @@ def single_temp_apec(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 @xspec_call
 def single_temp_mekal(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     start_temp: Quantity = Quantity(3.0, "keV"),
@@ -345,15 +350,15 @@ def single_temp_mekal(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     spectrum_checking: bool = True,
     timeout: Quantity = Quantity(1, "hr"),
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
-):
+    telescope: str | list[str] | None = None,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting an absorbed single temperature mekal model(constant*tbabs*mekal) to an
     object. If there are no existing spectra with the passed settings, then they will be generated automatically.
@@ -518,13 +523,14 @@ def single_temp_mekal(
             # We also fetch the start metallicity
             start_met = all_start_mets[src_ind]
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7}}}".format(
-                1.0, source.nH.to("10^22 cm^-2").value, start_temp.value, 1, start_met, source.redshift, 1, 1.0
+            par_values = (
+                f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {start_temp.value} "
+                f"{1} {start_met} {source.redshift} {1} {1.0}}}"
             )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
-            freezing = "{{F {n} {t} T {ab} T T F}}".format(
-                n="T" if freeze_nh else "F", t="T" if freeze_temp else "F", ab="T" if freeze_met else "F"
+            freezing = (
+                f"{{F {'T' if freeze_nh else 'F'} {'T' if freeze_temp else 'F'} T {'T' if freeze_met else 'F'} T T F}}"
             )
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
@@ -560,7 +566,7 @@ def single_temp_mekal(
             # If the fit has already been performed, we do not wish to perform it again
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-                res = source.get_results(
+                source.get_results(
                     out_rad_vals[src_ind],
                     tel,
                     model,
@@ -610,12 +616,12 @@ def single_temp_mekal(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 @xspec_call
 def multi_temp_dem_apec(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     start_max_temp: Quantity = Quantity(5.0, "keV"),
@@ -633,14 +639,14 @@ def multi_temp_dem_apec(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     spectrum_checking: bool = True,
     timeout: Quantity = Quantity(1, "hr"),
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
 ) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting an absorbed multi temperature apec model (constant*tbabs*wdem) to
@@ -773,21 +779,13 @@ def multi_temp_dem_apec(
             t = start_max_temp.to("keV", equivalencies=u.temperature_energy()).value
 
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = "{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}".format(
-                1.0,
-                source.nH.to("10^22 cm^-2").value,
-                t,
-                start_t_rat,
-                start_inv_em_slope,
-                1,
-                start_met,
-                source.redshift,
-                2,
-                1.0,
+            par_values = (
+                f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {t} {start_t_rat} "
+                f"{start_inv_em_slope} {1} {start_met} {source.redshift} {2} {1.0}}}"
             )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
-            freezing = "{{F {n} F F F T {ab} T T F}}".format(n="T" if freeze_nh else "F", ab="T" if freeze_met else "F")
+            freezing = f"{{F {'T' if freeze_nh else 'F'} F F F T {'T' if freeze_met else 'F'} T T F}}"
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
             #  multiplicative constant that accounts for variation in normalisation over different observations is not
@@ -816,7 +814,7 @@ def multi_temp_dem_apec(
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(
+                source.get_results(
                     out_rad_vals[src_ind],
                     tel,
                     model,
@@ -867,12 +865,12 @@ def multi_temp_dem_apec(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 @xspec_call
 def power_law(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     redshifted: bool = False,
@@ -887,14 +885,14 @@ def power_law(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     timeout: Quantity = Quantity(1, "hr"),
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
-):
+    telescope: str | list[str] | None = None,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting a tbabs absorbed powerlaw (or zpowerlw if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -1017,11 +1015,9 @@ def power_law(
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zpowerlw.")
             elif redshifted and source.redshift is not None:
-                par_values = "{{{0} {1} {2} {3} {4}}}".format(
-                    1.0, source.nH.to("10^22 cm^-2").value, start_pho_index, source.redshift, 1.0
-                )
+                par_values = f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {start_pho_index} {source.redshift} {1.0}}}"
             else:
-                par_values = "{{{0} {1} {2} {3}}}".format(1.0, source.nH.to("10^22 cm^-2").value, start_pho_index, 1.0)
+                par_values = f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {start_pho_index} {1.0}}}"
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
             if redshifted and freeze_nh:
@@ -1042,7 +1038,7 @@ def power_law(
 
             # If the powerlaw with redshift has been chosen, then we use the redshift attached to the source object
             #  If not we just pass a filler redshift and the luminosities are invalid
-            if redshifted or (not redshifted and source.redshift is not None):
+            if source.redshift is not None:
                 z = source.redshift
             else:
                 z = 1
@@ -1060,7 +1056,7 @@ def power_law(
 
             # If the fit has already been performed we do not wish to perform it again
             try:
-                res = source.get_results(
+                source.get_results(
                     out_rad_vals[src_ind],
                     tel,
                     model,
@@ -1109,12 +1105,12 @@ def power_law(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 @xspec_call
 def blackbody(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     redshifted: bool = False,
@@ -1129,14 +1125,14 @@ def blackbody(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     timeout: Quantity = Quantity(1, "hr"),
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
-):
+    telescope: str | list[str] | None = None,
+) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting a tbabs absorbed blackbody (or zbbody if redshifted
     is selected) to source spectra, with a multiplicative constant included to deal with different spectrum
@@ -1279,11 +1275,9 @@ def blackbody(
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
             elif redshifted and source.redshift is not None:
-                par_values = "{{{0} {1} {2} {3} {4}}}".format(
-                    1.0, source.nH.to("10^22 cm^-2").value, t, source.redshift, 1.0
-                )
+                par_values = f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {t} {source.redshift} {1.0}}}"
             else:
-                par_values = "{{{0} {1} {2} {3}}}".format(1.0, source.nH.to("10^22 cm^-2").value, t, 1.0)
+                par_values = f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {t} {1.0}}}"
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
             if redshifted and freeze_nh:
@@ -1304,7 +1298,7 @@ def blackbody(
 
             # If the blackbody with redshift has been chosen, then we use the redshift attached to the source object
             #  If not we just pass a filler redshift and the luminosities are invalid
-            if redshifted or (not redshifted and source.redshift is not None):
+            if source.redshift is not None:
                 z = source.redshift
             else:
                 z = 1
@@ -1322,7 +1316,7 @@ def blackbody(
 
             # If the fit has already been performed, we do not wish to perform it again
             try:
-                res = source.get_results(
+                source.get_results(
                     out_rad_vals[src_ind],
                     tel,
                     model,
@@ -1371,12 +1365,12 @@ def blackbody(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 @xspec_call
 def double_temp_apec(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
     start_temp_one: Quantity = Quantity(3.0, "keV"),
@@ -1397,14 +1391,14 @@ def double_temp_apec(
     fit_method: str = "leven",
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: float = None,
-    over_sample: float = None,
+    min_sn: float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     spectrum_checking: bool = False,
     timeout: Quantity = Quantity(1, "hr"),
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
 ) -> BaseSource | BaseSample | list[BaseSource]:
     """
     This is a convenience function for fitting an absorbed double-temperature apec model (constant*tbabs*(apec+apec))
@@ -1629,27 +1623,17 @@ def double_temp_apec(
             start_met_two = all_start_met_twos[src_ind]
 
             # Another TCL list, this time of the parameter start values for this model.
-            par_values = ("{{{0} {1} {2} {3} {4} {5} {6} {7} {8} {9}}}").format(
-                1.0,
-                source.nH.to("10^22 cm^-2").value,
-                start_temp_one.value,
-                start_met_one,
-                source.redshift,
-                1.0,
-                start_temp_two.value,
-                start_met_two,
-                source.redshift,
-                1.0,
+            par_values = (
+                f"{{{1.0} {source.nH.to('10^22 cm^-2').value} {start_temp_one.value} {start_met_one} "
+                f"{source.redshift} {1.0} {start_temp_two.value} {start_met_two} {source.redshift} {1.0}}}"
             )
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input - this can now
             #  include the temperature, if the user wants it fixed at the start value
-            freezing = "{{F {n} {t1} {a1} T F {t2} {a2} T F}}".format(
-                n="T" if freeze_nh else "F",
-                t1="T" if freeze_temp_one else "F",
-                a1="T" if freeze_met_one else "F",
-                t2="T" if freeze_temp_two else "F",
-                a2="T" if freeze_met_two else "F",
+            freezing = (
+                f"{{F {'T' if freeze_nh else 'F'} {'T' if freeze_temp_one else 'F'} "
+                f"{'T' if freeze_met_one else 'F'} T F {'T' if freeze_temp_two else 'F'} "
+                f"{'T' if freeze_met_two else 'F'} T F}}"
             )
 
             # Set up the TCL list that defines which parameters are linked across different spectra, only the
@@ -1685,7 +1669,7 @@ def double_temp_apec(
             # If the fit has already been performed we do not wish to perform it again
             try:
                 # We search for the norm parameter, as it is guaranteed to be there for any fit with this model
-                res = source.get_results(
+                source.get_results(
                     out_rad_vals[src_ind],
                     tel,
                     model,
@@ -1734,12 +1718,12 @@ def double_temp_apec(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 @xspec_call
 def general_model_fit(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     model: str,
     inner_radius: str | Quantity = Quantity(0, "arcsec"),
@@ -2102,7 +2086,7 @@ def general_model_fit(
         src_overrides = per_source_start_overrides[src_ind]
         # Rebind start_pars in locals() for this source so _gen_fit_conf records the source-specific overrides
         #  (or None if no overrides were provided), matching how single_temp_apec handles per-source start_temp
-        start_pars = src_overrides if src_overrides else None  # noqa: F841
+        start_pars = dict(src_overrides) if src_overrides else None  # noqa: F841
 
         for tel in source.telescopes:
             if tel not in telescope:
@@ -2216,7 +2200,7 @@ def general_model_fit(
                 inv_ents.append(inv_ent)
 
     run_type = "fit"
-    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, clean_model, fit_confs, inv_ents
+    return script_paths, outfile_paths, num_cores, run_type, src_inds, None, timeout, clean_model, fit_confs, inv_ents  # type: ignore[return-value]
 
 
 # This allows us to make a link between the model that was fit and the XGA function

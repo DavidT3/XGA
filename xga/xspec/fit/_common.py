@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:01 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
@@ -29,7 +29,7 @@ from ...sources import BaseSource, ExtendedSource, PointSource
 
 
 def _check_inputs(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     lum_en: Quantity,
     lo_en: Quantity,
     hi_en: Quantity,
@@ -82,9 +82,7 @@ def _check_inputs(
 
     if fit_method not in XSPEC_FIT_METHOD:
         raise ValueError(
-            "{f} is not an XSPEC fit method, allowed fit methods are; {a}.".format(
-                f=fit_method, a=", ".join(XSPEC_FIT_METHOD)
-            )
+            f"{fit_method} is not an XSPEC fit method, allowed fit methods are; {', '.join(XSPEC_FIT_METHOD)}."
         )
 
     if abund_table not in ABUND_TABLES:
@@ -102,19 +100,19 @@ def _check_inputs(
 
 
 def _pregen_spectra(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     outer_radius: str | Quantity,
     inner_radius: str | Quantity,
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
     force_gen: bool = False,
-) -> tuple[list[BaseSource] | BaseSample, Quantity, Quantity, list[str], dict]:
+) -> tuple[list[BaseSource] | BaseSample, list[Quantity], list[Quantity], list[str], dict]:
     """
     This pre-generates the spectra necessary for the requested fit (if they do not exist), and formats the input
     radii in a more predictable way.
@@ -153,9 +151,6 @@ def _pregen_spectra(
     """
     # Have to import here to avoid a circular import error
     from ...sourcetools._common import _get_all_telescopes
-
-    # This returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
-    all_telescopes = _get_all_telescopes(sources)
 
     # If the user didn't specify a particular telescope, or telescopes, from which we are to
     #  produce spectra, we fetch all telescope names associated with at least one source
@@ -246,22 +241,25 @@ def _pregen_spectra(
     else:
         raise NotImplementedError("I don't currently support fitting region spectra")
 
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
     return sources, inn_rad_vals, out_rad_vals, src_telescopes, real_stacked_spectra
 
 
 def _pregen_annular_spectra(
-    sources: BaseSource | BaseSample,
+    sources: BaseSource | BaseSample | list[BaseSource],
     radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]],
     group_spec: bool = True,
     min_counts: int = 5,
-    min_sn: int | float = None,
-    over_sample: float = None,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
     one_rmf: bool = True,
     num_cores: int = NUM_CORES,
     gen_cross_arf: bool = False,
     cross_arf_detmap_bin: int = 200,
     stacked_spectra: bool = False,
-    telescope: str | list[str] = None,
+    telescope: str | list[str] | None = None,
 ) -> tuple[list[BaseSource] | BaseSample, dict[str, Quantity] | dict[str, list[Quantity]], list[str]]:
     """
     Similar to the _pregen_spectra function, this makes sure we have all the necessary annular spectra to perform
@@ -366,6 +364,9 @@ def _pregen_annular_spectra(
         else:
             raise NotImplementedError(f"Spectrum generation functionality is not implemented for {tel} yet!")
 
+    if isinstance(sources, BaseSource):
+        sources = [sources]
+
     return sources, radii, src_telescopes
 
 
@@ -378,8 +379,8 @@ def _spec_obj_setup(
     inn_rad_vals: list[Quantity],
     group_spec: bool,
     min_counts: int,
-    min_sn: int | float,
-    over_sample: float,
+    min_sn: int | float | None,
+    over_sample: float | None,
 ) -> tuple[str, str]:
     """
     Internal function that collects relevant spectrum objects per telescope. This is used in
@@ -441,8 +442,8 @@ def _spec_obj_setup(
                 telescope=tel,
                 inst=search_inst,
             )
-    except NoProductAvailableError:
-        raise NoProductAvailableError(f"Relevant {tel} spectra for {source.name} cannot be found.")
+    except NoProductAvailableError as err:
+        raise NoProductAvailableError(f"Relevant {tel} spectra for {source.name} cannot be found.") from err
 
     # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
     #  a cluster with only a single valid instrument for a single valid observation this may not be the case
@@ -578,9 +579,9 @@ def _write_xspec_script(
     telescope: str,
     fit_conf: str,
     which_par_nh: str = "None",
-    rand_ident: str = None,
-    cross_arf_paths: str = None,
-    cross_arf_rmf_paths: str = None,
+    rand_ident: str | int | None = None,
+    cross_arf_paths: str | None = None,
+    cross_arf_rmf_paths: str | None = None,
 ) -> tuple[str, str, list]:
     """
     This writes out a configured XSPEC script, for global fits, annular fits, and annular fits with cross-arf

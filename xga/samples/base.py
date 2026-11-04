@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/1/26, 4:34 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
 
 from warnings import warn
 
@@ -738,14 +738,14 @@ class BaseSample:
         """
         return len(self._sources)
 
-    def __iter__(self):
+    def __iter__(self) -> "BaseSample":
         """
         Called when initiating iterating through a BaseSample based object. Resets the counter _n.
         """
         self._n = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> BaseSource:
         """
         Iterates the counter _n uses it to find the name of the corresponding source, then retrieves
         that source from the _sources dictionary. Sources are accessed using their name as a key, just like
