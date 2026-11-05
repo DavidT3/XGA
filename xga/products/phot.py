@@ -463,7 +463,14 @@ class Image(BaseProduct):
         for o in ds9_regs:
             # Setting up an entry in the output dictionary for that ObsID
             final_regs[o] = []
-            for reg in ds9_regs[o]:
+            if ds9_regs[o] is None:
+                continue
+            elif isinstance(ds9_regs[o], (PixelRegion, SkyRegion)):
+                obs_regs = [ds9_regs[o]]
+            else:
+                obs_regs = [r for r in ds9_regs[o] if r is not None]
+
+            for reg in obs_regs:
                 if isinstance(reg, PixelRegion):
                     final_regs[o].append(reg)
                 else:
@@ -725,7 +732,7 @@ class Image(BaseProduct):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]):
+    def regions(self, new_reg: Optional[Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]]):
         """
         A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
         then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
@@ -735,13 +742,16 @@ class Image(BaseProduct):
         :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict new_reg: A new region file path, a list or numpy array
             of region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         """
-        if not isinstance(new_reg, (str, list, np.ndarray, dict)):
+        if new_reg is not None and not isinstance(new_reg, (str, list, np.ndarray, dict)):
             raise TypeError("Please pass either a path to a region file, a list or numpy array of "
                             "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
                             "objects with ObsIDs as keys.")
 
+        if new_reg is None:
+            self._reg_file_path = ""
+            self._regions = {}
         # Checks to make sure that a region file path exists, if passed, then processes the file
-        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+        elif isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
             self._reg_file_path = new_reg
             self._regions = self._process_regions(new_reg)
         # Possible for an empty string to be passed in which case nothing happens
@@ -751,13 +761,18 @@ class Image(BaseProduct):
             warn("The region file path does not exist", stacklevel=2)
         # If an existing list/array of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, (list, np.ndarray)) and all(
-            [isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
+            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
         ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
         elif isinstance(new_reg, dict) and all(
             [
-                isinstance(rl, (list, np.ndarray)) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                rl is None
+                or isinstance(rl, (SkyRegion, PixelRegion))
+                or (
+                    isinstance(rl, (list, np.ndarray))
+                    and all([r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                )
                 for o, rl in new_reg.items()
             ]
         ):
@@ -3557,7 +3572,7 @@ class RateMap(Image):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]):
+    def regions(self, new_reg: Optional[Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]]):
         """
         A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
         then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
@@ -3567,13 +3582,16 @@ class RateMap(Image):
         :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict new_reg: A new region file path, a list or numpy array
             of region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         """
-        if not isinstance(new_reg, (str, list, np.ndarray, dict)):
+        if new_reg is not None and not isinstance(new_reg, (str, list, np.ndarray, dict)):
             raise TypeError("Please pass either a path to a region file, a list or numpy array of "
                             "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
                             "objects with ObsIDs as keys.")
 
+        if new_reg is None:
+            self._reg_file_path = ""
+            self._regions = {}
         # Checks to make sure that a region file path exists, if passed, then processes the file
-        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+        elif isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
             self._reg_file_path = new_reg
             self._regions = self._process_regions(new_reg)
         # Possible for an empty string to be passed in which case nothing happens
@@ -3583,13 +3601,18 @@ class RateMap(Image):
             warn("The region file path does not exist", stacklevel=2)
         # If an existing list/array of regions are passed then we just process them and assign them to regions attribute
         elif isinstance(new_reg, (list, np.ndarray)) and all(
-            [isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
+            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
         ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
         elif isinstance(new_reg, dict) and all(
             [
-                isinstance(rl, (list, np.ndarray)) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                rl is None
+                or isinstance(rl, (SkyRegion, PixelRegion))
+                or (
+                    isinstance(rl, (list, np.ndarray))
+                    and all([r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                )
                 for o, rl in new_reg.items()
             ]
         ):
