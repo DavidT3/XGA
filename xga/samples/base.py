@@ -500,6 +500,7 @@ class BaseSample:
         lums = []
         warns = []
         not_assoc_mod = []
+        not_assoc_band = []
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
@@ -528,9 +529,12 @@ class BaseSample:
                 warns.append(src.name)
                 not_assoc_mod.append(src.name)
                 lums.append(np.array([np.nan, np.nan, np.nan]))
+            except ParameterNotAssociatedError as err:
+                warns.append(src.name)
+                not_assoc_band.append(str(err))
+                lums.append(np.array([np.nan, np.nan, np.nan]))
             except (
                 ValueError,
-                ParameterNotAssociatedError,
                 TelescopeNotAssociatedError,
                 NotAssociatedError,
                 FitConfNotAssociatedError,
@@ -546,7 +550,9 @@ class BaseSample:
 
         # We're going to throw an error if all the luminosities are NaN, because obviously something is wrong
         check_lums = lums[~np.isnan(lums)]
-        if len(check_lums) == 0 and len(not_assoc_mod) > 0:
+        if len(check_lums) == 0 and len(not_assoc_band) > 0:
+            raise ParameterNotAssociatedError(not_assoc_band[0])
+        elif len(check_lums) == 0 and len(not_assoc_mod) > 0:
             raise ModelNotAssociatedError(
                 f"There are no {model} fits associated with any of the sources in this sample."
             )
