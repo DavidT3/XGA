@@ -1254,7 +1254,7 @@ class Image(BaseProduct):
         # Force garbage collection just to make sure the data are gone from memory
         # gc.collect()
 
-    def get_count(self, at_coord: Quantity) -> float:
+    def get_count(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the number of counts
         at those coordinates.
@@ -1264,7 +1264,10 @@ class Image(BaseProduct):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        cts = self.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            cts = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            cts = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(cts, "ct")
 
     def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
@@ -2887,7 +2890,10 @@ class ExpMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            exp = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            exp = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
     def get_count(self, *args, **kwargs):
@@ -3100,7 +3106,7 @@ class RateMap(Image):
         del self._data
         self._data = None
 
-    def get_rate(self, at_coord: Quantity) -> float:
+    def get_rate(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the rate (in photons
         per second) and returns it.
@@ -3110,10 +3116,13 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        rate = self.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            rate = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            rate = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(rate, "ct/s")
 
-    def get_count(self, at_coord: Quantity) -> float:
+    def get_count(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the number of counts
         at those coordinates.
@@ -3123,10 +3132,13 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        cts = self.image.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            cts = self.image.data[pix_coord[1], pix_coord[0]]
+        else:
+            cts = self.image.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(cts, "ct")
 
-    def get_exp(self, at_coord: Quantity) -> float:
+    def get_exp(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.
@@ -3136,7 +3148,10 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.expmap.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            exp = self.expmap.data[pix_coord[1], pix_coord[0]]
+        else:
+            exp = self.expmap.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
     def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
@@ -3768,29 +3783,35 @@ class PSF(Image):
         self._psf_centre = None
         self._psf_model = psf_model
 
-    def get_val(self, at_coord: Quantity) -> float:
+    def get_val(self, at_coord: Quantity) -> float | np.ndarray:
         """
         A simple method that converts the given coordinates to pixels, then finds the PSF value
         at those coordinates.
 
         :param Quantity at_coord: A pair of coordinates to find the PSF value time for.
         :return: The PSF value at the supplied coordinates.
-        :rtype: Quantity
+        :rtype: float | np.ndarray
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        neg_ind = np.where(pix_coord < 0)
-        # This wouldn't deal with PSF images that weren't the same size in x and y, but XGA
-        #  doesn't generate PSFs like that so its fine.
-        too_big_ind = np.where(pix_coord >= self.shape[0])
+        if pix_coord.ndim == 1:
+            if np.any(pix_coord < 0) or pix_coord[0] >= self.shape[1] or pix_coord[1] >= self.shape[0]:
+                val = 0.0
+            else:
+                val = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            neg_ind = np.where(pix_coord < 0)
+            # This wouldn't deal with PSF images that weren't the same size in x and y, but XGA
+            #  doesn't generate PSFs like that so its fine.
+            too_big_ind = np.where(pix_coord >= self.shape[0])
 
-        pix_coord[too_big_ind[0], :] = [0, 0]
-        pix_coord[neg_ind[0], :] = [0, 0]
+            pix_coord[too_big_ind[0], :] = [0, 0]
+            pix_coord[neg_ind[0], :] = [0, 0]
 
-        val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
-        # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
-        #  I think I'm going to set those coordinates to the minimum PSF value
-        val[too_big_ind[0]] = 0
-        val[neg_ind[0]] = 0
+            val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
+            # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
+            #  I think I'm going to set those coordinates to the minimum PSF value
+            val[too_big_ind[0]] = 0
+            val[neg_ind[0]] = 0
         return val
 
     def resample(self, im_prod: Image, half_side_length: Quantity) -> np.ndarray:
