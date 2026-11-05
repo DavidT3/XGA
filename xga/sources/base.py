@@ -3331,7 +3331,7 @@ class BaseSource:
         inst: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         telescope: str | None = None,
@@ -3377,6 +3377,11 @@ class BaseSource:
             out_rad_num = self.get_radius(outer_radius, "deg")
         else:
             raise TypeError("You may only pass a quantity or a string as outer_radius")
+
+        # If min_sn has been supplied, min_counts is automatically set to None so the user doesn't have to
+        #  explicitly pass min_counts=None
+        if min_sn is not None:
+            min_counts = None
 
         # Checking spectrum generation inputs, and making sure they are in the right types
         over_sample = int(over_sample) if over_sample is not None else None
@@ -4865,7 +4870,7 @@ class BaseSource:
         inst: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         telescope: str | None = None,
@@ -4918,7 +4923,7 @@ class BaseSource:
         inst: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         telescope: str | None = None,
@@ -4969,7 +4974,7 @@ class BaseSource:
         self,
         radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
@@ -5061,6 +5066,12 @@ class BaseSource:
         filt_matched_prods = [
             m_prod for m_prod in filt_matched_prods if (m_prod.central_coord == self.default_coord).all()
         ]
+
+        if min_sn is not None:
+            min_counts = None
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
 
         # Separating the matching steps can also give us the opportunity to say exactly where matching failed
         #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
