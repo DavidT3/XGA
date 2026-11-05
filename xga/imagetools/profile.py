@@ -410,13 +410,16 @@ def radial_brightness(rt: RateMap, centre: Quantity, outer_rad: Quantity, back_i
     deg_cen_rads = (deg_inn_rads + deg_out_rads) / 2
     rad_err = (final_out_rads-final_inn_rads) / 2
 
-    if not outer_rad.unit.is_equivalent('deg'):
-        deg_outer_rad = rad_to_ang(outer_rad, z, cosmo).to('deg')
-    else:
+    if outer_rad.unit.is_equivalent('deg'):
         deg_outer_rad = outer_rad.to("deg")
+    elif outer_rad.unit == pix:
+        deg_outer_rad = pix_rad_to_physical(rt, outer_rad, deg, centre, z, cosmo)
+    else:
+        deg_outer_rad = rad_to_ang(outer_rad, z, cosmo).to('deg')
 
+    deg_cen = rt.coord_conv(centre, deg)
     # Now I've finally implemented some profile product classes I can just smoosh everything into a convenient product
-    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br_prof, 'ct/(s*arcmin**2)'), centre, pix_step, min_snr,
+    br_prof = SurfaceBrightness1D(rt, cen_rads, Quantity(br_prof, 'ct/(s*arcmin**2)'), deg_cen, pix_step, min_snr,
                                   deg_outer_rad, rad_err, Quantity(br_errs, 'ct/(s*arcmin**2)'),
                                   Quantity(countrate_bg_per_area, 'ct/(s*arcmin**2)'),
                                   np.insert(out_rads, 0, inn_rads[0]), np.concatenate([back_inn_rad, back_out_rad]),
