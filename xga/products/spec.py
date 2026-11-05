@@ -3295,15 +3295,20 @@ class AnnularSpectra(BaseAggregateProduct):
             # Sort of duplicates an error further down, but this case will only trigger if 'model' is None.
             raise ModelNotAssociatedError("There are no XSPEC fits associated with this AnnularSpectra object.")
         elif model is None and len(self.fitted_models) != 1:
-            av_mods = ", ".join(self._fit_results[annulus_ident].keys())
+            av_mods = ", ".join(self.fitted_models)
             raise ValueError(
                 "Multiple models have been fit to this annular spectrum, so model=None is not "
                 f"valid; available models are {av_mods}"
             )
-        else:
+        elif model is None:
             # In this case there is ONE model fit, and the user didn't pass a model parameter value, so we'll just
             #  automatically select it for them
             model = self.fitted_models[0]
+        elif model is not None and model not in self.fitted_models:
+            av_mods = ", ".join(self.fitted_models)
+            raise ModelNotAssociatedError(
+                f"{model} has not been fitted to this AnnularSpectra; available models are {av_mods}"
+            )
 
         # Checks the input fit configuration values - if they are completely illegal we throw an error
         if fit_conf is not None and not isinstance(fit_conf, (str, dict)):
@@ -3315,8 +3320,8 @@ class AnnularSpectra(BaseAggregateProduct):
         #  as a string
         elif isinstance(fit_conf, dict):
             fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES[model], fit_conf)
-        elif isinstance(fit_conf, str) and fit_conf not in self._fit_results[0][model]:
-            av_fconfs = ", ".join(self._fit_results[annulus_ident][model].keys())
+        elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
+            av_fconfs = ", ".join(self.fitted_model_configurations[model])
             raise ModelNotAssociatedError(
                 f"The {fit_conf} fit configuration has not been used for any {model} fit to this "
                 "annular spectrum; available fit configurations are "
