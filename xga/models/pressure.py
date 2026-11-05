@@ -77,7 +77,7 @@ class SimpleGNFWThermalPressure(BaseModel1D):
 
         priors = [pz_priors[yu_ind], r_scale_priors[xu_ind], alpha_priors, beta_priors]
 
-        nice_pars = [r"P$_{0}$", r"$R_{s}$", r"$\alpha$", r"$\beta$"]
+        nice_pars = [r"$P_{0}$", r"$R_{\rm{s}}$", r"$\alpha$", r"$\beta$"]
         info_dict = {'author': 'Arnaud et al.', 'year': 2010,
                      'reference': 'https://ui.adsabs.harvard.edu/abs/2007ApJ...668....1N/abstract',
                      'general': "A model to fit galaxy cluster radial thermal pressure profiles, \n"
@@ -176,7 +176,7 @@ class GNFWThermalPressure(BaseModel1D):
 
         priors = [pz_priors[yu_ind], r_scale_priors[xu_ind], alpha_priors, beta_priors, gamma_priors]
 
-        nice_pars = [r"P$_{0}$", r"$R_{s}$", r"$\alpha$", r"$\beta$", r"$\gamma"]
+        nice_pars = [r"$P_{0}$", r"$R_{\rm{s}}$", r"$\alpha$", r"$\beta$", r"$\gamma$"]
         info_dict = {'author': 'Arnaud et al.', 'year': 2010,
                      'reference': 'https://ui.adsabs.harvard.edu/abs/2007ApJ...668....1N/abstract',
                      'general': "A model to fit galaxy cluster radial thermal pressure profiles, \n"

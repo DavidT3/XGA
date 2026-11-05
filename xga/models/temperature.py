@@ -86,7 +86,7 @@ class SimpleVikhlininTemperature1D(BaseModel1D):
         priors = [rc_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}, tm_priors[yu_ind],
                   t0_priors[yu_ind], rt_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'}]
 
-        nice_pars = [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$", r"R$_{\rm{T}}$", "c"]
+        nice_pars = [r"$R_{\rm{cool}}$", r"$a_{\rm{cool}}$", r"$T_{\rm{min}}$", r"$T_{0}$", r"$R_{\rm{T}}$", r"$c$"]
         info_dict = {'author': 'Ghirardini et al.', 'year': 2019,
                      'reference': 'https://doi.org/10.1051/0004-6361/201833325',
                      'general': "A simplified, 'functional', form of Vikhlinin's temperature model.\n"
@@ -231,8 +231,16 @@ class VikhlininTemperature1D(BaseModel1D):
                   t0_priors[yu_ind], rt_priors[xu_ind], {'prior': Quantity([0, 5]), 'type': 'uniform'},
                   {'prior': Quantity([0, 5]), 'type': 'uniform'}, {'prior': Quantity([0, 5]), 'type': 'uniform'}]
 
-        nice_pars = [r"R$_{\rm{cool}}$", r"a$_{\rm{cool}}$", r"T$_{\rm{min}}$", "T$_{0}$", r"R$_{\rm{T}}$", "a", "b",
-                     "c"]
+        nice_pars = [
+            r"$R_{\rm{cool}}$",
+            r"$a_{\rm{cool}}$",
+            r"$T_{\rm{min}}$",
+            r"$T_{0}$",
+            r"$R_{\rm{T}}$",
+            r"$a$",
+            r"$b$",
+            r"$c$",
+        ]
         info_dict = {'author': 'Vikhlinin et al.', 'year': 2005,
                      'reference': 'https://doi.org/10.1086/500288',
                      'general': "The full form of Vikhlinin's temperature model, describes a\n"
