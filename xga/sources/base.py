@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 10/28/26, 9:55 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/5/26, 9:20 AM. Copyright (c) The Contributors.
 """
 This module implements the central class for XGA's 'source-based paradigm', BaseSource, as well as the less featured
 but more generic NullSource. All the central logic for setting up, interacting with, and re-loading XGA sources
@@ -1759,147 +1759,150 @@ class BaseSource:
             :param NamedTuple row: The inventory dataframe object:
             :param bool combined_obs:
             """
-            if combined_obs:
-                obs_id = "combined"
-                # The inventory column names change depending on if it is combined or not
-                # inst_lookup = "insts"
-                inst = row.insts
-            else:
-                obs_id = row.obs_id
-                # The inventory column names change depending on if it is combined or not
-                # inst_lookup = "inst"
-                inst = row.inst
-
-            if tel in ["erosita", "erass"] and not combined_obs:
-                obs_id = str(obs_id).zfill(6)
-
-            if "/" in inst:
-                inst = "combined"
-
-            src_name = row.src_name
-            # Spectral files are named with '+' replaced with 'x', as having the plus
-            #  symbol in the same can be misinterpreted by some XMM-SAS tools
-            no_plus_src_name = src_name.replace("+", "x")
-
-            # We will take the info key from the filename, instead of the actual info key in the
-            # inventory. This is because annular spectrum need to be read in, and their info key
-            # follows a different format to regular spectrum, so this is more general
-            file_name = str(row.file_name)
-
-            info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
-
-            info_key_parts = info_key.split("_")
-
-            central_coord = Quantity(
-                [float(info_key_parts[0].strip("ra")), float(info_key_parts[1].strip("dec"))], "deg"
-            )
-            r_inner = Quantity(np.array(info_key_parts[2].strip("ri").split("and")).astype(float), "deg")
-            r_outer = Quantity(np.array(info_key_parts[3].strip("ro").split("and")).astype(float), "deg")
-            # Check if there is only one r_inner and r_outer value each, if so its a circle
-            #  (otherwise it's an ellipse)
-            if len(r_inner) == 1:
-                r_inner = r_inner[0]
-                r_outer = r_outer[0]
-
-            if "grpTrue" in info_key_parts:
-                grp_ind = info_key_parts.index("grpTrue")
-                grouped = True
-            else:
-                grouped = False
-            # mincnt or minsn information will only be in the filename if the spectrum is grouped
-            if grouped and "mincnt" in info_key:
-                min_counts = int(info_key_parts[grp_ind + 1].split("mincnt")[-1])
-                min_sn = None
-            elif grouped and "minsn" in info_key:
-                min_sn = float(info_key_parts[grp_ind + 1].split("minsn")[-1])
-                min_counts = None
-            else:
-                # We still need to pass the variables to the spectrum definition, even if it isn't
-                #  grouped
-                min_sn = None
-                min_counts = None
-
-            # Only if oversampling was applied will it appear in the filename
-            if "ovsamp" in info_key:
-                over_sample = int(info_key_parts[-2].split("ovsamp")[-1])
-            else:
-                over_sample = None
-
-            if "region" in info_key:
-                region = True
-            else:
-                region = False
-
-            # defining a standard product path that I can just suffixes to
-            if combined_obs:
-                indent_no = row.file_name.split("_")[0]
-                # The info key actually needs to be used here
-                prod_gen_path = cur_d + indent_no + f"_{inst}_" + str(no_plus_src_name) + "_" + info_key
-            else:
-                prod_gen_path = cur_d + obs_id + f"_{inst}_" + str(no_plus_src_name) + "_" + info_key
-
-            spec = prod_gen_path + "_spec.fits"
-            arf = prod_gen_path + ".arf"
-            back = prod_gen_path + "_backspec.fits"
-
-            if tel in ["erosita", "erass"]:
-                back_rmf = prod_gen_path + "_back.rmf"
-                back_arf = prod_gen_path + "_back.arf"
-                rmf = prod_gen_path + ".rmf"
-
-            else:
-                if os.path.basename(prod_gen_path + ".rmf") in cur_prod_dir_list:
-                    rmf = prod_gen_path + ".rmf"
+            if row.src_name == self.name:
+                if combined_obs:
+                    obs_id = "combined"
+                    # The inventory column names change depending on if it is combined or not
+                    # inst_lookup = "insts"
+                    inst = row.insts
                 else:
-                    rmf = cur_d + obs_id + "_" + inst + "_" + str(no_plus_src_name) + "_universal.rmf"
-                back_rmf = ""
-                back_arf = ""
+                    obs_id = row.obs_id
+                    # The inventory column names change depending on if it is combined or not
+                    # inst_lookup = "inst"
+                    inst = row.inst
 
-            # We check that all the files that need to go into a Spectrum exist, by looking to see whether
-            #  the file names are all in the outer scope 'cur_prod_dir_list' variable.
-            if all(
-                [
-                    os.path.basename(cur_cf) in cur_prod_dir_list
-                    for cur_cf in [spec, arf, back, rmf, back_arf, back_rmf]
-                    if cur_cf != ""
-                ]
-            ):
-                # Defining our XGA spectrum instance
-                obj = Spectrum(
-                    spec,
-                    rmf,
-                    arf,
-                    back,
-                    central_coord,
-                    r_inner,
-                    r_outer,
-                    obs_id,
-                    inst,
-                    grouped,
-                    min_counts,
-                    min_sn,
-                    over_sample,
-                    "",
-                    "",
-                    "",
-                    region,
-                    back_rmf,
-                    back_arf,
-                    telescope=tel,
-                    check_exists=False,
+                if tel in ["erosita", "erass"] and not combined_obs:
+                    obs_id = str(obs_id).zfill(6)
+
+                if "/" in inst:
+                    inst = "combined"
+
+                src_name = row.src_name
+                # Spectral files are named with '+' replaced with 'x', as having the plus
+                #  symbol in the same can be misinterpreted by some XMM-SAS tools
+                no_plus_src_name = src_name.replace("+", "x")
+
+                # We will take the info key from the filename, instead of the actual info key in the
+                # inventory. This is because annular spectrum need to be read in, and their info key
+                # follows a different format to regular spectrum, so this is more general
+                file_name = str(row.file_name)
+
+                info_key = "_".join(file_name.split("/")[-1].split("_spec.fits")[0].split("_")[3:])
+
+                info_key_parts = info_key.split("_")
+
+                central_coord = Quantity(
+                    [float(info_key_parts[0].strip("ra")), float(info_key_parts[1].strip("dec"))], "deg"
                 )
+                r_inner = Quantity(np.array(info_key_parts[2].strip("ri").split("and")).astype(float), "deg")
+                r_outer = Quantity(np.array(info_key_parts[3].strip("ro").split("and")).astype(float), "deg")
+                # Check if there is only one r_inner and r_outer value each, if so its a circle
+                #  (otherwise it's an ellipse)
+                if len(r_inner) == 1:
+                    r_inner = r_inner[0]
+                    r_outer = r_outer[0]
+
+                if "grpTrue" in info_key_parts:
+                    grp_ind = info_key_parts.index("grpTrue")
+                    grouped = True
+                else:
+                    grouped = False
+                # mincnt or minsn information will only be in the filename if the spectrum is grouped
+                if grouped and "mincnt" in info_key:
+                    min_counts = int(info_key_parts[grp_ind + 1].split("mincnt")[-1])
+                    min_sn = None
+                elif grouped and "minsn" in info_key:
+                    min_sn = float(info_key_parts[grp_ind + 1].split("minsn")[-1])
+                    min_counts = None
+                else:
+                    # We still need to pass the variables to the spectrum definition, even if it isn't
+                    #  grouped
+                    min_sn = None
+                    min_counts = None
+
+                # Only if oversampling was applied will it appear in the filename
+                if "ovsamp" in info_key:
+                    over_sample = int(info_key_parts[-2].split("ovsamp")[-1])
+                else:
+                    over_sample = None
+
+                if "region" in info_key:
+                    region = True
+                else:
+                    region = False
+
+                # defining a standard product path that I can just suffixes to
+                if combined_obs:
+                    indent_no = row.file_name.split("_")[0]
+                    # The info key actually needs to be used here
+                    prod_gen_path = cur_d + indent_no + f"_{inst}_" + str(no_plus_src_name) + "_" + info_key
+                else:
+                    prod_gen_path = cur_d + obs_id + f"_{inst}_" + str(no_plus_src_name) + "_" + info_key
+
+                spec = prod_gen_path + "_spec.fits"
+                arf = prod_gen_path + ".arf"
+                back = prod_gen_path + "_backspec.fits"
+
+                if tel in ["erosita", "erass"]:
+                    back_rmf = prod_gen_path + "_back.rmf"
+                    back_arf = prod_gen_path + "_back.arf"
+                    rmf = prod_gen_path + ".rmf"
+
+                else:
+                    if os.path.basename(prod_gen_path + ".rmf") in cur_prod_dir_list:
+                        rmf = prod_gen_path + ".rmf"
+                    else:
+                        rmf = cur_d + obs_id + "_" + inst + "_" + str(no_plus_src_name) + "_universal.rmf"
+                    back_rmf = ""
+                    back_arf = ""
+
+                # We check that all the files that need to go into a Spectrum exist, by looking to see whether
+                #  the file names are all in the outer scope 'cur_prod_dir_list' variable.
+                if all(
+                    [
+                        os.path.basename(cur_cf) in cur_prod_dir_list
+                        for cur_cf in [spec, arf, back, rmf, back_arf, back_rmf]
+                        if cur_cf != ""
+                    ]
+                ):
+                    # Defining our XGA spectrum instance
+                    obj = Spectrum(
+                        spec,
+                        rmf,
+                        arf,
+                        back,
+                        central_coord,
+                        r_inner,
+                        r_outer,
+                        obs_id,
+                        inst,
+                        grouped,
+                        min_counts,
+                        min_sn,
+                        over_sample,
+                        "",
+                        "",
+                        "",
+                        region,
+                        back_rmf,
+                        back_arf,
+                        telescope=tel,
+                        check_exists=False,
+                    )
+                else:
+                    obj = None
+
+                if "ident" in info_key:
+                    set_id = int(info_key.split("ident")[-1].split("_")[0])
+                    ann_id = int(info_key.split("ident")[-1].split("_")[1])
+
+                else:
+                    set_id = None
+                    ann_id = None
+
+                return obj, set_id, ann_id
             else:
-                obj = None
-
-            if "ident" in info_key:
-                set_id = int(info_key.split("ident")[-1].split("_")[0])
-                ann_id = int(info_key.split("ident")[-1].split("_")[1])
-
-            else:
-                set_id = None
-                ann_id = None
-
-            return obj, set_id, ann_id
+                return None, None, None
 
         # Just figure out where we are in the filesystem, we'll make sure to return to this location after all
         #  the changing directory we're about to do
@@ -1964,7 +1967,7 @@ class BaseSource:
                         #  to check the passed 'load_spectra' boolean variable
                         if load_spectra:
                             # Find only the lines of the inventory file that are to do with spectra
-                            spec_lines = inven[inven["type"] == "spectrum"]
+                            spec_lines = inven[(inven["type"] == "spectrum") & (inven["src_name"] == self.name)]
                             for row in spec_lines.itertuples(index=False):
                                 obj, set_id, ann_id = parse_spectrum(row, False)
                                 if set_id is not None:
@@ -2103,7 +2106,7 @@ class BaseSource:
                     #  SPECTRA AND SPECTRUM-SET COMPONENTS - WILL NEED TO BE REWRITTEN, THOUGH ISSUE #1504 WILL
                     #  NECESSITATE A REWRITE OF THIS WHOLE METHOD ANYWAY I THINK.
                     if load_spectra:
-                        rel_inven = inven[inven["type"] == "spectrum"]
+                        rel_inven = inven[(inven["type"] == "spectrum") & (inven["src_name"] == self.name)]
                         for row in rel_inven.itertuples(index=False):
                             # Spectra can have combined observations but individual instruments.
                             # Checking that a spectrum is associated to the source is different depending
