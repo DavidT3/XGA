@@ -653,7 +653,7 @@ class ScalingRelation:
         :rtype: np.ndarray/None
         """
         if isinstance(self._point_names, list):
-            return np.ndarray(self._point_names)
+            return np.array(self._point_names)
         else:
             return self._point_names
 
@@ -949,7 +949,8 @@ class ScalingRelation:
                  data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
                  custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, x_ticks: list = None,
                  x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
-                 label_points: bool = False, point_label_colour: str = 'black', point_label_size: int = 10,
+                 label_points: Union[bool, str] = False, point_label_names: bool = False,
+                 point_label_colour: str = 'black', point_label_size: int = 10,
                  point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
                  third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
                  third_dim_axis_formatters: dict = None, y_lims: Quantity = None, one_to_one: bool = False):
@@ -980,9 +981,12 @@ class ScalingRelation:
             case they are determined automatically.
         :param list y_minor_ticks: Customise which minor y-axis ticks and labels are on the figure, default is
             None in which case they are determined automatically.
-        :param bool label_points: If True, and source name information for each point was passed on the declaration of
-            this scaling relation, then points will be accompanied by an index that can be used with the 'point_names'
-            property to retrieve the source name for a point. Default is False.
+        :param bool/str label_points: If True, and source name information for each point was passed on the declaration
+            of this scaling relation, then points will be accompanied by an index that can be used with the
+            'point_names' property to retrieve the source name for a point (or the source name itself if
+            point_label_names is True). Default is False.
+        :param bool point_label_names: If True, data points will be labelled with their actual source names from
+            'point_names' rather than numerical indices. Default is False.
         :param str point_label_colour: The colour of the label text.
         :param int point_label_size: The fontsize of the label text.
         :param Tuple[float, float] point_label_offset: A fractional offset (in display coordinates) applied to the
@@ -1074,15 +1078,15 @@ class ScalingRelation:
 
         # This will check a) if the scaling relation knows the source names associated with the points, and b) if the
         #  user wants us to label them
-        if self.point_names is not None and label_points:
+        if self.point_names is not None and (label_points or point_label_names):
+            use_names = point_label_names or (isinstance(label_points, str) and label_points.lower() in ["name", "names"])
             # If both those conditions are satisfied then we will start to iterate through the data points
             for ind in range(len(self.point_names)):
                 # These are the current points being read out to help position the overlaid text
                 cur_x = self._x_data[ind].value
                 cur_y = self._y_data[ind].value
                 # Then we check to make sure neither coord is None, and add the index (which is used as the short
-                #  ID for these points) to the axes - the user can then look at the number and use that to retrieve
-                #  the name.
+                #  ID for these points) or the source name to the axes.
                 if not np.isnan(cur_x) and not np.isnan(cur_y):
                     # This measures the x_size of the plot in display coordinates (TRANSFORMED from data, thus avoiding
                     #  any issues with the scaling of the axis)
@@ -1099,7 +1103,8 @@ class ScalingRelation:
                     inv_tran = ax.transData.inverted()
                     lab_data_coord = inv_tran.transform((cur_fig_coord[0] + (point_label_offset[0] * x_size),
                                                          cur_fig_coord[1] + (point_label_offset[1] * y_size)))
-                    plt.text(lab_data_coord[0], lab_data_coord[1], str(ind), fontsize=point_label_size,
+                    pt_label = str(self.point_names[ind]) if use_names else str(ind)
+                    plt.text(lab_data_coord[0], lab_data_coord[1], pt_label, fontsize=point_label_size,
                              color=point_label_colour)
 
         # Need to randomly sample from the fitted model
@@ -1266,10 +1271,11 @@ class ScalingRelation:
              data_colour: str = 'black', model_colour: str = None, grid_on: bool = False, conf_level: int = 90,
              custom_x_label: str = None, custom_y_label: str = None, fontsize: float = 15, legend_fontsize: float = 13,
              x_ticks: list = None, x_minor_ticks: list = None, y_ticks: list = None, y_minor_ticks: list = None,
-             save_path: str = None, label_points: bool = False, point_label_colour: str = 'black',
-             point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01), show_third_dim: bool = None,
-             third_dim_cmap: Union[str, Colormap] = 'plasma', third_dim_norm_cmap: Normalize = Normalize,
-             third_dim_axis_formatters: dict = None, y_lims: Quantity = None, one_to_one: bool = False):
+             save_path: str = None, label_points: Union[bool, str] = False, point_label_names: bool = False,
+             point_label_colour: str = 'black', point_label_size: int = 10, point_label_offset: tuple = (0.01, 0.01),
+             show_third_dim: bool = None, third_dim_cmap: Union[str, Colormap] = 'plasma',
+             third_dim_norm_cmap: Normalize = Normalize, third_dim_axis_formatters: dict = None,
+             y_lims: Quantity = None, one_to_one: bool = False):
         """
         A method that produces a high quality plot of this scaling relation (including the data it is based upon,
         if available).
@@ -1301,9 +1307,12 @@ class ScalingRelation:
             None in which case they are determined automatically.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
             which case the figure will not be saved.
-        :param bool label_points: If True, and source name information for each point was passed on the declaration of
-            this scaling relation, then points will be accompanied by an index that can be used with the 'point_names'
-            property to retrieve the source name for a point. Default is False.
+        :param bool/str label_points: If True, and source name information for each point was passed on the declaration
+            of this scaling relation, then points will be accompanied by an index that can be used with the
+            'point_names' property to retrieve the source name for a point (or the source name itself if
+            point_label_names is True). Default is False.
+        :param bool point_label_names: If True, data points will be labelled with their actual source names from
+            'point_names' rather than numerical indices. Default is False.
         :param str point_label_colour: The colour of the label text.
         :param int point_label_size: The fontsize of the label text.
         :param bool show_third_dim: Colour the data points by the third dimension data passed in on creation of this
@@ -1360,8 +1369,9 @@ class ScalingRelation:
 
         ax = self.get_view(ax, x_lims, log_scale, plot_title, data_colour, model_colour, grid_on, conf_level,
                            custom_x_label, custom_y_label, fontsize, x_ticks, x_minor_ticks, y_ticks, y_minor_ticks,
-                           label_points, point_label_colour, point_label_size, point_label_offset, show_third_dim,
-                           third_dim_cmap, third_dim_norm_cmap, third_dim_axis_formatters, y_lims, one_to_one)
+                           label_points, point_label_names, point_label_colour, point_label_size, point_label_offset,
+                           show_third_dim, third_dim_cmap, third_dim_norm_cmap, third_dim_axis_formatters, y_lims,
+                           one_to_one)
 
         plt.legend(loc="best", fontsize=legend_fontsize)
         plt.tight_layout()
