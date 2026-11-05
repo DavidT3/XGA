@@ -5779,7 +5779,21 @@ class BaseSource:
         ):
             # Grab an image based on whether the ObsID is combined or specific
             if obs_id == "combined":
-                im = self.get_combined_images(telescope=telescope)
+                try:
+                    im = self.get_combined_images(telescope=telescope)
+                except NoProductAvailableError as err:
+                    if len(self.obs_ids[telescope]) == 1:
+                        raise NoProductAvailableError(
+                            f"No multi-observation combined image is available for {self.name} "
+                            f"({PRETTY_TELESCOPE_NAMES[telescope]}) because only a single ObsID "
+                            f"({self.obs_ids[telescope][0]}) is associated; please specify "
+                            f"obs_id='{self.obs_ids[telescope][0]}'."
+                        ) from err
+                    raise NoProductAvailableError(
+                        f"No combined image is available for {self.name} ({PRETTY_TELESCOPE_NAMES[telescope]}) to "
+                        f"generate a combined interloper mask; please generate combined images first or specify an "
+                        f"obs_id (available: {', '.join(self.obs_ids[telescope])})."
+                    ) from err
             elif not COMBINED_INSTS[telescope]:
                 im = self.get_images(obs_id, telescope=telescope)
             else:
