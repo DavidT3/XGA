@@ -3776,9 +3776,10 @@ class BaseAggregateProfile1D:
         else:
             raise ValueError("The new list passed for y-axis normalisations must be the same length as the original.")
 
-    def view(
+    def get_view(
         self,
-        figsize: tuple = (10, 7),
+        fig: Figure,
+        main_ax: Axes,
         xscale: str = "log",
         yscale: str = "log",
         xlim: tuple | None = None,
@@ -3793,18 +3794,18 @@ class BaseAggregateProfile1D:
         y_norm: bool = False,
         x_label: str | None = None,
         y_label: str | None = None,
-        save_path: str | None = None,
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         axis_formatters: dict | None = None,
         show_residual_ax: bool = True,
         joined_points: bool = False,
-    ) -> None:
+    ) -> tuple[Axes, Axes | None]:
         """
-        A method that allows us to see all the profiles that make up this aggregate profile, plotted
-        on the same figure.
+        This method populates a matplotlib figure and axes with all the profiles that make up this aggregate
+        profile, plotted on the same figure.
 
-        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param Figure fig: The matplotlib figure instance to be populated.
+        :param Axes main_ax: The primary axes of the view, onto which the profile data and models are added.
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
@@ -3827,16 +3828,14 @@ class BaseAggregateProfile1D:
             definition of the constituent profile objects.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
         :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
-                    dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
-                    e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
-                    passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
-                    Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
-                    Finally, plotting colour may be specified by setting the value to a list, with the first entry
-                    being the quantity, and the second being a colour;
-                    e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+            e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+            Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+            Finally, plotting colour may be specified by setting the value to a list, with the first entry
+            being the quantity, and the second being a colour;
+            e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
         :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
             will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
             plot outside the main axes.
@@ -3847,15 +3846,9 @@ class BaseAggregateProfile1D:
             model (if a model is fitted and being shown) is displayed. Default is True.
         :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
             will any uncertainty regions.
+        :return: The primary axes, and the residual axes (if present, otherwise None).
+        :rtype: Tuple[Axes, Union[Axes, None]]
         """
-        if save_path is not None and (
-            os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path))
-        ):
-            raise FileNotFoundError(
-                f"The directory in which the aggregate profile view is to be saved ({os.path.dirname(save_path)}) "
-                f"does not exist."
-            )
-
         # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
         if draw_rads is None:
             draw_rads = {}
@@ -3935,10 +3928,6 @@ class BaseAggregateProfile1D:
                     stacklevel=2,
                 )
 
-        # Setting up figure for the plot
-        fig = plt.figure(figsize=figsize)
-        # Grabbing the axis object and making sure the ticks are set up how we want
-        main_ax = plt.gca()
         main_ax.minorticks_on()
         if model is not None and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
@@ -4203,12 +4192,226 @@ class BaseAggregateProfile1D:
         if axis_formatters is not None and "ymajor" in axis_formatters:
             main_ax.yaxis.set_major_formatter(axis_formatters["ymajor"])
 
-        # If the user passed a save_path value, then we assume they want to save the figure
-        if save_path is not None:
-            fig.savefig(save_path, bbox_inches="tight")
+        if show_residual_ax and "res_ax" in locals():
+            return main_ax, res_ax
         else:
-            # Showing the figure
-            plt.show()
+            return main_ax, None
+
+    def view(
+        self,
+        figsize: tuple = (10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
+        model: str | None = None,
+        back_sub: bool = True,
+        show_legend: bool = True,
+        just_model: bool = False,
+        custom_title: str | None = None,
+        draw_rads: dict | None = None,
+        x_norm: bool = False,
+        y_norm: bool = False,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        axis_formatters: dict | None = None,
+        show_residual_ax: bool = True,
+        joined_points: bool = False,
+    ) -> None:
+        """
+        A method that allows us to see all the profiles that make up this aggregate profile, plotted
+        on the same figure.
+
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7).
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str model: The name of the model fit to display, default is None. If the model
+            hasn't been fitted, or it failed, then it won't be displayed.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool show_legend: Should a legend with source names be added to the figure, default is True.
+        :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
+            are not the same for each profile, then draw_rads will be disabled.
+        :param bool x_norm: Should the x-axis values be normalised with the x_norm value passed on the
+            definition of the constituent profile objects.
+        :param bool y_norm: Should the y-axis values be normalised with the y_norm value passed on the
+            definition of the constituent profile objects.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+            e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+            Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+            Finally, plotting colour may be specified by setting the value to a list, with the first entry
+            being the quantity, and the second being a colour;
+            e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        """
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object
+        main_ax = plt.gca()
+
+        self.get_view(
+            fig,
+            main_ax,
+            xscale=xscale,
+            yscale=yscale,
+            xlim=xlim,
+            ylim=ylim,
+            model=model,
+            back_sub=back_sub,
+            show_legend=show_legend,
+            just_model=just_model,
+            custom_title=custom_title,
+            draw_rads=draw_rads,
+            x_norm=x_norm,
+            y_norm=y_norm,
+            x_label=x_label,
+            y_label=y_label,
+            draw_vals=draw_vals,
+            auto_legend=auto_legend,
+            axis_formatters=axis_formatters,
+            show_residual_ax=show_residual_ax,
+            joined_points=joined_points,
+        )
+
+        # Showing the figure
+        plt.show()
+        # Clearing the current figure and closing all open figures
+        plt.close("all")
+
+    def save_view(
+        self,
+        save_path: str,
+        figsize: tuple = (10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
+        model: str | None = None,
+        back_sub: bool = True,
+        show_legend: bool = True,
+        just_model: bool = False,
+        custom_title: str | None = None,
+        draw_rads: dict | None = None,
+        x_norm: bool = False,
+        y_norm: bool = False,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        axis_formatters: dict | None = None,
+        show_residual_ax: bool = True,
+        joined_points: bool = False,
+        dpi: int = 300,
+    ) -> None:
+        """
+        This method generates a figure containing all the profiles that make up this aggregate profile, plotted
+        on the same figure, and saves it to the specified path.
+
+        :param str save_path: The path where the figure produced by this method should be saved.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7).
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str model: The name of the model fit to display, default is None. If the model
+            hasn't been fitted, or it failed, then it won't be displayed.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool show_legend: Should a legend with source names be added to the figure, default is True.
+        :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
+            are not the same for each profile, then draw_rads will be disabled.
+        :param bool x_norm: Should the x-axis values be normalised with the x_norm value passed on the
+            definition of the constituent profile objects.
+        :param bool y_norm: Should the y-axis values be normalised with the y_norm value passed on the
+            definition of the constituent profile objects.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+            e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+            Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+            Finally, plotting colour may be specified by setting the value to a list, with the first entry
+            being the quantity, and the second being a colour;
+            e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        :param int dpi: The dots-per-inch resolution of the saved image.
+        """
+        if os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path)):
+            raise FileNotFoundError(
+                f"The directory in which the aggregate profile view is to be saved ({os.path.dirname(save_path)}) "
+                f"does not exist."
+            )
+
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object
+        main_ax = plt.gca()
+
+        self.get_view(
+            fig,
+            main_ax,
+            xscale=xscale,
+            yscale=yscale,
+            xlim=xlim,
+            ylim=ylim,
+            model=model,
+            back_sub=back_sub,
+            show_legend=show_legend,
+            just_model=just_model,
+            custom_title=custom_title,
+            draw_rads=draw_rads,
+            x_norm=x_norm,
+            y_norm=y_norm,
+            x_label=x_label,
+            y_label=y_label,
+            draw_vals=draw_vals,
+            auto_legend=auto_legend,
+            axis_formatters=axis_formatters,
+            show_residual_ax=show_residual_ax,
+            joined_points=joined_points,
+        )
+
+        # Saving the figure
+        fig.savefig(save_path, bbox_inches="tight", dpi=dpi)
+        # Clearing the current figure and closing all open figures
+        plt.close("all")
 
     def __add__(self, other):
         to_combine = self.profiles
