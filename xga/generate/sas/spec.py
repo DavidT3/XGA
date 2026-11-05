@@ -22,7 +22,8 @@ from ..sas.run import sas_call
 def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                min_counts: int = 5, min_sn: float = None, over_sample: int = None, one_rmf: bool = True,
-               num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
+               num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False,
+               debug_images: bool = False):
     """
     An internal function to generate all the commands necessary to produce an evselect spectrum, but is not
     decorated by the sas_call function, so the commands aren't immediately run. This means it can be used for
@@ -49,6 +50,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :param bool debug_images: Controls whether debugging images of the source and background extraction regions
+        are generated alongside the spectra. Default is False.
     """
 
     # Early XGA could generate spectra within the detection regions of the source, but
@@ -391,9 +394,13 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Does the same thing for the evselect command to make the detmap
             d_cmd_str = detmap_cmd.format(e=detmap_evts.path, d=det_map, ex=d_expr)
 
-            # Populates the debug image commands
-            dim_cmd_str = debug_im.format(e=evt_list.path, ex=expr, i=dim)
-            b_dim_cmd_str = debug_im.format(e=evt_list.path, ex=b_expr, i=b_dim)
+            if debug_images:
+                # Populates the debug image commands
+                dim_cmd_str = debug_im.format(e=evt_list.path, ex=expr, i=dim)
+                b_dim_cmd_str = debug_im.format(e=evt_list.path, ex=b_expr, i=b_dim)
+                debug_cmds = [dim_cmd_str, b_dim_cmd_str]
+            else:
+                debug_cmds = []
 
             # This chunk adds rmfgen commands depending on whether we're using a universal RMF or
             #  an individual one for each spectrum. Also adds arfgen commands on the end, as they depend on
@@ -413,14 +420,14 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 
             final_rmf_path = OUTPUT + obs_id + '/' + rmf
             if one_rmf and (not os.path.exists(final_rmf_path) or force_gen):
-                cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
+                cmd_str = ";".join([s_cmd_str, *debug_cmds, d_cmd_str,
                                     rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src, ds=det_map, dt=dt),
                                     sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
                                     bscal_cmd.format(s=b_spec, e=evt_list.path)])
                 #arf_cmd.format(s=b_spec, a=b_arf, r=b_rmf, e=evt_list.path, es=ex_src, ds=det_map)
             elif not one_rmf and (not os.path.exists(final_rmf_path) or force_gen):
-                cmd_str = ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
+                cmd_str = ";".join([s_cmd_str, *debug_cmds, d_cmd_str,
                                     rmf_cmd.format(r=rmf, s=spec, es=ex_src, ds=det_map, dt=dt),
                                     arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
                                                    ds=det_map, dt=dt)]) + ";"
@@ -431,7 +438,7 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             else:
                 # This one just copies the existing universal rmf into the temporary generation folder
                 cmd_str = "cp {f_rmf} {d};".format(f_rmf=final_rmf_path, d=dest_dir)
-                cmd_str += ";".join([s_cmd_str, dim_cmd_str, b_dim_cmd_str, d_cmd_str,
+                cmd_str += ";".join([s_cmd_str, *debug_cmds, d_cmd_str,
                                      arf_cmd.format(s=spec, a=arf, r=rmf, e=evt_list.path, es=ex_src,
                                                     ds=det_map, dt=dt)]) + ";"
                 cmd_str += ";".join([sb_cmd_str, bscal_cmd.format(s=spec, e=evt_list.path),
@@ -484,7 +491,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
 def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
                       inner_radius: Union[str, Quantity] = Quantity(0, 'arcsec'), group_spec: bool = True,
                       min_counts: int = 5, min_sn: float = None, over_sample: float = None, one_rmf: bool = True,
-                      num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False):
+                      num_cores: int = NUM_CORES, disable_progress: bool = False, force_gen: bool = False,
+                      debug_images: bool = False):
     """
     A wrapper for all the SAS processes necessary to generate an XMM spectrum that can be analysed
     in XSPEC. Every observation associated with this source, and every instrument associated with that
@@ -515,18 +523,20 @@ def evselect_spectrum(sources: Union[BaseSource, BaseSample], outer_radius: Unio
     :param int num_cores: The number of cores to use, default is set to 90% of available.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
     :param bool force_gen: This boolean flag will force the regeneration of spectra, even if they already exist.
+    :param bool debug_images: Controls whether debugging images of the source and background extraction regions
+        are generated alongside the spectra. Default is False.
     """
     # All the workings of this function are in _spec_cmds so that the annular spectrum set generation function
     #  can also use them
     return _spec_cmds(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, over_sample, one_rmf,
-                      num_cores, disable_progress, force_gen)
+                      num_cores, disable_progress, force_gen, debug_images)
 
 
 @sas_call
 def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity], Quantity],
                  group_spec: bool = True, min_counts: int = 5, min_sn: float = None, over_sample: float = None,
                  one_rmf: bool = True, num_cores: int = NUM_CORES, force_regen: bool = False,
-                 disable_progress: bool = False):
+                 disable_progress: bool = False, debug_images: bool = False):
     """
     This function can be used to produce 'sets' of XGA Spectrum objects, generated in concentric circular annuli.
     Such spectrum sets can be used to measure projected spectroscopic quantities, or even be de-projected to attempt
@@ -551,6 +561,8 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
     :param bool force_regen: This will force all the constituent spectra of the set to be regenerated, use this
         if your call to this function was interrupted and an incomplete AnnularSpectrum is being read in.
     :param bool disable_progress: Setting this to true will turn off the SAS generation progress bar.
+    :param bool debug_images: Controls whether debugging images of the source and background extraction regions
+        are generated alongside the spectra. Default is False.
     """
     # We check to see whether there is an XMM entry in the 'telescopes' property. If sources is a Source object, then
     #  that property contains the telescopes associated with that source, and if it is a Sample object then
@@ -622,7 +634,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
         innermost_rads = Quantity([r_set[0] for r_set in radii], radii[0].unit)
         outermost_rads = Quantity([r_set[-1] for r_set in radii], radii[0].unit)
         evselect_spectrum(sources, outermost_rads, innermost_rads, group_spec, min_counts, min_sn, over_sample,
-                          one_rmf, num_cores, disable_progress)
+                          one_rmf, num_cores, disable_progress, debug_images=debug_images)
 
     # I want to be able to generate all the individual annuli in parallel, but I need them to be associated with
     #  the correct annuli, which is why I have to iterate through the sources and radii
@@ -691,7 +703,7 @@ def spectrum_set(sources: Union[BaseSource, BaseSample], radii: Union[List[Quant
             for r_ind in range(len(radii[s_ind])-1):
                 # Generate the SAS commands for the current annulus of the current source, for all observations
                 spec_cmd_out = _spec_cmds(source, radii[s_ind][r_ind+1], radii[s_ind][r_ind], group_spec, min_counts,
-                                          min_sn, over_sample, one_rmf, num_cores, disable_progress, True)
+                                          min_sn, over_sample, one_rmf, num_cores, disable_progress, True, debug_images)
 
                 # Read out some of the output into variables to be modified
                 interim_paths = spec_cmd_out[5][0]
