@@ -1382,7 +1382,7 @@ class Image(BaseProduct):
         elif mask is not None and mask.shape == self.data.shape:
             plot_data = self.data * mask
         else:
-            plot_data = self.data
+            plot_data = self.data.copy()
 
         if (low_val_lim is not None and upp_val_lim is not None) and low_val_lim >= upp_val_lim:
             raise ValueError("If 'low_val_lim' and 'upp_val_lim' are passed, the 'low_val_lim' argument "
@@ -1439,9 +1439,42 @@ class Image(BaseProduct):
 
         ax.set_title(title)
 
+        x_lims = None
+        y_lims = None
+        if zoom_in:
+            if manual_zoom_xlims is None and manual_zoom_ylims is None:
+                from xga.imagetools import data_limits
+
+                x_lims, y_lims = data_limits(plot_data)
+            else:
+                x_lims = manual_zoom_xlims
+                y_lims = manual_zoom_ylims
+
+        if zoom_in:
+            x_slice = (
+                slice(max(0, int(x_lims[0])), min(plot_data.shape[1], int(x_lims[1])))
+                if x_lims is not None
+                else slice(None)
+            )
+            y_slice = (
+                slice(max(0, int(y_lims[0])), min(plot_data.shape[0], int(y_lims[1])))
+                if y_lims is not None
+                else slice(None)
+            )
+            norm_data = plot_data[y_slice, x_slice]
+            if mask is not None:
+                sub_mask = mask[y_slice, x_slice].astype(bool)
+                if np.any(sub_mask):
+                    norm_data = norm_data[sub_mask]
+        elif mask is not None:
+            sub_mask = mask.astype(bool)
+            norm_data = plot_data[sub_mask] if np.any(sub_mask) else plot_data
+        else:
+            norm_data = plot_data
+
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in-depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
+        norm = ImageNormalize(data=norm_data, interval=interval, stretch=stretch)
 
         # If we want to plot point clusters on the image
         if chosen_points is not None:
@@ -1543,22 +1576,11 @@ class Image(BaseProduct):
                 ax.add_artist(reg_art)
 
         # This sets the limits of the figure depending on the options that have been passed in
-        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
-            # An unfortunate local import
-            from xga.imagetools import data_limits
-
-            # Uses an XGA function to find the x and y limits of where there are
-            #  non-zero entries in the current data array.
-            x_lims, y_lims = data_limits(plot_data)
-            ax.set_xlim(x_lims)
-            ax.set_ylim(y_lims)
-
-        # Here the user has passed manual x-limits, so we apply them
-        if zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
-            ax.set_xlim(manual_zoom_xlims)
-        # Same here but for manual y-limits
-        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
-            ax.set_ylim(manual_zoom_ylims)
+        if zoom_in:
+            if x_lims is not None:
+                ax.set_xlim(x_lims)
+            if y_lims is not None:
+                ax.set_ylim(y_lims)
 
         return ax
 
