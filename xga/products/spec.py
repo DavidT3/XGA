@@ -2194,6 +2194,7 @@ class Spectrum(BaseProduct):
         model: str = None,
         fit_conf: str | dict = None,
         show_residuals: bool = False,
+        legend_fontsize: int | float = None,
     ) -> None:
         """
         A method for viewing the data associated with this Spectrum instance.
@@ -2219,8 +2220,8 @@ class Spectrum(BaseProduct):
             been grouped then this be automatically set to False.
         :param str xscale: The scaling to be applied to the x-axis, default is 'log'.
         :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
-        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
-            fontsize will be fontsize + 1. Default is 14.
+        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1 unless
+            legend_fontsize is explicitly set. The title fontsize will be fontsize + 1. Default is 14.
         :param bool show_model_fits: Whether any models fit to the spectrum by XSPEC should be shown. Default is
             True, but will be set to False if no fits have been performed.
         :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
@@ -2234,7 +2235,12 @@ class Spectrum(BaseProduct):
             is None, in which case all fit configurations of a model will be plotted.
         :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
             the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
+        :param int/float legend_fontsize: The fontsize for the legend. Default is None, in which case fontsize - 1
+            will be used.
         """
+        if legend_fontsize is None:
+            legend_fontsize = fontsize - 1
+
         # Create figure object
         plt.figure(figsize=figsize)
         ax = plt.gca()
@@ -2263,7 +2269,7 @@ class Spectrum(BaseProduct):
         )
 
         # Generate the legend for the data and model(s)
-        plt.legend(loc="best", fontsize=fontsize - 1)
+        plt.legend(loc="best", fontsize=legend_fontsize)
 
         # Removing extraneous whitespace around the plot - we have h_pad=0 in the call to stop
         #  tight_layout from changing the 0-height vertical spacing we set between spectrum and
@@ -3969,6 +3975,7 @@ class AnnularSpectra(BaseAggregateProduct):
         bck_colour: str = "firebrick",
         grouped: bool = True,
         fontsize: int | float = 14,
+        legend_fontsize: int | float = None,
     ) -> None:
         """
         This view method is one of several in the AnnularSpectra class, and will display data and associated model
@@ -4006,10 +4013,15 @@ class AnnularSpectra(BaseAggregateProduct):
             been grouped then this be automatically set to False.
         :param str xscale: The scaling to be applied to the x-axis, default is 'log'.
         :param str yscale: The scaling to be applied to the y-axis, default is 'linear'.
-        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
-            fontsize will be fontsize + 1. Default is 14.
+        :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1 unless
+            legend_fontsize is explicitly set. The title fontsize will be fontsize + 1. Default is 14.
+        :param int/float legend_fontsize: The fontsize for the legend. Default is None, in which case fontsize - 1
+            will be used.
         """
         from ..xspec.fitconfgen import fit_conf_from_function
+
+        if legend_fontsize is None:
+            legend_fontsize = fontsize - 1
 
         # Setup the figure as we normally would
         fig = plt.figure(figsize=figsize)
@@ -4320,7 +4332,7 @@ class AnnularSpectra(BaseAggregateProduct):
         ax.set_ylim3d(y_lims)
 
         # plt.tight_layout()
-        plt.legend()
+        plt.legend(fontsize=legend_fontsize)
         ax.set_box_aspect(aspect=(5.5, 4, 3), zoom=0.86)
         plt.show()
         plt.close("all")
