@@ -3829,6 +3829,26 @@ class BaseAggregateProfile1D:
         if len(draw_vals) != 0 and len(set(y_norms)) != 1:
             draw_vals = {}
 
+        if just_model and model is None:
+            common_models = list(
+                set(self._profiles[0].good_model_fits).intersection(*[p.good_model_fits for p in self._profiles[1:]])
+            )
+            if len(common_models) == 1:
+                model = common_models[0]
+            elif len(common_models) == 0:
+                warn(
+                    "You have set 'just_model=True' without passing a 'model' name, and the component profiles have "
+                    "no fitted models in common; data points will be plotted instead.",
+                    stacklevel=2,
+                )
+            else:
+                warn(
+                    f"You have set 'just_model=True' without passing a 'model' name, and the component profiles have "
+                    f"multiple fitted models in common ({', '.join(common_models)}); please specify a model name. "
+                    f"Data points will be plotted instead.",
+                    stacklevel=2,
+                )
+
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
