@@ -24,7 +24,8 @@ from matplotlib.ticker import FuncFormatter
 from ..models import MODEL_PUBLICATION_NAMES, power_law
 
 # This is the default colour cycle for the AggregateScalingRelation view method
-PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateblue', 'goldenrod']
+PRETTY_COLOUR_CYCLE = ['tab:gray', 'tab:blue', 'darkgreen', 'firebrick', 'slateblue', 'goldenrod', 'darkorange',
+                       'teal', 'deeppink', 'saddlebrown']
 
 # Given the existing structure of this part of XGA, I would have written a BaseRelation class in xga.products.base,
 #  but I can't think of a reason why individual scaling relations should have their own classes. One general class
@@ -1625,7 +1626,10 @@ class AggregateScalingRelation:
             # Don't use the set_mod_cols variable as its unordered due to the use of set
             colour_list = [r.model_colour for r in self._relations]
         elif colour_list is None and len(set_mod_cols) != len(self._relations):
-            colour_list = PRETTY_COLOUR_CYCLE
+            colour_list = [PRETTY_COLOUR_CYCLE[i % len(PRETTY_COLOUR_CYCLE)] for i in range(len(self._relations))]
+        elif colour_list is not None and len(colour_list) != len(self._relations):
+            raise ValueError('If a colour_list is passed, then it must have the same number of entries as there'
+                             ' are relations.')
         new_col_cycle = cycler(color=colour_list)
 
         # If the user didn't pass their own list of DATA colours to use, then they will be the same as the
