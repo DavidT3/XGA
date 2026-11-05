@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 """Unit tests for XSPEC model.dat parsing, model expression validation, and custom fit function generation."""
 
 import inspect
@@ -166,6 +166,27 @@ class TestXSPECModelsParsing(unittest.TestCase):
             },
         )
         self.assertEqual(key_override, key_override_reordered)
+
+        # Custom fit functions must produce flat fit_conf keys identical in format to standard fit functions,
+        #  and accept both flat kwargs (e.g. freeze_Velocity=False) and dict overrides (e.g. freeze_pars={...}),
+        #  including disambiguated multi-component parameter keys (e.g. norm, norm_1).
+        bapec_pl_fn = custom_xspec_fit("tbabs*(bapec+powerlaw)")
+        flat_default = fit_conf_from_function(bapec_pl_fn)
+        self.assertIn("freezeVelocityTrue", flat_default)
+        self.assertIn("linknormTrue", flat_default)
+        self.assertIn("linknorm1True", flat_default)
+        flat_override = fit_conf_from_function(
+            bapec_pl_fn,
+            {"freeze_Velocity": False, "start_kT": Quantity(4.5, "keV"), "start_norm_1": 1e-4},
+        )
+        self.assertIn("freezeVelocityFalse", flat_override)
+        self.assertIn("startkT4.5keV", flat_override)
+        self.assertIn("startnorm10.0001", flat_override)
+        dict_override = fit_conf_from_function(
+            bapec_pl_fn,
+            {"freeze_pars": {"Velocity": False}, "start_pars": {"kT": 4.5, "norm_1": 1e-4}},
+        )
+        self.assertEqual(flat_override, dict_override)
 
 
 if __name__ == "__main__":

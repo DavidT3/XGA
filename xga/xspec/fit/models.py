@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 """Validation, tokenisation, and parameter inspection utilities for XSPEC model expressions."""
 
 import re
@@ -16,6 +16,7 @@ from ... import NUM_CORES, utils
 from ...exceptions import XSPECFitError, XSPECNotFoundError
 from ...samples.base import BaseSample
 from ...sources import BaseSource
+from ..fitconfgen import FIT_FUNC_ARGS
 
 # Valid characters in an XSPEC model expression (model names, '+', '*', and parentheses)
 _VALID_EXPR_RE = re.compile(r"^[a-zA-Z0-9_.*+()]+$")
@@ -710,6 +711,45 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         param.name: param.annotation for param in sig_params if param.annotation is not Parameter.empty
     }
     _custom_fit_wrapper.__annotations__["return"] = BaseSource | BaseSample | list[BaseSource]
+
+    # Register the flat parameter relevance map in FIT_FUNC_ARGS so fit_conf_from_function and
+    #  Spectrum.fitted_model_changed_From_default treat custom fit functions identically to built-in fit functions
+    rel_args: dict[str, bool] = {"inner_radius": False}
+    for p in user_pars:
+        rel_args[f"start_{p['par_key']}"] = True
+    for p in user_pars:
+        rel_args[f"freeze_{p['par_key']}"] = True
+    for p in user_pars:
+        rel_args[f"link_{p['par_key']}"] = True
+    rel_args.update(
+        {
+            "nh_to_zero": True,
+            "lum_en": True,
+            "lo_en": True,
+            "hi_en": True,
+            "par_fit_stat": True,
+            "lum_conf": True,
+            "abund_table": True,
+            "fit_method": True,
+            "group_spec": False,
+            "min_counts": False,
+            "min_sn": False,
+            "over_sample": False,
+            "one_rmf": False,
+            "num_cores": False,
+            "spectrum_checking": True,
+            "check_pars": True,
+            "check_lo_lims": True,
+            "check_hi_lims": True,
+            "check_err_lims": True,
+            "timeout": False,
+            "stacked_spectra": False,
+            "telescope": False,
+            "force_gen": False,
+        }
+    )
+    FIT_FUNC_ARGS[_custom_fit_wrapper.__name__] = rel_args
+    _custom_fit_wrapper._xga_user_pars = user_pars  # type: ignore[attr-defined]
 
     nh_zero_doc = (
         f"Default is None, which automatically zeroes parameter index(es) {auto_nh_to_zero}."

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 """
 This module implements global XSPEC spectral fitting functions for XGA sources and samples, including both
 dedicated convenience functions for common models (e.g. single_temp_apec, power_law) and the generic
@@ -1989,11 +1989,6 @@ def general_model_fit(
         check_lo_str = "{" + " ".join(str(v) for v in tcl_check_lo) + "}"
         check_hi_str = "{" + " ".join(str(v) for v in tcl_check_hi) + "}"
         check_err_str = "{" + " ".join(str(v) for v in tcl_check_err) + "}"
-        # Normalise the local variables so that _gen_fit_conf produces a canonical representation
-        check_pars = tcl_check_names
-        check_lo_lims = tcl_check_lo
-        check_hi_lims = tcl_check_hi
-        check_err_lims = tcl_check_err
     else:
         check_list_str = "{}"
         check_lo_str = "{}"
@@ -2046,14 +2041,15 @@ def general_model_fit(
                     _validate_par_hard_limits(conv_v, p_meta, par_key)
                     per_source_start_overrides[s_idx][par_key] = conv_v
                     per_source_fit_conf_start[s_idx][par_key] = (
-                        Quantity(conv_v, p_unit) if isinstance(elem_val, Quantity) and p_unit != u.Unit("") else conv_v
+                        Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
                     )
             else:
                 conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                 _validate_par_hard_limits(conv_v, p_meta, par_key)
+                fc_val_scalar: float | Quantity = Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
                 for s_idx in range(len(sources)):
                     per_source_start_overrides[s_idx][par_key] = conv_v
-                    per_source_fit_conf_start[s_idx][par_key] = conv_v
+                    per_source_fit_conf_start[s_idx][par_key] = fc_val_scalar
 
     # Normalise freeze_pars and link_pars to only include non-None cleaned boolean dicts for fit_conf
     clean_freeze_overrides: dict[str, bool] | None = (
@@ -2166,7 +2162,43 @@ def general_model_fit(
                         stacklevel=2,
                     )
 
-            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            # Build the flat fit_conf dictionary matching custom_xspec_fit so that general_model_fit and
+            #  custom_xspec_fit produce identical standard flat fit configuration keys
+            user_pars = [p for p in flat_pars if not p["is_leading_norm_scale"]]
+            in_fit_conf: dict = {}
+            src_fc_start = per_source_fit_conf_start[src_ind]
+            for p in user_pars:
+                pk = p["par_key"]
+                if pk in src_fc_start:
+                    in_fit_conf[f"start_{pk}"] = src_fc_start[pk]
+                elif p["is_galactic_nh"] or p["is_redshift"]:
+                    in_fit_conf[f"start_{pk}"] = None
+                elif p["unit"] != u.Unit(""):
+                    in_fit_conf[f"start_{pk}"] = Quantity(float(p["default"]), p["unit"])
+                else:
+                    in_fit_conf[f"start_{pk}"] = float(p["default"])
+            for p, fr_state in zip(flat_pars, final_frozen, strict=True):
+                if not p["is_leading_norm_scale"]:
+                    in_fit_conf[f"freeze_{p['par_key']}"] = fr_state
+            for p, lk_state in zip(flat_pars, final_linked, strict=True):
+                if not p["is_leading_norm_scale"]:
+                    in_fit_conf[f"link_{p['par_key']}"] = lk_state
+            for kn in (
+                "nh_to_zero",
+                "lum_en",
+                "lo_en",
+                "hi_en",
+                "par_fit_stat",
+                "lum_conf",
+                "abund_table",
+                "fit_method",
+                "spectrum_checking",
+                "check_pars",
+                "check_lo_lims",
+                "check_hi_lims",
+                "check_err_lims",
+            ):
+                in_fit_conf[kn] = locals()[kn]
             fit_conf = _gen_fit_conf(in_fit_conf)
 
             # Check if this exact model and fit_conf has already been fit to these spectra

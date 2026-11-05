@@ -1,12 +1,13 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:01 AM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 """Functions and constants for generating deterministic XSPEC fit configuration keys."""
 
+from collections.abc import Callable
 from inspect import Parameter, signature
 from types import FunctionType
 
 import numpy as np
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit
 
 # This constant very importantly defines whether each argument to the XGA XSPEC fitting functions should be included
 #  in the fit configuration storage key - we define it here so that this information can be accessed outside the
@@ -222,7 +223,7 @@ FIT_FUNC_ARGS = {
 }
 
 
-def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict | str | None = None) -> str:
+def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict | str | None = None) -> str:
     """
     This function is a convenient way to assemble a fit configuration key without adding together all the function
     arguments yourself, and is used in various parts of XGA to make it easier to retrieve non-default model fits. It
@@ -262,8 +263,45 @@ def fit_conf_from_function(fit_func: FunctionType, changed_pars: dict | str | No
 
         if changed_pars is not None and not isinstance(changed_pars, dict):
             raise TypeError("'changed_pars' argument must be a dictionary of the values that were changed from default")
-        elif changed_pars is not None and any([ch_par_key not in rel_args for ch_par_key in changed_pars]):
-            not_pres = ", ".join([ch_par_key for ch_par_key in changed_pars if ch_par_key not in def_args])
+
+        if changed_pars is not None and hasattr(fit_func, "_xga_user_pars"):
+            user_pars = fit_func._xga_user_pars
+            norm_changed: dict = {}
+            for ch_k, ch_v in changed_pars.items():
+                if ch_k in ("start_pars", "freeze_pars", "link_pars"):
+                    if ch_v is None:
+                        continue
+                    if not isinstance(ch_v, dict):
+                        raise TypeError(f"'{ch_k}' in 'changed_pars' must be a dictionary of parameter overrides.")
+                    prefix = ch_k.split("_")[0]
+                    for pk, pv in ch_v.items():
+                        norm_changed[f"{prefix}_{pk}"] = pv
+                else:
+                    norm_changed[ch_k] = ch_v
+
+            for p in user_pars:
+                pk = p["par_key"]
+                p_unit = p["unit"]
+                start_k = f"start_{pk}"
+                if start_k in norm_changed and norm_changed[start_k] is not None:
+                    raw_v = norm_changed[start_k]
+                    if isinstance(raw_v, Quantity):
+                        conv_v = (
+                            float(raw_v.to(p_unit).value) if p_unit != Unit("") else float(raw_v.to(Unit("")).value)
+                        )
+                    else:
+                        conv_v = float(raw_v)
+                    norm_changed[start_k] = Quantity(conv_v, p_unit) if p_unit != Unit("") else conv_v
+                freeze_k = f"freeze_{pk}"
+                if freeze_k in norm_changed:
+                    norm_changed[freeze_k] = bool(norm_changed[freeze_k])
+                link_k = f"link_{pk}"
+                if link_k in norm_changed:
+                    norm_changed[link_k] = bool(norm_changed[link_k])
+            changed_pars = norm_changed
+
+        if changed_pars is not None and any([not rel_args.get(ch_par_key, False) for ch_par_key in changed_pars]):
+            not_pres = ", ".join([ch_par_key for ch_par_key in changed_pars if not rel_args.get(ch_par_key, False)])
             all_args = ". ".join([kn for kn in rel_args if rel_args[kn]])
             raise KeyError(
                 f"Some entries in 'changed_pars' ({not_pres}) do not correspond to a keyword argument that is "

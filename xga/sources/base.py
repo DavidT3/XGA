@@ -3886,7 +3886,7 @@ class BaseSource:
         if telescope not in self.telescopes:
             raise NotAssociatedError(f"The {telescope} telescope is not associated with {self.name}.")
 
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, general_model_fit
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -3923,7 +3923,12 @@ class BaseSource:
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
         #  as a string
         elif isinstance(fit_conf, dict):
-            fit_conf = fit_conf_from_function(FIT_FUNC_MODEL_NAMES.get(model, general_model_fit), fit_conf)
+            existing_fconfs = self.fitted_model_configurations[telescope][spec_storage_key][model]
+            if model in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
+                fit_func = FIT_FUNC_MODEL_NAMES[model]
+            else:
+                fit_func = custom_xspec_fit(model, norm_scale=model.startswith("constant*"))
+            fit_conf = fit_conf_from_function(fit_func, fit_conf)
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[telescope][spec_storage_key][model]) != 1:
             av_fconfs = ", ".join(self.fitted_model_configurations[telescope][spec_storage_key][model])
@@ -6626,7 +6631,13 @@ class BaseSource:
             from ..xspec.fit.models import validate_and_parse_model
 
             _, flat_pars, _ = validate_and_parse_model(model, norm_scale=False)
-            par_units = {p["par_key"]: p["unit"] for p in flat_pars}
+            raw_name_units: dict[str, set[Unit]] = {}
+            for p in flat_pars:
+                par_units[p["par_key"]] = p["unit"]
+                raw_name_units.setdefault(p["par_name"], set()).add(p["unit"])
+            for raw_name, unit_set in raw_name_units.items():
+                if len(unit_set) == 1:
+                    par_units[raw_name] = next(iter(unit_set))
 
         # Read out into variable for readabilities sake
         fit_data = self._fit_results[telescope][storage_key][model][fit_conf]

@@ -1,5 +1,5 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 3:56 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 """Integration tests for XGA's XSPEC spectral fitting functions on single sources and samples."""
 
 import os
@@ -12,6 +12,7 @@ from astropy.units import Quantity, Unit
 
 from xga.samples import ClusterSample
 from xga.xspec.fit import custom_xspec_fit, general_model_fit, single_temp_apec
+from xga.xspec.fitconfgen import fit_conf_from_function
 
 from .. import CLUSTER_SMP, MISC_OUTPUT_TESTS, get_test_source
 
@@ -395,7 +396,7 @@ class TestXSPECSingleSource(unittest.TestCase):
             self.out_rad,
             telescope="xmm",
             model="constant*tbabs*bremss",
-            fit_conf={"start_pars": {"kT": Quantity(4.5, "keV")}},
+            fit_conf={"start_kT": Quantity(4.5, "keV")},
             with_units=True,
         )
         self.assertIsInstance(res_units, dict)
@@ -404,6 +405,13 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertIsInstance(res_units["norm"], Quantity)
         self.assertEqual(res_units["norm"].unit, Unit(""))
 
+        specs = self.no_fits_src.get_spectra(self.out_rad, telescope="xmm")
+        spec_obj = specs[0] if isinstance(specs, list) else specs
+        diffs = spec_obj.fitted_model_configuration_diffs["constant*tbabs*bremss"]
+        diff_vals = list(diffs.values())
+        self.assertIn({"start_kT": "3.0keV"}, diff_vals)
+        self.assertIn({"start_kT": "4.5keV"}, diff_vals)
+
         lxs = self.no_fits_src.get_luminosities(
             self.out_rad,
             telescope="xmm",
@@ -411,6 +419,27 @@ class TestXSPECSingleSource(unittest.TestCase):
             fit_conf={"start_pars": {"kT": Quantity(3.0, "keV")}},
         )
         self.assertEqual(len(lxs), 2)
+
+        # Verify multi-component custom model fit_conf lookup and shared parameter name unit resolution
+        two_apec_fn = custom_xspec_fit("tbabs*(apec+apec)")
+        two_apec_conf = fit_conf_from_function(two_apec_fn, {"start_kT_1": Quantity(2.0, "keV")})
+        self.no_fits_src._fit_results["xmm"][spec_obj.storage_key].setdefault("constant*tbabs*(apec+apec)", {})[
+            two_apec_conf
+        ] = {
+            "kT": {"3": [2.1, 0.1, 0.1], "7": [5.4, 0.3, 0.3]},
+            "norm": {"6": [1e-3, 1e-4, 1e-4], "10": [2e-3, 1e-4, 1e-4]},
+        }
+        multi_kt = self.no_fits_src.get_results(
+            self.out_rad,
+            telescope="xmm",
+            model="constant*tbabs*(apec+apec)",
+            par="kT",
+            fit_conf={"start_kT_1": Quantity(2.0, "keV")},
+            with_units=True,
+        )
+        self.assertIsInstance(multi_kt, Quantity)
+        self.assertEqual(multi_kt.unit, Unit("keV"))
+        self.assertEqual(multi_kt.shape, (2, 3))
 
 
 class TestBaseSample(unittest.TestCase):
