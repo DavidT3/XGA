@@ -26,6 +26,7 @@ from xga.products import RateMap
 from xga.sourcetools import ang_to_rad, rad_to_ang
 
 from ..products.profile import SurfaceBrightness1D
+from ..utils import RAD_MATCH_PRECISION
 from .base import BaseSource
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -489,10 +490,10 @@ class ExtendedSource(BaseSource):
         else:
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
-        if obs_id == "combined" or inst == "combined":
+        if obs_id == "combined" or inst == "combined" or (obs_id is None and inst is None):
             interim_prods = self.get_combined_profiles(
                 "brightness",
-                inst=inst,
+                inst="combined" if (obs_id is None and inst is None) else inst,
                 central_coord=central_coord,
                 radii=radii,
                 lo_en=lo_en,
@@ -522,7 +523,7 @@ class ExtendedSource(BaseSource):
         for p in filt_interim_prods:
             if (
                 not psf_corr
-                and p.outer_radius == outer_rad
+                and np.isclose(p.outer_radius, outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)
                 and p.pix_step == pix_step
                 and p.min_snr == min_snr
                 and p.psf_corrected == psf_corr
@@ -530,7 +531,7 @@ class ExtendedSource(BaseSource):
                 matched_prods.append(p)
             elif (
                 psf_corr
-                and p.outer_radius == outer_rad
+                and np.isclose(p.outer_radius, outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)
                 and p.pix_step == pix_step
                 and p.min_snr == min_snr
                 and p.psf_corrected == psf_corr
