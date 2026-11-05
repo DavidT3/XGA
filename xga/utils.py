@@ -283,7 +283,8 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
     fit_methods = ["leven", "migrad", "simplex"]
     abund_tables = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 
-    if shutil.which("xspec") is None:
+    which_xspec = shutil.which("xspec")
+    if which_xspec is None:
         warn("Unable to locate an XSPEC installation.", stacklevel=3)
     else:
         try:
@@ -294,6 +295,31 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
             xspec_vline = [line for line in xspec_out.decode("UTF-8").split("\n") if "XSPEC version" in line][0]
             xspec_version = Version(xspec_vline.split(": ")[-1])
         except Exception:
+            xspec_version = None
+
+        candidate_bases = []
+        if "HEADAS" in os.environ:
+            candidate_bases.append(os.environ["HEADAS"])
+        candidate_bases.append(os.path.abspath(os.path.join(os.path.dirname(which_xspec), "..")))
+
+        model_files_present = False
+        for base_path in candidate_bases:
+            model_dat_path = os.path.join(base_path, "spectral", "manager", "model.dat")
+            model_data_dir = os.path.join(base_path, "spectral", "modelData")
+            if (
+                os.path.isfile(model_dat_path)
+                and os.path.isdir(model_data_dir)
+                and len(os.listdir(model_data_dir)) > 0
+            ):
+                model_files_present = True
+                break
+
+        if not model_files_present:
+            warn(
+                "An XSPEC installation was detected, but the XSPEC model files (spectral/manager/model.dat and "
+                "spectral/modelData) could not be found; XSPEC functionality will not work.",
+                stacklevel=3,
+            )
             xspec_version = None
 
     return xspec_version, fit_methods, abund_tables
