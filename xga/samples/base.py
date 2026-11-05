@@ -193,11 +193,11 @@ class BaseSample:
         # HOWEVER - I only want this warning to appear in certain circumstances. For instance I wouldn't want it
         #  to be triggered here for a ClusterSample declaration that has called the super init (this method), as that
         #  class declaration does its own (somewhat different) check on which sources have data
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == "NoMatch"]
+        no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0 and type(self) == BaseSample:
             nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
-            no_data_str = "/".join(no_data)
+            no_data_str = ", ".join(no_data)
             warn(
                 f"The following do not appear to have any {nice_tels} data, and will not be included in the "
                 f"sample (can also check .failed_names); {no_data_str}",
