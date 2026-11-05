@@ -484,6 +484,7 @@ class Image(BaseProduct):
         :rtype: dict
         """
         # It is possible to set this to None, in which case no information is recorded.
+        matched_reg_input = deepcopy(matched_reg_input)
         if matched_reg_input is None:
             matched_reg_input = {}
         # This is triggered when a dictionary is passed, and all of its values are regions or None (indicating no match)

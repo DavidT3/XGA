@@ -822,7 +822,7 @@ class BaseSource:
         :return: A dictionary of matching regions, or None if such a match has not been performed.
         :rtype: dict
         """
-        return self._regions
+        return deepcopy(self._regions)
 
     @property
     def interloper_regions(self) -> dict[str, list[Region]]:
@@ -5662,12 +5662,12 @@ class BaseSource:
 
         # If flattened then a list is returned rather than the original dictionary with
         if not flattened:
-            return self._other_regions[telescope]
+            return deepcopy(self._other_regions[telescope])
         else:
             # Iterate through the ObsIDs in the dictionary and add the resulting lists together
             flat_ret_reg = []
             for o in self._other_regions[telescope]:
-                flat_ret_reg += self._other_regions[telescope][o]
+                flat_ret_reg += deepcopy(self._other_regions[telescope][o])
 
             return flat_ret_reg
 
