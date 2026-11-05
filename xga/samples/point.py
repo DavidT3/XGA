@@ -161,6 +161,7 @@ class StarSample(BaseSample):
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
         final_names = []
+        final_inds = []
         self._point_radii = []
         self._distances = []
         self._proper_motions = []
@@ -197,11 +198,13 @@ class StarSample(BaseSample):
                     #  been set yet when all radii should be forced to be the same unit
                     self._pr_unit = pr.unit
                     final_names.append(n)
+                    final_inds.append(self._accepted_inds[ind])
                 except NoValidObservationsError as err:
                     self._failed_sources[n] = str(err)
 
                 dec_lb.update(1)
         self._names = final_names
+        self._accepted_inds = final_inds
         # Store the matching radius as an attribute, though its also in the sources
         self._match_radius = match_radius
 

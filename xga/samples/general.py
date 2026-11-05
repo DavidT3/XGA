@@ -138,6 +138,7 @@ class ExtendedSample(BaseSample):
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
         final_names = []
+        final_inds = []
         self._custom_radii = []
         # This records which sources had a failed peak finding attempt, for a warning at the end of the declaration
         failed_peak_find = []
@@ -166,6 +167,7 @@ class ExtendedSample(BaseSample):
                         self._custom_radii.append(np.nan)
                         self._cr_unit = Unit('')
                     final_names.append(n)
+                    final_inds.append(self._accepted_inds[ind])
 
                 except PeakConvergenceFailedError:
                     try:
@@ -175,7 +177,14 @@ class ExtendedSample(BaseSample):
                                                           back_inn_rad_factor, back_out_rad_factor, cosmology, True,
                                                           load_fits, peak_find_method, True, telescope, search_distance,
                                                           clean_obs, clean_obs_reg, clean_obs_threshold)
+                        if isinstance(cr, Quantity):
+                            self._custom_radii.append(cr.value)
+                            self._cr_unit = cr.unit
+                        else:
+                            self._custom_radii.append(np.nan)
+                            self._cr_unit = Unit('')
                         final_names.append(n)
+                        final_inds.append(self._accepted_inds[ind])
                     except NoValidObservationsError as err:
                         self._failed_sources[n] = str(err)
 
@@ -184,6 +193,7 @@ class ExtendedSample(BaseSample):
 
                 dec_lb.update(1)
         self._names = final_names
+        self._accepted_inds = final_inds
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
         #  so I should regenerate the individual-telescope combined images/expmaps
@@ -383,6 +393,7 @@ class PointSample(BaseSample):
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
         final_names = []
+        final_inds = []
         self._point_radii = []
         # This records which sources had a failed peak finding attempt, for a warning at the end of the declaration
         failed_peak_find = []
@@ -409,6 +420,7 @@ class PointSample(BaseSample):
                     #  been set yet when all radii should be forced to be the same unit
                     self._pr_unit = pr.unit
                     final_names.append(n)
+                    final_inds.append(self._accepted_inds[ind])
                 except PeakConvergenceFailedError:
                     try:
                         failed_peak_find.append(n)
@@ -421,7 +433,10 @@ class PointSample(BaseSample):
                                                        in_sample=True, telescope=telescope,
                                                        search_distance=search_distance,
                                                        clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold)
+                        self._point_radii.append(pr.value)
+                        self._pr_unit = pr.unit
                         final_names.append(n)
+                        final_inds.append(self._accepted_inds[ind])
                     except NoValidObservationsError as err:
                         self._failed_sources[n] = str(err)
 
@@ -430,6 +445,7 @@ class PointSample(BaseSample):
 
                 dec_lb.update(1)
         self._names = final_names
+        self._accepted_inds = final_inds
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
         #  so I should regenerate the individual-telescope combined images/expmaps
