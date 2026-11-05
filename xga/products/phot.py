@@ -1342,10 +1342,12 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image,
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
             will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
             measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
@@ -1484,10 +1486,16 @@ class Image(BaseProduct):
                 pix_coord = None
 
             if pix_coord is not None:
+                from ..imagetools.misc import physical_rad_to_pix
+
                 if not isinstance(radial_bins_pix, Quantity):
                     radial_bins_pix = Quantity(radial_bins_pix, 'pix')
+                elif radial_bins_pix.unit.is_equivalent('deg'):
+                    radial_bins_pix = physical_rad_to_pix(self, radial_bins_pix, Quantity(pix_coord, 'pix'))
                 elif radial_bins_pix.unit != pix:
-                    raise UnitConversionError("radial_bins_pix must have units of pixels.")
+                    raise UnitConversionError(
+                        "radial_bins_pix must have units of pixels or angular units convertible to degrees."
+                    )
 
                 if radial_bins_pix.isscalar:
                     radial_bins_pix = Quantity([radial_bins_pix])
@@ -1502,8 +1510,12 @@ class Image(BaseProduct):
                 if back_bin_pix is not None:
                     if not isinstance(back_bin_pix, Quantity):
                         back_bin_pix = Quantity(back_bin_pix, 'pix')
+                    elif back_bin_pix.unit.is_equivalent('deg'):
+                        back_bin_pix = physical_rad_to_pix(self, back_bin_pix, Quantity(pix_coord, 'pix'))
                     elif back_bin_pix.unit != pix:
-                        raise UnitConversionError("back_bin_pix must have units of pixels.")
+                        raise UnitConversionError(
+                            "back_bin_pix must have units of pixels or angular units convertible to degrees."
+                        )
 
                     inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white', linewidth=1.6,
                                         linestyle='dashed')
@@ -1579,10 +1591,12 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image,
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
             will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
             measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
@@ -1656,10 +1670,12 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image,
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
             will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
             measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
@@ -2050,6 +2066,22 @@ class Image(BaseProduct):
                     pix_coord = None
 
                 if pix_coord is not None:
+                    from ..imagetools.misc import physical_rad_to_pix
+
+                    if not isinstance(radial_bins_pix, Quantity):
+                        radial_bins_pix = Quantity(radial_bins_pix, 'pix')
+                    elif radial_bins_pix.unit.is_equivalent('deg'):
+                        radial_bins_pix = physical_rad_to_pix(
+                            self._parent_phot_obj, radial_bins_pix, Quantity(pix_coord, 'pix')
+                        )
+                    elif radial_bins_pix.unit != pix:
+                        raise UnitConversionError(
+                            "radial_bins_pix must have units of pixels or angular units convertible to degrees."
+                        )
+
+                    if radial_bins_pix.isscalar:
+                        radial_bins_pix = Quantity([radial_bins_pix])
+
                     # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have
                     #  been passed then I assume that they want to centre on the first entry
                     for ann_rad in radial_bins_pix:
@@ -2066,6 +2098,17 @@ class Image(BaseProduct):
 
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
+                        if not isinstance(back_bin_pix, Quantity):
+                            back_bin_pix = Quantity(back_bin_pix, 'pix')
+                        elif back_bin_pix.unit.is_equivalent('deg'):
+                            back_bin_pix = physical_rad_to_pix(
+                                self._parent_phot_obj, back_bin_pix, Quantity(pix_coord, 'pix')
+                            )
+                        elif back_bin_pix.unit != pix:
+                            raise UnitConversionError(
+                                "back_bin_pix must have units of pixels or angular units convertible to degrees."
+                            )
+
                         # The background annulus is guaranteed to only have two entries, inner and outer
                         inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
                                             linewidth=ch_thickness, linestyle='dashed')
