@@ -259,6 +259,12 @@ class BaseSource:
         if name is not None:
             # We don't be liking spaces in source names, we also don't like underscores
             self._name = name.replace(" ", "").replace("_", "-")
+            if len(self._name) == 0 or not all(c.isascii() and (c.isalnum() or c in "+-.") for c in self._name):
+                raise ValueError(
+                    f"The source name '{name}' contains disallowed characters (such as brackets or special "
+                    f"characters). Only ASCII alphanumeric characters, spaces, underscores, '+', '-', and '.' "
+                    f"are permitted."
+                )
         else:
             self._name = coord_to_name(self.ra_dec)
 
