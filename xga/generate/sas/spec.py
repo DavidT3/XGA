@@ -451,7 +451,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
                 cmd_str += "; " + new_grp
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += "; rm ccf.cif; mv * ../; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; rm ccf.cif; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(
+                d=dest_dir
+            )
             cmds.append(cmd_str)  # Adds the full command to the set
             # Makes sure the whole path to the temporary directory is created
             os.makedirs(dest_dir)
@@ -848,7 +850,8 @@ def cross_arf(sources: Union[BaseSource, BaseSample], radii: Union[List[Quantity
     arfgen_cmd = "cd {d}; cp ../ccf.cif .; export SAS_CCF={ccf}; {dmc} arfgen spectrumset={s} arfset={a} " \
                  "withrmfset=yes rmfset={r} badpixlocation={e} extendedsource=yes detmaptype=dataset " \
                  "detmaparray={ds} setbackscale=no badpixmaptype=dataset crossregionarf=yes " \
-                 "crossreg_spectrumset={crs}; rm ccf.cif; mv * ../; cd ..; rm -r {d}"
+                 "crossreg_spectrumset={crs}; rm ccf.cif; " \
+                 "find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
 
     # These store the final output information needed to run the commands
     all_cmds = []

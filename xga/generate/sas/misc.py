@@ -61,7 +61,10 @@ def mifbuild(sources):
         gen_mif = True
 
     # This string contains the bash code to run cifbuild
-    mif_cmd = f"cd {temp_dir}; cifbuild masterindex=yes calindexset={os.path.basename(final_path)}; mv * ../; cd ..; rm -r {temp_dir}"
+    mif_cmd = (
+        f"cd {temp_dir}; cifbuild masterindex=yes calindexset={os.path.basename(final_path)}; "
+        f"find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {temp_dir}"
+    )
 
     if gen_mif:
         os.makedirs(temp_dir, exist_ok=True)
@@ -119,7 +122,7 @@ def cifbuild(sources: Union[BaseSource, NullSource, BaseSample], num_cores: int 
     # This string contains the bash code to run cifbuild
     cif_cmd = ("cd {d}; cifbuild calindexset=ccf.cif withobservationdate=yes "
                "observationdate={od} withmasterindexset=yes masterindexset={mif}; "
-               "mv * ../; cd ..; rm -r {n}")
+               "find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {n}")
 
     # This will get flipped to True if ANY cif is going to be generated, and
     #  then will be used to trigger the mifbuild function

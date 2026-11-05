@@ -123,7 +123,8 @@ def evselect_image(
                 f"cd {dest_dir};evselect table={evt_list.path} imageset={im} xcolumn=X ycolumn=Y ximagebinsize=87 "
                 "yimagebinsize=87 squarepixels=yes ximagesize=512 yimagesize=512 imagebinning=binSize "
                 "ximagemin=3649 ximagemax=48106 withxranges=yes yimagemin=3649 yimagemax=48106 "
-                f"withyranges=yes {expr}; mv * ../; cd ..; rm -r {dest_dir}"
+                f"withyranges=yes {expr}; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; "
+                f"cd ..; rm -r {dest_dir}"
             )
 
             # This is the products final resting place, if it exists at the end of this command
@@ -262,7 +263,8 @@ def eexpmap(
             cmds.append(
                 f"cd {dest_dir}; cp ../ccf.cif .; export SAS_CCF={os.path.join(dest_dir, 'ccf.cif')}; "
                 f"eexpmap eventset={evt_list.path} imageset={ref_im.path} expimageset={exp_map} withdetcoords=no "
-                f"withvignetting=yes attitudeset={att} pimin={lo_chan} pimax={hi_chan}; rm ccf.cif; mv * ../; "
+                f"withvignetting=yes attitudeset={att} pimin={lo_chan} pimax={hi_chan}; rm ccf.cif; "
+                f"find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; "
                 f"cd ..; rm -r {dest_dir}"
             )
 
@@ -355,7 +357,10 @@ def emosaic(
         sources = [sources]
 
     # The bit on the end takes everything up out of the temporary folder and removes it
-    mosaic_cmd = "cd {d}; emosaic imagesets='{ims}' mosaicedset={mim}; mv * ../; cd ..; rm -r {d}"
+    mosaic_cmd = (
+        "cd {d}; emosaic imagesets='{ims}' mosaicedset={mim}; "
+        "find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
+    )
 
     sources_cmds = []
     sources_paths = []
@@ -650,7 +655,10 @@ def psfgen(
                         f"x={ra} y={dec} output={psf_file}; "
                     )
 
-                total_cmd += f"rm ccf.cif; mv * ../; cd ..; rm -r {dest_dir}"
+                total_cmd += (
+                    f"rm ccf.cif; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; "
+                    f"cd ..; rm -r {dest_dir}"
+                )
                 cmds.append(total_cmd)
                 # This is the products final resting place, if it exists at the end of this command
                 # In this case it just checks for the final PSF in the grid, all other files in the grid
