@@ -586,6 +586,18 @@ def _initialise_xga():
         #  the USABLE entry for the current telescope will stay at the default value of False
         if all_req_changed and root_dir_exists:
             USABLE[tel] = True
+        elif "/this/is/required/" not in cur_sec[f"root_{tel}_dir"] and not root_dir_exists:
+            warn(
+                f"The configured root_{tel}_dir ({cur_sec[f'root_{tel}_dir']}) does not exist, so {tel} data "
+                f"cannot be used.",
+                stacklevel=2,
+            )
+        elif "/this/is/required/" not in cur_sec[f"root_{tel}_dir"] and not all_req_changed:
+            warn(
+                f"A valid root_{tel}_dir has been configured, but one or more required entries in {cur_sec_name} "
+                f"still have their default placeholder values, so {tel} data cannot be used.",
+                stacklevel=2,
+            )
     # -----------------------------------------------------------------------------------
 
     # ------------- Generating the observation censuses for all USABLE telescopes -------------
