@@ -597,34 +597,54 @@ class BaseModel1D(metaclass=ABCMeta):
 
         return conv_check_pars
 
-    def info(self, table_format: str = 'fancy_grid'):
+    def info(self, table_format: str = "fancy_grid") -> None:
         """
         A method that gives some information about this particular model.
         :param str table_format: The desired format of the allowed models table. This is passed to the
             tabulate module (allowed formats can be found here - https://pypi.org/project/tabulate/), and
             alters the way the printed table looks.
         """
-        headers = [self.publication_name, '']
+        headers = [self.publication_name, ""]
         # ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
         ugly_pars = ""
         cur_length = 0
         for p in list(inspect.signature(self.model).parameters.values())[1:]:
             if cur_length > 70:
-                ugly_pars += '\n'
+                ugly_pars += "\n"
                 cur_length = 0
 
             if ugly_pars == "":
-                next_par = '{}'.format(p.name)
+                next_par = f"{p.name}"
             else:
-                next_par = ', {}'.format(p.name)
+                next_par = f", {p.name}"
             cur_length += len(next_par)
             ugly_pars += next_par
 
         par_units = ", ".join([u.to_string() for u in self.par_units])
 
-        data = [['DESCRIBES', self.describes], ['UNIT', self._y_unit.to_string()], ['PARAMETERS', ugly_pars],
-                ['PARAMETER UNITS', par_units], ["AUTHOR", self._info['author']], ["YEAR", self._info['year']],
-                ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
+        data = [
+            ["DESCRIBES", self.describes],
+            ["UNIT", self._y_unit.to_string()],
+            ["PARAMETERS", ugly_pars],
+            ["PARAMETER UNITS", par_units],
+            ["AUTHOR", self._info["author"]],
+            ["YEAR", self._info["year"]],
+            ["PAPER", self._info["reference"]],
+            ["INFO", self._info["general"]],
+        ]
+        if self.success is not None:
+            fit_pars = []
+            for p_ind, p_name in enumerate(self.par_names):
+                p_val = self.model_pars[p_ind]
+                p_err = self.model_par_errs[p_ind]
+                u_str = f" {p_val.unit.to_string()}" if p_val.unit != Unit("") else ""
+                if p_err.isscalar:
+                    fit_pars.append(f"{p_name}: {p_val.value:.3g} ± {p_err.value:.3g}{u_str}")
+                else:
+                    fit_pars.append(f"{p_name}: {p_val.value:.3g} -{p_err[0].value:.3g} +{p_err[1].value:.3g}{u_str}")
+            data.append(["FIT METHOD", self.fit_method])
+            data.append(["FIT SUCCESS", self.success])
+            data.append(["FITTED PARAMETERS", "\n".join(fit_pars)])
         print(tabulate(data, headers=headers, tablefmt=table_format))
 
     def predicted_dist_view(self, radius: Quantity, bins: Union[str, int] = 'auto', colour: str = "lightslategrey",
