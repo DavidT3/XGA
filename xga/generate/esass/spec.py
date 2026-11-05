@@ -137,12 +137,12 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             if exists and check_sp.usable and not force_gen:
                 continue
 
-            # eROSITA observations have the potential to be in pointed or survey modes - we change the time step
+            # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
             if cur_evt_list.header['OBS_MODE'] == 'POINTING':
                 t_step = t_step_point
-            elif cur_evt_list.header['OBS_MODE'] == 'SURVEY':
+            elif cur_evt_list.header['OBS_MODE'] in ['SURVEY', 'SCAN']:
                 t_step = t_step_survey
             else:
                 warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
