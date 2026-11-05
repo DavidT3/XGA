@@ -390,7 +390,9 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             cmd_str = cmd_str.replace(";;", ";")
 
             # Adds clean up commands to move all generated files and remove the temporary directory
-            cmd_str += "; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(
+                d=dest_dir
+            )
             # If temporary region files were made, they will be here
             if os.path.exists(os.path.join(final_dest_dir, 'temp_regs_{i}'.format(i=rand_ident))):
                 # Removing this directory
