@@ -1956,7 +1956,8 @@ class AggregateLightCurve(BaseAggregateProduct):
                  title_font_size: int = 20, inst_cmap: str = 'viridis', y_lims: Quantity = None,
                  time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
                  show_legend: bool = True, alpha: float = 0.8, interval_start: Union[Quantity, Time, datetime] = None,
-                 interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True) -> Tuple[dict, Figure]:
+                 interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True,
+                 one_tick_per_chunk: Union[bool, List[bool], np.ndarray] = False) -> Tuple[dict, Figure]:
         """
         A get method for a populated visualisation of the light curves present in this AggregateLightCurve.
 
@@ -1986,6 +1987,9 @@ class AggregateLightCurve(BaseAggregateProduct):
             from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
         :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
             chunks entirely contained within the interval.
+        :param bool/List[bool]/np.ndarray one_tick_per_chunk: Controls whether only a single x-axis tick label (at
+            the midpoint of the chunk) is shown per time chunk. Can be a single boolean applied to all plotted
+            time chunks, or a list/array of booleans with one entry per plotted time chunk. Default is False.
         :return: A dictionary of axes objects that have been added, and the figure object that was passed in.
         :rtype: Tuple[dict, Figure]
         """
@@ -2035,6 +2039,18 @@ class AggregateLightCurve(BaseAggregateProduct):
         else:
             all_rel_lcs = self.all_lightcurves
             time_chunk_ids = self.time_chunk_ids
+
+        if isinstance(one_tick_per_chunk, (bool, np.bool_)):
+            one_tick_per_chunk = [bool(one_tick_per_chunk)] * len(time_chunk_ids)
+        elif isinstance(one_tick_per_chunk, (list, np.ndarray)):
+            if any([not isinstance(val, (bool, np.bool_)) for val in one_tick_per_chunk]):
+                raise TypeError("All entries in 'one_tick_per_chunk' must be boolean values.")
+            if len(one_tick_per_chunk) != len(time_chunk_ids):
+                raise ValueError("The length of 'one_tick_per_chunk' ({}) must match the number of plotted time "
+                                 "chunks ({}).".format(len(one_tick_per_chunk), len(time_chunk_ids)))
+            one_tick_per_chunk = [bool(val) for val in one_tick_per_chunk]
+        else:
+            raise TypeError("The 'one_tick_per_chunk' argument must be either a boolean, or a list/array of booleans.")
 
         # This sets the fraction of the total x-width of the figure that is set between each axes
         buffer_frac = 0.008
@@ -2162,6 +2178,11 @@ class AggregateLightCurve(BaseAggregateProduct):
                 # That this is the first part of the try-except, and won't trigger the except, is quite deliberate. It
                 #  sets up the x-axis tick labels, even if there are no data for the requested instrument (if the
                 #  user has even requested a specific instrument) - makes the plot look nice
+                if one_tick_per_chunk[tc_id_ind]:
+                    mid_dt = self.datetime_chunks[tc_id, 0] + (
+                        self.datetime_chunks[tc_id, 1] - self.datetime_chunks[tc_id, 0]
+                    ) / 2
+                    ax.set_xticks([mid_dt])
                 # The labels will have hour, minute, date, month (shortened word so as not to be ambigious with
                 #  american date system), and year
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Hh-%Mm %d-%b-%Y'))
@@ -2212,7 +2233,8 @@ class AggregateLightCurve(BaseAggregateProduct):
              title_font_size: int = 18, inst_cmap: str = 'viridis', y_lims: Quantity = None,
              time_chunk_ids: Union[int, List[int]] = None, yscale: str = 'linear', fracexp_corr: bool = False,
              show_legend: bool = True, alpha: float = 0.8, interval_start: Union[Quantity, Time, datetime] = None,
-             interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True):
+             interval_end: Union[Quantity, Time, datetime] = None, over_run: bool = True,
+             one_tick_per_chunk: Union[bool, List[bool], np.ndarray] = False):
         """
         This method creates a combined visualisation of all the light curves associated with this object (apart from
         when you specify a single instrument, then it uses all the light curves from that instrument). The data are
@@ -2247,13 +2269,16 @@ class AggregateLightCurve(BaseAggregateProduct):
             from the reference time, an astropy Time, or a Python datetime, or None to use the overall window end.
         :param over_run: A boolean flag. If True, includes chunks partially overlapping the interval. If False, matches
             chunks entirely contained within the interval.
+        :param bool/List[bool]/np.ndarray one_tick_per_chunk: Controls whether only a single x-axis tick label (at
+            the midpoint of the chunk) is shown per time chunk. Can be a single boolean applied to all plotted
+            time chunks, or a list/array of booleans with one entry per plotted time chunk. Default is False.
         """
         # Create figure object
         fig = plt.figure(figsize=figsize)
 
         ax_dict, fig = self.get_view(fig, inst, custom_title, label_font_size, title_font_size, inst_cmap, y_lims,
                                      time_chunk_ids, yscale, fracexp_corr, show_legend, alpha, interval_start,
-                                     interval_end, over_run)
+                                     interval_end, over_run, one_tick_per_chunk)
 
         # plt.tight_layout()
         # Display the plot
