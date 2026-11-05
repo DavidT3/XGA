@@ -205,11 +205,6 @@ class ExtendedSource(BaseSource):
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
 
-        # Making a combined list of interloper regions
-        self._interloper_regions = {tel: [] for tel in self.telescopes}
-        for tel in self._other_regions:
-            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
-
         # Run through any alternative matches and raise warnings
         for tel in self._alt_match_regions:
             for o in self._alt_match_regions[tel]:
@@ -691,11 +686,6 @@ class PointSource(BaseSource):
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to("keV")
         self._peak_hi_en = peak_hi_en.to("keV")
-
-        # Making a combined list of interloper regions
-        self._interloper_regions = {tel: [] for tel in self.telescopes}
-        for tel in self._other_regions:
-            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
 
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
             if self._redshift is None:
