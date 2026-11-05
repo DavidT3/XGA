@@ -196,6 +196,24 @@ class Image(BaseProduct):
         self._psf_num_iterations = None
         self._psf_model = None
 
+        # We perform validity checks on any input passed to the obs_inst_combs argument.
+        if obs_inst_combs is not None:
+            # We check to make sure that each entry in obs_inst_combs is a two-element list
+            if any([len(e) != 2 for e in obs_inst_combs]):
+                raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
+            # And if it passes that we check that the instrument values are one of the allowed list
+            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
+                raise ValueError(f"The allowed instruments for {telescope} are: "
+                                 f"{', '.join(ALLOWED_INST[telescope].values())}")
+
+        # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
+        #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by
+        #  the obs_inst_combos, obs_ids, and instruments properties.
+        self._comb_oi_pairs = obs_inst_combs
+        # This keeps track of whether we've attempted to populate the _comb_oi_pairs attribute, as it can be
+        #  None even after an attempted loading.
+        self._loaded_comb_oi_pairs = False
+
         # This checks whether a region file has been passed, and if it has then processes it. If a list or dictionary
         #  of regions has been passed instead (as is allowed) then the behaviour is modified slightly.
         if isinstance(regs, str) and regs != '' and os.path.exists(regs):
@@ -223,24 +241,6 @@ class Image(BaseProduct):
         else:
             self._smoothed_info = None
             self._smoothed_method = None
-
-        # We perform validity checks on any input passed to the obs_inst_combs argument.
-        if obs_inst_combs is not None:
-            # We check to make sure that each entry in obs_inst_combs is a two-element list
-            if any([len(e) != 2 for e in obs_inst_combs]):
-                raise ValueError("Entries in the obs_inst_combs list must be lists structured as [ObsID, Inst]")
-            # And if it passes that we check that the instrument values are one of the allowed list
-            elif any([e[1] not in ALLOWED_INST[telescope].values() for e in obs_inst_combs]):
-                raise ValueError(f"The allowed instruments for {telescope} are: "
-                                 f"{', '.join(ALLOWED_INST[telescope].values())}")
-
-        # This attribute stores the combinations of ObsID and instrument that make up combined images, if the
-        #  current image is combined. This used to be instantiated in the init, but it is now lazy-loaded by
-        #  the obs_inst_combos, obs_ids, and instruments properties.
-        self._comb_oi_pairs = obs_inst_combs
-        # This keeps track of whether we've attempted to populate the _comb_oi_pairs attribute, as it can be
-        #  None even after an attempted loading.
-        self._loaded_comb_oi_pairs = False
 
     def _read_on_demand(self):
         """
@@ -448,6 +448,12 @@ class Image(BaseProduct):
         if isinstance(ds9_regs, (list, np.ndarray)):
             ds9_regs = {self._obs_id: list(ds9_regs)}
         elif isinstance(ds9_regs, dict):
+            if (
+                self.telescope is not None
+                and self.telescope in ds9_regs
+                and isinstance(ds9_regs[self.telescope], dict)
+            ):
+                ds9_regs = ds9_regs[self.telescope]
             obs_keys = ds9_regs.keys()
             # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
             check = [o in obs_keys for o in self.obs_ids]
@@ -495,6 +501,14 @@ class Image(BaseProduct):
         """
         # It is possible to set this to None, in which case no information is recorded.
         matched_reg_input = deepcopy(matched_reg_input)
+        if (
+            isinstance(matched_reg_input, dict)
+            and self.telescope is not None
+            and self.telescope in matched_reg_input
+            and isinstance(matched_reg_input[self.telescope], dict)
+        ):
+            matched_reg_input = matched_reg_input[self.telescope]
+
         if matched_reg_input is None:
             matched_reg_input = {}
         # This is triggered when a dictionary is passed, and all of its values are regions or None (indicating no match)
@@ -746,6 +760,14 @@ class Image(BaseProduct):
             raise TypeError("Please pass either a path to a region file, a list or numpy array of "
                             "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
                             "objects with ObsIDs as keys.")
+
+        if (
+            isinstance(new_reg, dict)
+            and self.telescope is not None
+            and self.telescope in new_reg
+            and isinstance(new_reg[self.telescope], dict)
+        ):
+            new_reg = new_reg[self.telescope]
 
         if new_reg is None:
             self._reg_file_path = ""
@@ -2999,7 +3021,7 @@ class RateMap(Image):
         # Call the superclass's init.
         super().__init__(pass_path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
-                         telescope=xga_image.telescope, check_exists=False)
+                         telescope=xga_image.telescope, obs_inst_combs=xga_image._comb_oi_pairs, check_exists=False)
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
@@ -3023,8 +3045,16 @@ class RateMap(Image):
         self._on_sensor_mask = None
 
         # Don't have to do any checks, they'll be done for me in the image object.
-        self._im_obj.regions = regs
-        self._im_obj.matched_regions = matched_regs
+        if regs != "":
+            self.regions = regs
+            self._im_obj.regions = regs
+        else:
+            self._regions = deepcopy(xga_image.regions)
+        if matched_regs is not None:
+            self.matched_regions = matched_regs
+            self._im_obj.matched_regions = matched_regs
+        else:
+            self._matched_regions = deepcopy(xga_image.matched_regions)
 
     def _construct_on_demand(self):
         """
@@ -3682,6 +3712,14 @@ class RateMap(Image):
             raise TypeError("Please pass either a path to a region file, a list or numpy array of "
                             "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
                             "objects with ObsIDs as keys.")
+
+        if (
+            isinstance(new_reg, dict)
+            and self.telescope is not None
+            and self.telescope in new_reg
+            and isinstance(new_reg[self.telescope], dict)
+        ):
+            new_reg = new_reg[self.telescope]
 
         if new_reg is None:
             self._reg_file_path = ""
