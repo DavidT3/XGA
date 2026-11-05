@@ -306,6 +306,16 @@ class ExtendedSource(BaseSource):
         return self._custom_region_radius
 
     @property
+    def extended(self) -> bool:
+        """
+        Property indicating whether this source is treated as an extended X-ray source.
+
+        :return: True if this is an extended source, False otherwise.
+        :rtype: bool
+        """
+        return True
+
+    @property
     def point_clusters(self) -> tuple[dict[str, ndarray], dict[str, list[ndarray]]]:
         """
         This allows you to retrieve the point cluster positions from the hierarchical clustering
