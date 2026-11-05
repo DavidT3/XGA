@@ -27,7 +27,7 @@ XGA_XSPEC_ERRS = ["No acceptable spectra are left after the minimum channel step
                   "No acceptable spectra are left after the cleaning step"]
 
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
-        -> Tuple[Union[str, None], str, bool, list, list]:
+        -> Tuple[Union[str, None], str, bool, list, list, bool]:
     """
     This function is called for the local compute option. It will run the supplied XSPEC script, then
     parse the output for errors and check that the expected output file has been created.
@@ -39,13 +39,14 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     :param float timeout: The length of time (in seconds) which the XSPEC script is allowed to run for before being
         killed.
     :return: The path to the results file (or None if unsuccessful), string repr of the source associated with
-        this fit, a boolean flag indicating if the fit is considered usable, list of any errors found, and list
-        of any warnings found.
-    :rtype: Tuple[Union[str, None], str, bool, list, list]
+        this fit, a boolean flag indicating if the fit is considered usable, list of any errors found, list
+        of any warnings found, and a boolean flag indicating whether the XSPEC run timed out.
+    :rtype: Tuple[Union[str, None], str, bool, list, list, bool]
     """
 
-    # We assume the output will be usable to start with
+    # We assume the output will be usable to start with, and that the run has not timed out
     usable = True
+    timed_out = False
 
     # We're going to make a temporary pfiles directory which is a) local to the XGA directory, and thus sure to
     #  be on the same filesystem (can be a performance issue for HPCs I think); and b) is unique to a particular
@@ -66,9 +67,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
     except TimeoutExpired:
         xspec_proc.kill()
         out, err = xspec_proc.communicate()
-        # Need to infer the name of the source to supply it in the warning
-        source_name = x_script.split('/')[-1].split("_")[0]
-        warn("An XSPEC fit for {} has timed out".format(source_name), stacklevel=2)
+        timed_out = True
         usable = False
 
     # Have to decode the output and errors as they are in byte form
@@ -153,7 +152,7 @@ def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: 
         res_tables = out_file
         usable = False
 
-    return res_tables, src, usable, cur_error, cur_warn
+    return res_tables, src, usable, cur_error, cur_warn, timed_out
 
 
 def xspec_call(xspec_func):
@@ -212,6 +211,9 @@ def xspec_call(xspec_func):
         # If an error is raised during this fit, store it here and raise it at the end after all
         # results have been dealt with
         errors_all_sources = []
+        # We also collect any sources whose XSPEC runs timed out so we can issue a single warning at the end
+        #  rather than interrupting the tqdm progress bar
+        timed_out_sources = []
 
         if len(script_list) > 0:
             # This mode runs the XSPEC locally in a multiprocessing pool.
@@ -224,8 +226,8 @@ def xspec_call(xspec_func):
                     nonlocal fit  # The progress bar will need updating
                     nonlocal results  # The dictionary the command call results are added to
 
-                    res_fits, rel_src, successful, cur_err_list, cur_warn_list = results_in
-                    results[rel_src].append([res_fits, successful, cur_err_list, cur_warn_list])
+                    res_fits, rel_src, successful, cur_err_list, cur_warn_list, timed_out = results_in
+                    results[rel_src].append([res_fits, successful, cur_err_list, cur_warn_list, timed_out])
                     fit.update(1)
 
                 for script_ind, cur_script in enumerate(script_list):
@@ -257,6 +259,10 @@ def xspec_call(xspec_func):
             with_cross_arf = False
 
             for res_set in results[src_repr]:
+                # If the run timed out (which the res_set[4] boolean tells us), record the source name
+                if res_set[4]:
+                    timed_out_sources.append(cur_src.name)
+
                 # If the fit wasn't successful (which the res_set[1] boolean tells us) then
                 #  we compile the error information for later.
                 if not res_set[1]:
@@ -599,8 +605,14 @@ def xspec_call(xspec_func):
                         warn("{src} annular spectra profile fit was not successful for the {t} "
                                 "telescope.".format(src=ann_spec.src_name, t=tel), stacklevel=2)
 
+        if len(timed_out_sources) != 0:
+            warn(
+                "XSPEC fits for the following sources have timed out: {}".format(", ".join(timed_out_sources)),
+                stacklevel=2,
+            )
+
         if len(errors_all_sources) != 0:
-            warn(f"Some XSPEC fits were not successful, the errors raised are: {errors_all_sources}")
+            warn(f"Some XSPEC fits were not successful, the errors raised are: {errors_all_sources}", stacklevel=2)
 
         # If only one source was passed, turn it back into a source object rather than a source
         # object in a list.
