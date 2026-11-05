@@ -163,6 +163,7 @@ class ClusterSample(BaseSample):
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
         final_names = []
+        final_inds = []
         # This records which clusters had a failed peak finding attempt, for a warning at the end of the declaration
         failed_peak_find = []
         with tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar) as dec_lb:
@@ -251,6 +252,7 @@ class ClusterSample(BaseSample):
                                                          clean_obs_reg, clean_obs_threshold, False, peak_find_method,
                                                          True, telescope, search_distance, cur_inc_core_pnt_src)
                         final_names.append(n)
+                        final_inds.append(ind)
 
                     except PeakConvergenceFailedError:
                         try:
@@ -264,6 +266,7 @@ class ClusterSample(BaseSample):
                                                              peak_find_method, True, telescope, search_distance,
                                                              cur_inc_core_pnt_src)
                             final_names.append(n)
+                            final_inds.append(ind)
                         except NoValidObservationsError as err:
                             self._failed_sources[n] = str(err)
 
@@ -274,6 +277,7 @@ class ClusterSample(BaseSample):
                     dec_lb.update(1)
 
         self._names = final_names
+        self._accepted_inds = final_inds
 
         # And again I ask XGA to generate the individual-telescope combined images and exposure maps,
         #  in case any sources have been cleaned and had data removed
