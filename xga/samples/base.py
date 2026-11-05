@@ -15,6 +15,7 @@ from ..exceptions import (
     FitConfNotAssociatedError,
     ModelNotAssociatedError,
     NoMatchFoundError,
+    NoProductAvailableError,
     NotAssociatedError,
     NoValidObservationsError,
     ParameterNotAssociatedError,
@@ -501,6 +502,7 @@ class BaseSample:
         warns = []
         not_assoc_mod = []
         not_assoc_band = []
+        no_prod = []
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
@@ -525,6 +527,10 @@ class BaseSample:
                 else:
                     lums.append(lx_val)
 
+            except NoProductAvailableError:
+                warns.append(src.name)
+                no_prod.append(src.name)
+                lums.append(np.array([np.nan, np.nan, np.nan]))
             except ModelNotAssociatedError:
                 warns.append(src.name)
                 not_assoc_mod.append(src.name)
@@ -556,6 +562,8 @@ class BaseSample:
             raise ModelNotAssociatedError(
                 f"There are no {model} fits associated with any of the sources in this sample."
             )
+        elif len(check_lums) == 0 and len(no_prod) > 0:
+            raise NoProductAvailableError("No matching spectra are available for any of the sources in this sample.")
         elif len(check_lums) == 0:
             raise ValueError("All luminosities appear to be NaN.")
 

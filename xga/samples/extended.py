@@ -685,6 +685,7 @@ class ClusterSample(BaseSample):
         inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
 
         temps = []
+        no_prod = []
         for src_ind, gcs in enumerate(self._sources.values()):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
@@ -717,6 +718,10 @@ class ClusterSample(BaseSample):
                          "logged".format(s=gcs.name), stacklevel=2)
                 temps.append(gcs_temp)
 
+            except NoProductAvailableError as err:
+                warn(str(err), stacklevel=2)
+                no_prod.append(gcs.name)
+                temps.append(np.array([np.nan, np.nan, np.nan]))
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
                     NotAssociatedError, FitConfNotAssociatedError) as err:
                 # If any of the possible errors are thrown, we print the error as a warning and replace
@@ -729,7 +734,9 @@ class ClusterSample(BaseSample):
 
         # We're going to throw an error if all the temperatures are NaN, because obviously something is wrong
         check_temps = temps[~np.isnan(temps)]
-        if len(check_temps) == 0:
+        if len(check_temps) == 0 and len(no_prod) > 0:
+            raise NoProductAvailableError("No matching spectra are available for any of the clusters in this sample.")
+        elif len(check_temps) == 0:
             raise ValueError("All temperatures appear to be NaN.")
 
         return temps
