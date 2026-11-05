@@ -994,6 +994,13 @@ def build_observation_census(
 
         # We add the new observations into our existing census dataframe
         new_data = pd.DataFrame(new_census_rows, columns=obs_lookup.columns)
+        if new_data["RA_PNT"].isna().all():
+            warn(
+                f"No event files were found while building the {tel} observation census ({len(new_obs_census)} "
+                f"ObsID directories checked); please check that the event file paths in {CONFIG_FILE} are "
+                f"configured correctly.",
+                stacklevel=2,
+            )
         obs_lookup = pd.concat([obs_lookup, new_data], ignore_index=True)
         # This then saves the dataframe to its rightful place
         obs_lookup.to_csv(census_file, index=False)
