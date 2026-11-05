@@ -1311,7 +1311,8 @@ class Image(BaseProduct):
                  chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
                  zoom_in: bool = False, manual_zoom_xlims: Optional[Tuple[float, float]] = None,
                  manual_zoom_ylims: Optional[Tuple[float, float]] = None,
-                 radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: Optional[np.ndarray] = None,
+                 radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
+                 back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None,
                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
                  ch_thickness: Union[float, int] = 0.8, low_val_lim: Optional[Union[float, int]] = None,
                  upp_val_lim: Optional[Union[float, int]] = None, custom_title: Optional[str] = None,
@@ -1341,11 +1342,11 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
@@ -1483,17 +1484,30 @@ class Image(BaseProduct):
                 pix_coord = None
 
             if pix_coord is not None:
+                if not isinstance(radial_bins_pix, Quantity):
+                    radial_bins_pix = Quantity(radial_bins_pix, 'pix')
+                elif radial_bins_pix.unit != pix:
+                    raise UnitConversionError("radial_bins_pix must have units of pixels.")
+
+                if radial_bins_pix.isscalar:
+                    radial_bins_pix = Quantity([radial_bins_pix])
+
                 # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have been
                 #  passed then I assume that they want to centre on the first entry
                 for ann_rad in radial_bins_pix:
-                    artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
+                    artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white', linewidth=1.5)
                     ax.add_artist(artist)
 
                 # This draws the background region on as well, if present
                 if back_bin_pix is not None:
-                    inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
+                    if not isinstance(back_bin_pix, Quantity):
+                        back_bin_pix = Quantity(back_bin_pix, 'pix')
+                    elif back_bin_pix.unit != pix:
+                        raise UnitConversionError("back_bin_pix must have units of pixels.")
+
+                    inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white', linewidth=1.6,
                                         linestyle='dashed')
-                    out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
+                    out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white', linewidth=1.6,
                                         linestyle='dashed')
                     ax.add_artist(inn_artist)
                     ax.add_artist(out_artist)
@@ -1536,8 +1550,9 @@ class Image(BaseProduct):
     def view(self, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
              chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
              figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
-             manual_zoom_ylims: Optional[tuple] = None, radial_bins_pix: np.ndarray = np.array([]),
-             back_bin_pix: Optional[np.ndarray] = None, stretch: BaseStretch = LogStretch(),
+             manual_zoom_ylims: Optional[tuple] = None,
+             radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
+             back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None, stretch: BaseStretch = LogStretch(),
              mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
              low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
              custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
@@ -1564,11 +1579,11 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
@@ -1611,8 +1626,9 @@ class Image(BaseProduct):
     def save_view(self, save_path: str, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
                   chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
                   figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
-                  manual_zoom_ylims: Optional[tuple] = None, radial_bins_pix: np.ndarray = np.array([]),
-                  back_bin_pix: Optional[np.ndarray] = None, stretch: BaseStretch = LogStretch(),
+                  manual_zoom_ylims: Optional[tuple] = None,
+                  radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
+                  back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None, stretch: BaseStretch = LogStretch(),
                   mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
                   low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
                   custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
@@ -1640,11 +1656,11 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
