@@ -541,7 +541,7 @@ class GalaxyCluster(ExtendedSource):
         search_key: str,
         annuli_bound_radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
@@ -602,6 +602,12 @@ class GalaxyCluster(ExtendedSource):
         # Our first test is to iterate through the retrieved profiles and exclude any that don't have a set_ident
         #  associated with them, as that means that they were not generated from an annular spectrum
         init_matches = [p for p in init_matches if p.set_ident is not None]
+
+        if min_sn is not None:
+            min_counts = None
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
 
         matched_prods = []
         for p in init_matches:
@@ -887,7 +893,7 @@ class GalaxyCluster(ExtendedSource):
         self,
         annuli_bound_radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
@@ -967,7 +973,7 @@ class GalaxyCluster(ExtendedSource):
         self,
         annuli_bound_radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
@@ -1042,7 +1048,7 @@ class GalaxyCluster(ExtendedSource):
         self,
         annuli_bound_radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
@@ -1122,7 +1128,7 @@ class GalaxyCluster(ExtendedSource):
         self,
         annuli_bound_radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
