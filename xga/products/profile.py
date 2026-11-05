@@ -8,6 +8,7 @@ also implementing analysis techniques that make use of their specific contents.
 
 from __future__ import annotations
 
+import os
 from copy import copy
 from warnings import warn
 
@@ -3205,6 +3206,12 @@ class HydrostaticMass(BaseProfile1D):
         :param Tuple[float, float]/None figsize: A tuple that sets the size of the diagnostic plot, default is None
             in which case it is set automatically.
         """
+        if os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path)):
+            raise FileNotFoundError(
+                f"The directory in which the diagnostic view is to be saved ({os.path.dirname(save_path)}) "
+                f"does not exist."
+            )
+
         # Run the preparatory method to get the number of plots, RateMap, and SB profile - also performs
         #  some common sense checks if a source has been passed.
         num_plots, rt, sb = self._diag_view_prep(src)

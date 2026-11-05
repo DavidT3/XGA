@@ -2990,6 +2990,11 @@ class BaseProfile1D:
             can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
             keys should be instantiated matplotlib formatters.
         """
+        if os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path)):
+            raise FileNotFoundError(
+                f"The directory in which the profile view is to be saved ({os.path.dirname(save_path)}) does not exist."
+            )
+
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
@@ -3757,6 +3762,14 @@ class BaseAggregateProfile1D:
         :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
             will any uncertainty regions.
         """
+        if save_path is not None and (
+            os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path))
+        ):
+            raise FileNotFoundError(
+                f"The directory in which the aggregate profile view is to be saved ({os.path.dirname(save_path)}) "
+                f"does not exist."
+            )
+
         # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
         if draw_rads is None:
             draw_rads = {}
