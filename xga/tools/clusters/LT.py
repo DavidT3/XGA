@@ -1,6 +1,6 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 5/15/26, 2:40 PM. Copyright (c) The Contributors.
-from typing import Tuple
+from typing import Tuple, Union, List
 from warnings import warn
 
 import numpy as np
@@ -38,6 +38,7 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                                     save_rad_history_path: str = None, cosmo: Cosmology = DEFAULT_COSMO,
                                     telescope: str = 'xmm', search_distance: Quantity = None,
                                     stacked_spectra: bool = False, timeout: Quantity = Quantity(1, 'hr'),
+                                    include_core_pnt_srcs: Union[bool, List[bool], np.ndarray] = True,
                                     num_cores: int = NUM_CORES) \
         -> Tuple[ClusterSample, pd.DataFrame, pd.DataFrame]:
 
@@ -161,6 +162,10 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
         strongly recommended that this be set to True.
     :param Quantity timeout: This sets the amount of time an XSPEC fit can run before it is
         timed out, the default is 1 hour.
+    :param bool/List[bool]/np.ndarray include_core_pnt_srcs: Controls whether bright point sources near the
+        user-defined coordinates (hopefully in cluster cores) are allowed to contribute to analyses. Default is
+        True, in which case such point sources will NOT be included in masks, in case they are a bright cool core.
+        Lists or arrays of boolean values may also be supplied, for more nuanced control.
     :param int num_cores: The number of cores that can be used for spectrum generation and fitting. The default is
         90% of the cores detected on the system.
     :return: The GalaxyCluster sample object used for this analysis, the dataframe of results for all input
@@ -310,7 +315,8 @@ def luminosity_temperature_pipeline(sample_data: pd.DataFrame, start_aperture: Q
                          clean_obs=clean_obs, clean_obs_threshold=clean_obs_threshold, clean_obs_reg=o_dens,
                          load_fits=False, cosmology=cosmo, back_inn_rad_factor=back_inn_rad_factor,
                          back_out_rad_factor=back_out_rad_factor, **o_dens_arg,
-                         telescope=telescope, search_distance=search_distance)
+                         telescope=telescope, search_distance=search_distance,
+                         include_core_pnt_srcs=include_core_pnt_srcs)
 
     # As it is possible some clusters in the sample_data dataframe don't actually have X-ray data, we copy
     #  the sample_data and cut it down, so it only contains entries for clusters that were loaded in the sample at the
