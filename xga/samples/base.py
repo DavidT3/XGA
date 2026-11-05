@@ -131,6 +131,13 @@ class BaseSample:
         if name is not None and len(set(name)) != len(name):
             raise ValueError("Names supplied to samples must be unique.")
 
+        # Also check that duplicate coordinate pairs have not been supplied
+        if len(ra) != len(dec):
+            raise ValueError("The RA and Dec arrays supplied to samples must have the same length.")
+        if len(set(zip(np.asarray(ra).tolist(), np.asarray(dec).tolist()))) != len(ra):
+            raise ValueError("Duplicate RA and Dec coordinate pairs have been supplied; sample coordinates must be "
+                             "unique.")
+
         with tqdm(desc="Declaring BaseSource Sample", total=len(ra), disable=no_prog_bar) as dec_base:
             for ind, r in enumerate(ra):
                 d = dec[ind]
