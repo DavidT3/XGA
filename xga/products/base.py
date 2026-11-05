@@ -2076,18 +2076,27 @@ class BaseProfile1D:
                 tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"], tablefmt=table_format)
             )
 
-    def get_model_fit(self, model: str, method: str) -> BaseModel1D:
+    def get_model_fit(self, model: str | None = None, method: str | None = None) -> BaseModel1D:
         """
         A get method for fitted model objects associated with this profile. Models for which the fit failed will
         also be returned, but a warning will be shown to inform the user that the fit failed.
 
-        :param str model: The name of the model to retrieve.
-        :param str method: The method which was used to fit the model.
+        :param str model: The name of the model to retrieve. Default is None, in which case if only a single model
+            has been fitted (either overall or for the specified method), it will be selected automatically.
+        :param str method: The method which was used to fit the model. Default is None, in which case if only a
+            single method has been used (either overall or for the specified model), it will be selected
+            automatically.
         :return: An instance of an XGA model object that was fitted to this profile and updated with the
             parameter values.
         :rtype: BaseModel1D
         """
-        if model not in PROF_TYPE_MODELS[self._prof_type]:
+        if method is not None:
+            method = method.lower()
+            if method not in self._fit_methods:
+                allowed = ", ".join(self._fit_methods)
+                raise XGAFitError(f"{method} is not a valid fitting method, please use one of these; {allowed}")
+
+        if model is not None and model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
             prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError(
@@ -2095,13 +2104,78 @@ class BaseProfile1D:
                     m=model, a=", ".join(allowed), p=prof_name
                 )
             )
-        elif model in self._bad_model_fits[method]:
-            warn(f"An attempt was made to fit {model} with {method} but it failed, so treat the model with suspicion")
-            ret_model = self._bad_model_fits[method][model]
-        elif model not in self._good_model_fits[method]:
-            raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit with {method} yet")
-        else:
+
+        if model is None and method is None:
+            good_fits = [
+                (m_meth, m_name) for m_meth in self._good_model_fits for m_name in self._good_model_fits[m_meth]
+            ]
+            bad_fits = [(m_meth, m_name) for m_meth in self._bad_model_fits for m_name in self._bad_model_fits[m_meth]]
+            if len(good_fits) == 1:
+                method, model = good_fits[0]
+            elif len(good_fits) > 1:
+                raise ValueError(
+                    "Multiple model fits are associated with this profile, so model=None and method=None is not valid."
+                )
+            elif len(bad_fits) == 1:
+                method, model = bad_fits[0]
+            elif len(bad_fits) > 1:
+                raise ValueError(
+                    "Multiple failed model fits are associated with this profile, so model=None and method=None is "
+                    "not valid."
+                )
+            else:
+                raise ModelNotAssociatedError("There are no model fits associated with this profile.")
+        elif model is None and method is not None:
+            good_models = list(self._good_model_fits[method].keys())
+            bad_models = list(self._bad_model_fits[method].keys())
+            if len(good_models) == 1:
+                model = good_models[0]
+            elif len(good_models) > 1:
+                raise ValueError(
+                    f"Multiple models ({', '.join(good_models)}) have been fit to this profile with {method}, "
+                    f"so model=None is not valid."
+                )
+            elif len(bad_models) == 1:
+                model = bad_models[0]
+            elif len(bad_models) > 1:
+                raise ValueError(
+                    f"Multiple models ({', '.join(bad_models)}) have failed fits with {method}, so model=None "
+                    f"is not valid."
+                )
+            else:
+                raise ModelNotAssociatedError(
+                    f"There are no models associated with this profile that have been fit with {method}."
+                )
+        elif model is not None and method is None:
+            good_methods = [m_meth for m_meth in self._good_model_fits if model in self._good_model_fits[m_meth]]
+            bad_methods = [m_meth for m_meth in self._bad_model_fits if model in self._bad_model_fits[m_meth]]
+            if len(good_methods) == 1:
+                method = good_methods[0]
+            elif len(good_methods) > 1:
+                raise ValueError(
+                    f"{model} has been fit to this profile with multiple methods ({', '.join(good_methods)}), "
+                    f"so method=None is not valid."
+                )
+            elif len(bad_methods) == 1:
+                method = bad_methods[0]
+            elif len(bad_methods) > 1:
+                raise ValueError(
+                    f"{model} has failed fits with multiple methods ({', '.join(bad_methods)}), so method=None "
+                    f"is not valid."
+                )
+            else:
+                raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit yet.")
+
+        if model in self._good_model_fits[method]:
             ret_model = self._good_model_fits[method][model]
+        elif model in self._bad_model_fits[method]:
+            warn(
+                f"An attempt was made to fit {model} with {method} but it failed, so treat the model with suspicion",
+                stacklevel=2,
+            )
+            ret_model = self._bad_model_fits[method][model]
+        else:
+            raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit with {method} yet")
 
         return ret_model
 
@@ -2166,26 +2240,30 @@ class BaseProfile1D:
             # Finally remove the model
             del self._good_model_fits[method][model]
 
-    def get_sampler(self, model: str) -> em.EnsembleSampler:
+    def get_sampler(self, model: str | None = None) -> em.EnsembleSampler:
         """
         A get method meant to retrieve the MCMC ensemble sampler used to fit a particular
         model (supplied by the user). Checks are applied to the supplied model, to make
         sure that it is valid for the type of profile, that a good fit has actually been
         performed, and that the fit was performed with Emcee and not another method.
 
-        :param str model: The name of the model for which to retrieve the sampler.
+        :param str model: The name of the model for which to retrieve the sampler. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :return: The Emcee sampler used to fit the user supplied model.
         :rtype: em.EnsembleSampler
         """
-        model = self.get_model_fit(model, "mcmc")
-        return model.emcee_sampler
+        model_obj = self.get_model_fit(model, "mcmc")
+        return model_obj.emcee_sampler
 
-    def get_chains(self, model: str, discard: bool | int = True, flatten: bool = True, thin: int = 1) -> np.ndarray:
+    def get_chains(
+        self, model: str | None = None, discard: bool | int = True, flatten: bool = True, thin: int = 1
+    ) -> np.ndarray:
         """
         Get method for the sampler chains of an MCMC fit to the user supplied model. get_sampler is
         called to retrieve the sampler object, as well as perform validity checks on the model name.
 
-        :param str model: The name of the model for which to retrieve the chains.
+        :param str model: The name of the model for which to retrieve the chains. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :param bool/int discard: Whether steps should be discarded for burn-in. If True then the cut off decided
             using the auto-correlation time will be used. If an integer is passed then this will be used as the
             number of steps to discard, and if False then no steps will be discarded.
@@ -2195,22 +2273,25 @@ class BaseProfile1D:
         :return: The requested chains.
         :rtype: np.ndarray
         """
-        model = self.get_model_fit(model, "mcmc")
+        model_obj = self.get_model_fit(model, "mcmc")
 
         if isinstance(discard, bool) and discard:
-            chains = model.emcee_sampler.get_chain(discard=model.cut_off, flat=flatten, thin=thin)
+            chains = model_obj.emcee_sampler.get_chain(discard=model_obj.cut_off, flat=flatten, thin=thin)
         elif isinstance(discard, int):
-            chains = model.emcee_sampler.get_chain(discard=discard, flat=flatten, thin=thin)
+            chains = model_obj.emcee_sampler.get_chain(discard=discard, flat=flatten, thin=thin)
         else:
-            chains = model.emcee_sampler.get_chain(flat=flatten, thin=thin)
+            chains = model_obj.emcee_sampler.get_chain(flat=flatten, thin=thin)
 
         return chains
 
-    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple | None = None) -> None:
+    def view_chains(
+        self, model: str | None = None, discard: bool | int = True, thin: int = 1, figsize: tuple | None = None
+    ) -> None:
         """
         Simple view method to quickly look at the MCMC chains for a given model fit.
 
-        :param str model: The name of the model for which to view the MCMC chains.
+        :param str model: The name of the model for which to view the MCMC chains. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :param bool/int discard: Whether steps should be discarded for burn-in. If True then the cut off decided
             using the auto-correlation time will be used. If an integer is passed then this will be used as the
             number of steps to discard, and if False then no steps will be discarded.
@@ -2244,12 +2325,15 @@ class BaseProfile1D:
         plt.tight_layout()
         plt.show()
 
-    def view_corner(self, model: str, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
+    def view_corner(
+        self, model: str | None = None, settings: dict | None = None, figsize: tuple = (10, 10)
+    ) -> None:
         """
         A view method to show a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
 
-        :param str model: The name of the model for which to view the corner plot.
+        :param str model: The name of the model for which to view the corner plot. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :param dict settings: The settings dictionary for a getdist MCSample, default is None, which
             corresponds to an empty dictionary.
         :param tuple figsize: A tuple to set the size of the figure.
@@ -2289,7 +2373,9 @@ class BaseProfile1D:
         "The legacy `view_corner()` code has been replaced with getdist; `view_getdist_corner() "
         "is now redundant, and will be removed in a future version of XGA."
     )
-    def view_getdist_corner(self, model: str, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
+    def view_getdist_corner(
+        self, model: str | None = None, settings: dict | None = None, figsize: tuple = (10, 10)
+    ) -> None:
         """
         Thin wrapper over the view_corner method, which now uses getdist rather than the old 'corner'
         module. This 'view_getdist_corner' remains to maintain compatibility with the old interface, but
