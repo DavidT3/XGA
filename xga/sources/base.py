@@ -889,6 +889,16 @@ class BaseSource:
         return self._name
 
     @property
+    def extended(self) -> bool:
+        """
+        Property indicating whether this source is treated as an extended X-ray source.
+
+        :return: True if this is an extended source, False otherwise.
+        :rtype: bool
+        """
+        return False
+
+    @property
     def num_inst_obs(self) -> dict:
         """
         A property that returns a dictionary of the total number of each instrument for each telescope associated
