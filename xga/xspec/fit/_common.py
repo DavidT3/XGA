@@ -1,28 +1,42 @@
 #  This code is part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
-#  Last modified by David J Turner (djturner@umbc.edu) 5/19/26, 2:54 PM. Copyright (c) The Contributors.
+#  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 1:34 PM. Copyright (c) The Contributors.
 
 import os
 from random import randint
-from typing import List, Union, Tuple, Dict
 from warnings import warn
 
+import numpy as np
+from astropy import units as u
 from astropy.units import Quantity, UnitConversionError
 
-from ... import (OUTPUT, NUM_CORES, XGA_EXTRACT, BASE_XSPEC_SCRIPT, XSPEC_FIT_METHOD,
-                 ABUND_TABLES, CROSS_ARF_XSPEC_SCRIPT)
+from ... import (
+    ABUND_TABLES,
+    BASE_XSPEC_SCRIPT,
+    CROSS_ARF_XSPEC_SCRIPT,
+    NUM_CORES,
+    OUTPUT,
+    XGA_EXTRACT,
+    XSPEC_FIT_METHOD,
+)
 from ...exceptions import NoProductAvailableError
-from ...generate.ciao.spec import specextract_spectrum, ciao_spectrum_set
+from ...generate.ciao.spec import ciao_spectrum_set, specextract_spectrum
 from ...generate.esass import srctool_spectrum
 from ...generate.esass.spec import esass_spectrum_set
-from ...generate.sas import evselect_spectrum, region_setup
-from ...generate.sas import spectrum_set, cross_arf
+from ...generate.sas import cross_arf, evselect_spectrum, region_setup, spectrum_set
 from ...products import Spectrum
 from ...samples.base import BaseSample
-from ...sources import ExtendedSource, PointSource, BaseSource
+from ...sources import BaseSource, ExtendedSource, PointSource
 
 
-def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_en: Quantity, hi_en: Quantity,
-                  fit_method: str, abund_table: str, timeout: Quantity) -> Union[List[BaseSource], BaseSample]:
+def _check_inputs(
+    sources: BaseSource | BaseSample | list[BaseSource],
+    lum_en: Quantity,
+    lo_en: Quantity,
+    hi_en: Quantity,
+    fit_method: str,
+    abund_table: str,
+    timeout: Quantity,
+) -> list[BaseSource] | BaseSample:
     """
     This performs some checks that are common to all the model fit functions, also makes sure the necessary spectra
     have been generated.
@@ -40,7 +54,6 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
     then a list will be returned.
     :rtype: Union[List[BaseSource], BaseSample]
     """
-
     # This function supports passing both individual sources and samples of sources, but I do require that
     #  the sources object is iterable
     if isinstance(sources, BaseSource):
@@ -54,8 +67,10 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
 
     # Checks that the luminosity energy bands are pairs of values
     if lum_en.shape[1] != 2:
-        raise ValueError("Luminosity energy bands should be supplied in pairs, defined "
-                         "like Quantity([[0.5, 2.0], [2.0, 10.0]], 'keV')")
+        raise ValueError(
+            "Luminosity energy bands should be supplied in pairs, defined "
+            "like Quantity([[0.5, 2.0], [2.0, 10.0]], 'keV')"
+        )
     # Are the lower limits smaller than the upper limits? - Obviously they should be so I check
     elif not all([lum_en[pair_ind, 0] < lum_en[pair_ind, 1] for pair_ind in range(0, lum_en.shape[0])]):
         raise ValueError("Luminosity energy band first entries must be smaller than second entries.")
@@ -66,25 +81,38 @@ def _check_inputs(sources: Union[BaseSource, BaseSample], lum_en: Quantity, lo_e
         raise ValueError("lo_en cannot be greater than hi_en.")
 
     if fit_method not in XSPEC_FIT_METHOD:
-        raise ValueError("{f} is not an XSPEC fit method, allowed fit methods are; "
-                         "{a}.".format(f=fit_method, a=", ".join(XSPEC_FIT_METHOD)))
+        raise ValueError(
+            f"{fit_method} is not an XSPEC fit method, allowed fit methods are; {', '.join(XSPEC_FIT_METHOD)}."
+        )
 
     if abund_table not in ABUND_TABLES:
-        raise ValueError(f"{abund_table} is not an XSPEC abundance table, allowed abundance tables are; "
-                         f"{', '.join(ABUND_TABLES)}.")
+        raise ValueError(
+            f"{abund_table} is not an XSPEC abundance table, allowed abundance tables are; {', '.join(ABUND_TABLES)}."
+        )
 
-    if not timeout.unit.is_equivalent('second'):
-        raise UnitConversionError("The timeout quantity must be in units which can be converted to seconds, you have"
-                                  " passed a quantity with units of {}".format(timeout.unit.to_string()))
+    if not timeout.unit.is_equivalent("second"):
+        raise UnitConversionError(
+            "The timeout quantity must be in units which can be converted to seconds, you have"
+            f" passed a quantity with units of {timeout.unit.to_string()}"
+        )
 
     return sources
 
 
-def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Quantity],
-                    inner_radius: Union[str, Quantity], group_spec: bool = True, min_counts: int = 5,
-                    min_sn: Union[int, float] = None, over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                    stacked_spectra: bool = False, telescope: Union[str, List[str]] = None, force_gen: bool = False) \
-        -> Tuple[Union[List[BaseSource], BaseSample], Quantity, Quantity, List[str], dict]:
+def _pregen_spectra(
+    sources: BaseSource | BaseSample | list[BaseSource],
+    outer_radius: str | Quantity,
+    inner_radius: str | Quantity,
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    stacked_spectra: bool = False,
+    telescope: str | list[str] | None = None,
+    force_gen: bool = False,
+) -> tuple[list[BaseSource] | BaseSample, list[Quantity], list[Quantity], list[str], dict]:
     """
     This pre-generates the spectra necessary for the requested fit (if they do not exist), and formats the input
     radii in a more predictable way.
@@ -123,8 +151,6 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
     """
     # Have to import here to avoid a circular import error
     from ...sourcetools._common import _get_all_telescopes
-    # This returns a list of associated telescopes, for BaseSources, BaseSamples, and lists of source objects
-    all_telescopes = _get_all_telescopes(sources)
 
     # If the user didn't specify a particular telescope, or telescopes, from which we are to
     #  produce spectra, we fetch all telescope names associated with at least one source
@@ -148,34 +174,60 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
         # TODO create a function that does this sort of thing for us - as in generating spectra for each of the
         #  telescopes that are associated with a source or sample
         # Each telescope has its own methods of generating spectra
-        if tel == 'xmm':
+        if tel == "xmm":
             if stacked_spectra:
-                warn("Spectrum stacking is not currently supported (or recommended) for XMM, and so combined spectra "
-                     "will not be used for these XSPEC fits.", stacklevel=2)
+                warn(
+                    "Spectrum stacking is not currently supported (or recommended) for XMM, and so combined spectra "
+                    "will not be used for these XSPEC fits.",
+                    stacklevel=2,
+                )
             # Override the stacked_spectra value here, because stacking is not supported for XMM
             real_stacked_spectra[tel] = False
 
             # We call the evselect_spectrum function here for two reasons; to make sure the spectra we want to fit
             #  are generated, and because that function has a lot of radius parsing and checking that will
             #  tell us if the inputs aren't formatted correctly
-            sources = evselect_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                                        over_sample, one_rmf, num_cores, force_gen=force_gen)
-        elif tel == 'chandra':
-            warn("Spectrum stacking is not currently supported for Chandra, and so combined spectra will not be "
-                 "used for these XSPEC fits.", stacklevel=2)
+            sources = evselect_spectrum(
+                sources,
+                outer_radius,
+                inner_radius,
+                group_spec,
+                min_counts,
+                min_sn,
+                over_sample,
+                one_rmf,
+                num_cores,
+                force_gen=force_gen,
+            )
+        elif tel == "chandra":
+            warn(
+                "Spectrum stacking is not currently supported for Chandra, and so combined spectra will not be "
+                "used for these XSPEC fits.",
+                stacklevel=2,
+            )
             # Make sure we have Chandra spectra generated, so that we can fit them
-            sources = specextract_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn,
-                                           num_cores)
+            sources = specextract_spectrum(
+                sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores
+            )
             # Override the stacked_spectra value here, because stacking is not supported for Chandra
             real_stacked_spectra[tel] = False
 
-        elif tel in ['erosita', 'erass']:
+        elif tel in ["erosita", "erass"]:
             # This is the spectrum generation tool that is specific to eROSITA
-            sources = srctool_spectrum(sources, outer_radius, inner_radius, group_spec, min_counts, min_sn, num_cores,
-                                       False, stacked_spectra, force_gen=force_gen)
+            sources = srctool_spectrum(
+                sources,
+                outer_radius,
+                inner_radius,
+                group_spec,
+                min_counts,
+                min_sn,
+                num_cores,
+                False,
+                stacked_spectra,
+                force_gen=force_gen,
+            )
         else:
-            raise NotImplementedError("Spectrum generation functionality is not implemented "
-                                      "for {t} yet!".format(t=tel))
+            raise NotImplementedError(f"Spectrum generation functionality is not implemented for {tel} yet!")
 
         # Store the passed value of stacked_spectra if it hasn't been specially overridden for the
         #  current telescope
@@ -183,22 +235,32 @@ def _pregen_spectra(sources: Union[BaseSource, BaseSample], outer_radius: Union[
             real_stacked_spectra[tel] = stacked_spectra
 
     # This is the spectrum region preparation function, and I'm calling it here because it will return properly
-    #  formatted arrays for the inner and outer radii
-    if outer_radius != 'region':
-        inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, '')[1:]
-    else:
-        raise NotImplementedError("I don't currently support fitting region spectra")
+    #  formatted arrays for the inner and outer radii (note: region_setup itself raises NotImplementedError if
+    #  outer_radius == 'region')
+    inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, "")[1:]
+
+    # Single BaseSource instances are wrapped into a single-element list so that downstream indexing
+    #  and iteration can uniformly treat sources as a sequence alongside BaseSample/list inputs.
+    if isinstance(sources, BaseSource):
+        sources = [sources]
 
     return sources, inn_rad_vals, out_rad_vals, src_telescopes, real_stacked_spectra
 
 
-def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
-                            radii: Union[Quantity, List[Quantity], Dict[str, Quantity], Dict[str, List[Quantity]]],
-                            group_spec: bool = True, min_counts: int = 5, min_sn: Union[int, float] = None,
-                            over_sample: float = None, one_rmf: bool = True, num_cores: int = NUM_CORES,
-                            gen_cross_arf: bool = False, cross_arf_detmap_bin: int = 200,
-                            stacked_spectra: bool = False, telescope: Union[str, List[str]] = None) \
-        -> Tuple[Union[List[BaseSource], BaseSample], Union[Dict[str, Quantity], Dict[str, List[Quantity]]], List[str]]:
+def _pregen_annular_spectra(
+    sources: BaseSource | BaseSample | list[BaseSource],
+    radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]],
+    group_spec: bool = True,
+    min_counts: int = 5,
+    min_sn: int | float | None = None,
+    over_sample: float | None = None,
+    one_rmf: bool = True,
+    num_cores: int = NUM_CORES,
+    gen_cross_arf: bool = False,
+    cross_arf_detmap_bin: int = 200,
+    stacked_spectra: bool = False,
+    telescope: str | list[str] | None = None,
+) -> tuple[list[BaseSource] | BaseSample, dict[str, Quantity] | dict[str, list[Quantity]], list[str]]:
     """
     Similar to the _pregen_spectra function, this makes sure we have all the necessary annular spectra to perform
     whatever radially resolved spectral fit the user has requested.
@@ -221,9 +283,9 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
     :param int num_cores: The number of cores to use (if running locally), default is set to 90% of available.
     :param bool gen_cross_arf: Controls whether we generate cross-arfs in preparation for an XSPEC fit function
         to use them during the fit.
-    :param int cross_arf_detmap_bin: The spatial binning applied to XMM event lists to create the detector maps used in the
-        calculations of cross-arf effective areas. The default is 200, smaller values will increase the resolution
-        but will cause dramatically slower calculations.
+    :param int cross_arf_detmap_bin: The spatial binning applied to XMM event lists to create the detector maps used
+        in the calculations of cross-arf effective areas. The default is 200, smaller values will increase the
+        resolution but will cause dramatically slower calculations.
     :param bool stacked_spectra: Whether stacked spectra (of all instruments for an ObsID) should be generated. If a
         stacking procedure for a particular telescope is not supported, this function will instead use individual
         spectra for an ObsID. The default is False.
@@ -254,10 +316,13 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
         # TODO create a function that does this sort of thing for us - as in generating spectra for each of the
         #  telescopes that are associated with a source or sample
         # Each telescope has its own methods of generating spectra
-        if tel == 'xmm':
+        if tel == "xmm":
             if stacked_spectra:
-                warn("Spectrum stacking is not currently supported (or recommended) for XMM, and so combined "
-                     "spectra will not be used for these XSPEC fits.", stacklevel=2)
+                warn(
+                    "Spectrum stacking is not currently supported (or recommended) for XMM, and so combined "
+                    "spectra will not be used for these XSPEC fits.",
+                    stacklevel=2,
+                )
             # We make sure the requested sets of annular spectra have actually been generated (for XMM)
             spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, one_rmf, num_cores)
 
@@ -265,32 +330,60 @@ def _pregen_annular_spectra(sources: Union[BaseSource, BaseSample],
             #  have to make sure that they have been generated.
             if gen_cross_arf:
                 # We make sure to run the XGA function that uses SAS to generate XMM cross-arfs
-                cross_arf(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, detmap_bin=cross_arf_detmap_bin,
-                          num_cores=num_cores)
+                cross_arf(
+                    sources,
+                    radii[tel],
+                    num_cores,
+                    group_spec,
+                    min_counts,
+                    min_sn,
+                    over_sample,
+                    detmap_bin=cross_arf_detmap_bin,
+                )
 
-        elif tel in ['erosita', 'erass']:
+        elif tel in ["erosita", "erass"]:
             # The annular spectrum tool specific to eROSITA
-            esass_spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, num_cores,
-                               combine_tm=stacked_spectra)
+            esass_spectrum_set(
+                sources, radii[tel], group_spec, min_counts, min_sn, num_cores, combine_tm=stacked_spectra
+            )
 
             if gen_cross_arf:
-                warn(f"XGA does not currently support the generation of cross-arfs for {tel}, so spectral "
-                     f"profile fits using {tel} data will not use them.", stacklevel=2)
-        elif tel == 'chandra':
+                warn(
+                    f"XGA does not currently support the generation of cross-arfs for {tel}, so spectral "
+                    f"profile fits using {tel} data will not use them.",
+                    stacklevel=2,
+                )
+        elif tel == "chandra":
             ciao_spectrum_set(sources, radii[tel], group_spec, min_counts, min_sn, over_sample, False, num_cores)
             if gen_cross_arf:
-                warn(f"XGA does not currently support the generation of cross-arfs for {tel}, so spectral "
-                     f"profile fits using {tel} data will not use them.", stacklevel=2)
+                warn(
+                    f"XGA does not currently support the generation of cross-arfs for {tel}, so spectral "
+                    f"profile fits using {tel} data will not use them.",
+                    stacklevel=2,
+                )
         else:
-            raise NotImplementedError("Spectrum generation functionality is not implemented "
-                                      "for {t} yet!".format(t=tel))
+            raise NotImplementedError(f"Spectrum generation functionality is not implemented for {tel} yet!")
+
+    # Single BaseSource instances are wrapped into a single-element list so that downstream indexing
+    #  and iteration can uniformly treat sources as a sequence alongside BaseSample/list inputs.
+    if isinstance(sources, BaseSource):
+        sources = [sources]
 
     return sources, radii, src_telescopes
 
 
-def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad_vals: List[Quantity],
-                    src_ind: int, inn_rad_vals: List[Quantity], group_spec: bool, min_counts: int,
-                    min_sn: Union[int, float], over_sample: float) -> Tuple[str, str]:
+def _spec_obj_setup(
+    stacked_spectra: bool,
+    tel: str,
+    source: BaseSource,
+    out_rad_vals: list[Quantity],
+    src_ind: int,
+    inn_rad_vals: list[Quantity],
+    group_spec: bool,
+    min_counts: int,
+    min_sn: int | float | None,
+    over_sample: float | None,
+) -> tuple[str, str]:
     """
     Internal function that collects relevant spectrum objects per telescope. This is used in
     each XGA XSPEC fitting function eg. single_temp_apec etc.
@@ -315,31 +408,44 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
     :rtype: Tuple[str, str]
     """
     try:
-        if tel in ['erosita', 'erass']:
+        if tel in ["erosita", "erass"]:
             if len(source.obs_ids[tel]) > 1:
-                search_obs_id = 'combined'
+                search_obs_id = "combined"
             else:
                 search_obs_id = None
 
             # For erosita with multiple observations, we need combined-obs spectra to avoid duplicated events
             # The inst parameter controls whether we want multi-instrument (stacked) or per-instrument.
             # Due to strict instrument filtering in get_spectra, inst=None will only return 'real' TMs.
-            search_inst = 'combined' if stacked_spectra else None
+            search_inst = "combined" if stacked_spectra else None
 
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], obs_id=search_obs_id, inst=search_inst,
-                                           inner_radius=inn_rad_vals[src_ind],
-                                           group_spec=group_spec, min_counts=min_counts,
-                                           min_sn=min_sn, telescope=tel)
+            spec_objs = source.get_spectra(
+                out_rad_vals[src_ind],
+                obs_id=search_obs_id,
+                inst=search_inst,
+                inner_radius=inn_rad_vals[src_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                telescope=tel,
+            )
         else:
             # For all missions that don't support stacking spectra
             # search_inst = 'combined' if stacked_spectra else None
             search_inst = None
 
-            spec_objs = source.get_spectra(out_rad_vals[src_ind], inner_radius=inn_rad_vals[src_ind],
-                                            group_spec=group_spec, min_counts=min_counts, min_sn=min_sn,
-                                            over_sample=over_sample, telescope=tel, inst=search_inst)
-    except NoProductAvailableError:
-        raise NoProductAvailableError("Relevant {t} spectra for {s} cannot be found.".format(t=tel, s=source.name))
+            spec_objs = source.get_spectra(
+                out_rad_vals[src_ind],
+                inner_radius=inn_rad_vals[src_ind],
+                group_spec=group_spec,
+                min_counts=min_counts,
+                min_sn=min_sn,
+                over_sample=over_sample,
+                telescope=tel,
+                inst=search_inst,
+            )
+    except NoProductAvailableError as err:
+        raise NoProductAvailableError(f"Relevant {tel} spectra for {source.name} cannot be found.") from err
 
     # This is because many other parts of this function assume that spec_objs is iterable, and in the case of
     #  a cluster with only a single valid instrument for a single valid observation this may not be the case
@@ -348,8 +454,9 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
 
     # Obviously we can't do a fit if there are no spectra, so throw an error if that's the case
     if len(spec_objs) == 0:
-        raise NoProductAvailableError("There are no matching spectra for {s} object, you "
-                                        "need to generate them first!".format(s=source.name))
+        raise NoProductAvailableError(
+            f"There are no matching spectra for {source.name} object, you need to generate them first!"
+        )
 
     # Turn spectra paths into TCL style list for substitution into template
     specs = "{" + " ".join([spec.path for spec in spec_objs]) + "}"
@@ -358,8 +465,10 @@ def _spec_obj_setup(stacked_spectra: bool, tel: str, source: BaseSource, out_rad
 
     return specs, storage_key
 
-def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quantity], Dict[str, Quantity],
-                       Dict[str, List[Quantity]]]) -> Union[Dict[str, Quantity], Dict[str, List[Quantity]]]:
+
+def _parse_radii_input(
+    telescopes: list[str], radii: Quantity | list[Quantity] | dict[str, Quantity] | dict[str, list[Quantity]]
+) -> dict[str, Quantity] | dict[str, list[Quantity]]:
     """
     Internal function to parse the user input of the 'radii' argument of spectral fitting methods
     into spectrum generation functions.
@@ -381,27 +490,32 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
 
     # If the radii is input as a List, that means the user wants the same radii for each telescope,
     # but different radii for different sources.
-    elif isinstance(radii, List):
+    elif isinstance(radii, list):
         for telescope in telescopes:
             # checking every element in the list is a Quantity
             if not all(isinstance(elem, Quantity) for elem in radii):
-                raise ValueError("If 'radii' is input as a List, then every element of the List " 
-                                 "must be an astropy Quantity.")
+                raise ValueError(
+                    "If 'radii' is input as a list, then every element of the list must be an astropy Quantity."
+                )
             else:
                 output_dict[telescope] = radii
 
     elif isinstance(radii, dict):
         if not all(tel in radii.keys() for tel in telescopes):
-            raise KeyError("If 'radii' is input as a dictionary, this dictionary must contain a key"
-                           " for each telescope associated to the source.")
+            raise KeyError(
+                "If 'radii' is input as a dictionary, this dictionary must contain a key"
+                " for each telescope associated to the source."
+            )
         # If the radii is input as a Dictionary of lists, the user wants different radii for each
         # source and each telescope
-        if all(isinstance(value, List) for value in radii.values()):
+        if all(isinstance(value, list) for value in radii.values()):
             for list_ in radii.values():
                 # checking every element in the list is a Quantity
                 if not all(isinstance(elem, Quantity) for elem in list_):
-                    raise ValueError("If 'radii' is input as a Dictionary of Lists, then every "
-                                     "element of each List must be an astropy Quantity.")
+                    raise ValueError(
+                        "If 'radii' is input as a dictionary of lists, then every "
+                        "element of each list must be an astropy Quantity."
+                    )
 
             output_dict = radii
 
@@ -412,37 +526,65 @@ def _parse_radii_input(telescopes: List[str], radii: Union[Quantity, List[Quanti
             output_dict = radii
 
         else:
-            raise ValueError("The 'radii' argument must be input as either; a Quantity - which is"
-                             " applied to every source in every telescope; a List of Quantities - "
-                             "where every entry is applied to each source for each telescope; a "
-                             "dictionary with telescope keys and Quantity keys - this is to specify"
-                             " a different radii to be applied to each telescope; or a dictionary "
-                             "of Lists of Quantities - which specifies radii for each source for "
-                             "each telescope. In this case the radii argument has been given as a "
-                             "dictionary but with the incorrect format. Please change the radii "
-                             "input so that it matches one of the given options.")
+            raise ValueError(
+                "The 'radii' argument must be input as either; a Quantity - which is"
+                " applied to every source in every telescope; a List of Quantities - "
+                "where every entry is applied to each source for each telescope; a "
+                "dictionary with telescope keys and Quantity keys - this is to specify"
+                " a different radii to be applied to each telescope; or a dictionary "
+                "of Lists of Quantities - which specifies radii for each source for "
+                "each telescope. In this case the radii argument has been given as a "
+                "dictionary but with the incorrect format. Please change the radii "
+                "input so that it matches one of the given options."
+            )
 
     else:
-        raise ValueError("The 'radii' argument must be input as either; a Quantity - which is"
-                    " applied to every source in every telescope; a List of Quantities - "
-                    "where every entry is applied to each source for each telescope; a "
-                    "dictionary with telescope keys and Quantity keys - this is to specify"
-                    " a different radii to be applied to each telescope; or a dictionary "
-                    "of Lists of Quantities - which specifies radii for each source for "
-                    "each telescope. In this case the radii argument has been given as a "
-                    "dictionary but with the incorrect format. Please change the radii "
-                    "input so that it matches one of the given options.")
+        raise ValueError(
+            "The 'radii' argument must be input as either; a Quantity - which is"
+            " applied to every source in every telescope; a List of Quantities - "
+            "where every entry is applied to each source for each telescope; a "
+            "dictionary with telescope keys and Quantity keys - this is to specify"
+            " a different radii to be applied to each telescope; or a dictionary "
+            "of Lists of Quantities - which specifies radii for each source for "
+            "each telescope. In this case the radii argument has been given as a "
+            "dictionary but with the incorrect format. Please change the radii "
+            "input so that it matches one of the given options."
+        )
 
     return output_dict
 
 
-def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, abund_table: str, fit_method: str,
-                        specs: str, lo_en: Quantity, hi_en: Quantity, par_names: str, par_values: str, linking: str,
-                        freezing: str, par_fit_stat: float, lum_low_lims: str, lum_upp_lims: str, lum_conf: float,
-                        redshift: float, pre_check: bool, check_par_names: str, check_par_lo_lims: str,
-                        check_par_hi_lims: str, check_par_err_lims: str, norm_scale: bool, telescope: str, fit_conf: str,
-                        which_par_nh: str = 'None', rand_ident: str = None, cross_arf_paths: str = None,
-                        cross_arf_rmf_paths: str = None) -> Tuple[str, str, list]:
+def _write_xspec_script(
+    source: BaseSource,
+    spec_storage_key: str,
+    model: str,
+    abund_table: str,
+    fit_method: str,
+    specs: str,
+    lo_en: Quantity,
+    hi_en: Quantity,
+    par_names: str,
+    par_values: str,
+    linking: str,
+    freezing: str,
+    par_fit_stat: float,
+    lum_low_lims: str,
+    lum_upp_lims: str,
+    lum_conf: float,
+    redshift: float,
+    pre_check: bool,
+    check_par_names: str,
+    check_par_lo_lims: str,
+    check_par_hi_lims: str,
+    check_par_err_lims: str,
+    norm_scale: bool,
+    telescope: str,
+    fit_conf: str,
+    which_par_nh: str = "None",
+    rand_ident: str | int | None = None,
+    cross_arf_paths: str | None = None,
+    cross_arf_rmf_paths: str | None = None,
+) -> tuple[str, str, list]:
     """
     This writes out a configured XSPEC script, for global fits, annular fits, and annular fits with cross-arf
     support depending on the input parameters.
@@ -497,16 +639,25 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
     """
     # There has to be a directory to write this xspec script to, as well as somewhere for the fit output
     #  to be stored - single telescope fits are stored in a specific XSPEC directory for that telescope
-    dest_dir = os.path.join(OUTPUT, telescope, 'XSPEC', source.name, "")
+    dest_dir = os.path.join(OUTPUT, telescope, "XSPEC", source.name, "")
     os.makedirs(dest_dir, exist_ok=True)
 
-
     # We're keeping an inventory of XSPEC fits for each source, and if it doesn't already exist we set up the file
-    if not os.path.exists(dest_dir + 'inventory.csv'):
+    inv_file_path = os.path.join(dest_dir, "inventory.csv")
+    if not os.path.exists(inv_file_path):
         # These are the columns we want to have in our inventory file
-        inv_cols = ['results_file', 'spec_key', 'fit_conf_key', 'telescope', 'obs_ids', 'insts', 'src_name', 'type',
-                    'set_ident']
-        with open(dest_dir + 'inventory.csv', 'w') as writo:
+        inv_cols = [
+            "results_file",
+            "spec_key",
+            "fit_conf_key",
+            "telescope",
+            "obs_ids",
+            "insts",
+            "src_name",
+            "type",
+            "set_ident",
+        ]
+        with open(inv_file_path, "w") as writo:
             # Writing out the inventory column names to the new file
             inv_hdr = ",".join(inv_cols) + "\n"
             writo.write(inv_hdr)
@@ -515,77 +666,198 @@ def _write_xspec_script(source: BaseSource, spec_storage_key: str, model: str, a
         # It is possible that some XSPEC fitting file names containing the spectrum storage key and fit
         #  configuration key will be too long to be allowed, so we're going to keep an inventory and assign them
         #  random identifiers.
-        rand_ident = randint(0, int(1e+8))
+        rand_ident = randint(0, int(1e8))
 
     # We create the eventual final output results file from the fit - it won't necessarily get made because the fit
     #  might fail, but we're making life easier on ourselves by creating the inventory entry here so it can be put
     #  in the file by xspec_call if the fit succeeds
     # We are making it a relative path to make it more resilient to the output directory being moved
-    final_res_file = source.name + '_' + str(rand_ident) + ".fits"
+    final_res_file = source.name + "_" + str(rand_ident) + ".fits"
 
     # Create strings of the ObsID-instruments that represent the data currently associated with the source
     i_str = "/".join([i for o in source.instruments[telescope] for i in source.instruments[telescope][o]])
     o_str = "/".join([o for o in source.instruments[telescope] for i in source.instruments[telescope][o]])
 
     # This way we can identify if the fit is to an annular spectrum or a regular set of spectra
-    if 'ident' in spec_storage_key:
+    if "ident" in spec_storage_key:
         # These only occur in the annular spectra
-        set_ident = spec_storage_key.split('ident')[-1].split('_')[0]
+        set_ident = spec_storage_key.split("ident")[-1].split("_")[0]
     else:
-        set_ident = ''
+        set_ident = ""
 
     # Now we can define the 'type' of fit it is - this will help out when reading things in
-    if set_ident == '':
-        fit_type = 'global'
-    elif set_ident != '' and cross_arf_paths is None:
-        fit_type = 'ann'
-    elif set_ident != '' and cross_arf_paths is not None:
-        fit_type = 'ann_carf'
+    if set_ident == "":
+        fit_type = "global"
+    elif set_ident != "" and cross_arf_paths is None:
+        fit_type = "ann"
+    elif set_ident != "" and cross_arf_paths is not None:
+        fit_type = "ann_carf"
 
     # Now we create the presumptive entry in the inventory file, to be stored there if the fit succeeds
-    inv_ent = [final_res_file, spec_storage_key, fit_conf, telescope, o_str, i_str, source.name, fit_type, str(set_ident)]
+    inv_ent = [
+        final_res_file,
+        spec_storage_key,
+        fit_conf,
+        telescope,
+        o_str,
+        i_str,
+        source.name,
+        fit_type,
+        str(set_ident),
+    ]
 
     # Defining where the output summary file of the fit is written - these file names used to contain all the
     #  information about the fit, but we're using an inventory file and randomly generated identifiers now
     # out_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf
     # script_file = dest_dir + source.name + "_" + spec_storage_key + "_" + model + "_" + fit_conf + ".xcm"
     out_file = dest_dir + source.name + "_" + str(rand_ident)
-    script_file = dest_dir + source.name + "_" + str(rand_ident) + '.xcm'
+    script_file = dest_dir + source.name + "_" + str(rand_ident) + ".xcm"
 
     # We can tell if the 'standard' script template or the cross-arf template is needed by checking whether the
     #  cross arf paths variable has been set
     if cross_arf_paths is None:
         # Read in the template file for the usual XSPEC script.
-        with open(BASE_XSPEC_SCRIPT, 'r') as x_script:
+        with open(BASE_XSPEC_SCRIPT) as x_script:
             script = x_script.read()
 
         # The template is filled out here, taking everything we have generated and everything the user
         #  passed in. The result is an XSPEC script that can be run as is.
-        script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value,
-                               q0=0., lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
-                               hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values,
-                               lk=linking, fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims,
-                               of=out_file, redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
-                               cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
-                               nhmtz=which_par_nh)
+        script = script.format(
+            xsp=XGA_EXTRACT,
+            ab=abund_table,
+            md=fit_method,
+            H0=source.cosmo.H0.value,
+            q0=0.0,
+            lamb0=source.cosmo.Ode0,
+            sp=specs,
+            lo_cut=lo_en.to("keV").value,
+            hi_cut=hi_en.to("keV").value,
+            m=model,
+            pn=par_names,
+            pv=par_values,
+            lk=linking,
+            fr=freezing,
+            el=par_fit_stat,
+            lll=lum_low_lims,
+            lul=lum_upp_lims,
+            of=out_file,
+            redshift=redshift,
+            lel=lum_conf,
+            check=pre_check,
+            cps=check_par_names,
+            cpsl=check_par_lo_lims,
+            cpsh=check_par_hi_lims,
+            cpse=check_par_err_lims,
+            ns=norm_scale,
+            nhmtz=which_par_nh,
+        )
 
     else:
         # Read in the template file for the cross-arf XSPEC script - quite different fundamentally
-        with open(CROSS_ARF_XSPEC_SCRIPT, 'r') as x_script:
+        with open(CROSS_ARF_XSPEC_SCRIPT) as x_script:
             script = x_script.read()
 
         # The template is filled out here, taking everything we have generated and everything the user
         #  passed in. The result is an XSPEC script that can be run as is.
-        script = script.format(xsp=XGA_EXTRACT, ab=abund_table, md=fit_method, H0=source.cosmo.H0.value, q0=0.,
-                               lamb0=source.cosmo.Ode0, sp=specs, lo_cut=lo_en.to("keV").value,
-                               hi_cut=hi_en.to("keV").value, m=model, pn=par_names, pv=par_values, lk=linking,
-                               fr=freezing, el=par_fit_stat, lll=lum_low_lims, lul=lum_upp_lims, of=out_file,
-                               redshift=redshift, lel=lum_conf, check=pre_check, cps=check_par_names,
-                               cpsl=check_par_lo_lims, cpsh=check_par_hi_lims, cpse=check_par_err_lims, ns=norm_scale,
-                               nhmtz=which_par_nh, cap=cross_arf_paths, carp=cross_arf_rmf_paths)
+        script = script.format(
+            xsp=XGA_EXTRACT,
+            ab=abund_table,
+            md=fit_method,
+            H0=source.cosmo.H0.value,
+            q0=0.0,
+            lamb0=source.cosmo.Ode0,
+            sp=specs,
+            lo_cut=lo_en.to("keV").value,
+            hi_cut=hi_en.to("keV").value,
+            m=model,
+            pn=par_names,
+            pv=par_values,
+            lk=linking,
+            fr=freezing,
+            el=par_fit_stat,
+            lll=lum_low_lims,
+            lul=lum_upp_lims,
+            of=out_file,
+            redshift=redshift,
+            lel=lum_conf,
+            check=pre_check,
+            cps=check_par_names,
+            cpsl=check_par_lo_lims,
+            cpsh=check_par_hi_lims,
+            cpse=check_par_err_lims,
+            ns=norm_scale,
+            nhmtz=which_par_nh,
+            cap=cross_arf_paths,
+            carp=cross_arf_rmf_paths,
+        )
 
     # Write out the filled-in template to its destination
-    with open(script_file, 'w') as xcm:
+    with open(script_file, "w") as xcm:
         xcm.write(script)
 
     return out_file, script_file, inv_ent
+
+
+def _convert_par_val_to_xspec(val: float | int | Quantity, par_meta: dict, par_key: str) -> float:
+    """
+    Convert a scalar numeric or Astropy Quantity parameter value into the raw float expected by XSPEC.
+
+    When a parameter has a recognised physical unit in model.dat, we allow the user to pass either an Astropy
+    Quantity (which we convert to the XSPEC unit, including temperature-energy equivalencies for keV parameters)
+    or a plain float/int (which is assumed to already be in the XSPEC unit).
+
+    :param float/int/Quantity val: The parameter value supplied by the user.
+    :param dict par_meta: Parameter metadata dictionary from validate_and_parse_model.
+    :param str par_key: The disambiguated parameter key (used for clear error messages).
+    :return: The numeric parameter value in XSPEC's expected unit.
+    :rtype: float
+    """
+    # Extract the target Astropy Unit object and raw model.dat unit string for this parameter
+    target_unit = par_meta["unit"]
+    raw_unit = par_meta["raw_unit"]
+    if isinstance(val, Quantity):
+        # If the parameter is dimensionless in XSPEC, reject any Quantity that carries physical units
+        if target_unit == u.Unit(""):
+            if val.unit != u.Unit(""):
+                raise u.UnitConversionError(
+                    f"Parameter '{par_key}' is dimensionless in XSPEC (raw unit '{raw_unit}'), "
+                    f"so a Quantity with units of '{val.unit}' cannot be converted."
+                )
+            num_val = float(val.value)
+        # Allow temperature-energy equivalencies (e.g. Kelvin -> keV) for keV plasma temperature parameters
+        elif target_unit == u.Unit("keV"):
+            num_val = float(val.to("keV", equivalencies=u.temperature_energy()).value)
+        else:
+            num_val = float(val.to(target_unit).value)
+    elif isinstance(val, (int, float, np.number)) and not isinstance(val, bool):
+        # Plain floats/ints are assumed to already be in the parameter's native XSPEC unit
+        num_val = float(val)
+    else:
+        raise TypeError(
+            f"Value for parameter '{par_key}' must be a float, integer, or Astropy Quantity, not {type(val).__name__}."
+        )
+
+    return num_val
+
+
+def _validate_par_hard_limits(num_val: float, par_meta: dict, par_key: str) -> None:
+    """
+    Verify that a numeric starting parameter value falls within XSPEC's hard minimum and maximum bounds.
+
+    :param float num_val: The numeric parameter value in XSPEC units.
+    :param dict par_meta: Parameter metadata dictionary from validate_and_parse_model.
+    :param str par_key: The disambiguated parameter key.
+    """
+    # Check both hard minimum and hard maximum bounds from model.dat (switches/scale parameters have None bounds)
+    hard_min = par_meta["hard_min"]
+    hard_max = par_meta["hard_max"]
+    if hard_min is not None and num_val < hard_min:
+        raise ValueError(
+            f"Starting value {num_val} for parameter '{par_key}' ({par_meta['component']}) is below XSPEC's "
+            f"hard minimum of {hard_min}."
+        )
+    if hard_max is not None and num_val > hard_max:
+        raise ValueError(
+            f"Starting value {num_val} for parameter '{par_key}' ({par_meta['component']}) is above XSPEC's "
+            f"hard maximum of {hard_max}."
+        )

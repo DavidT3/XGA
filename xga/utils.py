@@ -17,7 +17,7 @@ import pandas as pd
 from astropy.constants import m_e, m_p
 from astropy.cosmology import LambdaCDM
 from astropy.io import fits
-from astropy.units import Quantity, add_enabled_equivalencies, add_enabled_units, def_unit
+from astropy.units import Quantity, Unit, add_enabled_equivalencies, add_enabled_units, def_unit
 from astropy.wcs import WCS
 from fitsio import FITSHDR
 from fsspec import AbstractFileSystem
@@ -53,6 +53,10 @@ _LAZY_VARS = {
     "CALDB_AVAIL",
     "CALDB_VERSION",
     "XSPEC_VERSION",
+    "XSPEC_FIT_METHOD",
+    "XSPEC_MODELS",
+    "MODEL_PARS",
+    "MODEL_UNITS",
     "OUTPUT",
     "NUM_CORES",
     "USABLE",
@@ -131,10 +135,29 @@ def __getattr__(name):
                 CIAO_VERSION, CIAO_AVAIL, CALDB_VERSION, CALDB_AVAIL = _get_ciao_info()
             return globals()[name]
 
-        if name in ["XSPEC_VERSION", "XSPEC_FIT_METHOD", "ABUND_TABLES"]:
-            global XSPEC_VERSION, XSPEC_FIT_METHOD, ABUND_TABLES
-            if "XSPEC_VERSION" not in globals() or XSPEC_VERSION is None:
-                XSPEC_VERSION, XSPEC_FIT_METHOD, ABUND_TABLES = _get_xspec_info()
+        if name in ["XSPEC_FIT_METHOD", "ABUND_TABLES"]:
+            global XSPEC_FIT_METHOD, ABUND_TABLES
+            if "ABUND_TABLES" not in globals() or "XSPEC_FIT_METHOD" not in globals():
+                XSPEC_FIT_METHOD = ["leven", "bays", "anneal", "migrad"]
+                ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+            return globals()[name]
+
+        if name in [
+            "XSPEC_VERSION",
+            "XSPEC_MODELS",
+            "MODEL_PARS",
+            "MODEL_UNITS",
+        ]:
+            global XSPEC_VERSION, XSPEC_MODELS, MODEL_PARS, MODEL_UNITS
+            if "XSPEC_MODELS" not in globals() or "XSPEC_VERSION" not in globals():
+                (
+                    XSPEC_VERSION,
+                    XSPEC_FIT_METHOD,
+                    ABUND_TABLES,
+                    XSPEC_MODELS,
+                    MODEL_PARS,
+                    MODEL_UNITS,
+                ) = _get_xspec_info()
             return globals()[name]
 
         return globals()[name]
@@ -274,14 +297,20 @@ def _get_ciao_info() -> tuple[Version | None, bool, Version | None, bool]:
     return ciao_version, ciao_avail, caldb_version, caldb_avail
 
 
-def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
+def _get_xspec_info() -> tuple[
+    Version | None, list[str], list[str], dict[str, dict], dict[str, list[str]], dict[str, list[Unit]]
+]:
     """
-    Internal helper to discover XSPEC version and availability.
+    Internal helper to discover XSPEC version, availability, and built-in model definitions from HEASoft's
+    model.dat file.
     """
     xspec_version = None
     # Fit methods and abundance tables are static, but we return them here to keep things grouped
     fit_methods = ["leven", "migrad", "simplex"]
     abund_tables = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+    xspec_models: dict[str, dict] = {}
+    model_pars: dict[str, list[str]] = {}
+    model_units: dict[str, list[Unit]] = {}
 
     which_xspec = shutil.which("xspec")
     if which_xspec is None:
@@ -313,24 +342,25 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
                         continue
                     key, val = line.split(":", 1)
                     if key.strip() == "MDATADIR" and val.strip():
-                        expanded_mdata = os.path.abspath(
-                            os.path.expanduser(os.path.expandvars(val.strip()))
-                        )
+                        expanded_mdata = os.path.abspath(os.path.expanduser(os.path.expandvars(val.strip())))
                         custom_model_data_dirs.append(expanded_mdata)
                         candidate_bases.append(os.path.abspath(os.path.join(expanded_mdata, "..", "..")))
 
-        model_dat_present = any(
-            os.path.isfile(os.path.join(base_path, "spectral", "manager", "model.dat"))
-            for base_path in candidate_bases
+        model_dat_path = next(
+            (
+                os.path.join(base_path, "spectral", "manager", "model.dat")
+                for base_path in candidate_bases
+                if os.path.isfile(os.path.join(base_path, "spectral", "manager", "model.dat"))
+            ),
+            None,
         )
         candidate_model_data_dirs = custom_model_data_dirs + [
             os.path.join(base_path, "spectral", "modelData") for base_path in candidate_bases
         ]
         model_data_present = any(
-            os.path.isdir(mdata_dir) and len(os.listdir(mdata_dir)) > 0
-            for mdata_dir in candidate_model_data_dirs
+            os.path.isdir(mdata_dir) and len(os.listdir(mdata_dir)) > 0 for mdata_dir in candidate_model_data_dirs
         )
-        model_files_present = model_dat_present and model_data_present
+        model_files_present = (model_dat_path is not None) and model_data_present
 
         if not model_files_present:
             warn(
@@ -339,8 +369,24 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
                 stacklevel=3,
             )
             xspec_version = None
+        else:
+            # Pre-populate the XSPEC globals before importing xga.xspec.fit.models so that top-level imports in
+            #  xga.xspec (which access XSPEC_VERSION, ABUND_TABLES, and XSPEC_FIT_METHOD) do not re-trigger
+            #  _get_xspec_info() via __getattr__
+            globals()["XSPEC_VERSION"] = xspec_version
+            globals()["XSPEC_FIT_METHOD"] = fit_methods
+            globals()["ABUND_TABLES"] = abund_tables
+            globals()["XSPEC_MODELS"] = xspec_models
+            globals()["MODEL_PARS"] = model_pars
+            globals()["MODEL_UNITS"] = model_units
+            from .xspec.fit.models import _parse_xspec_model_dat
 
-    return xspec_version, fit_methods, abund_tables
+            xspec_models, model_pars, model_units = _parse_xspec_model_dat(model_dat_path)
+            globals()["XSPEC_MODELS"] = xspec_models
+            globals()["MODEL_PARS"] = model_pars
+            globals()["MODEL_UNITS"] = model_units
+
+    return xspec_version, fit_methods, abund_tables, xspec_models, model_pars, model_units
 
 
 def _prep_xga_config_file() -> tuple[dict, str, str]:
@@ -1234,13 +1280,6 @@ XGA_EXTRACT = importlib.resources.files(__package__) / "xspec_scripts/xga_extrac
 BASE_XSPEC_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/general_xspec_fit.xcm"
 COUNTRATE_CONV_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/cr_conv_calc.xcm"
 CROSS_ARF_XSPEC_SCRIPT = importlib.resources.files(__package__) / "xspec_scripts/crossarf_xspec_fit.xcm"
-
-# Useful jsons of all XSPEC models, their required parameters, and those parameter's units
-with open(importlib.resources.files(__package__) / "files/xspec_model_pars.json5") as filey:
-    MODEL_PARS = json.load(filey)
-
-with open(importlib.resources.files(__package__) / "files/xspec_model_units.json5") as filey:
-    MODEL_UNITS = json.load(filey)
 
 with open(importlib.resources.files(__package__) / "files/xselect_mission_database.json") as filey:
     MISSION_COL_DB = json.load(filey)
