@@ -16,7 +16,7 @@ from ..exceptions import NoRegionsError, NoProductAvailableError, XGAFitError, M
 from ..imagetools.profile import radial_brightness
 from ..samples.extended import ClusterSample
 from ..sources import GalaxyCluster
-from ..utils import NUM_CORES
+from ..utils import NUM_CORES, DEFAULT_ABUND_TABLE
 from ..xspec.fakeit import cluster_cr_conv
 from ..xspec.fit import single_temp_apec
 
@@ -71,7 +71,7 @@ def _stack_setup_checks(sources: ClusterSample, scale_radius: str = "r200", lo_e
 
 
 def _create_stack(sb: np.ndarray, sources: ClusterSample, scale_radius: str, lo_en: Quantity, hi_en: Quantity,
-                  custom_temps: Quantity, sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
+                  custom_temps: Quantity, sim_met: Union[float, List] = 0.3, abund_table: str = DEFAULT_ABUND_TABLE,
                   telescope: str = None) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List]:
     """
@@ -300,7 +300,7 @@ def radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", use_pe
                       min_snr: Union[int, float] = 0.0,
                       lo_en: Quantity = Quantity(0.5, 'keV'), hi_en: Quantity = Quantity(2.0, 'keV'),
                       custom_temps: Quantity = None, sim_met: Union[float, List] = 0.3,
-                      abund_table: str = 'angr', psf_corr: bool = False, psf_model: str = "ELLBETA",
+                      abund_table: str = DEFAULT_ABUND_TABLE, psf_corr: bool = False, psf_model: str = "ELLBETA",
                       psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
                       telescope: str = None) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
@@ -464,7 +464,7 @@ def view_radial_data_stack(sources: ClusterSample, scale_radius: str = "r200", u
                            pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                            min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                            hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                           sim_met: Union[float, List] = 0.3, abund_table: str = 'angr',
+                           sim_met: Union[float, List] = 0.3, abund_table: str = DEFAULT_ABUND_TABLE,
                            psf_corr: bool = False, psf_model: str = "ELLBETA", psf_bins: int = 4,
                            psf_algo: str = "rl", psf_iter: int = 15, num_cores: int = NUM_CORES,
                            show_images: bool = False, figsize: tuple = (14, 14),
@@ -571,7 +571,7 @@ def radial_model_stack(sources: ClusterSample, model: str, scale_radius: str = "
                        use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                        min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                        hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                       sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
+                       sim_met: Union[float, List] = 0.3, abund_table: str = DEFAULT_ABUND_TABLE, psf_corr: bool = False,
                        psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
                        num_cores: int = NUM_CORES, num_walkers: int = 20, num_steps: int = 20000,
                        telescope: str = None) \
@@ -742,7 +742,7 @@ def view_radial_model_stack(sources: ClusterSample, model: str, scale_radius: st
                             use_peak: bool = True, pix_step: int = 1, radii: np.ndarray = np.linspace(0.01, 1, 20),
                             min_snr: Union[int, float] = 0.0, lo_en: Quantity = Quantity(0.5, 'keV'),
                             hi_en: Quantity = Quantity(2.0, 'keV'), custom_temps: Quantity = None,
-                            sim_met: Union[float, List] = 0.3, abund_table: str = 'angr', psf_corr: bool = False,
+                            sim_met: Union[float, List] = 0.3, abund_table: str = DEFAULT_ABUND_TABLE, psf_corr: bool = False,
                             psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl", psf_iter: int = 15,
                             num_cores: int = NUM_CORES, num_walkers: int = 30, num_steps: int = 20000,
                             show_images: bool = False, figsize: tuple = (14, 14),
