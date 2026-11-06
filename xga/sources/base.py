@@ -787,6 +787,46 @@ class BaseSource:
         return list(self._obs.keys())
 
     @property
+    def obs_modes(self) -> dict[str, dict[str, dict[str, dict[str, str | None]]]]:
+        """
+        Property returning a nested dictionary (structured by telescope, ObsID, and instrument) containing the
+        OBS_MODE, DATAMODE, and SUBMODE FITS header values from the associated EventList products. If a header
+        key is not present for a given event list, its value in the dictionary will be None.
+
+        :return: Nested dictionary of observation modes organized as
+            {telescope: {obs_id: {instrument: {'OBS_MODE': ..., 'DATAMODE': ..., 'SUBMODE': ...}}}}.
+        :rtype: dict
+        """
+        mode_keys = ("OBS_MODE", "DATAMODE", "SUBMODE")
+        modes: dict[str, dict[str, dict[str, dict[str, str | None]]]] = {}
+        for tel in self.instruments:
+            modes[tel] = {}
+            for obs_id in self.instruments[tel]:
+                modes[tel][obs_id] = {}
+                for inst in self.instruments[tel][obs_id]:
+                    inst_modes: dict[str, str | None] = dict.fromkeys(mode_keys, None)
+                    evts = self.get_products(
+                        "events",
+                        obs_id=obs_id,
+                        inst="combined" if COMBINED_INSTS[tel] else inst,
+                        telescope=tel,
+                    )
+                    if len(evts) > 0:
+                        evt = evts[0]
+                        hdr = evt.header
+                        for k in mode_keys:
+                            if k in hdr:
+                                inst_modes[k] = hdr[k]
+                        if any(inst_modes[k] is None for k in mode_keys):
+                            evt_hdr = evt.event_header
+                            for k in mode_keys:
+                                if inst_modes[k] is None and k in evt_hdr:
+                                    inst_modes[k] = evt_hdr[k]
+                        del evt.data
+                    modes[tel][obs_id][inst] = inst_modes
+        return modes
+
+    @property
     def blacklisted(self) -> dict:
         """
         A property getter that returns the dictionary of telescope ObsIDs and their instruments which have been
