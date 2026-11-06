@@ -15,6 +15,7 @@ from ..exceptions import (
     FitConfNotAssociatedError,
     ModelNotAssociatedError,
     NoMatchFoundError,
+    NoProductAvailableError,
     NotAssociatedError,
     NoValidObservationsError,
     ParameterNotAssociatedError,
@@ -192,11 +193,11 @@ class BaseSample:
         # HOWEVER - I only want this warning to appear in certain circumstances. For instance I wouldn't want it
         #  to be triggered here for a ClusterSample declaration that has called the super init (this method), as that
         #  class declaration does its own (somewhat different) check on which sources have data
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == "NoMatch"]
+        no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0 and type(self) == BaseSample:
             nice_tels = "/".join([PRETTY_TELESCOPE_NAMES[t] for t in telescope])
-            no_data_str = "/".join(no_data)
+            no_data_str = ", ".join(no_data)
             warn(
                 f"The following do not appear to have any {nice_tels} data, and will not be included in the "
                 f"sample (can also check .failed_names); {no_data_str}",
@@ -499,6 +500,9 @@ class BaseSample:
 
         lums = []
         warns = []
+        not_assoc_mod = []
+        not_assoc_band = []
+        no_prod = []
         for src_ind, src in enumerate(self._sources.values()):
             try:
                 # Fetch the luminosity from a given source using the dedicated method
@@ -523,10 +527,20 @@ class BaseSample:
                 else:
                     lums.append(lx_val)
 
+            except NoProductAvailableError:
+                warns.append(src.name)
+                no_prod.append(src.name)
+                lums.append(np.array([np.nan, np.nan, np.nan]))
+            except ModelNotAssociatedError:
+                warns.append(src.name)
+                not_assoc_mod.append(src.name)
+                lums.append(np.array([np.nan, np.nan, np.nan]))
+            except ParameterNotAssociatedError as err:
+                warns.append(src.name)
+                not_assoc_band.append(str(err))
+                lums.append(np.array([np.nan, np.nan, np.nan]))
             except (
                 ValueError,
-                ModelNotAssociatedError,
-                ParameterNotAssociatedError,
                 TelescopeNotAssociatedError,
                 NotAssociatedError,
                 FitConfNotAssociatedError,
@@ -542,7 +556,15 @@ class BaseSample:
 
         # We're going to throw an error if all the luminosities are NaN, because obviously something is wrong
         check_lums = lums[~np.isnan(lums)]
-        if len(check_lums) == 0:
+        if len(check_lums) == 0 and len(not_assoc_band) > 0:
+            raise ParameterNotAssociatedError(not_assoc_band[0])
+        elif len(check_lums) == 0 and len(not_assoc_mod) > 0:
+            raise ModelNotAssociatedError(
+                f"There are no {model} fits associated with any of the sources in this sample."
+            )
+        elif len(check_lums) == 0 and len(no_prod) > 0:
+            raise NoProductAvailableError("No matching spectra are available for any of the sources in this sample.")
+        elif len(check_lums) == 0:
             raise ValueError("All luminosities appear to be NaN.")
 
         # If there were any errors for any of the sources, we include their names in a warning here

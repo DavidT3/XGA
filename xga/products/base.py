@@ -2990,6 +2990,11 @@ class BaseProfile1D:
             can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
             keys should be instantiated matplotlib formatters.
         """
+        if os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path)):
+            raise FileNotFoundError(
+                f"The directory in which the profile view is to be saved ({os.path.dirname(save_path)}) does not exist."
+            )
+
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)
         # Grabbing the axis object and making sure the ticks are set up how we want
@@ -3757,6 +3762,14 @@ class BaseAggregateProfile1D:
         :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
             will any uncertainty regions.
         """
+        if save_path is not None and (
+            os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path))
+        ):
+            raise FileNotFoundError(
+                f"The directory in which the aggregate profile view is to be saved ({os.path.dirname(save_path)}) "
+                f"does not exist."
+            )
+
         # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
         if draw_rads is None:
             draw_rads = {}
@@ -3815,6 +3828,26 @@ class BaseAggregateProfile1D:
         # Same deal with draw_vals, different y-norms would screw up plotting draw_vals
         if len(draw_vals) != 0 and len(set(y_norms)) != 1:
             draw_vals = {}
+
+        if just_model and model is None:
+            common_models = list(
+                set(self._profiles[0].good_model_fits).intersection(*[p.good_model_fits for p in self._profiles[1:]])
+            )
+            if len(common_models) == 1:
+                model = common_models[0]
+            elif len(common_models) == 0:
+                warn(
+                    "You have set 'just_model=True' without passing a 'model' name, and the component profiles have "
+                    "no fitted models in common; data points will be plotted instead.",
+                    stacklevel=2,
+                )
+            else:
+                warn(
+                    f"You have set 'just_model=True' without passing a 'model' name, and the component profiles have "
+                    f"multiple fitted models in common ({', '.join(common_models)}); please specify a model name. "
+                    f"Data points will be plotted instead.",
+                    stacklevel=2,
+                )
 
         # Setting up figure for the plot
         fig = plt.figure(figsize=figsize)

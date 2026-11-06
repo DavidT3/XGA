@@ -307,13 +307,18 @@ class ClusterSample(BaseSample):
 
         # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
-                   self._failed_sources[name] == 'Failed ObsClean']
+        no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
             nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
             warn("The following do not appear to have any {t} data, and will not be included in the "
                  "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
+
+        failed_clean = [name for name in self._failed_sources if "cleaning" in self._failed_sources[name]]
+        if len(failed_clean) != 0:
+            warn("The following have been excluded from the sample due to observation cleaning (can also check "
+                 ".failed_names and .failed_reasons); {n}".format(n=', '.join(failed_clean)),
                  stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
@@ -685,6 +690,8 @@ class ClusterSample(BaseSample):
         inn_rads, out_rads = region_setup(self, outer_radius, inner_radius, True, '')[1:]
 
         temps = []
+        warns = []
+        no_prod = []
         for src_ind, gcs in enumerate(self._sources.values()):
             try:
                 # Fetch the temperature from a given cluster using the dedicated method
@@ -693,35 +700,27 @@ class ClusterSample(BaseSample):
 
                 # If the measured temperature is 64keV I know that's a failure condition of the XSPEC fit,
                 #  so its set to NaN
-                if quality_checks and gcs_temp[0] > 25:
+                if quality_checks and (
+                    gcs_temp[0] > 25
+                    or gcs_temp.min() < 0
+                    or (gcs_temp[0] - gcs_temp[1]) <= 0
+                    or (gcs_temp[1] / gcs_temp[2]) > 3
+                    or (gcs_temp[1] / gcs_temp[2]) < 0.33
+                    or (gcs_temp[0] - gcs_temp[1:].mean()) < 0
+                ):
                     gcs_temp = np.array([np.nan, np.nan, np.nan])
-                    warn("A temperature of {m}keV was measured for {s}, anything over 30keV considered a failed "
-                         "fit by XGA".format(s=gcs.name, m=gcs_temp), stacklevel=2)
-                elif quality_checks and gcs_temp.min() < 0:
-                    gcs_temp = np.array([np.nan, np.nan, np.nan])
-                    warn("A negative value was detected in the temperature array for {s}, this is considered a failed "
-                         "measurement".format(s=gcs.name), stacklevel=2)
-                elif quality_checks and ((gcs_temp[0] - gcs_temp[1]) <= 0):
-                    gcs_temp = np.array([np.nan, np.nan, np.nan])
-                    warn("The temperature value - the lower error goes below zero for {s}, this makes the temperature"
-                         " hard to use for scaling relations as values are often logged.".format(s=gcs.name),
-                         stacklevel=2)
-                elif quality_checks and ((gcs_temp[1] / gcs_temp[2]) > 3 or (gcs_temp[1] / gcs_temp[2]) < 0.33):
-                    gcs_temp = np.array([np.nan, np.nan, np.nan])
-                    warn("One of the temperature uncertainty values for {s} is more than three times larger than "
-                         "the other, this means the fit quality is suspect.".format(s=gcs.name), stacklevel=2)
-                elif quality_checks and ((gcs_temp[0] - gcs_temp[1:].mean()) < 0):
-                    gcs_temp = np.array([np.nan, np.nan, np.nan])
-                    warn("The temperature value - the average error goes below zero for {s}, this makes the "
-                         "temperature hard to use for scaling relations as values are often "
-                         "logged".format(s=gcs.name), stacklevel=2)
+                    warns.append(gcs.name)
                 temps.append(gcs_temp)
 
+            except NoProductAvailableError:
+                warns.append(gcs.name)
+                no_prod.append(gcs.name)
+                temps.append(np.array([np.nan, np.nan, np.nan]))
             except (ValueError, ModelNotAssociatedError, ParameterNotAssociatedError, TelescopeNotAssociatedError,
-                    NotAssociatedError, FitConfNotAssociatedError) as err:
-                # If any of the possible errors are thrown, we print the error as a warning and replace
-                #  that entry with a NaN
-                warn(str(err), stacklevel=2)
+                    NotAssociatedError, FitConfNotAssociatedError):
+                # If any of the possible errors are thrown, we record the source name and replace
+                #  that entry with a NaN - the names will be included in a warning at the end
+                warns.append(gcs.name)
                 temps.append(np.array([np.nan, np.nan, np.nan]))
 
         # Turn the list of 3 element arrays into an Nx3 array which is then turned into an astropy Quantity
@@ -729,8 +728,19 @@ class ClusterSample(BaseSample):
 
         # We're going to throw an error if all the temperatures are NaN, because obviously something is wrong
         check_temps = temps[~np.isnan(temps)]
-        if len(check_temps) == 0:
+        if len(check_temps) == 0 and len(no_prod) > 0:
+            raise NoProductAvailableError("No matching spectra are available for any of the clusters in this sample.")
+        elif len(check_temps) == 0:
             raise ValueError("All temperatures appear to be NaN.")
+
+        # If there were any errors or failed quality checks for any of the sources, we include their names in a
+        #  single warning here
+        if len(warns) > 0:
+            warn_text = (
+                "Problems occurred (there may have been no successful model fit) while attempting to retrieve "
+                "temperatures for the following sources; {}".format(",".join(warns))
+            )
+            warn(warn_text, stacklevel=2)
 
         return temps
 

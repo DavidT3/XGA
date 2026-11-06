@@ -283,7 +283,8 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
     fit_methods = ["leven", "migrad", "simplex"]
     abund_tables = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
 
-    if shutil.which("xspec") is None:
+    which_xspec = shutil.which("xspec")
+    if which_xspec is None:
         warn("Unable to locate an XSPEC installation.", stacklevel=3)
     else:
         try:
@@ -294,6 +295,49 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
             xspec_vline = [line for line in xspec_out.decode("UTF-8").split("\n") if "XSPEC version" in line][0]
             xspec_version = Version(xspec_vline.split(": ")[-1])
         except Exception:
+            xspec_version = None
+
+        candidate_bases = []
+        if "HEADAS" in os.environ:
+            candidate_bases.append(os.environ["HEADAS"])
+        candidate_bases.append(os.path.abspath(os.path.join(os.path.dirname(which_xspec), "..")))
+
+        # Check ~/.xspec/Xspec.init for a custom MDATADIR override
+        custom_model_data_dirs = []
+        xspec_init_path = os.path.expanduser("~/.xspec/Xspec.init")
+        if os.path.isfile(xspec_init_path):
+            with open(xspec_init_path, encoding="utf-8") as init_file:
+                for raw_line in init_file:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or ":" not in line:
+                        continue
+                    key, val = line.split(":", 1)
+                    if key.strip() == "MDATADIR" and val.strip():
+                        expanded_mdata = os.path.abspath(
+                            os.path.expanduser(os.path.expandvars(val.strip()))
+                        )
+                        custom_model_data_dirs.append(expanded_mdata)
+                        candidate_bases.append(os.path.abspath(os.path.join(expanded_mdata, "..", "..")))
+
+        model_dat_present = any(
+            os.path.isfile(os.path.join(base_path, "spectral", "manager", "model.dat"))
+            for base_path in candidate_bases
+        )
+        candidate_model_data_dirs = custom_model_data_dirs + [
+            os.path.join(base_path, "spectral", "modelData") for base_path in candidate_bases
+        ]
+        model_data_present = any(
+            os.path.isdir(mdata_dir) and len(os.listdir(mdata_dir)) > 0
+            for mdata_dir in candidate_model_data_dirs
+        )
+        model_files_present = model_dat_present and model_data_present
+
+        if not model_files_present:
+            warn(
+                "An XSPEC installation was detected, but the XSPEC model files (spectral/manager/model.dat and "
+                "spectral/modelData) could not be found; XSPEC functionality will not work.",
+                stacklevel=3,
+            )
             xspec_version = None
 
     return xspec_version, fit_methods, abund_tables
@@ -586,6 +630,18 @@ def _initialise_xga():
         #  the USABLE entry for the current telescope will stay at the default value of False
         if all_req_changed and root_dir_exists:
             USABLE[tel] = True
+        elif "/this/is/required/" not in cur_sec[f"root_{tel}_dir"] and not root_dir_exists:
+            warn(
+                f"The configured root_{tel}_dir ({cur_sec[f'root_{tel}_dir']}) does not exist, so {tel} data "
+                f"cannot be used.",
+                stacklevel=2,
+            )
+        elif "/this/is/required/" not in cur_sec[f"root_{tel}_dir"] and not all_req_changed:
+            warn(
+                f"A valid root_{tel}_dir has been configured, but one or more required entries in {cur_sec_name} "
+                f"still have their default placeholder values, so {tel} data cannot be used.",
+                stacklevel=2,
+            )
     # -----------------------------------------------------------------------------------
 
     # ------------- Generating the observation censuses for all USABLE telescopes -------------
@@ -994,6 +1050,13 @@ def build_observation_census(
 
         # We add the new observations into our existing census dataframe
         new_data = pd.DataFrame(new_census_rows, columns=obs_lookup.columns)
+        if new_data["RA_PNT"].isna().all():
+            warn(
+                f"No event files were found while building the {tel} observation census ({len(new_obs_census)} "
+                f"ObsID directories checked); please check that the event file paths in {CONFIG_FILE} are "
+                f"configured correctly.",
+                stacklevel=2,
+            )
         obs_lookup = pd.concat([obs_lookup, new_data], ignore_index=True)
         # This then saves the dataframe to its rightful place
         obs_lookup.to_csv(census_file, index=False)

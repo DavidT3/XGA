@@ -206,13 +206,18 @@ class ExtendedSample(BaseSample):
 
         # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
-                   self._failed_sources[name] == 'Failed ObsClean']
+        no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
             nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
             warn("The following do not appear to have any {t} data, and will not be included in the "
                  "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
+
+        failed_clean = [name for name in self._failed_sources if "cleaning" in self._failed_sources[name]]
+        if len(failed_clean) != 0:
+            warn("The following have been excluded from the sample due to observation cleaning (can also check "
+                 ".failed_names and .failed_reasons); {n}".format(n=', '.join(failed_clean)),
                  stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
@@ -447,12 +452,19 @@ class PointSample(BaseSample):
 
         # Put all the warnings for there being no XMM data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
-        no_data = [name for name in self._failed_sources if self._failed_sources[name] == 'NoMatch' or
-                   self._failed_sources[name] == 'Failed ObsClean']
+        no_data = [name for name in self._failed_sources if "cleaning" not in self._failed_sources[name]]
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
-            warn("The following do not appear to have any data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data)), stacklevel=2)
+            nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
+            warn("The following do not appear to have any {t} data, and will not be included in the "
+                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
+                 stacklevel=2)
+
+        failed_clean = [name for name in self._failed_sources if "cleaning" in self._failed_sources[name]]
+        if len(failed_clean) != 0:
+            warn("The following have been excluded from the sample due to observation cleaning (can also check "
+                 ".failed_names and .failed_reasons); {n}".format(n=', '.join(failed_clean)),
+                 stacklevel=2)
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
         if len(failed_peak_find) != 0:
