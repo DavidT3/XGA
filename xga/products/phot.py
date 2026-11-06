@@ -1500,10 +1500,10 @@ class Image(BaseProduct):
             ax.set_ylim(y_lims)
 
         # Here the user has passed manual x-limits, so we apply them
-        if zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
+        if zoom_in and manual_zoom_xlims is not None:
             ax.set_xlim(manual_zoom_xlims)
         # Same here but for manual y-limits
-        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
+        if zoom_in and manual_zoom_ylims is not None:
             ax.set_ylim(manual_zoom_ylims)
 
         return ax
