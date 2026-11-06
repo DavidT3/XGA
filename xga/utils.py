@@ -302,17 +302,35 @@ def _get_xspec_info() -> tuple[Version | None, list[str], list[str]]:
             candidate_bases.append(os.environ["HEADAS"])
         candidate_bases.append(os.path.abspath(os.path.join(os.path.dirname(which_xspec), "..")))
 
-        model_files_present = False
-        for base_path in candidate_bases:
-            model_dat_path = os.path.join(base_path, "spectral", "manager", "model.dat")
-            model_data_dir = os.path.join(base_path, "spectral", "modelData")
-            if (
-                os.path.isfile(model_dat_path)
-                and os.path.isdir(model_data_dir)
-                and len(os.listdir(model_data_dir)) > 0
-            ):
-                model_files_present = True
-                break
+        # Check ~/.xspec/Xspec.init for a custom MDATADIR override
+        custom_model_data_dirs = []
+        xspec_init_path = os.path.expanduser("~/.xspec/Xspec.init")
+        if os.path.isfile(xspec_init_path):
+            with open(xspec_init_path, encoding="utf-8") as init_file:
+                for raw_line in init_file:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or ":" not in line:
+                        continue
+                    key, val = line.split(":", 1)
+                    if key.strip() == "MDATADIR" and val.strip():
+                        expanded_mdata = os.path.abspath(
+                            os.path.expanduser(os.path.expandvars(val.strip()))
+                        )
+                        custom_model_data_dirs.append(expanded_mdata)
+                        candidate_bases.append(os.path.abspath(os.path.join(expanded_mdata, "..", "..")))
+
+        model_dat_present = any(
+            os.path.isfile(os.path.join(base_path, "spectral", "manager", "model.dat"))
+            for base_path in candidate_bases
+        )
+        candidate_model_data_dirs = custom_model_data_dirs + [
+            os.path.join(base_path, "spectral", "modelData") for base_path in candidate_bases
+        ]
+        model_data_present = any(
+            os.path.isdir(mdata_dir) and len(os.listdir(mdata_dir)) > 0
+            for mdata_dir in candidate_model_data_dirs
+        )
+        model_files_present = model_dat_present and model_data_present
 
         if not model_files_present:
             warn(

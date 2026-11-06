@@ -29,8 +29,8 @@ XGA_XSPEC_ERRS = ["No acceptable spectra are left after the minimum channel step
 def execute_cmd(x_script: str, out_file: str, src: str, run_type: str, timeout: float) \
         -> Tuple[Union[str, None], str, bool, list, list, bool]:
     """
-    This function is called for the local compute option. It will run the supplied XSPEC script, then
-    parse the output for errors and check that the expected output file has been created.
+    This function runs the supplied XSPEC script, then parses the output for errors and checks
+    that the expected output file has been created.
 
     :param str x_script: The path to an XSPEC script to be run.
     :param str out_file: The expected path for the output file of that XSPEC script.

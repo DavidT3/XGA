@@ -586,7 +586,7 @@ class BaseSource:
         if redshift is not None and redshift <= 0:
             raise ValueError(
                 "Source redshift must be greater than zero; pass redshift=None for sources without a "
-                "cosmological redshift."
+                "known redshift."
             )
         self._redshift = redshift
         self._cosmo = cosmology
