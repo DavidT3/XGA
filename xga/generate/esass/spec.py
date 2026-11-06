@@ -193,6 +193,8 @@ def _spec_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, 
             # Setting up file names that include the extra variables
             if group_spec and min_counts is not None:
                 extra_file_name = "_mincnt{c}".format(c=min_counts)
+            elif group_spec and min_sn is not None:
+                extra_file_name = "_minsn{s}".format(s=min_sn)
             else:
                 extra_file_name = ''
 
