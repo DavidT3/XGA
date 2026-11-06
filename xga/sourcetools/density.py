@@ -381,7 +381,7 @@ def _run_sb(src: GalaxyCluster, telescope: str, outer_radius: Quantity, use_peak
     rad = src.convert_radius(outer_radius, 'kpc')
 
     try:
-        sb_prof = src.get_1d_brightness_profile(rad, obs_id, inst, centre, lo_en=lo_en, hi_en=hi_en,
+        sb_prof = src.get_1d_brightness_profile(rad, rt.obs_id, rt.instrument, centre, lo_en=lo_en, hi_en=hi_en,
                                                 pix_step=pix_step, min_snr=min_snr,
                                                 psf_corr=psf_corr, psf_model=psf_model,
                                                 psf_bins=psf_bins, psf_algo=psf_algo,

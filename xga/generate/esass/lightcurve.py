@@ -128,12 +128,12 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             if exists and check_lc.usable and not force_gen:
                 continue
 
-            # eROSITA observations have the potential to be in pointed or survey modes - we change the time step
+            # eROSITA observations have the potential to be in pointed or survey/scan modes - we change the time step
             #  based on that. We suspect that the time step is almost irrelevant for pointed mode observations, as
             #  the pointing of the spacecraft won't be changing appreciably
             if cur_evt_list.header['OBS_MODE'] == 'POINTING':
                 t_step = t_step_point
-            elif cur_evt_list.header['OBS_MODE'] == 'SURVEY':
+            elif cur_evt_list.header['OBS_MODE'] in ['SURVEY', 'SCAN']:
                 t_step = t_step_survey
             else:
                 warn("XGA does not recognise the eROSITA OBS_MODE '{om}' - the timestep is defaulting to the "
@@ -235,7 +235,9 @@ def _lc_cmds(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Qu
             cmd_str = cmd_str.replace(";;", ";")
 
             # Adds clean up commands to move all generated files and remove temporary directory
-            cmd_str += "; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(d=dest_dir)
+            cmd_str += "; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}".format(
+                d=dest_dir
+            )
 
             # If temporary region files were made, they will be here
             if os.path.exists(os.path.join(final_dest_dir, '/temp_regs_{i}'.format(i=rand_ident))):

@@ -78,7 +78,7 @@ class Image(BaseProduct):
     """
     def __init__(self, path: Union[str, dict, list], obs_id: str, instrument: str, stdout_str: str, stderr_str: str,
                  gen_cmd: str, lo_en: Quantity, hi_en: Quantity,
-                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None, smoothed: bool = False,
                  smoothed_info: Union[dict, Kernel] = None, obs_inst_combs: List[List] = None, telescope: str = None,
                  allow_negative_vals: bool = False, check_exists: bool = True):
@@ -95,8 +95,8 @@ class Image(BaseProduct):
         :param str gen_cmd: The command used to generate the product.
         :param Quantity lo_en: The lower energy bound used to generate this product.
         :param Quantity hi_en: The upper energy bound used to generate this product.
-        :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
-            dictionary of region lists with ObsIDs as dictionary keys.
+        :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict regs: A region list file path, a list or numpy array of
+            region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
             that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
             supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
@@ -196,34 +196,6 @@ class Image(BaseProduct):
         self._psf_num_iterations = None
         self._psf_model = None
 
-        # This checks whether a region file has been passed, and if it has then processes it. If a list or dictionary
-        #  of regions has been passed instead (as is allowed) then the behaviour is modified slightly.
-        if isinstance(regs, str) and regs != '' and os.path.exists(regs):
-            self._regions = self._process_regions(regs)
-            self._reg_file_path = regs
-        elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
-            warn("The region file path does not exist", stacklevel=2)
-            self._regions = {}
-            self._reg_file_path = regs
-        elif isinstance(regs, (list, dict)):
-            self._regions = self._process_regions(reg_objs=regs)
-            self._reg_file_path = ''
-        else:
-            self._regions = {}
-            self._reg_file_path = ''
-
-        # This uses an internal function to process and return matched regions in a standard form, which is what
-        #  I really should have done for the chunk above but oh well!
-        self._matched_regions = self._process_matched_regions(matched_regs)
-
-        self._smoothed = smoothed
-        # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
-        if smoothed:
-            self._smoothed_method, self._smoothed_info = self.parse_smoothing(smoothed_info)
-        else:
-            self._smoothed_info = None
-            self._smoothed_method = None
-
         # We perform validity checks on any input passed to the obs_inst_combs argument.
         if obs_inst_combs is not None:
             # We check to make sure that each entry in obs_inst_combs is a two-element list
@@ -241,6 +213,34 @@ class Image(BaseProduct):
         # This keeps track of whether we've attempted to populate the _comb_oi_pairs attribute, as it can be
         #  None even after an attempted loading.
         self._loaded_comb_oi_pairs = False
+
+        # This checks whether a region file has been passed, and if it has then processes it. If a list or dictionary
+        #  of regions has been passed instead (as is allowed) then the behaviour is modified slightly.
+        if isinstance(regs, str) and regs != '' and os.path.exists(regs):
+            self._regions = self._process_regions(regs)
+            self._reg_file_path = regs
+        elif isinstance(regs, str) and regs != '' and not os.path.exists(regs):
+            warn("The region file path does not exist", stacklevel=2)
+            self._regions = {}
+            self._reg_file_path = regs
+        elif isinstance(regs, (list, np.ndarray, dict)):
+            self._regions = self._process_regions(reg_objs=regs)
+            self._reg_file_path = ''
+        else:
+            self._regions = {}
+            self._reg_file_path = ''
+
+        # This uses an internal function to process and return matched regions in a standard form, which is what
+        #  I really should have done for the chunk above but oh well!
+        self._matched_regions = self._process_matched_regions(matched_regs)
+
+        self._smoothed = smoothed
+        # If the user says at this point that the image has been smoothed, then we try and parse the smoothing info
+        if smoothed:
+            self._smoothed_method, self._smoothed_info = self.parse_smoothing(smoothed_info)
+        else:
+            self._smoothed_info = None
+            self._smoothed_method = None
 
     def _read_on_demand(self):
         """
@@ -415,16 +415,19 @@ class Image(BaseProduct):
         # If we get here, we made the attempt to load the information.
         self._loaded_comb_oi_pairs = True
 
-    def _process_regions(self, path: str = None, reg_objs: Union[List[Union[PixelRegion, SkyRegion]], dict] = None) \
-            -> dict:
+    def _process_regions(
+        self,
+        path: str = None,
+        reg_objs: Union[List[Union[PixelRegion, SkyRegion]], np.ndarray, dict] = None,
+    ) -> dict:
         """
         This internal function just takes the path to a region file and processes it into a form that
         this object requires for viewing.
 
         :param str path: The path of a region file to be processed, can be None but only if the
             other argument is given.
-        :param Union[List[PixelRegion/SkyRegion]/dict] reg_objs: A list or dictionary of region objects to be
-            processed, default is None.
+        :param Union[List[PixelRegion/SkyRegion]/np.ndarray/dict] reg_objs: A list, numpy array, or dictionary of
+            region objects to be processed, default is None.
         :return: A dictionary of lists of pixel regions, with dictionary keys being ObsIDs.
         :rtype: Dict
         """
@@ -441,10 +444,16 @@ class Image(BaseProduct):
         else:
             ds9_regs = deepcopy(reg_objs)
 
-        # As we now support passing either a dictionary or a list of region objects, some preprocessing is needed
-        if type(ds9_regs) == list:
-            ds9_regs = {self._obs_id: ds9_regs}
-        elif type(ds9_regs) == dict:
+        # As we now support passing either a dictionary or a list/array of region objects, some preprocessing is needed
+        if isinstance(ds9_regs, (list, np.ndarray)):
+            ds9_regs = {self._obs_id: list(ds9_regs)}
+        elif isinstance(ds9_regs, dict):
+            if (
+                self.telescope is not None
+                and self.telescope in ds9_regs
+                and isinstance(ds9_regs[self.telescope], dict)
+            ):
+                ds9_regs = ds9_regs[self.telescope]
             obs_keys = ds9_regs.keys()
             # Checks whether all the ObsIDs present in the XGA product are represented in the region dictionary
             check = [o in obs_keys for o in self.obs_ids]
@@ -460,7 +469,14 @@ class Image(BaseProduct):
         for o in ds9_regs:
             # Setting up an entry in the output dictionary for that ObsID
             final_regs[o] = []
-            for reg in ds9_regs[o]:
+            if ds9_regs[o] is None:
+                continue
+            elif isinstance(ds9_regs[o], (PixelRegion, SkyRegion)):
+                obs_regs = [ds9_regs[o]]
+            else:
+                obs_regs = [r for r in ds9_regs[o] if r is not None]
+
+            for reg in obs_regs:
                 if isinstance(reg, PixelRegion):
                     final_regs[o].append(reg)
                 else:
@@ -484,6 +500,15 @@ class Image(BaseProduct):
         :rtype: dict
         """
         # It is possible to set this to None, in which case no information is recorded.
+        matched_reg_input = deepcopy(matched_reg_input)
+        if (
+            isinstance(matched_reg_input, dict)
+            and self.telescope is not None
+            and self.telescope in matched_reg_input
+            and isinstance(matched_reg_input[self.telescope], dict)
+        ):
+            matched_reg_input = matched_reg_input[self.telescope]
+
         if matched_reg_input is None:
             matched_reg_input = {}
         # This is triggered when a dictionary is passed, and all of its values are regions or None (indicating no match)
@@ -721,23 +746,34 @@ class Image(BaseProduct):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+    def regions(self, new_reg: Optional[Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]]):
         """
-        A setter for regions associated with this object, a region file path or a list/dict of regions is passed, then
-        that file/set of regions is processed into the required format. If a list of regions is passed, it will
-        be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
+        A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
+        then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
+        will be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
         combined image we require that each ObsID that goes into the image has an entry in the dictionary.
 
-        :param str/List[SkyRegion/PixelRegion]/dict new_reg: A new region file path, a list of region objects, or a
-            dictionary of region lists with ObsIDs as dictionary keys.
+        :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict new_reg: A new region file path, a list or numpy array
+            of region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         """
-        if not isinstance(new_reg, (str, list, dict)):
-            raise TypeError("Please pass either a path to a region file, a list of "
-                            "SkyRegion/PixelRegion objects, or a dictionary of lists of SkyRegion/PixelRegion objects "
-                            "with ObsIDs as keys.")
+        if new_reg is not None and not isinstance(new_reg, (str, list, np.ndarray, dict)):
+            raise TypeError("Please pass either a path to a region file, a list or numpy array of "
+                            "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
+                            "objects with ObsIDs as keys.")
 
+        if (
+            isinstance(new_reg, dict)
+            and self.telescope is not None
+            and self.telescope in new_reg
+            and isinstance(new_reg[self.telescope], dict)
+        ):
+            new_reg = new_reg[self.telescope]
+
+        if new_reg is None:
+            self._reg_file_path = ""
+            self._regions = {}
         # Checks to make sure that a region file path exists, if passed, then processes the file
-        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+        elif isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
             self._reg_file_path = new_reg
             self._regions = self._process_regions(new_reg)
         # Possible for an empty string to be passed in which case nothing happens
@@ -745,17 +781,28 @@ class Image(BaseProduct):
             pass
         elif isinstance(new_reg, str):
             warn("The region file path does not exist", stacklevel=2)
-        # If an existing list of regions are passed then we just process them and assign them to regions attribute
-        elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
+        # If an existing list/array of regions are passed then we just process them and assign them to regions attribute
+        elif isinstance(new_reg, (list, np.ndarray)) and all(
+            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
+        ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
-        elif isinstance(new_reg, dict) and all([all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
-                                                for o, rl in new_reg.items()]):
+        elif isinstance(new_reg, dict) and all(
+            [
+                rl is None
+                or isinstance(rl, (SkyRegion, PixelRegion))
+                or (
+                    isinstance(rl, (list, np.ndarray))
+                    and all([r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                )
+                for o, rl in new_reg.items()
+            ]
+        ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
         else:
             raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
-                             "a list/dictionary of SkyRegion/PixelRegion objects")
+                             "a list/array/dictionary of SkyRegion/PixelRegion objects")
 
     @property
     def matched_regions(self) -> Dict:
@@ -1229,7 +1276,7 @@ class Image(BaseProduct):
         # Force garbage collection just to make sure the data are gone from memory
         # gc.collect()
 
-    def get_count(self, at_coord: Quantity) -> float:
+    def get_count(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the number of counts
         at those coordinates.
@@ -1239,7 +1286,10 @@ class Image(BaseProduct):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        cts = self.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            cts = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            cts = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(cts, "ct")
 
     def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
@@ -1286,7 +1336,8 @@ class Image(BaseProduct):
                  chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
                  zoom_in: bool = False, manual_zoom_xlims: Optional[Tuple[float, float]] = None,
                  manual_zoom_ylims: Optional[Tuple[float, float]] = None,
-                 radial_bins_pix: np.ndarray = np.array([]), back_bin_pix: Optional[np.ndarray] = None,
+                 radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
+                 back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None,
                  stretch: BaseStretch = LogStretch(), mask_edges: bool = True, view_regions: bool = False,
                  ch_thickness: Union[float, int] = 0.8, low_val_lim: Optional[Union[float, int]] = None,
                  upp_val_lim: Optional[Union[float, int]] = None, custom_title: Optional[str] = None,
@@ -1316,11 +1367,13 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
@@ -1351,7 +1404,7 @@ class Image(BaseProduct):
         elif mask is not None and mask.shape == self.data.shape:
             plot_data = self.data * mask
         else:
-            plot_data = self.data
+            plot_data = self.data.copy()
 
         if (low_val_lim is not None and upp_val_lim is not None) and low_val_lim >= upp_val_lim:
             raise ValueError("If 'low_val_lim' and 'upp_val_lim' are passed, the 'low_val_lim' argument "
@@ -1408,9 +1461,42 @@ class Image(BaseProduct):
 
         ax.set_title(title)
 
+        x_lims = None
+        y_lims = None
+        if zoom_in:
+            if manual_zoom_xlims is None and manual_zoom_ylims is None:
+                from xga.imagetools import data_limits
+
+                x_lims, y_lims = data_limits(plot_data)
+            else:
+                x_lims = manual_zoom_xlims
+                y_lims = manual_zoom_ylims
+
+        if zoom_in:
+            x_slice = (
+                slice(max(0, int(x_lims[0])), min(plot_data.shape[1], int(x_lims[1])))
+                if x_lims is not None
+                else slice(None)
+            )
+            y_slice = (
+                slice(max(0, int(y_lims[0])), min(plot_data.shape[0], int(y_lims[1])))
+                if y_lims is not None
+                else slice(None)
+            )
+            norm_data = plot_data[y_slice, x_slice]
+            if mask is not None:
+                sub_mask = mask[y_slice, x_slice].astype(bool)
+                if np.any(sub_mask):
+                    norm_data = norm_data[sub_mask]
+        elif mask is not None:
+            sub_mask = mask.astype(bool)
+            norm_data = plot_data[sub_mask] if np.any(sub_mask) else plot_data
+        else:
+            norm_data = plot_data
+
         # As this is a very quick view method, users will not be offered a choice of scaling
         #  There will be a more in-depth way of viewing cluster data eventually
-        norm = ImageNormalize(data=plot_data, interval=interval, stretch=stretch)
+        norm = ImageNormalize(data=norm_data, interval=interval, stretch=stretch)
 
         # If we want to plot point clusters on the image
         if chosen_points is not None:
@@ -1458,17 +1544,40 @@ class Image(BaseProduct):
                 pix_coord = None
 
             if pix_coord is not None:
+                from ..imagetools.misc import physical_rad_to_pix
+
+                if not isinstance(radial_bins_pix, Quantity):
+                    radial_bins_pix = Quantity(radial_bins_pix, 'pix')
+                elif radial_bins_pix.unit.is_equivalent('deg'):
+                    radial_bins_pix = physical_rad_to_pix(self, radial_bins_pix, Quantity(pix_coord, 'pix'))
+                elif radial_bins_pix.unit != pix:
+                    raise UnitConversionError(
+                        "radial_bins_pix must have units of pixels or angular units convertible to degrees."
+                    )
+
+                if radial_bins_pix.isscalar:
+                    radial_bins_pix = Quantity([radial_bins_pix])
+
                 # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have been
                 #  passed then I assume that they want to centre on the first entry
                 for ann_rad in radial_bins_pix:
-                    artist = Circle(pix_coord, ann_rad, fill=False, ec='white', linewidth=1.5)
+                    artist = Circle(pix_coord, ann_rad.value, fill=False, ec='white', linewidth=1.5)
                     ax.add_artist(artist)
 
                 # This draws the background region on as well, if present
                 if back_bin_pix is not None:
-                    inn_artist = Circle(pix_coord, back_bin_pix[0], fill=False, ec='white', linewidth=1.6,
+                    if not isinstance(back_bin_pix, Quantity):
+                        back_bin_pix = Quantity(back_bin_pix, 'pix')
+                    elif back_bin_pix.unit.is_equivalent('deg'):
+                        back_bin_pix = physical_rad_to_pix(self, back_bin_pix, Quantity(pix_coord, 'pix'))
+                    elif back_bin_pix.unit != pix:
+                        raise UnitConversionError(
+                            "back_bin_pix must have units of pixels or angular units convertible to degrees."
+                        )
+
+                    inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white', linewidth=1.6,
                                         linestyle='dashed')
-                    out_artist = Circle(pix_coord, back_bin_pix[1], fill=False, ec='white', linewidth=1.6,
+                    out_artist = Circle(pix_coord, back_bin_pix[1].value, fill=False, ec='white', linewidth=1.6,
                                         linestyle='dashed')
                     ax.add_artist(inn_artist)
                     ax.add_artist(out_artist)
@@ -1489,30 +1598,20 @@ class Image(BaseProduct):
                 ax.add_artist(reg_art)
 
         # This sets the limits of the figure depending on the options that have been passed in
-        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is None:
-            # An unfortunate local import
-            from xga.imagetools import data_limits
-
-            # Uses an XGA function to find the x and y limits of where there are
-            #  non-zero entries in the current data array.
-            x_lims, y_lims = data_limits(plot_data)
-            ax.set_xlim(x_lims)
-            ax.set_ylim(y_lims)
-
-        # Here the user has passed manual x-limits, so we apply them
-        if zoom_in and manual_zoom_xlims is not None and manual_zoom_ylims is None:
-            ax.set_xlim(manual_zoom_xlims)
-        # Same here but for manual y-limits
-        if zoom_in and manual_zoom_xlims is None and manual_zoom_ylims is not None:
-            ax.set_ylim(manual_zoom_ylims)
+        if zoom_in:
+            if x_lims is not None:
+                ax.set_xlim(x_lims)
+            if y_lims is not None:
+                ax.set_ylim(y_lims)
 
         return ax
 
     def view(self, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
              chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
              figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
-             manual_zoom_ylims: Optional[tuple] = None, radial_bins_pix: np.ndarray = np.array([]),
-             back_bin_pix: Optional[np.ndarray] = None, stretch: BaseStretch = LogStretch(),
+             manual_zoom_ylims: Optional[tuple] = None,
+             radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
+             back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None, stretch: BaseStretch = LogStretch(),
              mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
              low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
              custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
@@ -1539,11 +1638,13 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
@@ -1586,8 +1687,9 @@ class Image(BaseProduct):
     def save_view(self, save_path: str, cross_hair: Optional[Quantity] = None, mask: Optional[np.ndarray] = None,
                   chosen_points: Optional[np.ndarray] = None, other_points: Optional[List[np.ndarray]] = None,
                   figsize: Tuple = (10, 8), zoom_in: bool = False, manual_zoom_xlims: Optional[tuple] = None,
-                  manual_zoom_ylims: Optional[tuple] = None, radial_bins_pix: np.ndarray = np.array([]),
-                  back_bin_pix: Optional[np.ndarray] = None, stretch: BaseStretch = LogStretch(),
+                  manual_zoom_ylims: Optional[tuple] = None,
+                  radial_bins_pix: Union[Quantity, np.ndarray] = Quantity(np.array([]), 'pix'),
+                  back_bin_pix: Optional[Union[Quantity, np.ndarray]] = None, stretch: BaseStretch = LogStretch(),
                   mask_edges: bool = True, view_regions: bool = False, ch_thickness: Union[float, int] = 0.8,
                   low_val_lim: Optional[Union[float, int]] = None, upp_val_lim: Optional[Union[float, int]] = None,
                   custom_title: Optional[str] = None, color_map: str = 'gnuplot2'):
@@ -1615,11 +1717,13 @@ class Image(BaseProduct):
             of the y-axis to limit the image to, default is None. Pass a tuple with two elements, first being the
             lower limit, second the upper limit. Variable zoom_in must still be true for these limits
             to be applied.
-        :param np.ndarray radial_bins_pix: Radii (in units of pixels) of annuli to plot on top of the image, will
-            only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
+        :param Quantity/np.ndarray radial_bins_pix: Radii (in units of pixels or angular units convertible to
+            degrees) of annuli to plot on top of the image,
+            will only be triggered if a cross_hair coordinate is also specified, as this acts as the central coordinate
             of the annuli. If two cross-hair coordinates are specified, the first will be used as the centre.
-        :param np.ndarray back_bin_pix: The inner and outer radii (in pixel units) of the annulus used to measure
-            the background value for a given profile, will only be triggered if a cross_hair coordinate is also
+        :param Quantity/np.ndarray back_bin_pix: The inner and outer radii (in pixel or angular units convertible
+            to degrees) of the annulus used to
+            measure the background value for a given profile, will only be triggered if a cross_hair coordinate is also
             specified, as this acts as the central coordinate of the annuli. If two cross-hair coordinates are
             specified, the first will be used as the centre.
         :param BaseStretch stretch: The astropy scaling to use for the image data, default is log.
@@ -2009,6 +2113,22 @@ class Image(BaseProduct):
                     pix_coord = None
 
                 if pix_coord is not None:
+                    from ..imagetools.misc import physical_rad_to_pix
+
+                    if not isinstance(radial_bins_pix, Quantity):
+                        radial_bins_pix = Quantity(radial_bins_pix, 'pix')
+                    elif radial_bins_pix.unit.is_equivalent('deg'):
+                        radial_bins_pix = physical_rad_to_pix(
+                            self._parent_phot_obj, radial_bins_pix, Quantity(pix_coord, 'pix')
+                        )
+                    elif radial_bins_pix.unit != pix:
+                        raise UnitConversionError(
+                            "radial_bins_pix must have units of pixels or angular units convertible to degrees."
+                        )
+
+                    if radial_bins_pix.isscalar:
+                        radial_bins_pix = Quantity([radial_bins_pix])
+
                     # Drawing annular radii on the image, if they are enabled and passed. If multiple coordinates have
                     #  been passed then I assume that they want to centre on the first entry
                     for ann_rad in radial_bins_pix:
@@ -2025,6 +2145,17 @@ class Image(BaseProduct):
 
                     # This draws the background region on as well, if present
                     if back_bin_pix is not None:
+                        if not isinstance(back_bin_pix, Quantity):
+                            back_bin_pix = Quantity(back_bin_pix, 'pix')
+                        elif back_bin_pix.unit.is_equivalent('deg'):
+                            back_bin_pix = physical_rad_to_pix(
+                                self._parent_phot_obj, back_bin_pix, Quantity(pix_coord, 'pix')
+                            )
+                        elif back_bin_pix.unit != pix:
+                            raise UnitConversionError(
+                                "back_bin_pix must have units of pixels or angular units convertible to degrees."
+                            )
+
                         # The background annulus is guaranteed to only have two entries, inner and outer
                         inn_artist = Circle(pix_coord, back_bin_pix[0].value, fill=False, ec='white',
                                             linewidth=ch_thickness, linestyle='dashed')
@@ -2803,7 +2934,10 @@ class ExpMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            exp = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            exp = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
     def get_count(self, *args, **kwargs):
@@ -2841,8 +2975,8 @@ class RateMap(Image):
 
     :param Image xga_image: The image component of the RateMap.
     :param ExpMap xga_expmap: The exposure map component of the RateMap.
-    :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
-        dictionary of region lists with ObsIDs as dictionary keys.
+    :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict regs: A region list file path, a list or numpy array of
+        region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
     :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
         that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
         supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
@@ -2850,7 +2984,7 @@ class RateMap(Image):
         property. Default is None.
     """
     def __init__(self, xga_image: Image, xga_expmap: ExpMap,
-                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], dict] = '',
+                 regs: Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict] = '',
                  matched_regs: Union[SkyRegion, PixelRegion, dict] = None):
         """
         This initialises a RateMap instance, where a count image is divided by an exposure map, to create a map
@@ -2858,8 +2992,8 @@ class RateMap(Image):
 
         :param Image xga_image: The image component of the RateMap.
         :param ExpMap xga_expmap: The exposure map component of the RateMap.
-        :param str/List[SkyRegion/PixelRegion]/dict regs: A region list file path, a list of region objects, or a
-            dictionary of region lists with ObsIDs as dictionary keys.
+        :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict regs: A region list file path, a list or numpy array of
+            region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         :param dict/SkyRegion/PixelRegion matched_regs: Similar to the regs argument, but in this case for a region
             that has been designated as 'matched', i.e. is the subject of a current analysis. This should either be
             supplied as a single region object, or as a dictionary of region objects with ObsIDs as keys, or None values
@@ -2887,7 +3021,7 @@ class RateMap(Image):
         # Call the superclass's init.
         super().__init__(pass_path, xga_image.obs_id, xga_image.instrument, xga_image.unprocessed_stdout,
                          xga_image.unprocessed_stderr, "", xga_image.energy_bounds[0], xga_image.energy_bounds[1],
-                         telescope=xga_image.telescope, check_exists=False)
+                         telescope=xga_image.telescope, obs_inst_combs=xga_image._comb_oi_pairs, check_exists=False)
         self._prod_type = "ratemap"
         self._data_unit = Unit("ct/s")
 
@@ -2911,8 +3045,16 @@ class RateMap(Image):
         self._on_sensor_mask = None
 
         # Don't have to do any checks, they'll be done for me in the image object.
-        self._im_obj.regions = regs
-        self._im_obj.matched_regions = matched_regs
+        if regs != "":
+            self.regions = regs
+            self._im_obj.regions = regs
+        else:
+            self._regions = deepcopy(xga_image.regions)
+        if matched_regs is not None:
+            self.matched_regions = matched_regs
+            self._im_obj.matched_regions = matched_regs
+        else:
+            self._matched_regions = deepcopy(xga_image.matched_regions)
 
     def _construct_on_demand(self):
         """
@@ -3016,7 +3158,7 @@ class RateMap(Image):
         del self._data
         self._data = None
 
-    def get_rate(self, at_coord: Quantity) -> float:
+    def get_rate(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the rate (in photons
         per second) and returns it.
@@ -3026,10 +3168,13 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        rate = self.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            rate = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            rate = self.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(rate, "ct/s")
 
-    def get_count(self, at_coord: Quantity) -> float:
+    def get_count(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the number of counts
         at those coordinates.
@@ -3039,10 +3184,13 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        cts = self.image.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            cts = self.image.data[pix_coord[1], pix_coord[0]]
+        else:
+            cts = self.image.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(cts, "ct")
 
-    def get_exp(self, at_coord: Quantity) -> float:
+    def get_exp(self, at_coord: Quantity) -> Quantity:
         """
         A simple method that converts the given coordinates to pixels, then finds the exposure time
         at those coordinates.
@@ -3052,7 +3200,10 @@ class RateMap(Image):
         :rtype: Quantity
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        exp = self.expmap.data[pix_coord[1], pix_coord[0]]
+        if pix_coord.ndim == 1:
+            exp = self.expmap.data[pix_coord[1], pix_coord[0]]
+        else:
+            exp = self.expmap.data[pix_coord[:, 1], pix_coord[:, 0]]
         return Quantity(exp, "s")
 
     def simple_peak(self, mask: np.ndarray, out_unit: Union[UnitBase, str] = deg) -> Tuple[Quantity, bool]:
@@ -3547,23 +3698,34 @@ class RateMap(Image):
         return self._regions
 
     @regions.setter
-    def regions(self, new_reg: Union[str, List[Union[SkyRegion, PixelRegion]], dict]):
+    def regions(self, new_reg: Optional[Union[str, List[Union[SkyRegion, PixelRegion]], np.ndarray, dict]]):
         """
-        A setter for regions associated with this object, a region file path or a list/dict of regions is passed, then
-        that file/set of regions is processed into the required format. If a list of regions is passed, it will
-        be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
+        A setter for regions associated with this object, a region file path or a list/array/dict of regions is passed,
+        then that file/set of regions is processed into the required format. If a list or array of regions is passed, it
+        will be assumed that they are for the ObsID of the image. In the case of passing a dictionary of regions to a
         combined image we require that each ObsID that goes into the image has an entry in the dictionary.
 
-        :param str/List[SkyRegion/PixelRegion]/dict new_reg: A new region file path, a list of region objects, or a
-            dictionary of region lists with ObsIDs as dictionary keys.
+        :param str/List[SkyRegion/PixelRegion]/np.ndarray/dict new_reg: A new region file path, a list or numpy array
+            of region objects, or a dictionary of region lists/arrays with ObsIDs as dictionary keys.
         """
-        if not isinstance(new_reg, (str, list, dict)):
-            raise TypeError("Please pass either a path to a region file, a list of "
-                            "SkyRegion/PixelRegion objects, or a dictionary of lists of SkyRegion/PixelRegion objects "
-                            "with ObsIDs as keys.")
+        if new_reg is not None and not isinstance(new_reg, (str, list, np.ndarray, dict)):
+            raise TypeError("Please pass either a path to a region file, a list or numpy array of "
+                            "SkyRegion/PixelRegion objects, or a dictionary of lists/arrays of SkyRegion/PixelRegion "
+                            "objects with ObsIDs as keys.")
 
+        if (
+            isinstance(new_reg, dict)
+            and self.telescope is not None
+            and self.telescope in new_reg
+            and isinstance(new_reg[self.telescope], dict)
+        ):
+            new_reg = new_reg[self.telescope]
+
+        if new_reg is None:
+            self._reg_file_path = ""
+            self._regions = {}
         # Checks to make sure that a region file path exists, if passed, then processes the file
-        if isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
+        elif isinstance(new_reg, str) and new_reg != '' and os.path.exists(new_reg):
             self._reg_file_path = new_reg
             self._regions = self._process_regions(new_reg)
         # Possible for an empty string to be passed in which case nothing happens
@@ -3571,17 +3733,28 @@ class RateMap(Image):
             pass
         elif isinstance(new_reg, str):
             warn("The region file path does not exist", stacklevel=2)
-        # If an existing list of regions are passed then we just process them and assign them to regions attribute
-        elif isinstance(new_reg, List) and all([isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]):
+        # If an existing list/array of regions are passed then we just process them and assign them to regions attribute
+        elif isinstance(new_reg, (list, np.ndarray)) and all(
+            [r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in new_reg]
+        ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
-        elif isinstance(new_reg, dict) and all([all([isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
-                                                for o, rl in new_reg.items()]):
+        elif isinstance(new_reg, dict) and all(
+            [
+                rl is None
+                or isinstance(rl, (SkyRegion, PixelRegion))
+                or (
+                    isinstance(rl, (list, np.ndarray))
+                    and all([r is None or isinstance(r, (SkyRegion, PixelRegion)) for r in rl])
+                )
+                for o, rl in new_reg.items()
+            ]
+        ):
             self._reg_file_path = ""
             self._regions = self._process_regions(reg_objs=new_reg)
         else:
             raise ValueError("That value of new_reg is not valid, please pass either a path to a region file or "
-                             "a list/dictionary of SkyRegion/PixelRegion objects")
+                             "a list/array/dictionary of SkyRegion/PixelRegion objects")
 
         # This is the only part that's different from the implementation in the superclass. Here we make sure that
         #  the same attribute is set for the Image, so if the user were to access the image from the RateMap
@@ -3670,29 +3843,35 @@ class PSF(Image):
         self._psf_centre = None
         self._psf_model = psf_model
 
-    def get_val(self, at_coord: Quantity) -> float:
+    def get_val(self, at_coord: Quantity) -> float | np.ndarray:
         """
         A simple method that converts the given coordinates to pixels, then finds the PSF value
         at those coordinates.
 
         :param Quantity at_coord: A pair of coordinates to find the PSF value time for.
         :return: The PSF value at the supplied coordinates.
-        :rtype: Quantity
+        :rtype: float | np.ndarray
         """
         pix_coord = self.coord_conv(at_coord, pix).value
-        neg_ind = np.where(pix_coord < 0)
-        # This wouldn't deal with PSF images that weren't the same size in x and y, but XGA
-        #  doesn't generate PSFs like that so its fine.
-        too_big_ind = np.where(pix_coord >= self.shape[0])
+        if pix_coord.ndim == 1:
+            if np.any(pix_coord < 0) or pix_coord[0] >= self.shape[1] or pix_coord[1] >= self.shape[0]:
+                val = 0.0
+            else:
+                val = self.data[pix_coord[1], pix_coord[0]]
+        else:
+            neg_ind = np.where(pix_coord < 0)
+            # This wouldn't deal with PSF images that weren't the same size in x and y, but XGA
+            #  doesn't generate PSFs like that so its fine.
+            too_big_ind = np.where(pix_coord >= self.shape[0])
 
-        pix_coord[too_big_ind[0], :] = [0, 0]
-        pix_coord[neg_ind[0], :] = [0, 0]
+            pix_coord[too_big_ind[0], :] = [0, 0]
+            pix_coord[neg_ind[0], :] = [0, 0]
 
-        val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
-        # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
-        #  I think I'm going to set those coordinates to the minimum PSF value
-        val[too_big_ind[0]] = 0
-        val[neg_ind[0]] = 0
+            val = self.data[pix_coord[:, 1], pix_coord[:, 0]]
+            # This is a difficult decision, what to do about requested coordinates that are outside the PSF range.
+            #  I think I'm going to set those coordinates to the minimum PSF value
+            val[too_big_ind[0]] = 0
+            val[neg_ind[0]] = 0
         return val
 
     def resample(self, im_prod: Image, half_side_length: Quantity) -> np.ndarray:

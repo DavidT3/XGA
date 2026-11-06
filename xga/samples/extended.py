@@ -163,6 +163,7 @@ class ClusterSample(BaseSample):
         # We have this final names list in case so that we don't need to remove elements of self.names if one of the
         #  clusters doesn't pass the observation cleaning stage.
         final_names = []
+        final_inds = []
         # This records which clusters had a failed peak finding attempt, for a warning at the end of the declaration
         failed_peak_find = []
         with tqdm(desc="Setting up Galaxy Clusters", total=len(self.names), disable=no_prog_bar) as dec_lb:
@@ -251,6 +252,7 @@ class ClusterSample(BaseSample):
                                                          clean_obs_reg, clean_obs_threshold, False, peak_find_method,
                                                          True, telescope, search_distance, cur_inc_core_pnt_src)
                         final_names.append(n)
+                        final_inds.append(ind)
 
                     except PeakConvergenceFailedError:
                         try:
@@ -264,6 +266,7 @@ class ClusterSample(BaseSample):
                                                              peak_find_method, True, telescope, search_distance,
                                                              cur_inc_core_pnt_src)
                             final_names.append(n)
+                            final_inds.append(ind)
                         except NoValidObservationsError as err:
                             self._failed_sources[n] = str(err)
 
@@ -274,6 +277,7 @@ class ClusterSample(BaseSample):
                     dec_lb.update(1)
 
         self._names = final_names
+        self._accepted_inds = final_inds
 
         # And again I ask XGA to generate the individual-telescope combined images and exposure maps,
         #  in case any sources have been cleaned and had data removed
@@ -744,7 +748,7 @@ class ClusterSample(BaseSample):
 
         return temps
 
-    def gas_mass(self, rad_name: str, telescope: str, dens_model: str, method: str,
+    def gas_mass(self, rad_name: str, telescope: str = None, dens_model: str = None, method: str = None,
                  prof_outer_rad: Union[Quantity, str] = None, pix_step: int = 1, min_snr: Union[float, int] = 0.0,
                  psf_corr: bool = True, psf_model: str = "ELLBETA", psf_bins: int = 4, psf_algo: str = "rl",
                  psf_iter: int = 15, set_ids: List[int] = None, quality_checks: bool = True) -> Quantity:
@@ -755,21 +759,25 @@ class ClusterSample(BaseSample):
         profiles, though if you have generated density profiles from annular spectra and know their set ids you may
         pass them. Any more nuanced access to density profiles will have to be done yourself.
 
-        If the specified density model hasn't been fitted to the density profile, this method will run a fit using
-        the default settings of the fit method of XGA profiles.
+        If only a single density profile (and a single model fit to it) exists for each cluster in the sample, then
+        only ``rad_name`` needs to be passed. If the specified density model hasn't been fitted to the density
+        profile, this method will run a fit using the default settings of the fit method of XGA profiles.
 
         A gas mass will be set to NaN if either of the uncertainties are larger than the gas mass value, if
         the gas mass value is less than 1e+9 solar masses, if the gas mass value is greater than 1e+16 solar
         masses, if quality checks are on.
 
         :param str rad_name: The name of the radius (e.g. r500) to calculate the gas mass within.
-        :param str telescope: The name of the telescope used to measure the gas density profile.
+        :param str telescope: The name of the telescope used to measure the gas density profile. Default is None,
+            which is allowed when only a single density profile is associated with each cluster.
         :param str dens_model: The model fit to the density profiles to be used to calculate gas mass. If a fit
-            doesn't already exist then one will be performed with default settings.
+            doesn't already exist then one will be performed with default settings. Default is None, in which case
+            if only a single model has been fit to a density profile it will be selected automatically.
         :param str method: The method used to generate the density profile. For a profile created by fitting a model
             to a surface brightness profile this should be the name of the model, for a profile from annular spectra
             this should be 'spec', and for a profile generated directly from the data of a surface brightness profile
-            this should be 'onion'.
+            this should be 'onion'. Default is None, in which case all combined density profiles are searched and
+            selected if only a single profile exists.
         :param Quantity/str prof_outer_rad: The outer radii of the density profiles, either a single radius name or a
             Quantity containing an outer radius for each cluster. For instance if you defined a ClusterSample called
             srcs you could pass srcs.r500 here.
@@ -796,7 +804,7 @@ class ClusterSample(BaseSample):
         from ..generate.sas._common import region_setup
 
         # Have to check that the chosen telescope is actually valid for this sample
-        if telescope not in self.telescopes:
+        if telescope is not None and telescope not in self.telescopes:
             raise NotAssociatedError("The {t} telescope is not associated with any source in this "
                                      "sample.".format(t=telescope))
 
@@ -830,11 +838,26 @@ class ClusterSample(BaseSample):
                                                           telescope=telescope)
 
                 if isinstance(dens_profs, GasDensity3D):
-                    if dens_model not in dens_profs.good_model_fits:
-                        dens_profs.fit(dens_model)
+                    if dens_model is None and len(dens_profs.good_model_fits) == 1:
+                        cur_dens_model = dens_profs.good_model_fits[0]
+                    elif dens_model is None and len(dens_profs.good_model_fits) > 1:
+                        raise ValueError(
+                            f"Multiple density model fits ({', '.join(dens_profs.good_model_fits)}) are associated "
+                            f"with {gcs.name}'s density profile; please specify 'dens_model'."
+                        )
+                    elif dens_model is None:
+                        cur_dens_model = None
+                    else:
+                        cur_dens_model = dens_model
+                        if cur_dens_model not in dens_profs.good_model_fits:
+                            dens_profs.fit(cur_dens_model)
 
                     try:
-                        cur_gmass = dens_profs.gas_mass(dens_model, gas_mass_rad)[0]
+                        if cur_dens_model is None:
+                            raise ModelNotAssociatedError(
+                                f"No density model fits are associated with {gcs.name}'s density profile."
+                            )
+                        cur_gmass = dens_profs.gas_mass(cur_dens_model, gas_mass_rad)[0]
                         if quality_checks and (cur_gmass[1] > cur_gmass[0] or cur_gmass[2] > cur_gmass[0]):
                             gms.append([np.nan, np.nan, np.nan])
                         elif quality_checks and cur_gmass[0] < Quantity(1e+9, 'Msun'):
@@ -852,6 +875,11 @@ class ClusterSample(BaseSample):
                         warn("{s}'s gas mass is negative", stacklevel=2)
 
                 else:
+                    if method is None or telescope is None:
+                        raise ValueError(
+                            f"There are multiple matching density profiles associated with {gcs.name}, please "
+                            f"specify 'method', 'telescope', or 'prof_outer_rad' to select one."
+                        )
                     warn("Somehow there multiple matches for {s}'s density profile, this is the developer's "
                          "fault.".format(s=gcs.name), stacklevel=2)
                     gms.append([np.nan, np.nan, np.nan])

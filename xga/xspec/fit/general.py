@@ -918,13 +918,6 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
         raise XGADeveloperError(f"Current keyword arguments of this function and FIT_FUNC_ARGS entry do not "
                                 f"match - unmatched arguments are {", ".join(problem_pars)}.")
 
-    # We generate the fit configuration key - in this case there are no relevant variables that can have different
-    #  values for different sources, so we don't need to put this in the loop. Still, we will pass back  a list of
-    #  fit configuration keys because the xspec call decorator will expect a list with one entry per source that
-    #  is having a fit run
-    in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
-    fit_conf = _gen_fit_conf(in_fit_conf)
-
     script_paths = []
     outfile_paths = []
     src_inds = []
@@ -939,16 +932,16 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
                                                  inn_rad_vals, group_spec, min_counts, min_sn, over_sample)
 
             # Whatever start temperature is passed gets converted to keV, this will be put in the template
-            t = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy()).value
+            start_temp = all_start_temps[src_ind].to("keV", equivalencies=u.temperature_energy())
 
             # For this model, we have to know the redshift of the source.
             if redshifted and source.redshift is None:
                 raise ValueError("You cannot supply a source without a redshift if you have elected to fit zbbody.")
             elif redshifted and source.redshift is not None:
-                par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, t,
+                par_values = "{{{0} {1} {2} {3} {4}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp.value,
                                                               source.redshift, 1.)
             else:
-                par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, t, 1.)
+                par_values = "{{{0} {1} {2} {3}}}".format(1., source.nH.to("10^22 cm^-2").value, start_temp.value, 1.)
 
             # Set up the TCL list that defines which parameters are frozen, dependent on user input
             if redshifted and freeze_nh:
@@ -981,6 +974,11 @@ def blackbody(sources: Union[BaseSource, BaseSample], outer_radius: Union[str, Q
             #  multiple spectra) because I know that nH of tbabs is linked in this setup, so zeroing one will zero
             #  them all.
             nh_to_zero = "{2}"
+
+            # We generate the fit configuration key here, on a source by source basis, as the start temperature is
+            #  allowed to be different for every source
+            in_fit_conf = {kn: locals()[kn] for kn in rel_args if rel_args[kn]}
+            fit_conf = _gen_fit_conf(in_fit_conf)
 
             # If the fit has already been performed, we do not wish to perform it again
             try:

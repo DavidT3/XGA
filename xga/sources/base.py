@@ -259,6 +259,12 @@ class BaseSource:
         if name is not None:
             # We don't be liking spaces in source names, we also don't like underscores
             self._name = name.replace(" ", "").replace("_", "-")
+            if len(self._name) == 0 or not all(c.isascii() and (c.isalnum() or c in "+-.") for c in self._name):
+                raise ValueError(
+                    f"The source name '{name}' contains disallowed characters (such as brackets or special "
+                    f"characters). Only ASCII alphanumeric characters, spaces, underscores, '+', '-', and '.' "
+                    f"are permitted."
+                )
         else:
             self._name = coord_to_name(self.ra_dec)
 
@@ -616,7 +622,6 @@ class BaseSource:
         self._regions: dict[str, dict[str, Region | None]] = {}
         self._other_regions: dict[str, dict[str, list[Region]]] = {}
         self._alt_match_regions: dict[str, dict[str, list[Region]]] = {}
-        self._interloper_regions: dict[str, list[Region]] = {}
         # This dictionary is used to store the masks generated to remove contaminating sources from XGA images and
         #  ratemaps, in order to perform photometric analyses. We used to generate masks for all ObsIDs during
         #  definition of an Extended or Point source, regardless of whether they would be used or not, but this
@@ -782,6 +787,46 @@ class BaseSource:
         return list(self._obs.keys())
 
     @property
+    def obs_modes(self) -> dict[str, dict[str, dict[str, dict[str, str | None]]]]:
+        """
+        Property returning a nested dictionary (structured by telescope, ObsID, and instrument) containing the
+        OBS_MODE, DATAMODE, and SUBMODE FITS header values from the associated EventList products. If a header
+        key is not present for a given event list, its value in the dictionary will be None.
+
+        :return: Nested dictionary of observation modes organized as
+            {telescope: {obs_id: {instrument: {'OBS_MODE': ..., 'DATAMODE': ..., 'SUBMODE': ...}}}}.
+        :rtype: dict
+        """
+        mode_keys = ("OBS_MODE", "DATAMODE", "SUBMODE")
+        modes: dict[str, dict[str, dict[str, dict[str, str | None]]]] = {}
+        for tel in self.instruments:
+            modes[tel] = {}
+            for obs_id in self.instruments[tel]:
+                modes[tel][obs_id] = {}
+                for inst in self.instruments[tel][obs_id]:
+                    inst_modes: dict[str, str | None] = dict.fromkeys(mode_keys, None)
+                    evts = self.get_products(
+                        "events",
+                        obs_id=obs_id,
+                        inst="combined" if COMBINED_INSTS[tel] else inst,
+                        telescope=tel,
+                    )
+                    if len(evts) > 0:
+                        evt = evts[0]
+                        hdr = evt.header
+                        for k in mode_keys:
+                            if k in hdr:
+                                inst_modes[k] = hdr[k]
+                        if any(inst_modes[k] is None for k in mode_keys):
+                            evt_hdr = evt.event_header
+                            for k in mode_keys:
+                                if inst_modes[k] is None and k in evt_hdr:
+                                    inst_modes[k] = evt_hdr[k]
+                        del evt.data
+                    modes[tel][obs_id][inst] = inst_modes
+        return modes
+
+    @property
     def blacklisted(self) -> dict:
         """
         A property getter that returns the dictionary of telescope ObsIDs and their instruments which have been
@@ -817,7 +862,18 @@ class BaseSource:
         :return: A dictionary of matching regions, or None if such a match has not been performed.
         :rtype: dict
         """
-        return self._regions
+        return deepcopy(self._regions)
+
+    @property
+    def interloper_regions(self) -> dict[str, list[Region]]:
+        """
+        Property getter for the interloper regions associated with this particular source, flattened across ObsIDs
+        for each telescope.
+
+        :return: A dictionary of flattened lists of interloper regions for each telescope.
+        :rtype: dict[str, list[Region]]
+        """
+        return {tel: self.get_interloper_regions(tel, flattened=True) for tel in self.telescopes}
 
     @property
     def nH(self) -> Quantity:  # noqa: N802 (allows capital letter in the function name)
@@ -871,6 +927,16 @@ class BaseSource:
         :rtype: str
         """
         return self._name
+
+    @property
+    def extended(self) -> bool:
+        """
+        Property indicating whether this source is treated as an extended X-ray source.
+
+        :return: True if this is an extended source, False otherwise.
+        :rtype: bool
+        """
+        return False
 
     @property
     def num_inst_obs(self) -> dict:
@@ -3081,25 +3147,26 @@ class BaseSource:
         # This is the array that the mask gets built in - initially all ones and as we move through the regions we
         #  start to set the bits that need to be excluded to zero
         mask = np.ones(mask_image.shape)
+        inter_regs = self.interloper_regions[mask_image.telescope]
 
         # If a region inclusion distance has not been set, then we create a mask of all True so that all regions
         #  are included in the final mask
         if region_distance is None:
-            for_mask = np.full(len(self._interloper_regions[mask_image.telescope]), True)
+            for_mask = np.full(len(inter_regs), True)
         # However, if an inclusion distance has been passed, we use it to create a True-False array to define which
         #  regions we want to include.
         else:
             for_mask = (
                 Quantity(
                     np.array(
-                        [_dist_from_source(*self._ra_dec, r) for r in self._interloper_regions[mask_image.telescope]]  # type: ignore[call-arg]
+                        [_dist_from_source(*self._ra_dec, r) for r in inter_regs]  # type: ignore[call-arg]
                     )
                 )
                 < region_distance
             )
 
         # TODO Maybe this is a candidate for some intelligent multi-threading?
-        for r in np.array(self._interloper_regions[mask_image.telescope])[for_mask]:
+        for r in np.array(inter_regs)[for_mask]:
             if r is not None:
                 # The central coordinate of the current region
                 c = Quantity([r.center.ra.value, r.center.dec.value], "deg")
@@ -3304,7 +3371,7 @@ class BaseSource:
         inst: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         telescope: str | None = None,
@@ -3350,6 +3417,11 @@ class BaseSource:
             out_rad_num = self.get_radius(outer_radius, "deg")
         else:
             raise TypeError("You may only pass a quantity or a string as outer_radius")
+
+        # If min_sn has been supplied, min_counts is automatically set to None so the user doesn't have to
+        #  explicitly pass min_counts=None
+        if min_sn is not None:
+            min_counts = None
 
         # Checking spectrum generation inputs, and making sure they are in the right types
         over_sample = int(over_sample) if over_sample is not None else None
@@ -4838,7 +4910,7 @@ class BaseSource:
         inst: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         telescope: str | None = None,
@@ -4891,7 +4963,7 @@ class BaseSource:
         inst: str | None = None,
         inner_radius: str | Quantity = Quantity(0, "arcsec"),
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         telescope: str | None = None,
@@ -4942,7 +5014,7 @@ class BaseSource:
         self,
         radii: Quantity | None = None,
         group_spec: bool = True,
-        min_counts: int = 5,
+        min_counts: int | None = 5,
         min_sn: float | None = None,
         over_sample: float | None = None,
         set_id: int | None = None,
@@ -5034,6 +5106,12 @@ class BaseSource:
         filt_matched_prods = [
             m_prod for m_prod in filt_matched_prods if (m_prod.central_coord == self.default_coord).all()
         ]
+
+        if min_sn is not None:
+            min_counts = None
+        over_sample = int(over_sample) if over_sample is not None else None
+        min_counts = int(min_counts) if min_counts is not None else None
+        min_sn = float(min_sn) if min_sn is not None else None
 
         # Separating the matching steps can also give us the opportunity to say exactly where matching failed
         #  in the future. Now we check for matches to the spectrum generation settings - in a for loop this time
@@ -5609,16 +5687,17 @@ class BaseSource:
             poss_ims = self.get_images(telescope=telescope, inst="combined")
         im = poss_ims[0] if isinstance(poss_ims, list) else poss_ims
 
+        inter_regs = self.interloper_regions[telescope]
         crossover = np.array(
             [
                 region.intersection(r).to_pixel(im.radec_wcs).to_mask().data.sum() != 0
-                for r in self._interloper_regions[telescope]
+                for r in inter_regs
             ]
         )
 
         # TODO Should this really return None?
         if crossover.sum() != 0:
-            reg_within = np.array(self._interloper_regions[telescope])[crossover]
+            reg_within = np.array(inter_regs)[crossover]
         else:
             reg_within = None
 
@@ -5644,12 +5723,12 @@ class BaseSource:
 
         # If flattened then a list is returned rather than the original dictionary with
         if not flattened:
-            return self._other_regions[telescope]
+            return deepcopy(self._other_regions[telescope])
         else:
             # Iterate through the ObsIDs in the dictionary and add the resulting lists together
             flat_ret_reg = []
             for o in self._other_regions[telescope]:
-                flat_ret_reg += self._other_regions[telescope][o]
+                flat_ret_reg += deepcopy(self._other_regions[telescope][o])
 
             return flat_ret_reg
 
@@ -6201,7 +6280,7 @@ class BaseSource:
 
         # If no custom regions array was passed, we use the internal array of interloper regions
         if regions_to_search is None:
-            regions_to_search = self._interloper_regions[telescope].copy()
+            regions_to_search = self.interloper_regions[telescope].copy()
 
         inner_radius = self.convert_radius(inner_radius, "deg")
         outer_radius = self.convert_radius(outer_radius, "deg")
@@ -7497,18 +7576,10 @@ class BaseSource:
                         self._supp_warn.append(warn_text)
 
             if whole_obsid_dis and tel in self._other_regions:
-                # We replace the interloper regions entry for this telescope (i.e. the combined list of contaminant
-                #  regions) here, as it is possible we may have disassociated an ObsID and left its regions behind here.
-                # If an ObsID has been entirely removed, it will no longer be in '_other_regions' so this should work
-                self._interloper_regions[tel] = [
-                    r for o in self._other_regions[tel] for r in self._other_regions[tel][o]
-                ]
-                # We also have to wipe the interloper masks that already exist, as they would have been created with
+                # We have to wipe the interloper masks that already exist, as they would have been created with
                 #  other ObsID's regions
                 self._interloper_masks[tel] = {o: {} for o in self.obs_ids[tel] + ["combined"]}
             elif whole_obsid_dis and tel not in self._other_regions:
-                if tel in self._interloper_regions:
-                    del self._interloper_regions[tel]
                 if tel in self._interloper_masks:
                     del self._interloper_masks[tel]
 

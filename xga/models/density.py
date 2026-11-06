@@ -72,7 +72,7 @@ class KingProfile1D(BaseModel1D):
 
         priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
 
-        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", "N$_{0}$"]
+        nice_pars = [r"$\beta$", r"$R_{\rm{core}}$", r"$N_{0}$"]
         info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
                      'general': 'The un-projected version of the beta profile, suitable for a simple fit\n'
                                 ' to 3D density distributions. Describes a simple isothermal sphere.'}
@@ -192,8 +192,14 @@ class DoubleKingProfile1D(BaseModel1D):
         priors = [{'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind],
                   {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind], norm_priors[yu_ind]]
 
-        nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core}, 1}$", "N$_{0, 1}$", r"$\beta_{2}$", r"R$_{\rm{core}, 2}$",
-                     "N$_{0, 2}$"]
+        nice_pars = [
+            r"$\beta_{1}$",
+            r"$R_{\rm{core}, 1}$",
+            r"$N_{0, 1}$",
+            r"$\beta_{2}$",
+            r"$R_{\rm{core}, 2}$",
+            r"$N_{0, 2}$",
+        ]
         info_dict = {'author': 'placeholder', 'year': 'placeholder', 'reference': 'placeholder',
                      'general': 'placeholder'}
         super().__init__(x_unit, y_unit, start_pars, priors, 'double_king', 'Double King Profile', nice_pars,
@@ -322,7 +328,7 @@ class SimpleVikhlininDensity1D(BaseModel1D):
                   {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],
                   {'prior': Quantity([0, 5]), 'type': 'uniform'}, norm_priors[yu_ind]]
 
-        nice_pars = [r"$\beta$", r"R$_{\rm{core}}$", r"$\alpha$", r"R$_{\rm{s}}$", r"$\epsilon$", r"N$_{0}$"]
+        nice_pars = [r"$\beta$", r"$R_{\rm{core}}$", r"$\alpha$", r"$R_{\rm{s}}$", r"$\epsilon$", r"$N_{0}$"]
         info_dict = {'author': 'Ghirardini et al.', 'year': 2019,
                      'reference': 'https://doi.org/10.1051/0004-6361/201833325',
                      'general': "A simplified form of Vikhlinin's full density model, a type of broken\n"
@@ -476,8 +482,18 @@ class VikhlininDensity1D(BaseModel1D):
                   norm_priors[yu_ind], {'prior': Quantity([0, 3]), 'type': 'uniform'}, r_core_priors[xu_ind],
                   norm_priors[yu_ind]]
 
-        nice_pars = [r"$\beta_{1}$", r"R$_{\rm{core,1}}$", r"$\alpha$", r"R$_{\rm{s}}$", r"$\epsilon$", r"$\gamma$",
-                     r"N$_{01}$", r"$\beta_{2}$", r"R$_{\rm{core,2}}$", r"N$_{02}$"]
+        nice_pars = [
+            r"$\beta_{1}$",
+            r"$R_{\rm{core,1}}$",
+            r"$\alpha$",
+            r"$R_{\rm{s}}$",
+            r"$\epsilon$",
+            r"$\gamma$",
+            r"$N_{01}$",
+            r"$\beta_{2}$",
+            r"$R_{\rm{core,2}}$",
+            r"$N_{02}$",
+        ]
         info_dict = {'author': 'Vikhlinin et al.', 'year': 2006,
                      'reference': 'https://doi.org/10.1086/500288',
                      'general': "The full model for cluster density profiles created by Vikhlinin et al.\n"

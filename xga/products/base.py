@@ -2076,18 +2076,27 @@ class BaseProfile1D:
                 tabulate(tab_dat, ["MODEL NAME", "EXPECTED PARAMETERS", "DEFAULT START VALUES"], tablefmt=table_format)
             )
 
-    def get_model_fit(self, model: str, method: str) -> BaseModel1D:
+    def get_model_fit(self, model: str | None = None, method: str | None = None) -> BaseModel1D:
         """
         A get method for fitted model objects associated with this profile. Models for which the fit failed will
         also be returned, but a warning will be shown to inform the user that the fit failed.
 
-        :param str model: The name of the model to retrieve.
-        :param str method: The method which was used to fit the model.
+        :param str model: The name of the model to retrieve. Default is None, in which case if only a single model
+            has been fitted (either overall or for the specified method), it will be selected automatically.
+        :param str method: The method which was used to fit the model. Default is None, in which case if only a
+            single method has been used (either overall or for the specified model), it will be selected
+            automatically.
         :return: An instance of an XGA model object that was fitted to this profile and updated with the
             parameter values.
         :rtype: BaseModel1D
         """
-        if model not in PROF_TYPE_MODELS[self._prof_type]:
+        if method is not None:
+            method = method.lower()
+            if method not in self._fit_methods:
+                allowed = ", ".join(self._fit_methods)
+                raise XGAFitError(f"{method} is not a valid fitting method, please use one of these; {allowed}")
+
+        if model is not None and model not in PROF_TYPE_MODELS[self._prof_type]:
             allowed = list(PROF_TYPE_MODELS[self._prof_type].keys())
             prof_name = self._y_axis_name.lower()
             raise XGAInvalidModelError(
@@ -2095,13 +2104,78 @@ class BaseProfile1D:
                     m=model, a=", ".join(allowed), p=prof_name
                 )
             )
-        elif model in self._bad_model_fits[method]:
-            warn(f"An attempt was made to fit {model} with {method} but it failed, so treat the model with suspicion")
-            ret_model = self._bad_model_fits[method][model]
-        elif model not in self._good_model_fits[method]:
-            raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit with {method} yet")
-        else:
+
+        if model is None and method is None:
+            good_fits = [
+                (m_meth, m_name) for m_meth in self._good_model_fits for m_name in self._good_model_fits[m_meth]
+            ]
+            bad_fits = [(m_meth, m_name) for m_meth in self._bad_model_fits for m_name in self._bad_model_fits[m_meth]]
+            if len(good_fits) == 1:
+                method, model = good_fits[0]
+            elif len(good_fits) > 1:
+                raise ValueError(
+                    "Multiple model fits are associated with this profile, so model=None and method=None is not valid."
+                )
+            elif len(bad_fits) == 1:
+                method, model = bad_fits[0]
+            elif len(bad_fits) > 1:
+                raise ValueError(
+                    "Multiple failed model fits are associated with this profile, so model=None and method=None is "
+                    "not valid."
+                )
+            else:
+                raise ModelNotAssociatedError("There are no model fits associated with this profile.")
+        elif model is None and method is not None:
+            good_models = list(self._good_model_fits[method].keys())
+            bad_models = list(self._bad_model_fits[method].keys())
+            if len(good_models) == 1:
+                model = good_models[0]
+            elif len(good_models) > 1:
+                raise ValueError(
+                    f"Multiple models ({', '.join(good_models)}) have been fit to this profile with {method}, "
+                    f"so model=None is not valid."
+                )
+            elif len(bad_models) == 1:
+                model = bad_models[0]
+            elif len(bad_models) > 1:
+                raise ValueError(
+                    f"Multiple models ({', '.join(bad_models)}) have failed fits with {method}, so model=None "
+                    f"is not valid."
+                )
+            else:
+                raise ModelNotAssociatedError(
+                    f"There are no models associated with this profile that have been fit with {method}."
+                )
+        elif model is not None and method is None:
+            good_methods = [m_meth for m_meth in self._good_model_fits if model in self._good_model_fits[m_meth]]
+            bad_methods = [m_meth for m_meth in self._bad_model_fits if model in self._bad_model_fits[m_meth]]
+            if len(good_methods) == 1:
+                method = good_methods[0]
+            elif len(good_methods) > 1:
+                raise ValueError(
+                    f"{model} has been fit to this profile with multiple methods ({', '.join(good_methods)}), "
+                    f"so method=None is not valid."
+                )
+            elif len(bad_methods) == 1:
+                method = bad_methods[0]
+            elif len(bad_methods) > 1:
+                raise ValueError(
+                    f"{model} has failed fits with multiple methods ({', '.join(bad_methods)}), so method=None "
+                    f"is not valid."
+                )
+            else:
+                raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit yet.")
+
+        if model in self._good_model_fits[method]:
             ret_model = self._good_model_fits[method][model]
+        elif model in self._bad_model_fits[method]:
+            warn(
+                f"An attempt was made to fit {model} with {method} but it failed, so treat the model with suspicion",
+                stacklevel=2,
+            )
+            ret_model = self._bad_model_fits[method][model]
+        else:
+            raise ModelNotAssociatedError(f"{model} is valid for this profile, but hasn't been fit with {method} yet")
 
         return ret_model
 
@@ -2166,26 +2240,30 @@ class BaseProfile1D:
             # Finally remove the model
             del self._good_model_fits[method][model]
 
-    def get_sampler(self, model: str) -> em.EnsembleSampler:
+    def get_sampler(self, model: str | None = None) -> em.EnsembleSampler:
         """
         A get method meant to retrieve the MCMC ensemble sampler used to fit a particular
         model (supplied by the user). Checks are applied to the supplied model, to make
         sure that it is valid for the type of profile, that a good fit has actually been
         performed, and that the fit was performed with Emcee and not another method.
 
-        :param str model: The name of the model for which to retrieve the sampler.
+        :param str model: The name of the model for which to retrieve the sampler. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :return: The Emcee sampler used to fit the user supplied model.
         :rtype: em.EnsembleSampler
         """
-        model = self.get_model_fit(model, "mcmc")
-        return model.emcee_sampler
+        model_obj = self.get_model_fit(model, "mcmc")
+        return model_obj.emcee_sampler
 
-    def get_chains(self, model: str, discard: bool | int = True, flatten: bool = True, thin: int = 1) -> np.ndarray:
+    def get_chains(
+        self, model: str | None = None, discard: bool | int = True, flatten: bool = True, thin: int = 1
+    ) -> np.ndarray:
         """
         Get method for the sampler chains of an MCMC fit to the user supplied model. get_sampler is
         called to retrieve the sampler object, as well as perform validity checks on the model name.
 
-        :param str model: The name of the model for which to retrieve the chains.
+        :param str model: The name of the model for which to retrieve the chains. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :param bool/int discard: Whether steps should be discarded for burn-in. If True then the cut off decided
             using the auto-correlation time will be used. If an integer is passed then this will be used as the
             number of steps to discard, and if False then no steps will be discarded.
@@ -2195,22 +2273,25 @@ class BaseProfile1D:
         :return: The requested chains.
         :rtype: np.ndarray
         """
-        model = self.get_model_fit(model, "mcmc")
+        model_obj = self.get_model_fit(model, "mcmc")
 
         if isinstance(discard, bool) and discard:
-            chains = model.emcee_sampler.get_chain(discard=model.cut_off, flat=flatten, thin=thin)
+            chains = model_obj.emcee_sampler.get_chain(discard=model_obj.cut_off, flat=flatten, thin=thin)
         elif isinstance(discard, int):
-            chains = model.emcee_sampler.get_chain(discard=discard, flat=flatten, thin=thin)
+            chains = model_obj.emcee_sampler.get_chain(discard=discard, flat=flatten, thin=thin)
         else:
-            chains = model.emcee_sampler.get_chain(flat=flatten, thin=thin)
+            chains = model_obj.emcee_sampler.get_chain(flat=flatten, thin=thin)
 
         return chains
 
-    def view_chains(self, model: str, discard: bool | int = True, thin: int = 1, figsize: tuple | None = None) -> None:
+    def view_chains(
+        self, model: str | None = None, discard: bool | int = True, thin: int = 1, figsize: tuple | None = None
+    ) -> None:
         """
         Simple view method to quickly look at the MCMC chains for a given model fit.
 
-        :param str model: The name of the model for which to view the MCMC chains.
+        :param str model: The name of the model for which to view the MCMC chains. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :param bool/int discard: Whether steps should be discarded for burn-in. If True then the cut off decided
             using the auto-correlation time will be used. If an integer is passed then this will be used as the
             number of steps to discard, and if False then no steps will be discarded.
@@ -2244,12 +2325,15 @@ class BaseProfile1D:
         plt.tight_layout()
         plt.show()
 
-    def view_corner(self, model: str, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
+    def view_corner(
+        self, model: str | None = None, settings: dict | None = None, figsize: tuple = (10, 10)
+    ) -> None:
         """
         A view method to show a corner plot generated with the getdist module, using flattened chains with
         burn-in removed (whatever the getdist message might say).
 
-        :param str model: The name of the model for which to view the corner plot.
+        :param str model: The name of the model for which to view the corner plot. Default is None, in which case
+            if only a single model has been fitted with MCMC, it will be selected automatically.
         :param dict settings: The settings dictionary for a getdist MCSample, default is None, which
             corresponds to an empty dictionary.
         :param tuple figsize: A tuple to set the size of the figure.
@@ -2289,7 +2373,9 @@ class BaseProfile1D:
         "The legacy `view_corner()` code has been replaced with getdist; `view_getdist_corner() "
         "is now redundant, and will be removed in a future version of XGA."
     )
-    def view_getdist_corner(self, model: str, settings: dict | None = None, figsize: tuple = (10, 10)) -> None:
+    def view_getdist_corner(
+        self, model: str | None = None, settings: dict | None = None, figsize: tuple = (10, 10)
+    ) -> None:
         """
         Thin wrapper over the view_corner method, which now uses getdist rather than the old 'corner'
         module. This 'view_getdist_corner' remains to maintain compatibility with the old interface, but
@@ -3690,9 +3776,10 @@ class BaseAggregateProfile1D:
         else:
             raise ValueError("The new list passed for y-axis normalisations must be the same length as the original.")
 
-    def view(
+    def get_view(
         self,
-        figsize: tuple = (10, 7),
+        fig: Figure,
+        main_ax: Axes,
         xscale: str = "log",
         yscale: str = "log",
         xlim: tuple | None = None,
@@ -3707,18 +3794,18 @@ class BaseAggregateProfile1D:
         y_norm: bool = False,
         x_label: str | None = None,
         y_label: str | None = None,
-        save_path: str | None = None,
         draw_vals: dict | None = None,
         auto_legend: bool = True,
         axis_formatters: dict | None = None,
         show_residual_ax: bool = True,
         joined_points: bool = False,
-    ) -> None:
+    ) -> tuple[Axes, Axes | None]:
         """
-        A method that allows us to see all the profiles that make up this aggregate profile, plotted
-        on the same figure.
+        This method populates a matplotlib figure and axes with all the profiles that make up this aggregate
+        profile, plotted on the same figure.
 
-        :param Tuple figsize: The desired size of the figure, the default is (10, 7)
+        :param Figure fig: The matplotlib figure instance to be populated.
+        :param Axes main_ax: The primary axes of the view, onto which the profile data and models are added.
         :param str xscale: The scaling to be applied to the x axis, default is log.
         :param str yscale: The scaling to be applied to the y axis, default is log.
         :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
@@ -3741,16 +3828,14 @@ class BaseAggregateProfile1D:
             definition of the constituent profile objects.
         :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
         :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
-        :param str save_path: The path where the figure produced by this method should be saved. Default is None, in
-            which case the figure will not be saved.
         :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
-                    dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
-                    e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
-                    passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
-                    Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
-                    Finally, plotting colour may be specified by setting the value to a list, with the first entry
-                    being the quantity, and the second being a colour;
-                    e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+            e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+            Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+            Finally, plotting colour may be specified by setting the value to a list, with the first entry
+            being the quantity, and the second being a colour;
+            e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
         :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
             will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
             plot outside the main axes.
@@ -3761,15 +3846,9 @@ class BaseAggregateProfile1D:
             model (if a model is fitted and being shown) is displayed. Default is True.
         :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
             will any uncertainty regions.
+        :return: The primary axes, and the residual axes (if present, otherwise None).
+        :rtype: Tuple[Axes, Union[Axes, None]]
         """
-        if save_path is not None and (
-            os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path))
-        ):
-            raise FileNotFoundError(
-                f"The directory in which the aggregate profile view is to be saved ({os.path.dirname(save_path)}) "
-                f"does not exist."
-            )
-
         # If the draw_rads and draw_vals arguments are None, we set them to be empty dictionaries
         if draw_rads is None:
             draw_rads = {}
@@ -3849,10 +3928,6 @@ class BaseAggregateProfile1D:
                     stacklevel=2,
                 )
 
-        # Setting up figure for the plot
-        fig = plt.figure(figsize=figsize)
-        # Grabbing the axis object and making sure the ticks are set up how we want
-        main_ax = plt.gca()
         main_ax.minorticks_on()
         if model is not None and show_residual_ax:
             # This sets up an axis for the residuals to be plotted on, if model plotting is enabled
@@ -4117,12 +4192,226 @@ class BaseAggregateProfile1D:
         if axis_formatters is not None and "ymajor" in axis_formatters:
             main_ax.yaxis.set_major_formatter(axis_formatters["ymajor"])
 
-        # If the user passed a save_path value, then we assume they want to save the figure
-        if save_path is not None:
-            fig.savefig(save_path, bbox_inches="tight")
+        if show_residual_ax and "res_ax" in locals():
+            return main_ax, res_ax
         else:
-            # Showing the figure
-            plt.show()
+            return main_ax, None
+
+    def view(
+        self,
+        figsize: tuple = (10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
+        model: str | None = None,
+        back_sub: bool = True,
+        show_legend: bool = True,
+        just_model: bool = False,
+        custom_title: str | None = None,
+        draw_rads: dict | None = None,
+        x_norm: bool = False,
+        y_norm: bool = False,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        axis_formatters: dict | None = None,
+        show_residual_ax: bool = True,
+        joined_points: bool = False,
+    ) -> None:
+        """
+        A method that allows us to see all the profiles that make up this aggregate profile, plotted
+        on the same figure.
+
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7).
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str model: The name of the model fit to display, default is None. If the model
+            hasn't been fitted, or it failed, then it won't be displayed.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool show_legend: Should a legend with source names be added to the figure, default is True.
+        :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
+            are not the same for each profile, then draw_rads will be disabled.
+        :param bool x_norm: Should the x-axis values be normalised with the x_norm value passed on the
+            definition of the constituent profile objects.
+        :param bool y_norm: Should the y-axis values be normalised with the y_norm value passed on the
+            definition of the constituent profile objects.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+            e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+            Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+            Finally, plotting colour may be specified by setting the value to a list, with the first entry
+            being the quantity, and the second being a colour;
+            e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        """
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object
+        main_ax = plt.gca()
+
+        self.get_view(
+            fig,
+            main_ax,
+            xscale=xscale,
+            yscale=yscale,
+            xlim=xlim,
+            ylim=ylim,
+            model=model,
+            back_sub=back_sub,
+            show_legend=show_legend,
+            just_model=just_model,
+            custom_title=custom_title,
+            draw_rads=draw_rads,
+            x_norm=x_norm,
+            y_norm=y_norm,
+            x_label=x_label,
+            y_label=y_label,
+            draw_vals=draw_vals,
+            auto_legend=auto_legend,
+            axis_formatters=axis_formatters,
+            show_residual_ax=show_residual_ax,
+            joined_points=joined_points,
+        )
+
+        # Showing the figure
+        plt.show()
+        # Clearing the current figure and closing all open figures
+        plt.close("all")
+
+    def save_view(
+        self,
+        save_path: str,
+        figsize: tuple = (10, 7),
+        xscale: str = "log",
+        yscale: str = "log",
+        xlim: tuple | None = None,
+        ylim: tuple | None = None,
+        model: str | None = None,
+        back_sub: bool = True,
+        show_legend: bool = True,
+        just_model: bool = False,
+        custom_title: str | None = None,
+        draw_rads: dict | None = None,
+        x_norm: bool = False,
+        y_norm: bool = False,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        draw_vals: dict | None = None,
+        auto_legend: bool = True,
+        axis_formatters: dict | None = None,
+        show_residual_ax: bool = True,
+        joined_points: bool = False,
+        dpi: int = 300,
+    ) -> None:
+        """
+        This method generates a figure containing all the profiles that make up this aggregate profile, plotted
+        on the same figure, and saves it to the specified path.
+
+        :param str save_path: The path where the figure produced by this method should be saved.
+        :param Tuple figsize: The desired size of the figure, the default is (10, 7).
+        :param str xscale: The scaling to be applied to the x axis, default is log.
+        :param str yscale: The scaling to be applied to the y axis, default is log.
+        :param Tuple xlim: The limits to be applied to the x axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param Tuple ylim: The limits to be applied to the y axis, upper and lower, default is
+            to let matplotlib decide by itself.
+        :param str model: The name of the model fit to display, default is None. If the model
+            hasn't been fitted, or it failed, then it won't be displayed.
+        :param bool back_sub: Should the plotted data be background subtracted, default is True.
+        :param bool show_legend: Should a legend with source names be added to the figure, default is True.
+        :param bool just_model: Should only the models, not the data, be plotted. Default is False.
+        :param str custom_title: A plot title to replace the automatically generated title, default is None.
+        :param dict draw_rads: A dictionary of extra radii (as astropy Quantities) to draw onto the plot, where
+            the dictionary key they are stored under is what they will be labelled.
+            e.g. ({'r500': Quantity(), 'r200': Quantity()}. If normalise_x option is also used, and the x-norm values
+            are not the same for each profile, then draw_rads will be disabled.
+        :param bool x_norm: Should the x-axis values be normalised with the x_norm value passed on the
+            definition of the constituent profile objects.
+        :param bool y_norm: Should the y-axis values be normalised with the y_norm value passed on the
+            definition of the constituent profile objects.
+        :param str x_label: Custom label for the x-axis (excluding units, which will be added automatically).
+        :param str y_label: Custom label for the y-axis (excluding units, which will be added automatically).
+        :param dict draw_vals: A dictionary of extra y-values (as astropy quantities) to draw onto the plot, where the
+            dictionary key they are stored under is what they will be labelled (keys can be LaTeX formatted);
+            e.g. {r'$T_{\rm{X,500}}$': Quantity(6, 'keV')}. Quantities with uncertainties may also be
+            passed, and the error regions will be shaded; e.g. {r'$T_{\rm{X,500}}$':
+            Quantity([6, 0.2, 0.3], 'keV')}, where 0.2 is the negative error, and 0.3 is the positive error.
+            Finally, plotting colour may be specified by setting the value to a list, with the first entry
+            being the quantity, and the second being a colour;
+            e.g. {r'$T_{\rm{X,500}}$': [Quantity([6, 0.2, 0.3], 'keV'), 'tab:blue']}.
+        :param bool auto_legend: If True, and show_legend has also been set to True, then the 'best' legend location
+            will be defined by matplotlib, otherwise, if False, the legend will be added to the right hand side of the
+            plot outside the main axes.
+        :param dict axis_formatters: A dictionary of formatters that can be applied to the profile plot. The keys
+            can have the following values; 'xmajor', 'xminor', 'ymajor', and 'yminor'. The values associated with the
+            keys should be instantiated matplotlib formatters.
+        :param bool show_residual_ax: Controls whether a lower axis showing the residuals between data and
+            model (if a model is fitted and being shown) is displayed. Default is True.
+        :param bool joined_points: If True, the data in the profiles will be plotted as a line, rather than points, as
+            will any uncertainty regions.
+        :param int dpi: The dots-per-inch resolution of the saved image.
+        """
+        if os.path.dirname(save_path) != "" and not os.path.exists(os.path.dirname(save_path)):
+            raise FileNotFoundError(
+                f"The directory in which the aggregate profile view is to be saved ({os.path.dirname(save_path)}) "
+                f"does not exist."
+            )
+
+        # Setting up figure for the plot
+        fig = plt.figure(figsize=figsize)
+        # Grabbing the axis object
+        main_ax = plt.gca()
+
+        self.get_view(
+            fig,
+            main_ax,
+            xscale=xscale,
+            yscale=yscale,
+            xlim=xlim,
+            ylim=ylim,
+            model=model,
+            back_sub=back_sub,
+            show_legend=show_legend,
+            just_model=just_model,
+            custom_title=custom_title,
+            draw_rads=draw_rads,
+            x_norm=x_norm,
+            y_norm=y_norm,
+            x_label=x_label,
+            y_label=y_label,
+            draw_vals=draw_vals,
+            auto_legend=auto_legend,
+            axis_formatters=axis_formatters,
+            show_residual_ax=show_residual_ax,
+            joined_points=joined_points,
+        )
+
+        # Saving the figure
+        fig.savefig(save_path, bbox_inches="tight", dpi=dpi)
+        # Clearing the current figure and closing all open figures
+        plt.close("all")
 
     def __add__(self, other):
         to_combine = self.profiles
