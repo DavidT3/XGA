@@ -530,7 +530,7 @@ def get_annular_esass_region(source: BaseSource, inner_radius: Quantity, outer_r
     else:
         # Multiple regions must be passed to eSASS via an ASCII
         #  file, so we will need somewhere to write them
-        reg_file_path = os.path.join(out_root_path, f'/temp_regs_{rand_ident}')
+        reg_file_path = os.path.join(out_root_path, f'temp_regs_{rand_ident}')
 
         reg_str = esass_source_area.replace(" ", "_")  # replacing spaces with underscores for file naming purposes
         reg_str = reg_str.replace(".", "-")  # replacing any dots with dashes
