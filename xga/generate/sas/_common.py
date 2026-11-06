@@ -59,8 +59,8 @@ def region_setup(
     # Checking that inner radii that have been passed into the spectrum generation aren't nonsense
     if isinstance(inner_radius, str) and inner_radius not in RAD_LABELS:
         raise ValueError(
-            "You have passed a radius name rather than a value for 'inner_radius', but it is "
-            "not a valid name, please use one of the following:\n {}".format(", ".join(RAD_LABELS))
+            f"You have passed a radius name rather than a value for 'inner_radius', but it is "
+            f"not a valid name, please use one of the following:\n {', '.join(RAD_LABELS)}"
         )
 
     elif (
@@ -79,16 +79,15 @@ def region_setup(
         and len(sources) != len(inner_radius)
     ):
         raise ValueError(
-            f"Your sample has {len(sources)} sources, but your inner_radius variable only has {len(inner_radius)} entries. Please "
-            "pass only one inner_radius or the same number as there are "
-            "sources"
+            f"Your sample has {len(sources)} sources, but your inner_radius variable only has {len(inner_radius)} "
+            f"entries. Please pass only one inner_radius or the same number as there are sources."
         )
 
     # Checking that outer_radius radii that have been passed into the spectrum generation aren't nonsense
     if isinstance(outer_radius, str) and outer_radius not in RAD_LABELS:
         raise ValueError(
-            "You have passed a radius name rather than a value for 'outer_radius', but it is "
-            "not a valid name, please use one of the following:\n {}".format(", ".join(RAD_LABELS))
+            f"You have passed a radius name rather than a value for 'outer_radius', but it is "
+            f"not a valid name, please use one of the following:\n {', '.join(RAD_LABELS)}"
         )
     elif (
         isinstance(outer_radius, str)
@@ -103,9 +102,8 @@ def region_setup(
         and len(sources) != len(outer_radius)
     ):
         raise ValueError(
-            f"Your sample has {len(sources)} sources, but your outer_radius variable only has {len(outer_radius)} entries. Please "
-            "pass only one outer_radius or the same number as there are "
-            "sources"
+            f"Your sample has {len(sources)} sources, but your outer_radius variable only has {len(outer_radius)} "
+            f"entries. Please pass only one outer_radius or the same number as there are sources."
         )
 
     # A crude way to store the radii but I'm tired and this will work fine

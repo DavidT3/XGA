@@ -223,7 +223,11 @@ FIT_FUNC_ARGS = {
 }
 
 
-def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict | str | None = None) -> str:
+def fit_conf_from_function(
+    fit_func: FunctionType | Callable | str,
+    changed_pars: dict | str | None = None,
+    existing_fit_confs: list[str] | set[str] | tuple[str, ...] | None = None,
+) -> str:
     """
     This function is a convenient way to assemble a fit configuration key without adding together all the function
     arguments yourself, and is used in various parts of XGA to make it easier to retrieve non-default model fits. It
@@ -234,12 +238,19 @@ def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict
     If a string is passed for 'changed_pars', we will assume that it is already a fully formed fit configuration
     key, and it will be passed back.
 
-    :param FunctionType fit_func: The XGA XSPEC function that was run, and for which a fit configuration storage
-        key is to be generated.
+    :param FunctionType/Callable/str fit_func: Either the XGA XSPEC fit function that was run (e.g.
+        ``single_temp_apec`` or a function returned by ``custom_xspec_fit``), or the string XSPEC model name
+        (e.g. ``'constant*tbabs*apec'`` or ``'constant*tbabs*bremss'``).
     :param dict/str changed_pars: A dictionary containing parameters that were altered from the default values when the
         fit function was called, and the values that they were altered too. This is to make it easier to assemble a
         fit configuration key for a non-default model run. If a string value is passed, we will assume that it is
         already the full fit configuration key, and it will be returned.
+    :param list/set/tuple existing_fit_confs: Optional collection of fit configuration keys already associated with
+        the model on a source or spectrum. Used when ``fit_func`` is passed as a model name string that matches both
+        a built-in convenience fit function (e.g. ``single_temp_apec`` for ``'constant*tbabs*apec'``) and a fit run
+        via ``general_model_fit`` or ``custom_xspec_fit``: built-in convenience functions do not include ``_nhtozero``
+        in their fit configuration keys, whereas ``general_model_fit`` and ``custom_xspec_fit`` always include
+        ``_nhtozero``, allowing us to disambiguate which parameter schema to use.
     :return: The full fit configuration storage key.
     :rtype: str
     """
@@ -249,12 +260,38 @@ def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict
     if isinstance(changed_pars, str):
         fit_conf = changed_pars
     else:
+        # Users and internal retrieval methods (such as Spectrum._get_fit_checks and BaseSource._get_fit_checks) can
+        #  pass either a callable fit function or a string model name (e.g. 'constant*tbabs*apec'). When a string model
+        #  name is provided, there are two ways a model could have been fitted in XGA:
+        #  1. Via one of XGA's dedicated built-in convenience functions (mapped in FIT_FUNC_MODEL_NAMES, such as
+        #     single_temp_apec for 'constant*tbabs*apec'), which use curated argument names like start_temp and
+        #     start_met.
+        #  2. Via general_model_fit or custom_xspec_fit, which support any XSPEC model expression and generate standard
+        #     flat parameter keys directly from model.dat (such as start_kT, start_Abundanc, and nh_to_zero).
+        #  When a model name overlaps with a built-in convenience function (e.g. 'constant*tbabs*apec'), we check
+        #  whether any existing fit configurations stored for that model contain '_nhtozero' (which is always present
+        #  in fits run through general_model_fit/custom_xspec_fit, and never present in the legacy convenience
+        #  functions). If not, we resolve the model name to the built-in fit function; otherwise we construct the
+        #  custom_xspec_fit wrapper.
+        if isinstance(fit_func, str):
+            from .fit import FIT_FUNC_MODEL_NAMES
+            from .fit.models import custom_xspec_fit
+
+            if fit_func in FIT_FUNC_MODEL_NAMES and (
+                existing_fit_confs is None or not any("_nhtozero" in fc for fc in existing_fit_confs)
+            ):
+                resolved_func: FunctionType | Callable = FIT_FUNC_MODEL_NAMES[fit_func]
+            else:
+                resolved_func = custom_xspec_fit(fit_func, norm_scale=fit_func.startswith("constant*"))
+        else:
+            resolved_func = fit_func
+
         # This reads the signature (i.e. the first line of the function definition with all the arguments) - we shall
         #  need it in order to know what the default values are
-        sig = signature(fit_func)
+        sig = signature(resolved_func)
         # This gets the dictionary that describes whether an argument is relevant to the fit configuration key for
         #  the function that has been passed
-        rel_args = FIT_FUNC_ARGS[fit_func.__name__]
+        rel_args = FIT_FUNC_ARGS[resolved_func.__name__]
 
         # This snippet uses the read-in signature of the function to create a dictionary of keyword arguments and
         #  default values - we shall need this in order to make it easier to construct the key, as the user will only
@@ -264,9 +301,18 @@ def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict
         if changed_pars is not None and not isinstance(changed_pars, dict):
             raise TypeError("'changed_pars' argument must be a dictionary of the values that were changed from default")
 
-        if changed_pars is not None and hasattr(fit_func, "_xga_user_pars"):
-            user_pars = fit_func._xga_user_pars
+        # Functions created by custom_xspec_fit attach a '_xga_user_pars' metadata list of parameter dicts from
+        #  model.dat. Because users may fit a model with general_model_fit (passing nested dicts like
+        #  start_pars={'kT': ...}, freeze_pars={'Abundanc': False}, link_pars={...}) OR with a custom_xspec_fit
+        #  function (passing flat keyword arguments like start_kT=..., freeze_Abundanc=False), we normalise both styles
+        #  into the flat keyword argument format expected by the custom function's signature, and ensure any starting
+        #  values for parameters with physical units in model.dat are converted to Astropy Quantities in XSPEC's
+        #  expected unit before formatting the key.
+        if changed_pars is not None and hasattr(resolved_func, "_xga_user_pars"):
+            user_pars = resolved_func._xga_user_pars
             norm_changed: dict = {}
+            # First unpack any nested start_pars, freeze_pars, or link_pars dictionaries into flat '<prefix>_<par_key>'
+            #  entries while preserving any already-flat parameter overrides
             for ch_k, ch_v in changed_pars.items():
                 if ch_k in ("start_pars", "freeze_pars", "link_pars"):
                     if ch_v is None:
@@ -279,6 +325,9 @@ def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict
                 else:
                     norm_changed[ch_k] = ch_v
 
+            # Next, iterate through the model's parameter metadata from model.dat to convert start_<par_key> values
+            #  into Astropy Quantities with the expected unit (or floats for dimensionless parameters), and cast any
+            #  freeze_<par_key> and link_<par_key> overrides to booleans
             for p in user_pars:
                 pk = p["par_key"]
                 p_unit = p["unit"]
@@ -305,7 +354,7 @@ def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict
             all_args = ". ".join([kn for kn in rel_args if rel_args[kn]])
             raise KeyError(
                 f"Some entries in 'changed_pars' ({not_pres}) do not correspond to a keyword argument that is "
-                f"included in the fit configuration key for {fit_func.__name__}; the keyword arguments are "
+                f"included in the fit configuration key for {resolved_func.__name__}; the keyword arguments are "
                 f"{all_args}."
             )
 
@@ -327,26 +376,35 @@ def fit_conf_from_function(fit_func: FunctionType | Callable, changed_pars: dict
 
 def _format_fit_conf_value(val: int | float | bool | str | Quantity | np.ndarray | dict | list | tuple | None) -> str:
     """
-    Convert an individual value into a deterministic, compact string for a fit configuration key.
+    Convert a single fit function argument value into a deterministic, compact string for a fit configuration key.
 
-    This is used for formatting parameter dictionaries, lists, or None values passed to general_model_fit. Any
-    underscores in dictionary keys or string values are replaced with '~' so that downstream methods which split
-    fit configuration keys on '_' do not fracture a single parameter entry, while still distinguishing disambiguated
-    parameter names (e.g. 'kT_1' -> 'kT~1') from native parameter names (e.g. 'kT1').
+    Scalar Astropy Quantities are formatted as their numeric value concatenated with their unit string, while
+    non-scalar Quantities and NumPy arrays have their elements joined with ``;`` inside square brackets. Lists and
+    tuples are formatted recursively by applying ``_format_fit_conf_value`` to each element and joining the results
+    with ``;`` inside square brackets. Dictionaries are sorted by key, with each key's underscores replaced by ``~``
+    and each value formatted recursively via ``_format_fit_conf_value``, joined with ``;`` inside curly braces.
+    Strings also have underscores replaced with ``~`` so that downstream methods which split fit configuration keys
+    on ``_`` do not split inside a single parameter entry, while still distinguishing disambiguated parameter names
+    (e.g. ``'kT_1'`` -> ``'kT~1'``) from native parameter names (e.g. ``'kT1'``).
 
     :param int/float/bool/str/Quantity/np.ndarray/dict/list/tuple val: The value to format as a string.
     :return: The formatted string representation of the value.
     :rtype: str
     """
     if isinstance(val, Quantity):
+        # Scalar Quantities are formatted directly as '<value><unit>', whereas array Quantities are flattened and
+        #  enclosed in '[...]<unit>' with ';' separators
         if val.isscalar:
             return f"{val.value}{val.unit.to_string()}"
         else:
             vals_str = ";".join(str(v) for v in np.asarray(val.value).flatten())
             return f"[{vals_str}]{val.unit.to_string()}"
     elif isinstance(val, np.ndarray):
+        # Recursively format each element of a NumPy array and join with ';' inside square brackets
         return "[" + ";".join(_format_fit_conf_value(elem) for elem in val.tolist()) + "]"
     elif isinstance(val, dict):
+        # Sort dictionary items by key for deterministic output, replacing '_' with '~' in keys and recursively
+        #  formatting each value
         return (
             "{"
             + ";".join(
@@ -356,10 +414,13 @@ def _format_fit_conf_value(val: int | float | bool | str | Quantity | np.ndarray
             + "}"
         )
     elif isinstance(val, (list, tuple)):
+        # Recursively format each element of a list or tuple and join with ';' inside square brackets
         return "[" + ";".join(_format_fit_conf_value(elem) for elem in val) + "]"
     elif isinstance(val, str):
+        # Replace '_' with '~' in strings so '_' remains reserved as the top-level delimiter between fit_conf parts
         return val.replace("_", "~")
     else:
+        # Booleans, ints, floats, and None are converted via str()
         return str(val)
 
 

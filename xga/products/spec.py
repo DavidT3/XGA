@@ -2,6 +2,7 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 
 import os
+import re
 from copy import deepcopy
 from warnings import warn
 
@@ -1190,22 +1191,26 @@ class Spectrum(BaseProduct):
             dictionaries of parameters-changed-from-default as values.
         :rtype: dict
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
+        from ..xspec.fit import FIT_FUNC_MODEL_NAMES
         from ..xspec.fitconfgen import FIT_FUNC_ARGS, fit_conf_from_function
 
         diffs = {}
         for mod in self.fitted_models:
             diffs.setdefault(mod, {})
             existing_fconfs = self.fitted_model_configurations[mod]
+            # Construct the default fit configuration key for this model. Passing existing_fit_confs allows
+            #  fit_conf_from_function to determine whether the model was fit via one of XGA's built-in convenience
+            #  functions (which do not include '_nhtozero' in their keys) or via general_model_fit/custom_xspec_fit
+            #  (which always include '_nhtozero' and register a 'fit_<model>' entry in FIT_FUNC_ARGS).
+            def_fit_conf = fit_conf_from_function(mod, existing_fit_confs=existing_fconfs)
+            # Determine the function key in FIT_FUNC_ARGS (which fit_conf_from_function has now ensured is populated)
+            #  so we can extract the list of candidate argument names for splitting the fit_conf key below.
             if mod in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
-                fit_func = FIT_FUNC_MODEL_NAMES[mod]
+                func_name = FIT_FUNC_MODEL_NAMES[mod].__name__
             else:
-                fit_func = custom_xspec_fit(mod, norm_scale=mod.startswith("constant*"))
-            def_fit_conf = fit_conf_from_function(fit_func)
+                func_name = f"fit_{re.sub(r'[^a-zA-Z0-9]+', '_', mod).strip('_')}"
 
-            mod_args = [
-                in_arg for in_arg in FIT_FUNC_ARGS[fit_func.__name__] if FIT_FUNC_ARGS[fit_func.__name__][in_arg]
-            ]
+            mod_args = [in_arg for in_arg in FIT_FUNC_ARGS[func_name] if FIT_FUNC_ARGS[func_name][in_arg]]
 
             for cur_fit_conf in self.fitted_model_configurations[mod]:
                 diffs[mod][cur_fit_conf] = {}
@@ -1327,7 +1332,6 @@ class Spectrum(BaseProduct):
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -1357,14 +1361,10 @@ class Spectrum(BaseProduct):
                 "changed-from-default fit function arguments as keys and changed values as items."
             )
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
-        #  as a string
+        #  as a string. Passing the existing fit configurations for this model allows fit_conf_from_function to
+        #  resolve whether the fit used a built-in convenience function or general_model_fit/custom_xspec_fit.
         elif isinstance(fit_conf, dict):
-            existing_fconfs = self.fitted_model_configurations[model]
-            if model in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
-                fit_func = FIT_FUNC_MODEL_NAMES[model]
-            else:
-                fit_func = custom_xspec_fit(model, norm_scale=model.startswith("constant*"))
-            fit_conf = fit_conf_from_function(fit_func, fit_conf)
+            fit_conf = fit_conf_from_function(model, fit_conf, self.fitted_model_configurations[model])
         elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
             av_fconfs = ", ".join(self.fitted_model_configurations[model])
             raise ModelNotAssociatedError(
@@ -1869,7 +1869,6 @@ class Spectrum(BaseProduct):
         :param bool show_residuals: Whether an additional subplot is created with the residuals of any models fit to
             the spectrum by XSPEC. Default is False, and can only be set to True if a model fit has been performed.
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # This just checks whether the grouped argument to this method is compatible with whether the spectrum
@@ -1948,12 +1947,7 @@ class Spectrum(BaseProduct):
 
             # If the configuration is a dictionary we need to try to turn that into a proper fit configuration key
             if isinstance(fit_conf, dict):
-                existing_fconfs = self.fitted_model_configurations[model]
-                if model in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
-                    fit_func = FIT_FUNC_MODEL_NAMES[model]
-                else:
-                    fit_func = custom_xspec_fit(model, norm_scale=model.startswith("constant*"))
-                fit_conf = fit_conf_from_function(fit_func, fit_conf)
+                fit_conf = fit_conf_from_function(model, fit_conf, self.fitted_model_configurations[model])
 
             # And now we check if the fit configuration is available to this Spectrum instance
             if fit_conf not in self.fitted_model_configurations[model]:
@@ -3300,7 +3294,6 @@ class AnnularSpectra(BaseAggregateProduct):
         :return: The model name and fit configuration.
         :rtype: Tuple[str, str]
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -3331,14 +3324,10 @@ class AnnularSpectra(BaseAggregateProduct):
                 "changed-from-default fit function arguments as keys and changed values as items."
             )
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
-        #  as a string
+        #  as a string. Passing the existing fit configurations for this model allows fit_conf_from_function to
+        #  resolve whether the fit used a built-in convenience function or general_model_fit/custom_xspec_fit.
         elif isinstance(fit_conf, dict):
-            existing_fconfs = self.fitted_model_configurations[model]
-            if model in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
-                fit_func = FIT_FUNC_MODEL_NAMES[model]
-            else:
-                fit_func = custom_xspec_fit(model, norm_scale=model.startswith("constant*"))
-            fit_conf = fit_conf_from_function(fit_func, fit_conf)
+            fit_conf = fit_conf_from_function(model, fit_conf, self.fitted_model_configurations[model])
         elif isinstance(fit_conf, str) and fit_conf not in self.fitted_model_configurations[model]:
             av_fconfs = ", ".join(self.fitted_model_configurations[model])
             raise ModelNotAssociatedError(
@@ -4020,7 +4009,6 @@ class AnnularSpectra(BaseAggregateProduct):
         :param int/float fontsize: The fontsize for axis labels. The legend fontsize will be fontsize - 1. The title
             fontsize will be fontsize + 1. Default is 14.
         """
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # Setup the figure as we normally would
@@ -4120,12 +4108,7 @@ class AnnularSpectra(BaseAggregateProduct):
 
                 # If the configuration is a dictionary we need to try to turn that into a proper fit configuration key
                 if isinstance(fit_conf, dict):
-                    existing_fconfs = self.fitted_model_configurations[model]
-                    if model in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
-                        fit_func = FIT_FUNC_MODEL_NAMES[model]
-                    else:
-                        fit_func = custom_xspec_fit(model, norm_scale=model.startswith("constant*"))
-                    fit_conf = fit_conf_from_function(fit_func, fit_conf)
+                    fit_conf = fit_conf_from_function(model, fit_conf, self.fitted_model_configurations[model])
 
                 # And now we check if the fit configuration is available to this Spectrum instance
                 if fit_conf not in self.fitted_model_configurations[model]:

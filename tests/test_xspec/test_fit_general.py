@@ -14,7 +14,7 @@ from xga.samples import ClusterSample
 from xga.xspec.fit import custom_xspec_fit, general_model_fit, single_temp_apec
 from xga.xspec.fitconfgen import fit_conf_from_function
 
-from .. import CLUSTER_SMP, MISC_OUTPUT_TESTS, get_test_source
+from .. import MISC_OUTPUT_TESTS, get_test_sample, get_test_source
 
 
 class TestXSPECSingleSource(unittest.TestCase):
@@ -364,6 +364,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         """Tests fitting an arbitrary XSPEC model via general_model_fit and custom_xspec_fit, and retrieving
         results with and without units.
         """
+        # Fit an absorbed bremsstrahlung model using general_model_fit with a dictionary parameter override
         general_model_fit(
             self.no_fits_src,
             self.out_rad,
@@ -372,6 +373,7 @@ class TestXSPECSingleSource(unittest.TestCase):
             telescope="xmm",
         )
 
+        # Fit the same model expression using a custom_xspec_fit factory wrapper with a flat keyword override
         custom_fit_fn = custom_xspec_fit("tbabs*bremss")
         custom_fit_fn(
             self.no_fits_src,
@@ -380,6 +382,7 @@ class TestXSPECSingleSource(unittest.TestCase):
             telescope="xmm",
         )
 
+        # Retrieve results from the first fit without Astropy units (default raw numpy array behaviour)
         res_raw = self.no_fits_src.get_results(
             self.out_rad,
             telescope="xmm",
@@ -392,6 +395,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertIn("norm", res_raw)
         self.assertIsInstance(res_raw["kT"], np.ndarray)
 
+        # Retrieve results from the second fit with with_units=True so parameters are wrapped as Astropy Quantities
         res_units = self.no_fits_src.get_results(
             self.out_rad,
             telescope="xmm",
@@ -405,6 +409,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertIsInstance(res_units["norm"], Quantity)
         self.assertEqual(res_units["norm"].unit, Unit(""))
 
+        # Verify that Spectrum.fitted_model_configuration_diffs identifies the changed start_kT for both fits
         specs = self.no_fits_src.get_spectra(self.out_rad, telescope="xmm")
         spec_obj = specs[0] if isinstance(specs, list) else specs
         diffs = spec_obj.fitted_model_configuration_diffs["constant*tbabs*bremss"]
@@ -412,6 +417,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertIn({"start_kT": "3.0keV"}, diff_vals)
         self.assertIn({"start_kT": "4.5keV"}, diff_vals)
 
+        # Verify that luminosity retrieval works when passing the general_model_fit override dictionary
         lxs = self.no_fits_src.get_luminosities(
             self.out_rad,
             telescope="xmm",
@@ -423,12 +429,16 @@ class TestXSPECSingleSource(unittest.TestCase):
         # Verify multi-component custom model fit_conf lookup and shared parameter name unit resolution
         two_apec_fn = custom_xspec_fit("tbabs*(apec+apec)")
         two_apec_conf = fit_conf_from_function(two_apec_fn, {"start_kT_1": Quantity(2.0, "keV")})
+        # Inject a synthetic two-component APEC fit result into _fit_results to verify that
+        #  get_results(..., with_units=True) attaches keV units when 'kT' appears in two different additive
+        #  components (parameter indices 3 and 7)
         self.no_fits_src._fit_results["xmm"][spec_obj.storage_key].setdefault("constant*tbabs*(apec+apec)", {})[
             two_apec_conf
         ] = {
             "kT": {"3": [2.1, 0.1, 0.1], "7": [5.4, 0.3, 0.3]},
             "norm": {"6": [1e-3, 1e-4, 1e-4], "10": [2e-3, 1e-4, 1e-4]},
         }
+        # Retrieve the multi-component kT array with units enabled and check its type, unit, and (2, 3) shape
         multi_kt = self.no_fits_src.get_results(
             self.out_rad,
             telescope="xmm",
@@ -451,29 +461,17 @@ class TestBaseSample(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """Initialise test ClusterSample instances for sample-level XSPEC tests."""
-        cls.test_smp = ClusterSample(
-            CLUSTER_SMP["ra"].to_numpy(),
-            CLUSTER_SMP["dec"].to_numpy(),
-            CLUSTER_SMP["z"].to_numpy(),
-            CLUSTER_SMP["name"].to_numpy(),
-            r500=Quantity(CLUSTER_SMP["r500"].to_numpy(), "kpc"),
-            use_peak=False,
-            search_distance={"erass": Quantity(3.6, "deg")},
-        )
+        # Retrieve a shared ClusterSample instance with all available missions
+        cls.test_smp = get_test_sample("all")
 
-        cls.smp_odd_tels = ClusterSample(
-            CLUSTER_SMP["ra"].to_numpy(),
-            CLUSTER_SMP["dec"].to_numpy(),
-            CLUSTER_SMP["z"].to_numpy(),
-            CLUSTER_SMP["name"].to_numpy(),
-            r500=Quantity(CLUSTER_SMP["r500"].to_numpy(), "kpc"),
-            use_peak=False,
-            search_distance={"erass": Quantity(3.6, "deg")},
-        )
+        # Retrieve a separate unshared ClusterSample instance and disassociate eROSITA from the first cluster
+        #  so we can test sample retrieval when members have differing telescope coverage
+        cls.smp_odd_tels = get_test_sample("all", shared=False)
         cls.smp_odd_tels[0].disassociate_obs("erass")
 
     def test_lx_w_stacked_spectra(self) -> None:
         """Tests retrieving stacked-spectra luminosities from a ClusterSample."""
+        # Run a stacked-spectra APEC fit on the sample and verify that Lx returns a 2-element Quantity
         single_temp_apec(self.test_smp, "r500", stacked_spectra=True, spectrum_checking=False)
         lx = self.test_smp.Lx("r500", "erass", stacked_spectra=True)
 
@@ -485,6 +483,8 @@ class TestBaseSample(unittest.TestCase):
         Testing that for samples where sources don't have the same telescopes assigned, the Lx and Tx
         can be retrieved.
         """
+        # Fit the sample where the first cluster lacks eROSITA data, then check that Lx pads the missing
+        #  cluster's eROSITA luminosity with NaN while returning a 2-element Quantity
         single_temp_apec(self.smp_odd_tels, "r500", stacked_spectra=True, spectrum_checking=False)
 
         cur_lx = self.smp_odd_tels.Lx("r500", "erass", stacked_spectra=True)

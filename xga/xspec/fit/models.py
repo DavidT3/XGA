@@ -2,7 +2,9 @@
 #  Last modified by David J Turner (djturner@umbc.edu) 11/4/26, 9:50 PM. Copyright (c) The Contributors.
 """Validation, tokenisation, and parameter inspection utilities for XSPEC model expressions."""
 
+import os
 import re
+import shlex
 from collections.abc import Callable
 from inspect import Parameter, Signature
 from typing import Any
@@ -19,9 +21,250 @@ from ...sources import BaseSource
 from ..fitconfgen import FIT_FUNC_ARGS
 
 # Valid characters in an XSPEC model expression (model names, '+', '*', and parentheses)
-_VALID_EXPR_RE = re.compile(r"^[a-zA-Z0-9_.*+()]+$")
+_VALID_XSPEC_EXPR_RE = re.compile(r"^[a-zA-Z0-9_.*+()]+$")
 # Matches either an operator/parenthesis or a model component identifier
-_TOKEN_RE = re.compile(r"\(|\)|\*|\+|[a-zA-Z0-9_.]+")
+_XSPEC_TOKEN_RE = re.compile(r"\(|\)|\*|\+|[a-zA-Z0-9_.]+")
+
+# Mapping of non-standard or shorthand unit strings used in XSPEC's model.dat file onto valid astropy unit
+#  representations. XSPEC's model.dat was written for human display in terminal prompts rather than strict machine
+#  parsing, so many entries include parenthetical notes (e.g. 'keV(-th)'), omit the column-density area dimension
+#  (e.g. '10^22' for hydrogen column density in 10^22 cm^-2), or use text labels for dimensionless quantities
+#  (e.g. 'solar', 'z', '0/1').
+_XSPEC_UNIT_MAP: dict[str, str] = {
+    "": "",
+    "0/1": "",
+    "0off/1on": "",
+    "real": "",
+    "solar": "",
+    "Solar": "",
+    "z": "",
+    "(-disk)": "",
+    "(-selfg)": "",
+    "(_calc)": "",
+    "(_disk)": "",
+    "(_selfg)": "",
+    "10^22": "10^22 cm^-2",
+    "10^16": "10^16 cm^-2",
+    "1e18": "10^18 cm^-2",
+    "10^-4": "1e-4",
+    "10^9": "1e9",
+    "1e12G": "1e12 G",
+    "1e17g/s": "1e17 g s^-1",
+    "A": "AA",
+    "Gau": "G",
+    "KeV": "keV",
+    "keV(-nt)": "keV",
+    "keV(-pl)": "keV",
+    "keV(-sc)": "keV",
+    "keV(-th)": "keV",
+    "keV(_pl)": "keV",
+    "keV(_sc)": "keV",
+    "M_sun": "Msun",
+    "Msun": "Msun",
+    "M0yr": "Msun yr^-1",
+    "cm-3": "cm^-3",
+    "cm^-3": "cm^-3",
+    "cm**-3": "cm^-3",
+    "days": "d",
+    "mum": "um",
+    "ergcm/s": "erg cm s^-1",
+    "erg cm/s": "erg cm s^-1",
+}
+
+
+def _xspec_unit_to_astropy(raw_unit: str) -> tuple[Unit, bool]:
+    """
+    Internal helper to convert an XSPEC parameter unit string (as defined in HEASoft's model.dat) into an
+    astropy Unit object. If a unit string represents a dimensionless quantity, or uses an XSPEC-specific notation
+    (such as 'R_g' or 'L_Edd') that cannot be represented as a standard physical astropy unit, a dimensionless
+    Unit('') is returned rather than raising an error, along with a boolean flag indicating whether the unit was
+    recognised so that callers (such as get_results with with_units=True) can warn the user if needed.
+
+    :param str raw_unit: The raw unit string extracted from XSPEC's model.dat file.
+    :return: A tuple of (astropy Unit object, boolean indicating whether the unit was recognised).
+    :rtype: Tuple[Unit, bool]
+    """
+    cleaned = raw_unit.strip()
+    if cleaned in _XSPEC_UNIT_MAP:
+        return Unit(_XSPEC_UNIT_MAP[cleaned]), True
+
+    # Strip any trailing parenthetical qualifiers (e.g. 'keV(-th)' or future annotations of that form) before
+    #  asking astropy to parse the unit string.
+    stripped_parens = re.sub(r"\([^)]*\)$", "", cleaned).strip()
+    if stripped_parens in _XSPEC_UNIT_MAP:
+        return Unit(_XSPEC_UNIT_MAP[stripped_parens]), True
+
+    for candidate in (cleaned, stripped_parens):
+        if not candidate:
+            continue
+        try:
+            return Unit(candidate), True
+        except ValueError:
+            continue
+
+    return Unit(""), False
+
+
+def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[str, list[str]], dict[str, list[Unit]]]:
+    """
+    Internal helper that reads the local HEASoft XSPEC model.dat descriptor file and extracts all built-in models,
+    their types ('add', 'mul', 'con', 'acn'), and full parameter metadata (names, units, default values, hard/soft
+    limits, and default freeze states).
+
+    We parse model.dat directly from the user's active HEASoft installation rather than bundling static model lists
+    with XGA because XGA does not mandate a single XSPEC version, and new models (or updated parameter definitions)
+    are added across HEASoft releases.
+
+    :param str model_dat_path: Path to the model.dat file in the local HEASoft installation.
+    :return: A tuple of three dictionaries keyed by lowercase model name:
+        1. Full model metadata dictionary (XSPEC_MODELS).
+        2. Mapping of model name to ordered list of parameter names (MODEL_PARS).
+        3. Mapping of model name to ordered list of astropy Unit objects (MODEL_UNITS).
+    :rtype: Tuple[dict[str, dict], dict[str, list[str]], dict[str, list[Unit]]]
+    """
+    xspec_models: dict[str, dict] = {}
+    model_pars: dict[str, list[str]] = {}
+    model_units: dict[str, list[Unit]] = {}
+
+    if not os.path.exists(model_dat_path):
+        return xspec_models, model_pars, model_units
+
+    with open(model_dat_path, encoding="utf-8", errors="replace") as model_file:
+        lines = [line.strip() for line in model_file if line.strip()]
+
+    line_idx = 0
+    num_lines = len(lines)
+    while line_idx < num_lines:
+        hdr_tokens = shlex.split(lines[line_idx])
+        # A valid model header line in model.dat has at least 6 tokens:
+        #  <model_name> <num_pars> <lo_energy> <hi_energy> <func_name> <model_type> [flags...]
+        if len(hdr_tokens) < 6:
+            line_idx += 1
+            continue
+
+        xspec_name = hdr_tokens[0]
+        model_key = xspec_name.lower()
+        num_pars = int(hdr_tokens[1])
+        model_type = hdr_tokens[5].lower()
+
+        pars_meta: list[dict] = []
+        for par_offset in range(1, num_pars + 1):
+            if line_idx + par_offset >= num_lines:
+                break
+            par_tokens = shlex.split(lines[line_idx + par_offset])
+            if not par_tokens:
+                continue
+
+            raw_par_name = par_tokens[0]
+            # In model.dat, a leading '$' denotes an integer switch parameter (e.g. '$switch 1' in mekal),
+            #  and a leading '*' denotes a fixed scale/pivot parameter (e.g. '*pivotE keV 1.0' in logpar).
+            #  When XSPEC loads the model (and when tcloutr pinfo is queried in TCL), those prefix characters
+            #  are stripped from the parameter name, and the parameter cannot be freely fit by default.
+            is_switch = raw_par_name.startswith("$")
+            is_scale = raw_par_name.startswith("*")
+            par_name = raw_par_name.lstrip("$*")
+
+            if is_switch:
+                # Most switch lines are 2 tokens ('$switch 1'), though a few include an empty unit string column
+                #  before the default integer value (e.g. '$lflag " " 1.'), so the default value is always the final
+                #  token on the line.
+                default_val = float(par_tokens[-1]) if len(par_tokens) > 1 else 1.0
+                pars_meta.append(
+                    {
+                        "name": par_name,
+                        "raw_unit": "",
+                        "unit": Unit(""),
+                        "unit_recognised": True,
+                        "default": default_val,
+                        "hard_min": None,
+                        "soft_min": None,
+                        "soft_max": None,
+                        "hard_max": None,
+                        "delta": -1.0,
+                        "frozen": True,
+                        "switch_or_scale": True,
+                    }
+                )
+            elif is_scale and len(par_tokens) < 8:
+                raw_unit = par_tokens[1].strip() if len(par_tokens) > 1 else ""
+                par_unit, unit_rec = _xspec_unit_to_astropy(raw_unit)
+                default_val = float(par_tokens[2]) if len(par_tokens) > 2 else 1.0
+                pars_meta.append(
+                    {
+                        "name": par_name,
+                        "raw_unit": raw_unit,
+                        "unit": par_unit,
+                        "unit_recognised": unit_rec,
+                        "default": default_val,
+                        "hard_min": None,
+                        "soft_min": None,
+                        "soft_max": None,
+                        "hard_max": None,
+                        "delta": -1.0,
+                        "frozen": True,
+                        "switch_or_scale": True,
+                    }
+                )
+            else:
+                # Standard 8-column parameter entry:
+                #  <name> <unit> <default> <hard_min> <soft_min> <soft_max> <hard_max> <delta>
+                # A negative or zero step size (delta) means XSPEC freezes the parameter by default.
+                raw_unit = par_tokens[1].strip()
+                par_unit, unit_rec = _xspec_unit_to_astropy(raw_unit)
+                default_val = float(par_tokens[2])
+                hard_min = float(par_tokens[3])
+                soft_min = float(par_tokens[4])
+                soft_max = float(par_tokens[5])
+                hard_max = float(par_tokens[6])
+                delta = float(par_tokens[7])
+                pars_meta.append(
+                    {
+                        "name": par_name,
+                        "raw_unit": raw_unit,
+                        "unit": par_unit,
+                        "unit_recognised": unit_rec,
+                        "default": default_val,
+                        "hard_min": hard_min,
+                        "soft_min": soft_min,
+                        "soft_max": soft_max,
+                        "hard_max": hard_max,
+                        "delta": delta,
+                        "frozen": (delta <= 0.0) or is_scale,
+                        "switch_or_scale": is_scale,
+                    }
+                )
+
+        # Additive ('add') models in XSPEC always have an implicit 'norm' parameter appended as their final
+        #  parameter, even though it is not listed as a parameter line in model.dat.
+        if model_type == "add":
+            pars_meta.append(
+                {
+                    "name": "norm",
+                    "raw_unit": "",
+                    "unit": Unit(""),
+                    "unit_recognised": True,
+                    "default": 1.0,
+                    "hard_min": 0.0,
+                    "soft_min": 0.0,
+                    "soft_max": 1e24,
+                    "hard_max": 1e24,
+                    "delta": 0.01,
+                    "frozen": False,
+                    "switch_or_scale": False,
+                }
+            )
+
+        xspec_models[model_key] = {
+            "xspec_name": xspec_name,
+            "model_type": model_type,
+            "pars": pars_meta,
+        }
+        model_pars[model_key] = [p["name"] for p in pars_meta]
+        model_units[model_key] = [p["unit"] for p in pars_meta]
+
+        line_idx += num_pars + 1
+
+    return xspec_models, model_pars, model_units
 
 
 def _strip_outer_parens(expr: str) -> str:
@@ -36,6 +279,8 @@ def _strip_outer_parens(expr: str) -> str:
     while expr.startswith("(") and expr.endswith(")"):
         depth = 0
         wraps_all = True
+        # Walk through the expression and check whether the opening parenthesis at index 0 closes before the final
+        #  character; if it does (e.g. '(apec+apec)*(tbabs)'), the outer parentheses do not wrap the whole expression
         for idx, char in enumerate(expr):
             if char == "(":
                 depth += 1
@@ -64,6 +309,7 @@ def _has_top_level_addition(expr: str) -> bool:
     :rtype: bool
     """
     depth = 0
+    # Track parenthesis nesting depth and return True immediately if we encounter '+' at depth 0
     for char in expr:
         if char == "(":
             depth += 1
@@ -147,9 +393,11 @@ def validate_and_parse_model(
     general_xspec_fit.xcm script.
 
     :param str model: The XSPEC model expression (e.g. 'tbabs*apec', 'tbabs*(apec+powerlaw)').
-    :param bool norm_scale: If True, prepends 'constant*' to the model expression (if not already present) so
-        that simultaneous fits across multiple spectra link additive normalisations and scale via a multiplicative
-        constant. Default is True.
+    :param bool norm_scale: If True, prepends the multiplicative 'constant*' model component to the expression (if
+        not already present) to account for cross-calibration normalisation offsets when simultaneously fitting
+        multiple observations/instruments (linking the normalisation parameters of additive emission components such as
+        'apec' or 'powerlaw' across spectra while allowing the multiplicative constant factor to vary independently per
+        spectrum). Default is True.
     :return: A tuple of:
         1. The normalised XSPEC model string (lowercase, whitespace removed, 'constant*' prepended if requested).
         2. Ordered list of parameter metadata dictionaries for one data group.
@@ -167,14 +415,14 @@ def validate_and_parse_model(
     # Remove all whitespace and convert to lowercase to match XGA's model storage naming conventions
     clean_model = "".join(model.split()).lower()
 
-    if not _VALID_EXPR_RE.match(clean_model):
+    if not _VALID_XSPEC_EXPR_RE.match(clean_model):
         raise ValueError(
             f"Model expression '{model}' contains invalid characters. Only alphanumeric model names, "
             f"'+', '*', '(', and ')' are permitted."
         )
 
     # Tokenise and verify balanced parentheses and valid operator placement before checking model names
-    tokens = _TOKEN_RE.findall(clean_model)
+    tokens = _XSPEC_TOKEN_RE.findall(clean_model)
     if "".join(tokens) != clean_model:
         raise ValueError(f"Model expression '{model}' could not be cleanly tokenised.")
 
@@ -222,7 +470,7 @@ def validate_and_parse_model(
             clean_model = f"constant*({clean_model})"
         else:
             clean_model = f"constant*{clean_model}"
-        tokens = _TOKEN_RE.findall(clean_model)
+        tokens = _XSPEC_TOKEN_RE.findall(clean_model)
 
     components = [tok for tok in tokens if tok not in ("(", ")", "*", "+")]
     if not components:
@@ -267,6 +515,8 @@ def validate_and_parse_model(
             redshifted_abs_comps.append(comp_name)
 
         for par_meta in comp_info["pars"]:
+            # Disambiguate parameter names that appear more than once across the model's components by appending
+            #  _1, _2, etc. (matching the exact suffix convention used in general_xspec_fit.xcm)
             base_name = par_meta["name"]
             par_key = base_name
             dup_count = 1
@@ -275,6 +525,7 @@ def validate_and_parse_model(
                 dup_count += 1
             seen_par_keys.add(par_key)
 
+            # Identify whether this parameter is the leading cross-calibration constant factor or an absorption nH
             is_leading_norm_scale = norm_scale and comp_idx == 1 and comp_name == "constant" and par_idx == 1
             is_abs_nh = _is_absorption_nh_par(m_type, par_meta)
 
@@ -291,8 +542,12 @@ def validate_and_parse_model(
                 if is_abs_nh:
                     extra_abs_nh_keys.append(f"{comp_name}:{par_key} (par {par_idx})")
 
+            # Cosmological redshift parameters on non-redshifted-absorber components default to source.redshift
             is_z = _is_redshift_par(par_meta) and not is_redshifted_absorber
 
+            # Determine default freeze and link states: the leading constant factor is thawed and unlinked across
+            #  spectra (since general_xspec_fit.xcm freezes data group 1's constant at 1.0 and thaws the rest),
+            #  Galactic nH is frozen and linked, and all other parameters follow model.dat freeze defaults and link
             if is_leading_norm_scale:
                 default_frozen = False
                 default_linked = False
@@ -303,6 +558,8 @@ def validate_and_parse_model(
                 default_frozen = bool(par_meta["frozen"])
                 default_linked = True
 
+            # Record the 1-based parameter index of any absorption column density so xga_extract can zero it when
+            #  calculating unabsorbed luminosities
             if is_abs_nh:
                 nh_to_zero.append(par_idx)
 
@@ -392,6 +649,8 @@ def describe_xspec_model(
         unit_obj: Unit = p["unit"]
         raw_unit: str = p["raw_unit"]
 
+        # Galactic nH and cosmological redshift parameters default to None in start_pars so general_model_fit knows
+        #  to substitute source.nH and source.redshift automatically unless the user replaces None with a value
         if p["is_galactic_nh"]:
             default_display = f"<source.nH> ({p['default']} {raw_unit})"
             start_val: Quantity | float | None = None
@@ -399,6 +658,7 @@ def describe_xspec_model(
             default_display = f"<source.redshift> ({p['default']})"
             start_val = None
         else:
+            # Wrap parameters with recognised physical units in an Astropy Quantity
             if unit_obj != Unit(""):
                 start_val = Quantity(p["default"], unit_obj)
                 default_display = f"{p['default']} {unit_obj}"
@@ -412,11 +672,13 @@ def describe_xspec_model(
             freeze_pars[par_key] = p["frozen"]
             link_pars[par_key] = p["linked"]
 
+        # Format hard parameter limits for display in the summary table
         if p["hard_min"] is not None and p["hard_max"] is not None:
             limits_str = f"[{p['hard_min']}, {p['hard_max']}]"
         else:
             limits_str = "Fixed / Switch"
 
+        # Build any contextual notes (norm_scale auto-management, unabsorbed luminosity zeroing, or unparsed units)
         notes = []
         if p["is_leading_norm_scale"]:
             notes.append("norm_scale factor (auto-managed)")
@@ -585,7 +847,7 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         ),
         Parameter("lo_en", Parameter.POSITIONAL_OR_KEYWORD, default=Quantity(0.3, "keV"), annotation=Quantity),
         Parameter("hi_en", Parameter.POSITIONAL_OR_KEYWORD, default=Quantity(7.9, "keV"), annotation=Quantity),
-        Parameter("par_fit_stat", Parameter.POSITIONAL_OR_KEYWORD, default=1.0, annotation=float),
+        Parameter("par_fit_stat", Parameter.POSITIONAL_OR_KEYWORD, default=2.706, annotation=float),
         Parameter("lum_conf", Parameter.POSITIONAL_OR_KEYWORD, default=68.0, annotation=float),
         Parameter("abund_table", Parameter.POSITIONAL_OR_KEYWORD, default="angr", annotation=str),
         Parameter("fit_method", Parameter.POSITIONAL_OR_KEYWORD, default="leven", annotation=str),
@@ -628,7 +890,10 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         v1: float | int | Quantity | list | np.ndarray | None,
         v2: float | int | Quantity | list | np.ndarray | None,
     ) -> bool:
-        """Safely compare default parameter values (including Quantities, lists, and arrays) for equality."""
+        """
+        Safely compare a user-supplied parameter value against its default (including ``None``, Astropy ``Quantity``
+        instances, lists, and numpy arrays) without triggering array-truth-value ambiguity errors.
+        """
         if v1 is None and v2 is None:
             return True
         if v1 is None or v2 is None:
@@ -639,17 +904,22 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
             if v1.unit != v2.unit or v1.shape != v2.shape:
                 return False
             return bool(np.all(v1.value == v2.value))
+        # Per-source lists/arrays are never equal to scalar default values
         if isinstance(v1, (list, np.ndarray)):
             return False
         return bool(v1 == v2)
 
     def _custom_fit_wrapper(*args: object, **kwargs: object) -> BaseSource | BaseSample | list[BaseSource]:
+        # Lazy import avoids a circular import between xga.xspec.fit.models and xga.xspec.fit.general
         from .general import general_model_fit
 
+        # Bind the caller's positional and keyword arguments against our dynamically synthesized signature
         bound = custom_sig.bind(*args, **kwargs)
         bound.apply_defaults()
         b_args = bound.arguments
 
+        # Collect only those start_<par>, freeze_<par>, and link_<par> arguments that differ from the model's
+        #  defaults so they can be forwarded as override dictionaries to general_model_fit
         start_overrides: dict[str, Any] = {}
         freeze_overrides: dict[str, bool] = {}
         link_overrides: dict[str, bool] = {}
@@ -668,6 +938,7 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
             if cur_link != default_link_map[pk]:
                 link_overrides[pk] = cur_link
 
+        # Delegate execution of the spectral fit to general_model_fit
         res: BaseSource | BaseSample | list[BaseSource] = general_model_fit(
             b_args["sources"],
             b_args["outer_radius"],
@@ -703,6 +974,9 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         )
         return res
 
+    # Attach the dynamically constructed inspect.Signature and function metadata to the wrapper callable.
+    #  Standard Python functions do not declare __signature__ or _xga_user_pars on their static Callable type,
+    #  so we silence mypy's attr-defined check on those two dynamic attribute assignments.
     _custom_fit_wrapper.__signature__ = custom_sig  # type: ignore[attr-defined]
     safe_func_suffix = re.sub(r"[^a-zA-Z0-9]+", "_", clean_model).strip("_")
     _custom_fit_wrapper.__name__ = f"fit_{safe_func_suffix}"
@@ -749,6 +1023,8 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         }
     )
     FIT_FUNC_ARGS[_custom_fit_wrapper.__name__] = rel_args
+    # Store the parsed parameter descriptors on the wrapper so fit_conf_from_function can normalise units and
+    #  dict-based overrides (e.g. start_pars={...}) when given this custom fit function
     _custom_fit_wrapper._xga_user_pars = user_pars  # type: ignore[attr-defined]
 
     nh_zero_doc = (
@@ -774,7 +1050,7 @@ def custom_xspec_fit(model: str, norm_scale: bool = True) -> Callable[..., BaseS
         f"    :param Quantity lum_en: Energy bands in which to measure luminosity.\n"
         f"    :param Quantity lo_en: The lower energy limit for the data to be fitted.\n"
         f"    :param Quantity hi_en: The upper energy limit for the data to be fitted.\n"
-        f"    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0.\n"
+        f"    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 2.706.\n"
         f"    :param float lum_conf: The confidence level for XSPEC luminosity measurements.\n"
         f"    :param str abund_table: The abundance table to use for the fit.\n"
         f"    :param str fit_method: The XSPEC fit method to use.\n"

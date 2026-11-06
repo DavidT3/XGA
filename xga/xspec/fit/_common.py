@@ -235,12 +235,12 @@ def _pregen_spectra(
             real_stacked_spectra[tel] = stacked_spectra
 
     # This is the spectrum region preparation function, and I'm calling it here because it will return properly
-    #  formatted arrays for the inner and outer radii
-    if outer_radius != "region":
-        inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, "")[1:]
-    else:
-        raise NotImplementedError("I don't currently support fitting region spectra")
+    #  formatted arrays for the inner and outer radii (note: region_setup itself raises NotImplementedError if
+    #  outer_radius == 'region')
+    inn_rad_vals, out_rad_vals = region_setup(sources, outer_radius, inner_radius, True, "")[1:]
 
+    # Single BaseSource instances are wrapped into a single-element list so that downstream indexing
+    #  and iteration can uniformly treat sources as a sequence alongside BaseSample/list inputs.
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -333,12 +333,12 @@ def _pregen_annular_spectra(
                 cross_arf(
                     sources,
                     radii[tel],
+                    num_cores,
                     group_spec,
                     min_counts,
                     min_sn,
                     over_sample,
                     detmap_bin=cross_arf_detmap_bin,
-                    num_cores=num_cores,
                 )
 
         elif tel in ["erosita", "erass"]:
@@ -364,6 +364,8 @@ def _pregen_annular_spectra(
         else:
             raise NotImplementedError(f"Spectrum generation functionality is not implemented for {tel} yet!")
 
+    # Single BaseSource instances are wrapped into a single-element list so that downstream indexing
+    #  and iteration can uniformly treat sources as a sequence alongside BaseSample/list inputs.
     if isinstance(sources, BaseSource):
         sources = [sources]
 
@@ -493,7 +495,7 @@ def _parse_radii_input(
             # checking every element in the list is a Quantity
             if not all(isinstance(elem, Quantity) for elem in radii):
                 raise ValueError(
-                    "If 'radii' is input as a List, then every element of the List must be an astropy Quantity."
+                    "If 'radii' is input as a list, then every element of the list must be an astropy Quantity."
                 )
             else:
                 output_dict[telescope] = radii
@@ -511,8 +513,8 @@ def _parse_radii_input(
                 # checking every element in the list is a Quantity
                 if not all(isinstance(elem, Quantity) for elem in list_):
                     raise ValueError(
-                        "If 'radii' is input as a Dictionary of Lists, then every "
-                        "element of each List must be an astropy Quantity."
+                        "If 'radii' is input as a dictionary of lists, then every "
+                        "element of each list must be an astropy Quantity."
                     )
 
             output_dict = radii
@@ -641,7 +643,8 @@ def _write_xspec_script(
     os.makedirs(dest_dir, exist_ok=True)
 
     # We're keeping an inventory of XSPEC fits for each source, and if it doesn't already exist we set up the file
-    if not os.path.exists(dest_dir + "inventory.csv"):
+    inv_file_path = os.path.join(dest_dir, "inventory.csv")
+    if not os.path.exists(inv_file_path):
         # These are the columns we want to have in our inventory file
         inv_cols = [
             "results_file",
@@ -654,7 +657,7 @@ def _write_xspec_script(
             "type",
             "set_ident",
         ]
-        with open(dest_dir + "inventory.csv", "w") as writo:
+        with open(inv_file_path, "w") as writo:
             # Writing out the inventory column names to the new file
             inv_hdr = ",".join(inv_cols) + "\n"
             writo.write(inv_hdr)
@@ -809,9 +812,11 @@ def _convert_par_val_to_xspec(val: float | int | Quantity, par_meta: dict, par_k
     :return: The numeric parameter value in XSPEC's expected unit.
     :rtype: float
     """
+    # Extract the target Astropy Unit object and raw model.dat unit string for this parameter
     target_unit = par_meta["unit"]
     raw_unit = par_meta["raw_unit"]
     if isinstance(val, Quantity):
+        # If the parameter is dimensionless in XSPEC, reject any Quantity that carries physical units
         if target_unit == u.Unit(""):
             if val.unit != u.Unit(""):
                 raise u.UnitConversionError(
@@ -819,11 +824,13 @@ def _convert_par_val_to_xspec(val: float | int | Quantity, par_meta: dict, par_k
                     f"so a Quantity with units of '{val.unit}' cannot be converted."
                 )
             num_val = float(val.value)
+        # Allow temperature-energy equivalencies (e.g. Kelvin -> keV) for keV plasma temperature parameters
         elif target_unit == u.Unit("keV"):
             num_val = float(val.to("keV", equivalencies=u.temperature_energy()).value)
         else:
             num_val = float(val.to(target_unit).value)
     elif isinstance(val, (int, float, np.number)) and not isinstance(val, bool):
+        # Plain floats/ints are assumed to already be in the parameter's native XSPEC unit
         num_val = float(val)
     else:
         raise TypeError(
@@ -841,6 +848,7 @@ def _validate_par_hard_limits(num_val: float, par_meta: dict, par_key: str) -> N
     :param dict par_meta: Parameter metadata dictionary from validate_and_parse_model.
     :param str par_key: The disambiguated parameter key.
     """
+    # Check both hard minimum and hard maximum bounds from model.dat (switches/scale parameters have None bounds)
     hard_min = par_meta["hard_min"]
     hard_max = par_meta["hard_max"]
     if hard_min is not None and num_val < hard_min:

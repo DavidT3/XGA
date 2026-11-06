@@ -585,8 +585,7 @@ class BaseSource:
 
         if redshift is not None and redshift <= 0:
             raise ValueError(
-                "Source redshift must be greater than zero; pass redshift=None for sources without a "
-                "known redshift."
+                "Source redshift must be greater than zero; pass redshift=None for sources without a known redshift."
             )
         self._redshift = redshift
         self._cosmo = cosmology
@@ -3886,7 +3885,6 @@ class BaseSource:
         if telescope not in self.telescopes:
             raise NotAssociatedError(f"The {telescope} telescope is not associated with {self.name}.")
 
-        from ..xspec.fit import FIT_FUNC_MODEL_NAMES, custom_xspec_fit
         from ..xspec.fitconfgen import fit_conf_from_function
 
         # It is possible to pass a null value for the 'model' parameter, but we'll only accept that if a single model
@@ -3921,14 +3919,11 @@ class BaseSource:
                 "changed-from-default fit function arguments as keys and changed values as items."
             )
         # If the input is a dictionary then we need to construct the key, as opposed to it being passed in whole
-        #  as a string
+        #  as a string. Passing existing_fconfs allows fit_conf_from_function to resolve whether the fit used a
+        #  built-in convenience function or general_model_fit/custom_xspec_fit.
         elif isinstance(fit_conf, dict):
             existing_fconfs = self.fitted_model_configurations[telescope][spec_storage_key][model]
-            if model in FIT_FUNC_MODEL_NAMES and not any("_nhtozero" in fc for fc in existing_fconfs):
-                fit_func = FIT_FUNC_MODEL_NAMES[model]
-            else:
-                fit_func = custom_xspec_fit(model, norm_scale=model.startswith("constant*"))
-            fit_conf = fit_conf_from_function(fit_func, fit_conf)
+            fit_conf = fit_conf_from_function(model, fit_conf, existing_fconfs)
         # In this case the user passed no fit configuration key, but there are multiple fit configurations stored here
         elif fit_conf is None and len(self.fitted_model_configurations[telescope][spec_storage_key][model]) != 1:
             av_fconfs = ", ".join(self.fitted_model_configurations[telescope][spec_storage_key][model])
@@ -6630,11 +6625,19 @@ class BaseSource:
         if with_units:
             from ..xspec.fit.models import validate_and_parse_model
 
+            # Parse the fitted model expression against model.dat to obtain the ordered parameter metadata and
+            #  Astropy Unit objects for each component parameter
             _, flat_pars, _ = validate_and_parse_model(model, norm_scale=False)
             raw_name_units: dict[str, set[Unit]] = {}
+            # Map each disambiguated parameter key (e.g. 'kT', 'kT_1') to its unit, and also collect the set of
+            #  units associated with each raw undisambiguated parameter name (e.g. 'kT')
             for p in flat_pars:
                 par_units[p["par_key"]] = p["unit"]
                 raw_name_units.setdefault(p["par_name"], set()).add(p["unit"])
+            # When a parameter name appears multiple times in a multi-component model (e.g. 'kT' in 'apec+apec'),
+            #  XGA's result ingestion stores the values under their raw parameter name ('kT') keyed by XSPEC parameter
+            #  index. As long as all occurrences of that raw parameter name share a single unambiguous physical unit,
+            #  we also register that unit under the raw name so get_results(..., with_units=True) attaches it properly
             for raw_name, unit_set in raw_name_units.items():
                 if len(unit_set) == 1:
                     par_units[raw_name] = next(iter(unit_set))

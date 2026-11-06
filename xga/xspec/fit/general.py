@@ -1037,7 +1037,9 @@ def power_law(
                 linking = "{F T T T}"
 
             # If the powerlaw with redshift has been chosen, then we use the redshift attached to the source object
-            #  If not we just pass a filler redshift and the luminosities are invalid
+            #  (if redshifted=True and source.redshift is None, a ValueError has already been raised above; the else
+            #  branch here only applies when redshifted=False and the source has no redshift, passing a filler z=1
+            #  since luminosities are invalid without a redshift).
             if source.redshift is not None:
                 z = source.redshift
             else:
@@ -1297,7 +1299,9 @@ def blackbody(
                 linking = "{F T T T}"
 
             # If the blackbody with redshift has been chosen, then we use the redshift attached to the source object
-            #  If not we just pass a filler redshift and the luminosities are invalid
+            #  (if redshifted=True and source.redshift is None, a ValueError has already been raised above; the else
+            #  branch here only applies when redshifted=False and the source has no redshift, passing a filler z=1
+            #  since luminosities are invalid without a redshift).
             if source.redshift is not None:
                 z = source.redshift
             else:
@@ -1526,12 +1530,12 @@ def double_temp_apec(
 
     # TODO MAKE THIS CHECK SUPPORT QUANTITY AS WELL - issue #1509 is semi-relevant
     # We repeat the above, but for the starting metallicity value(s)
-    if isinstance(start_met_one, (list, np.ndarray)) and len(start_met_one) != len(sources):
+    if isinstance(start_met_one, (list, np.ndarray, Quantity)) and len(start_met_one) != len(sources):
         raise ValueError(
             f"If a list or array is passed to 'start_met_one', it must have one entry for each "
             f"source. It currently has {len(start_met_one)} for {len(sources)} sources."
         )
-    elif isinstance(start_met_one, (list, np.ndarray)):
+    elif isinstance(start_met_one, (list, np.ndarray, Quantity)):
         all_start_met_ones = deepcopy(start_met_one)
     # Want to make sure that the start_met variable is always a list with an entry for every source
     #  after this point, it means we normalise how we deal with it.
@@ -1544,12 +1548,12 @@ def double_temp_apec(
 
     # TODO MAKE THIS CHECK SUPPORT QUANTITY AS WELL - issue #1509 is semi-relevant
     # We repeat the above, but for the starting metallicity value(s)
-    if isinstance(start_met_two, (list, np.ndarray)) and len(start_met_two) != len(sources):
+    if isinstance(start_met_two, (list, np.ndarray, Quantity)) and len(start_met_two) != len(sources):
         raise ValueError(
             f"If a list or array is passed to 'start_met_two', it must have one entry for each "
             f"source. It currently has {len(start_met_two)} for {len(sources)} sources."
         )
-    elif isinstance(start_met_two, (list, np.ndarray)):
+    elif isinstance(start_met_two, (list, np.ndarray, Quantity)):
         all_start_met_twos = deepcopy(start_met_two)
     # Want to make sure that the start_met variable is always a list with an entry for every source
     #  after this point, it means we normalise how we deal with it.
@@ -1735,7 +1739,7 @@ def general_model_fit(
     lum_en: Quantity = Quantity([[0.5, 2.0], [0.01, 100.0]], "keV"),
     lo_en: Quantity = Quantity(0.3, "keV"),
     hi_en: Quantity = Quantity(7.9, "keV"),
-    par_fit_stat: float = 1.0,
+    par_fit_stat: float = 2.706,
     lum_conf: float = 68.0,
     abund_table: str = "angr",
     fit_method: str = "leven",
@@ -1769,6 +1773,14 @@ def general_model_fit(
     model expression using :func:`~xga.xspec.fit.describe_xspec_model`, or generate a model-specific fitting function
     with explicit keyword arguments and a tailored docstring using :func:`~xga.xspec.fit.custom_xspec_fit`.
 
+    .. tip::
+        For a more ergonomic interactive user experience (including IDE tab-completion, explicit signature
+        inspection via ``help()`` or ``Shift+Tab``, and detailed docstrings listing every model parameter and its
+        default value/limits), we recommend using :func:`~xga.xspec.fit.custom_xspec_fit` to generate a dedicated
+        convenience fitting function for your chosen XSPEC model expression. The generated convenience function
+        exposes explicit ``start_<par>``, ``freeze_<par>``, and ``link_<par>`` keyword arguments for every parameter
+        in the model rather than requiring dictionary overrides, while executing ``general_model_fit`` under the hood.
+
     :param BaseSource/BaseSample sources: A single source object, or a sample of sources.
     :param str/Quantity outer_radius: The name or value of the outer radius of the region that the desired spectrum
         covers (for instance 'r200' would be acceptable for a GalaxyCluster, or Quantity(1000, 'kpc')). If you are
@@ -1794,7 +1806,8 @@ def general_model_fit(
     :param Quantity lum_en: Energy bands in which to measure luminosity.
     :param Quantity lo_en: The lower energy limit for the data to be fitted.
     :param Quantity hi_en: The upper energy limit for the data to be fitted.
-    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 1.0 (1σ).
+    :param float par_fit_stat: The delta fit statistic for the XSPEC 'error' command, default is 2.706 (90%
+        confidence for 1 parameter of interest, matching XSPEC's default).
     :param float lum_conf: The confidence level for XSPEC luminosity measurements.
     :param str abund_table: The abundance table to use for the fit.
     :param str fit_method: The XSPEC fit method to use.
@@ -1884,8 +1897,10 @@ def general_model_fit(
             if not isinstance(v, (bool, np.bool_)):
                 raise TypeError(f"Link setting for parameter '{k}' in 'link_pars' must be a boolean.")
 
-    # Resolve nh_to_zero: if None, use the automatically identified absorption nH parameter indices; otherwise
-    #  allow the user to specify a list of disambiguated parameter names or 1-based parameter indices
+    # Resolve nh_to_zero (the 1-based XSPEC parameter indices whose values are temporarily set to zero by
+    #  xga_extract.tcl after fitting so that unabsorbed X-ray luminosities can be calculated): if None, use the
+    #  automatically identified multiplicative absorption nH parameter indices; otherwise allow the user to specify
+    #  a list of disambiguated parameter names or 1-based parameter indices (or [] to disable zeroing any parameters).
     if nh_to_zero is None:
         resolved_nh_indices = auto_nh_to_zero
     elif isinstance(nh_to_zero, list):
@@ -1913,6 +1928,7 @@ def general_model_fit(
     else:
         raise TypeError("'nh_to_zero' must be a list of parameter names or 1-based integer indices, or None.")
 
+    # Format the resolved parameter indices as a TCL list (or 'None' if empty) for substitution into the .xcm template
     if len(resolved_nh_indices) == 0:
         nh_to_zero_tcl = "None"
     else:
@@ -1936,6 +1952,10 @@ def general_model_fit(
         )
 
     if spectrum_checking:
+        # Normalise scalar vs list inputs for check_pars and its lower, upper, and uncertainty limits so that they
+        #  can be zipped and validated together. Because all_check_supplied was verified above, none of these four
+        #  variables can be None here, but mypy cannot narrow their types across the boolean helper variable, so
+        #  # type: ignore[arg-type] is required on the list(...) conversions.
         norm_check_pars = [check_pars] if isinstance(check_pars, str) else list(check_pars)  # type: ignore[arg-type]
         norm_lo = (
             [check_lo_lims]
@@ -1956,6 +1976,7 @@ def general_model_fit(
             else list(check_err_lims)  # type: ignore[arg-type]
         )
 
+        # Ensure that every parameter being checked has corresponding lower, upper, and uncertainty bounds
         if not (len(norm_check_pars) == len(norm_lo) == len(norm_hi) == len(norm_err)):
             raise ValueError(
                 "'check_pars', 'check_lo_lims', 'check_hi_lims', and 'check_err_lims' must all have the same length."
@@ -1966,6 +1987,7 @@ def general_model_fit(
         tcl_check_hi: list[float] = []
         tcl_check_err: list[float] = []
 
+        # Convert each check limit to the parameter's native XSPEC unit and collect the TCL list elements
         for cp_name, lo_v, hi_v, err_v in zip(norm_check_pars, norm_lo, norm_hi, norm_err, strict=True):
             if cp_name in par_lookup:
                 cp_meta = par_lookup[cp_name]
@@ -1985,11 +2007,13 @@ def general_model_fit(
             tcl_check_hi.append(_convert_par_val_to_xspec(hi_v, cp_meta, cp_name))
             tcl_check_err.append(_convert_par_val_to_xspec(err_v, cp_meta, cp_name))
 
+        # Format the validated parameter names and bounds as brace-delimited TCL lists for general_xspec_fit.xcm
         check_list_str = "{" + " ".join(tcl_check_names) + "}"
         check_lo_str = "{" + " ".join(str(v) for v in tcl_check_lo) + "}"
         check_hi_str = "{" + " ".join(str(v) for v in tcl_check_hi) + "}"
         check_err_str = "{" + " ".join(str(v) for v in tcl_check_err) + "}"
     else:
+        # When spectrum checking is disabled, pass empty TCL lists into the script template
         check_list_str = "{}"
         check_lo_str = "{}"
         check_hi_str = "{}"
@@ -2010,6 +2034,7 @@ def general_model_fit(
             p_unit = p_meta["unit"]
             if isinstance(raw_val, Quantity):
                 if not raw_val.isscalar:
+                    # Non-scalar Quantity array: must have one entry per source
                     if len(raw_val) != len(sources):
                         raise ValueError(
                             f"If a non-scalar Quantity is passed in 'start_pars' for '{par_key}', it must have one "
@@ -2023,6 +2048,7 @@ def general_model_fit(
                             Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
                         )
                 else:
+                    # Scalar Quantity: convert once and broadcast across all sources
                     conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                     _validate_par_hard_limits(conv_v, p_meta, par_key)
                     fc_val: float | Quantity = Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
@@ -2030,6 +2056,7 @@ def general_model_fit(
                         per_source_start_overrides[s_idx][par_key] = conv_v
                         per_source_fit_conf_start[s_idx][par_key] = fc_val
             elif isinstance(raw_val, (list, np.ndarray)):
+                # Python list or numpy array of values/Quantities: must have one entry per source
                 if len(raw_val) != len(sources):
                     raise ValueError(
                         f"If a list or array is passed in 'start_pars' for '{par_key}', it must have one "
@@ -2044,6 +2071,7 @@ def general_model_fit(
                         Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
                     )
             else:
+                # Scalar float/int: convert once and broadcast across all sources
                 conv_v = _convert_par_val_to_xspec(raw_val, p_meta, par_key)
                 _validate_par_hard_limits(conv_v, p_meta, par_key)
                 fc_val_scalar: float | Quantity = Quantity(conv_v, p_unit) if p_unit != u.Unit("") else conv_v
@@ -2100,14 +2128,12 @@ def general_model_fit(
     for src_ind, source in enumerate(sources):
         src_overrides = per_source_start_overrides[src_ind]
         src_fc_start = per_source_fit_conf_start[src_ind]
-        # Rebind start_pars in locals() for this source so _gen_fit_conf records the source-specific overrides
-        #  (or None if no overrides were provided), matching how single_temp_apec handles per-source start_temp
-        start_pars = dict(src_fc_start) if src_fc_start else None  # noqa: F841
 
         for tel in source.telescopes:
             if tel not in telescope:
                 continue
 
+            # Retrieve all matching spectra for this source and telescope
             specs, storage_key = _spec_obj_setup(
                 stacked_spectra,
                 tel,
@@ -2121,7 +2147,12 @@ def general_model_fit(
                 over_sample,
             )
 
-            # Build the starting parameter values for this source
+            # Build the starting parameter values for this source in exact XSPEC parameter order:
+            #  1. Explicit user override in start_pars takes highest precedence.
+            #  2. The auto-prepended leading constant cross-calibration factor starts at 1.0.
+            #  3. The primary Galactic absorption nH parameter defaults to source.nH (in 10^22 cm^-2).
+            #  4. Non-redshifted-absorber cosmological redshift parameters default to source.redshift.
+            #  5. All other parameters use their default starting value from model.dat.
             cur_par_vals: list[float] = []
             for p in flat_pars:
                 pk = p["par_key"]
@@ -2163,10 +2194,14 @@ def general_model_fit(
                     )
 
             # Build the flat fit_conf dictionary matching custom_xspec_fit so that general_model_fit and
-            #  custom_xspec_fit produce identical standard flat fit configuration keys
+            #  custom_xspec_fit produce identical standard flat fit configuration keys. We exclude the
+            #  auto-prepended leading constant cross-calibration factor (is_leading_norm_scale) because XGA's
+            #  built-in fit functions do not expose or include it in fit_conf keys.
             user_pars = [p for p in flat_pars if not p["is_leading_norm_scale"]]
             in_fit_conf: dict = {}
-            src_fc_start = per_source_fit_conf_start[src_ind]
+            # 1. Populate start_<par> keys: use the per-source override if supplied, None for Galactic nH and
+            #    redshift parameters that default dynamically to source attributes, or the model.dat default
+            #    (wrapped in its Astropy Unit when applicable).
             for p in user_pars:
                 pk = p["par_key"]
                 if pk in src_fc_start:
@@ -2177,12 +2212,16 @@ def general_model_fit(
                     in_fit_conf[f"start_{pk}"] = Quantity(float(p["default"]), p["unit"])
                 else:
                     in_fit_conf[f"start_{pk}"] = float(p["default"])
+            # 2. Populate freeze_<par> keys with the resolved boolean freeze state for each user-facing parameter
             for p, fr_state in zip(flat_pars, final_frozen, strict=True):
                 if not p["is_leading_norm_scale"]:
                     in_fit_conf[f"freeze_{p['par_key']}"] = fr_state
+            # 3. Populate link_<par> keys with the resolved boolean link state for each user-facing parameter
             for p, lk_state in zip(flat_pars, final_linked, strict=True):
                 if not p["is_leading_norm_scale"]:
                     in_fit_conf[f"link_{p['par_key']}"] = lk_state
+            # 4. Append the remaining general fit configuration arguments in the exact order registered by
+            #    custom_xspec_fit
             for kn in (
                 "nh_to_zero",
                 "lum_en",

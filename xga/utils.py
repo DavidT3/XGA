@@ -5,7 +5,6 @@ import importlib.resources
 import json
 import os
 import re
-import shlex
 import shutil
 from concurrent.futures import ProcessPoolExecutor
 from configparser import ConfigParser
@@ -136,16 +135,21 @@ def __getattr__(name):
                 CIAO_VERSION, CIAO_AVAIL, CALDB_VERSION, CALDB_AVAIL = _get_ciao_info()
             return globals()[name]
 
+        if name in ["XSPEC_FIT_METHOD", "ABUND_TABLES"]:
+            global XSPEC_FIT_METHOD, ABUND_TABLES
+            if "ABUND_TABLES" not in globals() or "XSPEC_FIT_METHOD" not in globals():
+                XSPEC_FIT_METHOD = ["leven", "bays", "anneal", "migrad"]
+                ABUND_TABLES = ["feld", "angr", "aneb", "grsa", "wilm", "lodd", "aspl"]
+            return globals()[name]
+
         if name in [
             "XSPEC_VERSION",
-            "XSPEC_FIT_METHOD",
-            "ABUND_TABLES",
             "XSPEC_MODELS",
             "MODEL_PARS",
             "MODEL_UNITS",
         ]:
-            global XSPEC_VERSION, XSPEC_FIT_METHOD, ABUND_TABLES, XSPEC_MODELS, MODEL_PARS, MODEL_UNITS
-            if "XSPEC_VERSION" not in globals() or XSPEC_VERSION is None:
+            global XSPEC_VERSION, XSPEC_MODELS, MODEL_PARS, MODEL_UNITS
+            if "XSPEC_MODELS" not in globals() or "XSPEC_VERSION" not in globals():
                 (
                     XSPEC_VERSION,
                     XSPEC_FIT_METHOD,
@@ -293,248 +297,6 @@ def _get_ciao_info() -> tuple[Version | None, bool, Version | None, bool]:
     return ciao_version, ciao_avail, caldb_version, caldb_avail
 
 
-# Mapping of non-standard or shorthand unit strings used in XSPEC's model.dat file onto valid astropy unit
-#  representations. XSPEC's model.dat was written for human display in terminal prompts rather than strict machine
-#  parsing, so many entries include parenthetical notes (e.g. 'keV(-th)'), omit the column-density area dimension
-#  (e.g. '10^22' for hydrogen column density in 10^22 cm^-2), or use text labels for dimensionless quantities
-#  (e.g. 'solar', 'z', '0/1').
-_XSPEC_UNIT_MAP: dict[str, str] = {
-    "": "",
-    "0/1": "",
-    "0off/1on": "",
-    "real": "",
-    "solar": "",
-    "Solar": "",
-    "z": "",
-    "(-disk)": "",
-    "(-selfg)": "",
-    "(_calc)": "",
-    "(_disk)": "",
-    "(_selfg)": "",
-    "10^22": "10^22 cm^-2",
-    "10^16": "10^16 cm^-2",
-    "1e18": "10^18 cm^-2",
-    "10^-4": "1e-4",
-    "10^9": "1e9",
-    "1e12G": "1e12 G",
-    "1e17g/s": "1e17 g s^-1",
-    "A": "AA",
-    "Gau": "G",
-    "KeV": "keV",
-    "keV(-nt)": "keV",
-    "keV(-pl)": "keV",
-    "keV(-sc)": "keV",
-    "keV(-th)": "keV",
-    "keV(_pl)": "keV",
-    "keV(_sc)": "keV",
-    "M_sun": "Msun",
-    "Msun": "Msun",
-    "M0yr": "Msun yr^-1",
-    "cm-3": "cm^-3",
-    "cm^-3": "cm^-3",
-    "cm**-3": "cm^-3",
-    "days": "d",
-    "mum": "um",
-    "ergcm/s": "erg cm s^-1",
-    "erg cm/s": "erg cm s^-1",
-}
-
-
-def _xspec_unit_to_astropy(raw_unit: str) -> tuple[Unit, bool]:
-    """
-    Internal helper to convert an XSPEC parameter unit string (as defined in HEASoft's model.dat) into an
-    astropy Unit object. If a unit string represents a dimensionless quantity, or uses an XSPEC-specific notation
-    (such as 'R_g' or 'L_Edd') that cannot be represented as a standard physical astropy unit, a dimensionless
-    Unit('') is returned rather than raising an error, along with a boolean flag indicating whether the unit was
-    recognised so that callers (such as get_results with with_units=True) can warn the user if needed.
-
-    :param str raw_unit: The raw unit string extracted from XSPEC's model.dat file.
-    :return: A tuple of (astropy Unit object, boolean indicating whether the unit was recognised).
-    :rtype: Tuple[Unit, bool]
-    """
-    cleaned = raw_unit.strip()
-    if cleaned in _XSPEC_UNIT_MAP:
-        return Unit(_XSPEC_UNIT_MAP[cleaned]), True
-
-    # Strip any trailing parenthetical qualifiers (e.g. 'keV(-th)' or future annotations of that form) before
-    #  asking astropy to parse the unit string.
-    stripped_parens = re.sub(r"\([^)]*\)$", "", cleaned).strip()
-    if stripped_parens in _XSPEC_UNIT_MAP:
-        return Unit(_XSPEC_UNIT_MAP[stripped_parens]), True
-
-    for candidate in (cleaned, stripped_parens):
-        if not candidate:
-            continue
-        try:
-            return Unit(candidate), True
-        except ValueError:
-            continue
-
-    return Unit(""), False
-
-
-def _parse_xspec_model_dat(model_dat_path: str) -> tuple[dict[str, dict], dict[str, list[str]], dict[str, list[Unit]]]:
-    """
-    Internal helper that reads the local HEASoft XSPEC model.dat descriptor file and extracts all built-in models,
-    their types ('add', 'mul', 'con', 'acn'), and full parameter metadata (names, units, default values, hard/soft
-    limits, and default freeze states).
-
-    We parse model.dat directly from the user's active HEASoft installation rather than bundling static model lists
-    with XGA because XGA does not mandate a single XSPEC version, and new models (or updated parameter definitions)
-    are added across HEASoft releases.
-
-    :param str model_dat_path: Path to the model.dat file in the local HEASoft installation.
-    :return: A tuple of three dictionaries keyed by lowercase model name:
-        1. Full model metadata dictionary (XSPEC_MODELS).
-        2. Mapping of model name to ordered list of parameter names (MODEL_PARS).
-        3. Mapping of model name to ordered list of astropy Unit objects (MODEL_UNITS).
-    :rtype: Tuple[dict[str, dict], dict[str, list[str]], dict[str, list[Unit]]]
-    """
-    xspec_models: dict[str, dict] = {}
-    model_pars: dict[str, list[str]] = {}
-    model_units: dict[str, list[Unit]] = {}
-
-    if not os.path.exists(model_dat_path):
-        return xspec_models, model_pars, model_units
-
-    with open(model_dat_path, encoding="utf-8", errors="replace") as model_file:
-        lines = [line.strip() for line in model_file if line.strip()]
-
-    line_idx = 0
-    num_lines = len(lines)
-    while line_idx < num_lines:
-        hdr_tokens = shlex.split(lines[line_idx])
-        # A valid model header line in model.dat has at least 6 tokens:
-        #  <model_name> <num_pars> <lo_energy> <hi_energy> <func_name> <model_type> [flags...]
-        if len(hdr_tokens) < 6:
-            line_idx += 1
-            continue
-
-        xspec_name = hdr_tokens[0]
-        model_key = xspec_name.lower()
-        num_pars = int(hdr_tokens[1])
-        model_type = hdr_tokens[5].lower()
-
-        pars_meta: list[dict] = []
-        for par_offset in range(1, num_pars + 1):
-            if line_idx + par_offset >= num_lines:
-                break
-            par_tokens = shlex.split(lines[line_idx + par_offset])
-            if not par_tokens:
-                continue
-
-            raw_par_name = par_tokens[0]
-            # In model.dat, a leading '$' denotes an integer switch parameter (e.g. '$switch 1' in mekal),
-            #  and a leading '*' denotes a fixed scale/pivot parameter (e.g. '*pivotE keV 1.0' in logpar).
-            #  When XSPEC loads the model (and when tcloutr pinfo is queried in TCL), those prefix characters
-            #  are stripped from the parameter name, and the parameter cannot be freely fit by default.
-            is_switch = raw_par_name.startswith("$")
-            is_scale = raw_par_name.startswith("*")
-            par_name = raw_par_name.lstrip("$*")
-
-            if is_switch:
-                # Most switch lines are 2 tokens ('$switch 1'), though a few include an empty unit string column
-                #  before the default integer value (e.g. '$lflag " " 1.'), so the default value is always the final
-                #  token on the line.
-                default_val = float(par_tokens[-1]) if len(par_tokens) > 1 else 1.0
-                pars_meta.append(
-                    {
-                        "name": par_name,
-                        "raw_unit": "",
-                        "unit": Unit(""),
-                        "unit_recognised": True,
-                        "default": default_val,
-                        "hard_min": None,
-                        "soft_min": None,
-                        "soft_max": None,
-                        "hard_max": None,
-                        "delta": -1.0,
-                        "frozen": True,
-                        "switch_or_scale": True,
-                    }
-                )
-            elif is_scale and len(par_tokens) < 8:
-                raw_unit = par_tokens[1].strip() if len(par_tokens) > 1 else ""
-                par_unit, unit_rec = _xspec_unit_to_astropy(raw_unit)
-                default_val = float(par_tokens[2]) if len(par_tokens) > 2 else 1.0
-                pars_meta.append(
-                    {
-                        "name": par_name,
-                        "raw_unit": raw_unit,
-                        "unit": par_unit,
-                        "unit_recognised": unit_rec,
-                        "default": default_val,
-                        "hard_min": None,
-                        "soft_min": None,
-                        "soft_max": None,
-                        "hard_max": None,
-                        "delta": -1.0,
-                        "frozen": True,
-                        "switch_or_scale": True,
-                    }
-                )
-            else:
-                # Standard 8-column parameter entry:
-                #  <name> <unit> <default> <hard_min> <soft_min> <soft_max> <hard_max> <delta>
-                # A negative or zero step size (delta) means XSPEC freezes the parameter by default.
-                raw_unit = par_tokens[1].strip()
-                par_unit, unit_rec = _xspec_unit_to_astropy(raw_unit)
-                default_val = float(par_tokens[2])
-                hard_min = float(par_tokens[3])
-                soft_min = float(par_tokens[4])
-                soft_max = float(par_tokens[5])
-                hard_max = float(par_tokens[6])
-                delta = float(par_tokens[7])
-                pars_meta.append(
-                    {
-                        "name": par_name,
-                        "raw_unit": raw_unit,
-                        "unit": par_unit,
-                        "unit_recognised": unit_rec,
-                        "default": default_val,
-                        "hard_min": hard_min,
-                        "soft_min": soft_min,
-                        "soft_max": soft_max,
-                        "hard_max": hard_max,
-                        "delta": delta,
-                        "frozen": (delta <= 0.0) or is_scale,
-                        "switch_or_scale": is_scale,
-                    }
-                )
-
-        # Additive ('add') models in XSPEC always have an implicit 'norm' parameter appended as their final
-        #  parameter, even though it is not listed as a parameter line in model.dat.
-        if model_type == "add":
-            pars_meta.append(
-                {
-                    "name": "norm",
-                    "raw_unit": "",
-                    "unit": Unit(""),
-                    "unit_recognised": True,
-                    "default": 1.0,
-                    "hard_min": 0.0,
-                    "soft_min": 0.0,
-                    "soft_max": 1e24,
-                    "hard_max": 1e24,
-                    "delta": 0.01,
-                    "frozen": False,
-                    "switch_or_scale": False,
-                }
-            )
-
-        xspec_models[model_key] = {
-            "xspec_name": xspec_name,
-            "model_type": model_type,
-            "pars": pars_meta,
-        }
-        model_pars[model_key] = [p["name"] for p in pars_meta]
-        model_units[model_key] = [p["unit"] for p in pars_meta]
-
-        line_idx += num_pars + 1
-
-    return xspec_models, model_pars, model_units
-
-
 def _get_xspec_info() -> tuple[
     Version | None, list[str], list[str], dict[str, dict], dict[str, list[str]], dict[str, list[Unit]]
 ]:
@@ -580,9 +342,7 @@ def _get_xspec_info() -> tuple[
                         continue
                     key, val = line.split(":", 1)
                     if key.strip() == "MDATADIR" and val.strip():
-                        expanded_mdata = os.path.abspath(
-                            os.path.expanduser(os.path.expandvars(val.strip()))
-                        )
+                        expanded_mdata = os.path.abspath(os.path.expanduser(os.path.expandvars(val.strip())))
                         custom_model_data_dirs.append(expanded_mdata)
                         candidate_bases.append(os.path.abspath(os.path.join(expanded_mdata, "..", "..")))
 
@@ -598,8 +358,7 @@ def _get_xspec_info() -> tuple[
             os.path.join(base_path, "spectral", "modelData") for base_path in candidate_bases
         ]
         model_data_present = any(
-            os.path.isdir(mdata_dir) and len(os.listdir(mdata_dir)) > 0
-            for mdata_dir in candidate_model_data_dirs
+            os.path.isdir(mdata_dir) and len(os.listdir(mdata_dir)) > 0 for mdata_dir in candidate_model_data_dirs
         )
         model_files_present = (model_dat_path is not None) and model_data_present
 
@@ -611,7 +370,21 @@ def _get_xspec_info() -> tuple[
             )
             xspec_version = None
         else:
+            # Pre-populate the XSPEC globals before importing xga.xspec.fit.models so that top-level imports in
+            #  xga.xspec (which access XSPEC_VERSION, ABUND_TABLES, and XSPEC_FIT_METHOD) do not re-trigger
+            #  _get_xspec_info() via __getattr__
+            globals()["XSPEC_VERSION"] = xspec_version
+            globals()["XSPEC_FIT_METHOD"] = fit_methods
+            globals()["ABUND_TABLES"] = abund_tables
+            globals()["XSPEC_MODELS"] = xspec_models
+            globals()["MODEL_PARS"] = model_pars
+            globals()["MODEL_UNITS"] = model_units
+            from .xspec.fit.models import _parse_xspec_model_dat
+
             xspec_models, model_pars, model_units = _parse_xspec_model_dat(model_dat_path)
+            globals()["XSPEC_MODELS"] = xspec_models
+            globals()["MODEL_PARS"] = model_pars
+            globals()["MODEL_UNITS"] = model_units
 
     return xspec_version, fit_methods, abund_tables, xspec_models, model_pars, model_units
 
