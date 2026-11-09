@@ -46,7 +46,10 @@ def evtool_combine_evts(sources: Union[BaseSource, NullSource, BaseSample], num_
         sources = [sources]
 
     # Set up a template for the evtool command to be run
-    evtool_cmd = 'cd {d}; evtool eventfiles="{evts}" outfile="{out}"; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}'
+    evtool_cmd = (
+        'cd {d}; evtool eventfiles="{evts}" outfile="{out}"; '
+        "find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
+    )
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function

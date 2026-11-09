@@ -364,9 +364,13 @@ class TestXSPECSingleSource(unittest.TestCase):
         """Tests fitting an arbitrary XSPEC model via general_model_fit and custom_xspec_fit, and retrieving
         results with and without units.
         """
+        # Use a dedicated source instance so fitting tbabs*bremss does not add a second model to self.no_fits_src
+        #  before the single_temp_apec-only tests run
+        gen_fit_src: Any = get_test_source("all", shared=False, load_fits=False)
+
         # Fit an absorbed bremsstrahlung model using general_model_fit with a dictionary parameter override
         general_model_fit(
-            self.no_fits_src,
+            gen_fit_src,
             self.out_rad,
             model="tbabs*bremss",
             start_pars={"kT": Quantity(3.0, "keV")},
@@ -376,14 +380,14 @@ class TestXSPECSingleSource(unittest.TestCase):
         # Fit the same model expression using a custom_xspec_fit factory wrapper with a flat keyword override
         custom_fit_fn = custom_xspec_fit("tbabs*bremss")
         custom_fit_fn(
-            self.no_fits_src,
+            gen_fit_src,
             self.out_rad,
             start_kT=Quantity(4.5, "keV"),
             telescope="xmm",
         )
 
         # Retrieve results from the first fit without Astropy units (default raw numpy array behaviour)
-        res_raw = self.no_fits_src.get_results(
+        res_raw = gen_fit_src.get_results(
             self.out_rad,
             telescope="xmm",
             model="constant*tbabs*bremss",
@@ -396,7 +400,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertIsInstance(res_raw["kT"], np.ndarray)
 
         # Retrieve results from the second fit with with_units=True so parameters are wrapped as Astropy Quantities
-        res_units = self.no_fits_src.get_results(
+        res_units = gen_fit_src.get_results(
             self.out_rad,
             telescope="xmm",
             model="constant*tbabs*bremss",
@@ -410,7 +414,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertEqual(res_units["norm"].unit, Unit(""))
 
         # Verify that Spectrum.fitted_model_configuration_diffs identifies the changed start_kT for both fits
-        specs = self.no_fits_src.get_spectra(self.out_rad, telescope="xmm")
+        specs = gen_fit_src.get_spectra(self.out_rad, telescope="xmm")
         spec_obj = specs[0] if isinstance(specs, list) else specs
         diffs = spec_obj.fitted_model_configuration_diffs["constant*tbabs*bremss"]
         diff_vals = list(diffs.values())
@@ -418,7 +422,7 @@ class TestXSPECSingleSource(unittest.TestCase):
         self.assertIn({"start_kT": "4.5keV"}, diff_vals)
 
         # Verify that luminosity retrieval works when passing the general_model_fit override dictionary
-        lxs = self.no_fits_src.get_luminosities(
+        lxs = gen_fit_src.get_luminosities(
             self.out_rad,
             telescope="xmm",
             model="constant*tbabs*bremss",
@@ -432,14 +436,14 @@ class TestXSPECSingleSource(unittest.TestCase):
         # Inject a synthetic two-component APEC fit result into _fit_results to verify that
         #  get_results(..., with_units=True) attaches keV units when 'kT' appears in two different additive
         #  components (parameter indices 3 and 7)
-        self.no_fits_src._fit_results["xmm"][spec_obj.storage_key].setdefault("constant*tbabs*(apec+apec)", {})[
+        gen_fit_src._fit_results["xmm"][spec_obj.storage_key].setdefault("constant*tbabs*(apec+apec)", {})[
             two_apec_conf
         ] = {
             "kT": {"3": [2.1, 0.1, 0.1], "7": [5.4, 0.3, 0.3]},
             "norm": {"6": [1e-3, 1e-4, 1e-4], "10": [2e-3, 1e-4, 1e-4]},
         }
         # Retrieve the multi-component kT array with units enabled and check its type, unit, and (2, 3) shape
-        multi_kt = self.no_fits_src.get_results(
+        multi_kt = gen_fit_src.get_results(
             self.out_rad,
             telescope="xmm",
             model="constant*tbabs*(apec+apec)",

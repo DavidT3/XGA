@@ -1,7 +1,6 @@
 #  This code is a part of X-ray: Generate and Analyse (XGA), a module designed for the XMM Cluster Survey (XCS).
 #  Last modified by David J Turner (djturner@umbc.edu) 11/12/2025, 17:14. Copyright (c) The Contributors
 
-from typing import Union, List
 from warnings import warn
 
 import numpy as np
@@ -9,10 +8,10 @@ from astropy.cosmology import Cosmology
 from astropy.units import Quantity, Unit, UnitConversionError
 from tqdm import tqdm
 
-from .base import BaseSample
 from .. import DEFAULT_COSMO, PRETTY_TELESCOPE_NAMES
 from ..exceptions import NoValidObservationsError
 from ..sources.point import Star
+from .base import BaseSample
 
 
 class StarSample(BaseSample):
@@ -62,14 +61,30 @@ class StarSample(BaseSample):
         telescopes specified by the 'telescope' argument. In the case where only SOME of the telescopes are
         specified in a distance dictionary, the default XGA values will be used for any that are missing.
     """
-    def __init__(self, ra: np.ndarray, dec: np.ndarray, distance: np.ndarray = None, name: np.ndarray = None,
-                 proper_motion: Quantity = None, point_radius: Quantity = Quantity(30, 'arcsec'),
-                 match_radius: Quantity = Quantity(10, 'arcsec'), use_peak: bool = False,
-                 peak_lo_en: Quantity = Quantity(0.5, "keV"), peak_hi_en: Quantity = Quantity(2.0, "keV"),
-                 back_inn_rad_factor: float = 1.05, back_out_rad_factor: float = 1.5,
-                 cosmology: Cosmology = DEFAULT_COSMO, load_fits: bool = False, clean_obs: bool = True,
-                 clean_obs_threshold: float = 0.9, no_prog_bar: bool = False, psf_corr: bool = False,
-                 telescope: Union[str, List[str]] = None, search_distance: Union[Quantity, dict] = None):
+
+    def __init__(
+        self,
+        ra: np.ndarray,
+        dec: np.ndarray,
+        distance: np.ndarray = None,
+        name: np.ndarray = None,
+        proper_motion: Quantity = None,
+        point_radius: Quantity = Quantity(30, "arcsec"),
+        match_radius: Quantity = Quantity(10, "arcsec"),
+        use_peak: bool = False,
+        peak_lo_en: Quantity = Quantity(0.5, "keV"),
+        peak_hi_en: Quantity = Quantity(2.0, "keV"),
+        back_inn_rad_factor: float = 1.05,
+        back_out_rad_factor: float = 1.5,
+        cosmology: Cosmology = DEFAULT_COSMO,
+        load_fits: bool = False,
+        clean_obs: bool = True,
+        clean_obs_threshold: float = 0.9,
+        no_prog_bar: bool = False,
+        psf_corr: bool = False,
+        telescope: str | list[str] = None,
+        search_distance: Quantity | dict = None,
+    ):
         """
          The init of the StarSample XGA class.
 
@@ -123,33 +138,49 @@ class StarSample(BaseSample):
         elif point_radius.isscalar:
             point_radius = Quantity([point_radius.value] * len(ra), point_radius.unit)
         elif not point_radius.isscalar and len(point_radius) != len(ra):
-            raise ValueError("If you pass a set of radii (rather than a single radius) to point_radius then there"
-                             " must be one entry per object passed to this sample object.")
+            raise ValueError(
+                "If you pass a set of radii (rather than a single radius) to point_radius then there"
+                " must be one entry per object passed to this sample object."
+            )
 
         # This does the checking for distance, making sure that if its a Quantity it fulfills our requirements
         if isinstance(distance, Quantity) and distance.isscalar:
             raise ValueError("Please pass a non-scalar quantity for distance.")
         elif isinstance(distance, Quantity) and len(distance) != len(ra):
             raise ValueError("Please pass a non-scalar quantity for distance, with one entry per source.")
-        elif isinstance(distance, Quantity) and not distance.unit.is_equivalent('parsec'):
+        elif isinstance(distance, Quantity) and not distance.unit.is_equivalent("parsec"):
             raise UnitConversionError("Please pass distances that can be converted to parsecs.")
 
         # Here I also perform checks on the proper motion information passed (if any)
         if isinstance(proper_motion, Quantity) and proper_motion.isscalar:
             raise ValueError("Please pass a non-scalar quantity for proper_motion.")
         elif isinstance(proper_motion, Quantity) and proper_motion.ndim == 1 and len(proper_motion) != len(ra):
-            raise ValueError("Please pass a non-scalar quantity for proper motion, and if passing proper"
-                             " motion magnitudes please have one entry per source.")
+            raise ValueError(
+                "Please pass a non-scalar quantity for proper motion, and if passing proper"
+                " motion magnitudes please have one entry per source."
+            )
         elif isinstance(proper_motion, Quantity) and proper_motion.ndim == 2 and proper_motion.shape != (len(ra), 2):
-            raise ValueError("Please pass a non-scalar quantity for proper motion, and if passing proper"
-                             " motion magnitudes please have one entry of two components per source.")
+            raise ValueError(
+                "Please pass a non-scalar quantity for proper motion, and if passing proper"
+                " motion magnitudes please have one entry of two components per source."
+            )
 
         # I don't like having this here, but it does avoid a circular import problem
-        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_expmaps, all_telescope_combined_images
 
         # Using the super defines BaseSources and stores them in the self._sources dictionary
-        super().__init__(ra, dec, None, name, cosmology, load_products=True, load_fits=False, no_prog_bar=no_prog_bar,
-                         telescope=telescope, search_distance=search_distance)
+        super().__init__(
+            ra,
+            dec,
+            None,
+            name,
+            cosmology,
+            load_products=True,
+            load_fits=False,
+            no_prog_bar=no_prog_bar,
+            telescope=telescope,
+            search_distance=search_distance,
+        )
 
         all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
         all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
@@ -161,6 +192,7 @@ class StarSample(BaseSample):
         # A list to store the inds of any declarations that failed due to NoValidObservations, so some
         #  attributes can be cleaned up later
         final_names = []
+        final_inds = []
         self._point_radii = []
         self._distances = []
         self._proper_motions = []
@@ -185,11 +217,29 @@ class StarSample(BaseSample):
                 # Observation cleaning goes on automatically in PointSource, so if a NoValidObservations error is
                 #  thrown I have to catch it and not add that source to this sample.
                 try:
-                    self._sources[n] = Star(r, d, di, n, pm, pr, match_radius, use_peak, peak_lo_en, peak_hi_en,
-                                            back_inn_rad_factor, back_out_rad_factor, cosmology, True, load_fits,
-                                            regen_merged=False, in_sample=True, telescope=telescope,
-                                            search_distance=search_distance, clean_obs=clean_obs,
-                                            clean_obs_threshold=clean_obs_threshold)
+                    self._sources[n] = Star(
+                        r,
+                        d,
+                        di,
+                        n,
+                        pm,
+                        pr,
+                        match_radius,
+                        use_peak,
+                        peak_lo_en,
+                        peak_hi_en,
+                        back_inn_rad_factor,
+                        back_out_rad_factor,
+                        cosmology,
+                        True,
+                        load_fits,
+                        regen_merged=False,
+                        in_sample=True,
+                        telescope=telescope,
+                        search_distance=search_distance,
+                        clean_obs=clean_obs,
+                        clean_obs_threshold=clean_obs_threshold,
+                    )
                     self._point_radii.append(pr.value)
                     self._distances.append(di)
                     self._proper_motions.append(pm)
@@ -197,31 +247,34 @@ class StarSample(BaseSample):
                     #  been set yet when all radii should be forced to be the same unit
                     self._pr_unit = pr.unit
                     final_names.append(n)
+                    final_inds.append(self._accepted_inds[ind])
                 except NoValidObservationsError as err:
                     self._failed_sources[n] = str(err)
 
                 dec_lb.update(1)
         self._names = final_names
+        self._accepted_inds = final_inds
         # Store the matching radius as an attribute, though its also in the sources
         self._match_radius = match_radius
 
         # I've cleaned the observations, and its possible some of the data has been thrown away,
         #  so I should regenerate the individual-telescope combined images/expmaps
-        from xga.generate.multitelescope.phot import all_telescope_combined_images, all_telescope_combined_expmaps
+        from xga.generate.multitelescope.phot import all_telescope_combined_expmaps, all_telescope_combined_images
+
         all_telescope_combined_images(self, peak_lo_en, peak_hi_en)
         all_telescope_combined_expmaps(self, peak_lo_en, peak_hi_en)
 
         # I don't offer the user choices as to the configuration for PSF correction at the moment
-        if psf_corr and 'xmm' in self.telescopes:
+        if psf_corr and "xmm" in self.telescopes:
             # Trying to see if this stops a circular import issue I've been having
             from ..imagetools.psf import rl_psf
+
             rl_psf(self, lo_en=peak_lo_en, hi_en=peak_hi_en)
 
         # It is possible (especially if someone is using the Sample classes as a way to check whether things have
         #  XMM data) that no sources will have been declared by this point, in which case it should fail now
         if len(self._sources) == 0:
-            raise NoValidObservationsError(
-                "No Stars have been declared, none of the sample passed the cleaning steps.")
+            raise NoValidObservationsError("No Stars have been declared, none of the sample passed the cleaning steps.")
 
         # Put all the warnings for there being no data in one - I think it's neater. Wait until after the check
         #  to make sure that are some sources because in that case this warning is redundant.
@@ -229,20 +282,28 @@ class StarSample(BaseSample):
         # If there are names in that list, then we do the warning
         if len(no_data) != 0:
             nice_tels = [PRETTY_TELESCOPE_NAMES[t] for t in telescope]
-            warn("The following do not appear to have any {t} data, and will not be included in the "
-                 "sample (can also check .failed_names); {n}".format(n=', '.join(no_data), t='/'.join(nice_tels)),
-                 stacklevel=2)
+            warn(
+                f"The following do not appear to have any {'/'.join(nice_tels)} data, and will not be included in the "
+                f"sample (can also check .failed_names); {', '.join(no_data)}",
+                stacklevel=2,
+            )
 
         failed_clean = [name for name in self._failed_sources if "cleaning" in self._failed_sources[name]]
         if len(failed_clean) != 0:
-            warn("The following have been excluded from the sample due to observation cleaning (can also check "
-                 ".failed_names and .failed_reasons); {n}".format(n=', '.join(failed_clean)),
-                 stacklevel=2)
+            warn(
+                f"The following have been excluded from the sample due to observation cleaning (can also check "
+                f".failed_names and .failed_reasons); {', '.join(failed_clean)}",
+                stacklevel=2,
+            )
 
         # We also do a combined warning for those clusters that had a failed peak finding attempt, if there are any
         if len(failed_peak_find) != 0:
-            warn("Peak finding did not converge for the following; {n}, using user "
-                 "supplied coordinates".format(n=', '.join(failed_peak_find)), stacklevel=2)
+            warn(
+                "Peak finding did not converge for the following; {n}, using user supplied coordinates".format(
+                    n=", ".join(failed_peak_find)
+                ),
+                stacklevel=2,
+            )
 
         # This shows a warning that tells the user how to see any suppressed warnings that occurred during source
         #  declarations, but only if there actually were any.

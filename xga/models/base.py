@@ -4,13 +4,12 @@
 import inspect
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
-from typing import Union, List, Dict
 from warnings import warn
 
 import emcee as em
 import numpy as np
 from abel.basex import basex_transform
-from abel.dasch import onion_peeling_transform, two_point_transform, three_point_transform
+from abel.dasch import onion_peeling_transform, three_point_transform, two_point_transform
 from abel.direct import direct_transform
 from abel.hansenlaw import hansenlaw_transform
 from abel.onion_bordas import onion_bordas_transform
@@ -49,18 +48,28 @@ class BaseModel1D(metaclass=ABCMeta):
         being the upper limit. Default is None.
     """
 
-    def __init__(self, x_unit: Union[Unit, str], y_unit: Union[Unit, str], start_pars: List[Quantity],
-                 par_priors: List[Dict[str, Union[Quantity, str]]], model_name: str, model_pub_name: str,
-                 par_pub_names: List[str], describes: str, info: dict, x_lims: Quantity = None):
+    def __init__(
+        self,
+        x_unit: Unit | str,
+        y_unit: Unit | str,
+        start_pars: list[Quantity],
+        par_priors: list[dict[str, Quantity | str]],
+        model_name: str,
+        model_pub_name: str,
+        par_pub_names: list[str],
+        describes: str,
+        info: dict,
+        x_lims: Quantity = None,
+    ):
         """
         Initialisation method for the base model class, just sets up all the necessary attributes and does some
         checks on the passed in parameters.
         """
         # These are the prior types that XGA currently understands
-        self._prior_types = ['uniform']
+        self._prior_types = ["uniform"]
         # This is used by the allowed_prior_types method to populate the table explaining what info should
         #  be supplied for each prior type
-        self._prior_type_format = ['Quantity([LOWER, UPPER], UNIT)']
+        self._prior_type_format = ["Quantity([LOWER, UPPER], UNIT)"]
 
         # If a string representation of a unit was passed then we make it an astropy unit
         if isinstance(x_unit, str):
@@ -93,9 +102,10 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Just checking that the units and shape of xlim make sense
         if x_lims is not None and not x_lims.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("You have passed x-limits with a unit ({p}) that cannot be converted to the "
-                                      "set x-unit of this model ({e})".format(p=x_lims.unit.to_string(),
-                                                                              e=self._x_unit.to_string()))
+            raise UnitConversionError(
+                f"You have passed x-limits with a unit ({x_lims.unit.to_string()}) that cannot be converted to the "
+                f"set x-unit of this model ({self._x_unit.to_string()})"
+            )
         elif x_lims is not None and x_lims.isscalar:
             raise ValueError("The xlim argument should be a non-scalar astropy quantity, with a lower and upper limit.")
         elif x_lims is not None and x_lims.shape != (2,):
@@ -120,10 +130,11 @@ class BaseModel1D(metaclass=ABCMeta):
         # This sets up the attribute to store what this model describes (e.g. surface brightness)
         self._describes = describes
         # This dictionary gives information about the model, have to make sure required keys are present
-        required = ['general', 'reference', 'author', 'year']
+        required = ["general", "reference", "author", "year"]
         if any([k not in info for k in required]):
-            raise KeyError("The following keys must be present in the info dictionary: "
-                           "{r}".format(r=', '.join(required)))
+            raise KeyError(
+                "The following keys must be present in the info dictionary: {r}".format(r=", ".join(required))
+            )
         else:
             self._info = info
 
@@ -132,7 +143,7 @@ class BaseModel1D(metaclass=ABCMeta):
         self._par_dists = [Quantity([], p.unit) for p in self._model_pars]
 
         # Any warnings that the user should be aware of from the fitting function can be stored in here
-        self._fit_warnings = ''
+        self._fit_warnings = ""
 
         # And another attribute to hold whether the external fit method considers the fit run using
         #  this model to be successful or not. This is also reflected in how the model is stored in a profile
@@ -152,7 +163,7 @@ class BaseModel1D(metaclass=ABCMeta):
         self._fit_method = None
 
         # I'm going to store any volume integral results within the model itself
-        self._vol_ints = {'pars': {}, 'par_dists': {}}
+        self._vol_ints = {"pars": {}, "par_dists": {}}
 
         # This attribute stores a reference to a profile that a model instance has been used to fit. If the model
         #  exists in isolation and hasn't been fit through a profile fit() method then it will remain None, but
@@ -175,8 +186,10 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: Quantity
         """
         if not x.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
-                                      "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
+            raise UnitConversionError(
+                f"You have passed an x value in units of {x.unit.to_string()}, but this model expects units of "
+                f"{self._x_unit.to_string()}"
+            )
         else:
             # Just to be sure it's in exactly the right units
             x = x.to(self._x_unit)
@@ -186,8 +199,9 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Check whether parameter distributions have been added to this model
         if use_par_dist and len(self._par_dists[0]) == 0:
-            raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
-                              " available.")
+            raise XGAFitError(
+                "No fit has been performed with this model, so there are no parameter distributions available."
+            )
 
         if use_par_dist:
             val = self.get_realisations(x)
@@ -214,15 +228,19 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: Quantity
         """
         if not x.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
-                                      "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
+            raise UnitConversionError(
+                f"You have passed an x value in units of {x.unit.to_string()}, but this model expects units of "
+                f"{self._x_unit.to_string()}"
+            )
         else:
             # Just to be sure it's in exactly the right units
             x = x.to(self._x_unit)
 
         if self._x_lims is not None and (np.any(x < self._x_lims[0]) or np.any(x > self._x_lims[1])):
-            warn("Some x values are outside of the x-axis limits for this model, results may not be trustworthy.",
-                 stacklevel=2)
+            warn(
+                "Some x values are outside of the x-axis limits for this model, results may not be trustworthy.",
+                stacklevel=2,
+            )
 
         if x.isscalar or (not x.isscalar and x.ndim == 1):
             realisations = self.model(x[..., None], *self._par_dists)
@@ -239,7 +257,7 @@ class BaseModel1D(metaclass=ABCMeta):
 
     @staticmethod
     @abstractmethod
-    def model(x: Quantity, pars: List[Quantity]) -> Quantity:
+    def model(x: Quantity, pars: list[Quantity]) -> Quantity:
         """
         This is where the model function is actually defined, this MUST be overridden by every subclass
         model, hence why I've used the abstract method decorator.
@@ -286,23 +304,29 @@ class BaseModel1D(metaclass=ABCMeta):
 
         # Just checking that the units of x and dx aren't silly
         if not x.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("You have passed an x value in units of {p}, but this model expects units of "
-                                      "{e}".format(p=x.unit.to_string(), e=self._x_unit.to_string()))
+            raise UnitConversionError(
+                f"You have passed an x value in units of {x.unit.to_string()}, but this model expects units of "
+                f"{self._x_unit.to_string()}"
+            )
         else:
             # Just to be sure its in exactly the right units
             x = x.to(self._x_unit)
 
         if not dx.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("You have passed a dx value in units of {p}, but this model expects units of "
-                                      "{e}".format(p=dx.unit.to_string(), e=self._x_unit.to_string()))
+            raise UnitConversionError(
+                f"You have passed a dx value in units of {dx.unit.to_string()}, but this model expects units of "
+                f"{self._x_unit.to_string()}"
+            )
         else:
             dx = dx.to(self._x_unit)
 
-        der_val = Quantity(derivative(lambda r: self(Quantity(r, self._x_unit), use_par_dist).value, x.value,
-                                      dx.value, n=order), self._y_unit / np.power(self._x_unit, order))
+        der_val = Quantity(
+            derivative(lambda r: self(Quantity(r, self._x_unit), use_par_dist).value, x.value, dx.value, n=order),
+            self._y_unit / np.power(self._x_unit, order),
+        )
         return der_val
 
-    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = 'direct') -> Quantity:
+    def inverse_abel(self, x: Quantity, use_par_dist: bool = False, method: str = "direct") -> Quantity:
         """
         This method uses numerical methods to generate the inverse abel transform of the model. It may be
         overridden by models that have analytical solutions to the inverse abel transform. All numerical inverse
@@ -318,86 +342,91 @@ class BaseModel1D(metaclass=ABCMeta):
         :return: The inverse abel transform result.
         :rtype: Quantity
         """
-
         # Checking x units to make sure that they are valid
         if not x.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("The input x coordinates cannot be converted to units of "
-                                      "{}".format(self._x_unit.to_string()))
+            raise UnitConversionError(
+                f"The input x coordinates cannot be converted to units of {self._x_unit.to_string()}"
+            )
         else:
             x = x.to(self._x_unit)
 
         # Sets up the resolution of the radial spatial sampling
         force_change = False
         if len(set(np.diff(x.value).round(5))) != 1:
-            warn("Most numerical methods for the abel transform require uniformly sampled radius values, setting "
-                 "the method to 'direct'", stacklevel=2)
-            method = 'direct'
+            warn(
+                "Most numerical methods for the abel transform require uniformly sampled radius values, setting "
+                "the method to 'direct'",
+                stacklevel=2,
+            )
+            method = "direct"
             force_change = True
         else:
             dr = (x[1] - x[0]).value
 
         # If the user just wants to use the current values of the model parameters then this is what happens
         if not use_par_dist:
-            if method == 'direct' and force_change:
+            if method == "direct" and force_change:
                 to_trans = np.concatenate([self(x).value, np.array([0.0])])
                 temp_dr = (x[-1] - x[-2]).value
                 mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
-                transform_res = direct_transform(to_trans, r=mod_rad, backend='python', verbose=False)[:-1]
-            elif method == 'direct' and not force_change:
+                transform_res = direct_transform(to_trans, r=mod_rad, backend="python", verbose=False)[:-1]
+            elif method == "direct" and not force_change:
                 to_trans = np.concatenate([self(x).value, np.array([0.0])])
-                transform_res = direct_transform(to_trans, dr=dr, backend='python', verbose=False)
-            elif method == 'basex':
+                transform_res = direct_transform(to_trans, dr=dr, backend="python", verbose=False)
+            elif method == "basex":
                 transform_res = basex_transform(self(x).value, dr=dr, verbose=False)
-            elif method == 'hansenlaw':
+            elif method == "hansenlaw":
                 transform_res = hansenlaw_transform(self(x).value, dr=dr, verbose=False)
-            elif method == 'onion_bordas':
+            elif method == "onion_bordas":
                 transform_res = onion_bordas_transform(self(x).value, dr=dr, verbose=False)
-            elif method == 'onion_peeling':
+            elif method == "onion_peeling":
                 transform_res = onion_peeling_transform(self(x).value, dr=dr, verbose=False)
-            elif method == 'two_point':
+            elif method == "two_point":
                 transform_res = two_point_transform(self(x).value, dr=dr, verbose=False)
-            elif method == 'three_point':
+            elif method == "three_point":
                 transform_res = three_point_transform(self(x).value, dr=dr, verbose=False)
             else:
-                raise ValueError("{} is not a recognised inverse abel transform type".format(method))
+                raise ValueError(f"{method} is not a recognised inverse abel transform type")
 
         # This uses the parameter distributions of this module
         elif use_par_dist:
             realisations = self.get_realisations(x).value
             transform_res = np.zeros(realisations.shape)
             for t_ind in range(0, realisations.shape[1]):
-                if method == 'direct' and force_change:
+                if method == "direct" and force_change:
                     to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
                     temp_dr = (x[-1] - x[-2]).value
                     mod_rad = np.concatenate([x.value, np.array([x.value[-1] + temp_dr])])
-                    transform_res[:, t_ind] = direct_transform(to_trans, r=mod_rad, backend='python',
-                                                               verbose=False)[:-1]
-                elif method == 'direct' and not force_change:
+                    transform_res[:, t_ind] = direct_transform(to_trans, r=mod_rad, backend="python", verbose=False)[
+                        :-1
+                    ]
+                elif method == "direct" and not force_change:
                     # This is necessary (see issue #1164) for the direct method because the last value is by definition
                     #  zero - one of the PyAbel authors suggested padding out the data.
                     to_trans = np.concatenate([realisations[:, t_ind], np.array([0.0])])
-                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, backend='python', verbose=False)[:-1]
-                elif method == 'basex':
+                    transform_res[:, t_ind] = direct_transform(to_trans, dr=dr, backend="python", verbose=False)[:-1]
+                elif method == "basex":
                     transform_res[:, t_ind] = basex_transform(realisations[:, t_ind], dr=dr, verbose=False)
-                elif method == 'hansenlaw':
+                elif method == "hansenlaw":
                     transform_res[:, t_ind] = hansenlaw_transform(realisations[:, t_ind], dr=dr, verbose=False)
-                elif method == 'onion_bordas':
+                elif method == "onion_bordas":
                     transform_res[:, t_ind] = onion_bordas_transform(realisations[:, t_ind], dr=dr, verbose=False)
-                elif method == 'onion_peeling':
+                elif method == "onion_peeling":
                     transform_res[:, t_ind] = onion_peeling_transform(realisations[:, t_ind], dr=dr, verbose=False)
-                elif method == 'two_point':
+                elif method == "two_point":
                     transform_res[:, t_ind] = two_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
-                elif method == 'three_point':
+                elif method == "three_point":
                     transform_res[:, t_ind] = three_point_transform(realisations[:, t_ind], dr=dr, verbose=False)
                 else:
-                    raise ValueError("{} is not a recognised inverse abel transform type".format(method))
+                    raise ValueError(f"{method} is not a recognised inverse abel transform type")
 
         transform_res = Quantity(transform_res, self._y_unit / self._x_unit)
 
         return transform_res
 
-    def volume_integral(self, outer_radius: Quantity, inner_radius: Quantity = None,
-                        use_par_dist: bool = False) -> Quantity:
+    def volume_integral(
+        self, outer_radius: Quantity, inner_radius: Quantity = None, use_par_dist: bool = False
+    ) -> Quantity:
         """
         Calculates a numerical value for the volume integral of the function over a sphere of
         radius outer_radius. The scipy quad function is used. This method can either return a single value
@@ -423,7 +452,7 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: Quantity
         """
 
-        def integrand(x: float, pars: List[float]):
+        def integrand(x: float, pars: list[float]):
             """
             Internal function to wrap the model function.
 
@@ -432,8 +461,7 @@ class BaseModel1D(metaclass=ABCMeta):
             :return: The integrand value.
             :rtype: float
             """
-
-            return x ** 2 * self.model(x, *pars)
+            return x**2 * self.model(x, *pars)
 
         # This variable just tells the rest of the function whether either the inner or outer radii are actually
         #  a distribution rather than a single value.
@@ -447,32 +475,37 @@ class BaseModel1D(metaclass=ABCMeta):
         if inner_radius is None:
             inner_radius = Quantity(0, outer_radius.unit)
         elif inner_radius is not None and not inner_radius.unit.is_equivalent(outer_radius.unit):
-            raise UnitConversionError("If an inner_radius Quantity is supplied, then it must be in the same units"
-                                      " as the outer_radius Quantity.")
+            raise UnitConversionError(
+                "If an inner_radius Quantity is supplied, then it must be in the same units"
+                " as the outer_radius Quantity."
+            )
 
         if (not outer_radius.isscalar or not inner_radius.isscalar) and not use_par_dist:
             raise ValueError("Radius distributions can only be used with use_par_dist set to True.")
         elif not outer_radius.isscalar and len(outer_radius) != len(self.par_dists[0]):
-            raise ValueError("The outer_radius distribution must have the same number of entries (currently {rd}) "
-                             "as the model posterior distributions ({md}).".format(rd=len(outer_radius),
-                                                                                   md=len(self.par_dists[0])))
+            raise ValueError(
+                f"The outer_radius distribution must have the same number of entries (currently {len(outer_radius)}) "
+                f"as the model posterior distributions ({len(self.par_dists[0])})."
+            )
         elif not inner_radius.isscalar and len(inner_radius) != len(self.par_dists[0]):
-            raise ValueError("The inner_radius distribution must have the same number of entries (currently {rd}) "
-                             "as the model posterior distributions ({md}).".format(rd=len(inner_radius),
-                                                                                   md=len(self.par_dists[0])))
+            raise ValueError(
+                f"The inner_radius distribution must have the same number of entries (currently {len(inner_radius)}) "
+                f"as the model posterior distributions ({len(self.par_dists[0])})."
+            )
 
         # Do a basic sanity checks on the radii, they can't be below zero because that doesn't make any sense
         #  physically. Also make sure that outer_radius isn't less than inner_radius
         if (inner_radius.value < 0).any() or (not rad_dist and outer_radius < inner_radius):
-            raise ValueError("Both inner_radius and outer_radius must be greater than zero (though inner_radius "
-                             "may be None, which is equivalent to zero). Also, outer_radius must be greater than "
-                             "inner_radius.")
+            raise ValueError(
+                "Both inner_radius and outer_radius must be greater than zero (though inner_radius "
+                "may be None, which is equivalent to zero). Also, outer_radius must be greater than "
+                "inner_radius."
+            )
 
         # Perform checks on the input outer radius units - don't need to explicitly check the inner radius units
         #  because I've already ensured that they're the same as outer_radius
         if not outer_radius.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("Outer radius cannot be converted to units of "
-                                      "{}".format(self._x_unit.to_string()))
+            raise UnitConversionError(f"Outer radius cannot be converted to units of {self._x_unit.to_string()}")
         else:
             outer_radius = outer_radius.to(self._x_unit)
             # We already know that this conversion is possible, because I checked that inner_radius units are
@@ -482,18 +515,25 @@ class BaseModel1D(metaclass=ABCMeta):
         # Here I just check to see whether this particular integral has been performed already, no sense repeating a
         #  costly-ish calculation if it has. Where the results are stored depends on whether the integral was performed
         #  using the median parameter values or the distributions
-        if not use_par_dist and (outer_radius in self._vol_ints['pars'] and
-                                 inner_radius in self._vol_ints['pars'][outer_radius]):
+        if not use_par_dist and (
+            outer_radius in self._vol_ints["pars"] and inner_radius in self._vol_ints["pars"][outer_radius]
+        ):
             # This makes sure the rest of the code in this function knows that this calculation has already been run
             already_run = True
-            integral_res = self._vol_ints['pars'][outer_radius][inner_radius]
+            integral_res = self._vol_ints["pars"][outer_radius][inner_radius]
 
         # Equivalent to the above clause but for par distribution results rather than the median single values used
         #  to concisely represent the models
-        elif use_par_dist and not rad_dist and (outer_radius in self._vol_ints['par_dists'] and
-                                                inner_radius in self._vol_ints['par_dists'][outer_radius]):
+        elif (
+            use_par_dist
+            and not rad_dist
+            and (
+                outer_radius in self._vol_ints["par_dists"]
+                and inner_radius in self._vol_ints["par_dists"][outer_radius]
+            )
+        ):
             already_run = True
-            integral_res = self._vol_ints['par_dists'][outer_radius][inner_radius]
+            integral_res = self._vol_ints["par_dists"][outer_radius][inner_radius]
 
         # Otherwise, this particular integral just hasn't been run
         elif not rad_dist:
@@ -501,9 +541,9 @@ class BaseModel1D(metaclass=ABCMeta):
             # In this case I pre-emptively add the outer radius to the dictionary keys, for use later to store
             #  the result. I don't add the inner radius because it will be automatically added
             if use_par_dist:
-                self._vol_ints['par_dists'][outer_radius] = {}
+                self._vol_ints["par_dists"][outer_radius] = {}
             else:
-                self._vol_ints['pars'][outer_radius] = {}
+                self._vol_ints["pars"][outer_radius] = {}
         else:
             # In the case where we are using a radius distribution, we still need to set this parameter so
             #  that the calculation is actually run
@@ -513,8 +553,11 @@ class BaseModel1D(metaclass=ABCMeta):
         #  using the current parameter distributions (if set)
         if not use_par_dist and not already_run:
             # Runs the volume integral for a sphere for the representative parameter values of this model
-            integral_res = 4 * np.pi * quad(integrand, inner_radius.value, outer_radius.value,
-                                            args=[p.value for p in self._model_pars])[0]
+            integral_res = (
+                4
+                * np.pi
+                * quad(integrand, inner_radius.value, outer_radius.value, args=[p.value for p in self._model_pars])[0]
+            )
         elif use_par_dist and len(self._par_dists[0]) != 0 and not already_run:
             # Runs the volume integral for the parameter distributions (assuming there are any) of this model
             unitless_dists = [par_d.value for par_d in self.par_dists]
@@ -531,24 +574,26 @@ class BaseModel1D(metaclass=ABCMeta):
                     inn_rad = inner_radius[par_ind].value
                 else:
                     inn_rad = inner_radius.value
-                integral_res[par_ind] = 4 * np.pi * quad(integrand, inn_rad, out_rad,
-                                                         args=[par_d[par_ind] for par_d in unitless_dists])[0]
+                integral_res[par_ind] = (
+                    4 * np.pi * quad(integrand, inn_rad, out_rad, args=[par_d[par_ind] for par_d in unitless_dists])[0]
+                )
         elif use_par_dist and len(self._par_dists[0]) == 0 and not already_run:
-            raise XGAFitError("No fit has been performed with this model, so there are no parameter distributions"
-                              " available.")
+            raise XGAFitError(
+                "No fit has been performed with this model, so there are no parameter distributions available."
+            )
 
         # If there wasn't already a result stored, the integration result is saved in a dictionary
         if not already_run:
-            integral_res = Quantity(integral_res, self.y_unit * self.x_unit ** 3)
+            integral_res = Quantity(integral_res, self.y_unit * self.x_unit**3)
 
             if not rad_dist and use_par_dist:
-                self._vol_ints['par_dists'][outer_radius][inner_radius] = integral_res
+                self._vol_ints["par_dists"][outer_radius][inner_radius] = integral_res
             elif not rad_dist:
-                self._vol_ints['pars'][outer_radius][inner_radius] = integral_res
+                self._vol_ints["pars"][outer_radius][inner_radius] = integral_res
 
         return integral_res.copy()
 
-    def allowed_prior_types(self, table_format: str = 'fancy_grid'):
+    def allowed_prior_types(self, table_format: str = "fancy_grid") -> None:
         """
         Simple method to display the allowed prior types and their expected formats.
         :param str table_format: The desired format of the allowed models table. This is passed to the
@@ -560,7 +605,7 @@ class BaseModel1D(metaclass=ABCMeta):
         print(tabulate(table_data, headers=headers, tablefmt=table_format))
 
     @staticmethod
-    def compare_units(check_pars: List[Quantity], good_pars: List[Quantity]) -> List[Quantity]:
+    def compare_units(check_pars: list[Quantity], good_pars: list[Quantity]) -> list[Quantity]:
         """
         Simple method that will be used in the inits of subclasses to make sure that any custom start
         values passed in by the user match the expected units of the default start parameters for that model.
@@ -573,8 +618,9 @@ class BaseModel1D(metaclass=ABCMeta):
         :rtype: List[Quantity]
         """
         if len(check_pars) != len(good_pars):
-            raise ValueError("If you pass custom start parameters you must pass a list with one entry for"
-                             " each parameter")
+            raise ValueError(
+                "If you pass custom start parameters you must pass a list with one entry for each parameter"
+            )
 
         # Check if custom par units are compatible with the correct default start parameter units
         unit_check = np.array([p.unit.is_equivalent(good_pars[p_ind].unit) for p_ind, p in enumerate(check_pars)])
@@ -582,14 +628,15 @@ class BaseModel1D(metaclass=ABCMeta):
         # Putting together an error string in the case where there are incompatible units
         for uc_ind, uc in enumerate(unit_check):
             if not uc:
-                unit_strings.append("{p} != {e}".format(p=check_pars[uc_ind].unit.to_string(),
-                                                        e=good_pars[uc_ind].unit.to_string()))
-        which_units = ', '.join(unit_strings)
+                unit_strings.append(f"{check_pars[uc_ind].unit.to_string()} != {good_pars[uc_ind].unit.to_string()}")
+        which_units = ", ".join(unit_strings)
 
         # If that string is not empty then some of the units are buggered and we throw an error
         if which_units != "":
-            raise UnitConversionError("The custom start parameters which have been passed can't all be converted to "
-                                      "the expected units; " + which_units)
+            raise UnitConversionError(
+                "The custom start parameters which have been passed can't all be converted to "
+                "the expected units; " + which_units
+            )
 
         # If we get this far though then we know we're all good, so we just convert the parameters to
         #  exactly the same units and return them
@@ -597,38 +644,71 @@ class BaseModel1D(metaclass=ABCMeta):
 
         return conv_check_pars
 
-    def info(self, table_format: str = 'fancy_grid'):
+    def info(self, table_format: str = "fancy_grid") -> None:
         """
         A method that gives some information about this particular model.
         :param str table_format: The desired format of the allowed models table. This is passed to the
             tabulate module (allowed formats can be found here - https://pypi.org/project/tabulate/), and
             alters the way the printed table looks.
         """
-        headers = [self.publication_name, '']
-        # ugly_pars = ", ".join([p.name for p in list(inspect.signature(self.model).parameters.values())[1:]])
+        # The publication_name of the model is used as the main header for the summary table
+        headers = [self.publication_name, ""]
+
+        # Extract the model parameter names from the static model function signature (skipping the first
+        #  argument, which is always the radial coordinate), wrapping lines so the table stays readable
         ugly_pars = ""
         cur_length = 0
         for p in list(inspect.signature(self.model).parameters.values())[1:]:
             if cur_length > 70:
-                ugly_pars += '\n'
+                ugly_pars += "\n"
                 cur_length = 0
 
             if ugly_pars == "":
-                next_par = '{}'.format(p.name)
+                next_par = f"{p.name}"
             else:
-                next_par = ', {}'.format(p.name)
+                next_par = f", {p.name}"
             cur_length += len(next_par)
             ugly_pars += next_par
 
+        # Format the expected unit for each model parameter as a comma-separated string
         par_units = ", ".join([u.to_string() for u in self.par_units])
 
-        data = [['DESCRIBES', self.describes], ['UNIT', self._y_unit.to_string()], ['PARAMETERS', ugly_pars],
-                ['PARAMETER UNITS', par_units], ["AUTHOR", self._info['author']], ["YEAR", self._info['year']],
-                ["PAPER", self._info['reference']], ['INFO', self._info['general']]]
+        # Assemble the base metadata rows describing the model definition and provenance
+        data = [
+            ["DESCRIBES", self.describes],
+            ["UNIT", self._y_unit.to_string()],
+            ["PARAMETERS", ugly_pars],
+            ["PARAMETER UNITS", par_units],
+            ["AUTHOR", self._info["author"]],
+            ["YEAR", self._info["year"]],
+            ["PAPER", self._info["reference"]],
+            ["INFO", self._info["general"]],
+        ]
+
+        # If this model instance has been fitted to a profile (so self.success has been set to True or False
+        #  rather than its initial None value), append the fit method, fit outcome, and current fitted parameter
+        #  values and uncertainties to the output table
+        if self.success is not None:
+            fit_pars = []
+            for p_ind, p_name in enumerate(self.par_names):
+                p_val = self.model_pars[p_ind]
+                p_err = self.model_par_errs[p_ind]
+                # Only include a trailing unit string if the parameter is not dimensionless
+                u_str = f" {p_val.unit.to_string()}" if p_val.unit != Unit("") else ""
+                # Scalar uncertainties correspond to symmetric (1-sigma) errors, whereas non-scalar 2-element
+                #  Quantities hold asymmetric (-err, +err) uncertainties
+                if p_err.isscalar:
+                    fit_pars.append(f"{p_name}: {p_val.value:.3g} ± {p_err.value:.3g}{u_str}")
+                else:
+                    fit_pars.append(f"{p_name}: {p_val.value:.3g} -{p_err[0].value:.3g} +{p_err[1].value:.3g}{u_str}")
+            data.append(["FIT METHOD", self.fit_method])
+            data.append(["FIT SUCCESS", self.success])
+            data.append(["FITTED PARAMETERS", "\n".join(fit_pars)])
         print(tabulate(data, headers=headers, tablefmt=table_format))
 
-    def predicted_dist_view(self, radius: Quantity, bins: Union[str, int] = 'auto', colour: str = "lightslategrey",
-                            figsize: tuple = (6, 5)):
+    def predicted_dist_view(
+        self, radius: Quantity, bins: str | int = "auto", colour: str = "lightslategrey", figsize: tuple = (6, 5)
+    ) -> None:
         """
         A simple view method, to visualise the predicted value distribution at a particular radius. Only usable if
         this model has had parameter distributions assigned to it.
@@ -648,15 +728,15 @@ class BaseModel1D(metaclass=ABCMeta):
 
             ax.hist(self(radius, True).value, bins=bins, color=colour)
             # Add predicted value as a solid red line
-            ax.axvline(self(radius).value, color='red')
+            ax.axvline(self(radius).value, color="red")
 
             cur_unit = self.y_unit
-            if cur_unit == Unit(''):
+            if cur_unit == Unit(""):
                 par_unit_name = ""
             else:
                 par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
 
-            ax.set_xlabel(self.describes + ' {}'.format(par_unit_name))
+            ax.set_xlabel(self.describes + f" {par_unit_name}")
 
             # And show the plot
             plt.tight_layout()
@@ -664,7 +744,7 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             warn("You have not added parameter distributions to this model")
 
-    def par_dist_view(self, bins: Union[str, int] = 'auto', colour: str = "lightseagreen"):
+    def par_dist_view(self, bins: str | int = "auto", colour: str = "lightseagreen") -> None:
         """
         Very simple method that allows you to view the parameter distributions that have been added to this
         model. The model parameter and uncertainties are indicated with red lines, highlighting the value
@@ -695,7 +775,7 @@ class BaseModel1D(metaclass=ABCMeta):
                 if err.isscalar:
                     # Change how we format the value label depending on how big the number is effectively
                     if (self.model_pars[ax_ind].value / 1000) > 1:
-                        v_ord = len(str(self.model_pars[ax_ind].value).split('.')[0]) - 1
+                        v_ord = len(str(self.model_pars[ax_ind].value).split(".")[0]) - 1
                         cur_v_str = str((self.model_pars[ax_ind].value / (10**v_ord)).round(2))
                         cur_e_str = str((err.value / (10**v_ord)).round(2)) + r"\times 10^{" + str(v_ord) + "}"
                     else:
@@ -705,47 +785,60 @@ class BaseModel1D(metaclass=ABCMeta):
                     # Set up the label that will accompany the vertical lines to indicate parameter value and error
                     vals_label = cur_v_str + r"\pm" + cur_e_str
 
-                    ax.axvline(self.model_pars[ax_ind].value - err.value, color='red', linestyle='dashed')
-                    ax.axvline(self.model_pars[ax_ind].value + err.value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value - err.value, color="red", linestyle="dashed")
+                    ax.axvline(self.model_pars[ax_ind].value + err.value, color="red", linestyle="dashed")
                 elif not err.isscalar and len(err) == 2:
-
                     # Change how we format the value label depending on how big the number is effectively
                     if (self.model_pars[ax_ind].value / 1000) > 1:
-                        v_ord = len(str(self.model_pars[ax_ind].value).split('.')[0]) - 1
+                        v_ord = len(str(self.model_pars[ax_ind].value).split(".")[0]) - 1
 
-                        cur_v_str = str((self.model_pars[ax_ind].value / (10 ** v_ord)).round(2))
-                        cur_em_str = str((err[0].value / (10 ** v_ord)).round(2))
-                        cur_ep_str = str((err[1].value / (10 ** v_ord)).round(2))
+                        cur_v_str = str((self.model_pars[ax_ind].value / (10**v_ord)).round(2))
+                        cur_em_str = str((err[0].value / (10**v_ord)).round(2))
+                        cur_ep_str = str((err[1].value / (10**v_ord)).round(2))
                         # Set up the label that will accompany the vertical lines to indicate parameter value and error
-                        vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "} " +
-                                      r"\times 10^{" + str(v_ord) + "}")
+                        vals_label = (
+                            cur_v_str
+                            + "^{+"
+                            + cur_ep_str
+                            + "}_{-"
+                            + cur_em_str
+                            + "} "
+                            + r"\times 10^{"
+                            + str(v_ord)
+                            + "}"
+                        )
                     else:
                         cur_v_str = str(self.model_pars[ax_ind].round(2).value)
                         cur_em_str = str(err[0].round(2).value)
                         cur_ep_str = str(err[1].round(2).value)
                         # Set up the label that will accompany the vertical lines to indicate parameter value and error
-                        vals_label = (cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "}")
+                        vals_label = cur_v_str + "^{+" + cur_ep_str + "}_{-" + cur_em_str + "}"
 
-                    ax.axvline(self.model_pars[ax_ind].value - err[0].value, color='red', linestyle='dashed')
-                    ax.axvline(self.model_pars[ax_ind].value + err[1].value, color='red', linestyle='dashed')
+                    ax.axvline(self.model_pars[ax_ind].value - err[0].value, color="red", linestyle="dashed")
+                    ax.axvline(self.model_pars[ax_ind].value + err[1].value, color="red", linestyle="dashed")
                 else:
                     raise ValueError("Parameter error has three elements in it!")
 
                 # The full label for the vertical line that indicates the parameter value
-                res_label = (r"$" + self.par_publication_names[ax_ind].replace('$', '') + "= "
-                             + vals_label + cur_unit.to_string("latex").strip("$") + '$')
+                res_label = (
+                    r"$"
+                    + self.par_publication_names[ax_ind].replace("$", "")
+                    + "= "
+                    + vals_label
+                    + cur_unit.to_string("latex").strip("$")
+                    + "$"
+                )
 
                 # Add parameter value as a solid red line
-                ax.axvline(self.model_pars[ax_ind].value, color='red', label=res_label)
+                ax.axvline(self.model_pars[ax_ind].value, color="red", label=res_label)
 
-                if cur_unit == Unit(''):
+                if cur_unit == Unit(""):
                     par_unit_name = ""
                 else:
                     par_unit_name = r" $\left[" + cur_unit.to_string("latex").strip("$") + r"\right]$"
 
                 ax.set_xlabel(self.par_publication_names[ax_ind] + par_unit_name, fontsize=14)
-                ax.legend(loc='best')
-
+                ax.legend(loc="best")
 
             # And show the plot
             plt.tight_layout()
@@ -753,8 +846,14 @@ class BaseModel1D(metaclass=ABCMeta):
         else:
             warn("You have not added parameter distributions to this model", stacklevel=2)
 
-    def view(self, radii: Quantity = None, xscale: str = 'log', yscale: str = 'log', figsize: tuple = (8, 8),
-             colour: str = "black"):
+    def view(
+        self,
+        radii: Quantity = None,
+        xscale: str = "log",
+        yscale: str = "log",
+        figsize: tuple = (8, 8),
+        colour: str = "black",
+    ) -> None:
         """
         Very simple view method to visualise XGA models with the current parameters.
 
@@ -768,13 +867,14 @@ class BaseModel1D(metaclass=ABCMeta):
         if radii is None and self.x_lims is not None:
             radii = Quantity(np.linspace(*self._x_lims.value, 100), self._x_unit)
         elif radii is None and self._x_lims is None:
-            raise ValueError("You did not set x-limits for this model, so you must pass radii values to the"
-                             " view method.")
+            raise ValueError(
+                "You did not set x-limits for this model, so you must pass radii values to the view method."
+            )
 
         plt.figure(figsize=figsize)
         ax = plt.gca()
         ax.minorticks_on()
-        ax.tick_params(axis='both', direction='in', which='both', top=True, right=True)
+        ax.tick_params(axis="both", direction="in", which="both", top=True, right=True)
 
         plt.plot(radii, self(radii), color=colour)
 
@@ -786,15 +886,15 @@ class BaseModel1D(metaclass=ABCMeta):
         x_unit = r"$\left[" + self._x_unit.to_string("latex").strip("$") + r"\right]$"
         y_unit = r"$\left[" + self._y_unit.to_string("latex").strip("$") + r"\right]$"
 
-        plt.xlabel('x {}'.format(x_unit), fontsize=12)
-        y_lab = self.describes + ' {}'.format(y_unit)
+        plt.xlabel(f"x {x_unit}", fontsize=12)
+        y_lab = self.describes + f" {y_unit}"
         plt.ylabel(y_lab, fontsize=12)
         plt.title(self.publication_name, fontsize=16)
         plt.tight_layout()
         plt.show()
 
     @property
-    def model_pars(self) -> List[Quantity]:
+    def model_pars(self) -> list[Quantity]:
         """
         Property that returns the current parameters of the model, by default they are the same as the
         parameter start values.
@@ -805,7 +905,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._model_pars
 
     @model_pars.setter
-    def model_pars(self, new_vals: List[Quantity]):
+    def model_pars(self, new_vals: list[Quantity]):
         """
         Property that allows the current parameter values of the model to be set.
 
@@ -814,18 +914,19 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         # Need to check that units are the same as the original parameters
         if len(new_vals) != self._num_pars:
-            raise ValueError("This model takes {t} parameters, the list you passed contains "
-                             "{c}".format(t=self._num_pars, c=len(new_vals)))
+            raise ValueError(
+                f"This model takes {self._num_pars} parameters, the list you passed contains {len(new_vals)}"
+            )
         elif not all([p.unit == self._model_pars[p_ind].unit for p_ind, p in enumerate(new_vals)]):
             raise UnitConversionError("All new parameters must have the same unit as the old parameters.")
         self._model_pars = new_vals
 
         # We also need to make sure any existing integrals are wiped from the model's storage, as they will
         #  no longer be valid
-        self._vol_ints['pars'] = {}
+        self._vol_ints["pars"] = {}
 
     @property
-    def model_par_errs(self) -> List[Quantity]:
+    def model_par_errs(self) -> list[Quantity]:
         """
         Property that returns the uncertainties on the current parameters of the model, by default these will
         be zero as the default model_pars are the same as the start_pars.
@@ -836,7 +937,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._model_par_errs
 
     @model_par_errs.setter
-    def model_par_errs(self, new_vals: List[Quantity]):
+    def model_par_errs(self, new_vals: list[Quantity]):
         """
         Property that allows the current parameter uncertainties of the model to be set. Quantities representing
         uncertainties may have one or two entries, with single element quantities assumed to represent
@@ -847,16 +948,16 @@ class BaseModel1D(metaclass=ABCMeta):
             on the parameters of this model.
         """
         if len(new_vals) != self._num_pars:
-            raise ValueError("This model takes {t} parameters, the list you passed contains "
-                             "{c}".format(t=self._num_pars, c=len(new_vals)))
+            raise ValueError(
+                f"This model takes {self._num_pars} parameters, the list you passed contains {len(new_vals)}"
+            )
         elif not all([p.unit == self._model_pars[p_ind].unit for p_ind, p in enumerate(new_vals)]):
-            raise UnitConversionError("All new parameter uncertainties must have the same unit as the "
-                                      "old parameters.")
+            raise UnitConversionError("All new parameter uncertainties must have the same unit as the old parameters.")
 
         self._model_par_errs = new_vals
 
     @property
-    def start_pars(self) -> List[Quantity]:
+    def start_pars(self) -> list[Quantity]:
         """
         Property that returns the current start parameters of the model, by which I mean the values that
         certain types of fitting function will use to start their fit.
@@ -878,7 +979,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return np.array([p.value for p in self.start_pars])
 
     @property
-    def par_priors(self) -> List[Dict[str, Union[Quantity, str]]]:
+    def par_priors(self) -> list[dict[str, Quantity | str]]:
         """
         Property that returns the current priors on parameters of the model, these will be used by any
         fitting function that sets priors on parameters. Each entry in this list will be a dictionary with
@@ -891,7 +992,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._par_priors
 
     @par_priors.setter
-    def par_priors(self, new_vals: List[Dict[str, Union[Quantity, str]]]):
+    def par_priors(self, new_vals: list[dict[str, Quantity | str]]):
         """
         Property setter for the parameter priors of this model. The user should supply a list of dictionaries
         which describe the characteristic values of the prior and its type, for instance:
@@ -905,28 +1006,34 @@ class BaseModel1D(metaclass=ABCMeta):
         """
         # new_vals should have one entry per parameter of the model
         if len(new_vals) != self._num_pars:
-            raise ValueError("This model takes {t} parameters, the list you passed contains "
-                             "{c}".format(t=self._num_pars, c=len(new_vals)))
+            raise ValueError(
+                f"This model takes {self._num_pars} parameters, the list you passed contains {len(new_vals)}"
+            )
 
         # Need to iterate through all the priors and perform checks to make sure they can be allowed
         for prior_ind, prior in enumerate(new_vals):
             # Need to make sure the dictionary describing the prior on a parameter has the entries we expect
-            if 'prior' not in prior or 'type' not in prior:
+            if "prior" not in prior or "type" not in prior:
                 raise KeyError("All entries in prior list must be dictionaries, with 'prior' and 'type' keys.")
             # Check that the type of prior is currently supported
-            elif prior['type'] not in self._prior_types:
-                allowed = ", ".format(self._prior_types)
-                raise ValueError("Priors of type {t} are not supported, currently supported types are; "
-                                 "{a}".format(t=prior['type'], a=allowed))
+            elif prior["type"] not in self._prior_types:
+                allowed = ", "
+                raise ValueError(
+                    "Priors of type {t} are not supported, currently supported types are; {a}".format(
+                        t=prior["type"], a=allowed
+                    )
+                )
             # And finally check the units of the characteristic values of the prior
-            elif not prior['prior'].unit.is_equivalent(self._par_priors[prior_ind]["prior"].unit):
-                raise UnitConversionError("Cannot convert new prior's {n} to old prior's "
-                                          "{o}".format(n=prior['prior'].unit.to_string(),
-                                                       o=self._par_priors[prior_ind]["prior"].unit.to_string()))
+            elif not prior["prior"].unit.is_equivalent(self._par_priors[prior_ind]["prior"].unit):
+                raise UnitConversionError(
+                    "Cannot convert new prior's {n} to old prior's {o}".format(
+                        n=prior["prior"].unit.to_string(), o=self._par_priors[prior_ind]["prior"].unit.to_string()
+                    )
+                )
             else:
                 # We make sure that if the prior values are in an equivelant unit to the current prior then
                 #  they are converted to the original unit, to be consistent.
-                prior['prior'] = prior['prior'].to(self._par_priors[prior_ind]["prior"].unit)
+                prior["prior"] = prior["prior"].to(self._par_priors[prior_ind]["prior"].unit)
                 self._par_priors[prior_ind] = prior
 
     @property
@@ -969,15 +1076,17 @@ class BaseModel1D(metaclass=ABCMeta):
         :param Quantity new_val: The new x-limits, first element lower, second element upper.
         """
         if not new_val.unit.is_equivalent(self._x_unit):
-            raise UnitConversionError("The x-axis unit of this model is {e}, you have passed limits in "
-                                      "{p}.".format(e=self._x_unit.to_string(), p=new_val.unit.to_string()))
+            raise UnitConversionError(
+                f"The x-axis unit of this model is {self._x_unit.to_string()}, you have passed limits in "
+                f"{new_val.unit.to_string()}."
+            )
         elif len(new_val) != 2:
             raise ValueError("The new quantity for the x-axis limits must have two entries.")
 
         self.x_lims = new_val
 
     @property
-    def par_units(self) -> List[Unit]:
+    def par_units(self) -> list[Unit]:
         """
         A list of units for the parameters of this model.
 
@@ -1009,7 +1118,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._pretty_name
 
     @property
-    def par_publication_names(self) -> List[str]:
+    def par_publication_names(self) -> list[str]:
         """
         Property getter for the publication names of the model parameters. These would be used in a plot
         for instance, and so can make use of Matplotlib's ability to render LaTeX math code.
@@ -1040,7 +1149,7 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._num_pars
 
     @property
-    def par_dists(self) -> List[Quantity]:
+    def par_dists(self) -> list[Quantity]:
         """
         A property that returns the currently stored distributions for the model parameters, by default these
         will be empty quantities as no fitting will have occurred. Once a fit has been performed involving the
@@ -1052,10 +1161,9 @@ class BaseModel1D(metaclass=ABCMeta):
         return self._par_dists
 
     @par_dists.setter
-    def par_dists(self, new_vals: List[Quantity]):
+    def par_dists(self, new_vals: list[Quantity]):
         if len(new_vals) != len(self._par_dists):
-            raise ValueError("The new list of parameter distributions must have an entry for each "
-                             "model parameter.")
+            raise ValueError("The new list of parameter distributions must have an entry for each model parameter.")
         elif not all([p.unit.is_equivalent(self._par_units[p_ind]) for p_ind, p in enumerate(new_vals)]):
             raise UnitConversionError("Some of the new par distributions do not have the correct units.")
         elif any([p.isscalar for p in new_vals]):
@@ -1067,7 +1175,7 @@ class BaseModel1D(metaclass=ABCMeta):
         self._par_dists = new_vals
 
         # Again must wipe any stored integrals as new parameter distributions will make them invalid
-        self._vol_ints['par_dists'] = {}
+        self._vol_ints["par_dists"] = {}
 
     @property
     def fit_warning(self) -> str:
@@ -1174,7 +1282,7 @@ class BaseModel1D(metaclass=ABCMeta):
         self._fit_method = new_val
 
     @property
-    def par_names(self) -> List[str]:
+    def par_names(self) -> list[str]:
         """
         The names of the parameters as they appear in the signature of the model python function.
 

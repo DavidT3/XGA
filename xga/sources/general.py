@@ -5,6 +5,7 @@ This module defines the generic PointSource and ExtendedSource classes, which ar
 importantly exist to be inherited by classes representing specific astrophysical objects (e.g. galaxy clusters).
 """
 
+from typing import Any
 from warnings import simplefilter, warn
 
 import numpy as np
@@ -26,6 +27,7 @@ from xga.products import RateMap
 from xga.sourcetools import ang_to_rad, rad_to_ang
 
 from ..products.profile import SurfaceBrightness1D
+from ..utils import RAD_MATCH_PRECISION
 from .base import BaseSource
 
 # This disables an annoying astropy warning that pops up all the time with XMM images
@@ -204,11 +206,6 @@ class ExtendedSource(BaseSource):
         # This uses the added context of the type of source to find (or not find) matches in region files
         self._regions, self._alt_match_regions, self._other_regions = self._source_type_match("ext")
 
-        # Making a combined list of interloper regions
-        self._interloper_regions = {tel: [] for tel in self.telescopes}
-        for tel in self._other_regions:
-            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
-
         # Run through any alternative matches and raise warnings
         for tel in self._alt_match_regions:
             for o in self._alt_match_regions[tel]:
@@ -308,6 +305,16 @@ class ExtendedSource(BaseSource):
         :rtype: Quantity
         """
         return self._custom_region_radius
+
+    @property
+    def extended(self) -> bool:
+        """
+        Property indicating whether this source is treated as an extended X-ray source.
+
+        :return: True if this is an extended source, False otherwise.
+        :rtype: bool
+        """
+        return True
 
     @property
     def point_clusters(self) -> tuple[dict[str, ndarray], dict[str, list[ndarray]]]:
@@ -426,10 +433,10 @@ class ExtendedSource(BaseSource):
                 f"The instrument {inst} is not associated with observation {obs_id} of this source."
             )
         elif obs_id is None and inst is None:
-            chosen = self._peaks[telescope]
+            chosen: Any = self._peaks[telescope]
         elif obs_id is not None and inst is None:
             chosen = self._peaks[telescope][obs_id]
-        else:
+        elif obs_id is not None and inst is not None:
             chosen = self._peaks[telescope][obs_id][inst]
 
         return chosen
@@ -489,10 +496,13 @@ class ExtendedSource(BaseSource):
         else:
             raise ValueError("Outer radius may only be a string or an astropy quantity")
 
-        if obs_id == "combined" or inst == "combined":
+        # If the user explicitly requests a combined profile (via obs_id='combined' or inst='combined') or leaves both
+        #  obs_id and inst as None (which defaults to searching for a combined-observation, combined-instrument
+        #  profile), delegate to get_combined_profiles; otherwise look up single-observation profiles via get_profiles
+        if obs_id == "combined" or inst == "combined" or (obs_id is None and inst is None):
             interim_prods = self.get_combined_profiles(
                 "brightness",
-                inst=inst,
+                inst="combined" if (obs_id is None and inst is None) else inst,
                 central_coord=central_coord,
                 radii=radii,
                 lo_en=lo_en,
@@ -522,7 +532,7 @@ class ExtendedSource(BaseSource):
         for p in filt_interim_prods:
             if (
                 not psf_corr
-                and p.outer_radius == outer_rad
+                and np.isclose(p.outer_radius, outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)
                 and p.pix_step == pix_step
                 and p.min_snr == min_snr
                 and p.psf_corrected == psf_corr
@@ -530,7 +540,7 @@ class ExtendedSource(BaseSource):
                 matched_prods.append(p)
             elif (
                 psf_corr
-                and p.outer_radius == outer_rad
+                and np.isclose(p.outer_radius, outer_rad, rtol=0, atol=RAD_MATCH_PRECISION)
                 and p.pix_step == pix_step
                 and p.min_snr == min_snr
                 and p.psf_corrected == psf_corr
@@ -690,11 +700,6 @@ class PointSource(BaseSource):
         # Make sure the peak energy boundaries are in keV
         self._peak_lo_en = peak_lo_en.to("keV")
         self._peak_hi_en = peak_hi_en.to("keV")
-
-        # Making a combined list of interloper regions
-        self._interloper_regions = {tel: [] for tel in self.telescopes}
-        for tel in self._other_regions:
-            self._interloper_regions[tel] = [r for o in self._other_regions[tel] for r in self._other_regions[tel][o]]
 
         if point_radius is not None and point_radius.unit.is_equivalent("kpc"):
             if self._redshift is None:

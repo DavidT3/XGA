@@ -162,7 +162,8 @@ def evtool_image(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quan
     # This is the template for the evtool command that will be run to make new images
     evtool_cmd = "cd {d}; evtool eventfiles={e} outfile={i} image=yes " \
                  "emin={l} emax={u} events=no size='{xs} {ys}' rebin={rb} " \
-                 "center_position='{c}'; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
+                 "center_position='{c}'; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; " \
+                 "cd ..; rm -r {d}"
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
@@ -393,7 +394,7 @@ def expmap(sources: Union[BaseSource, NullSource, BaseSample], lo_en: Quantity =
                  "emin={l} emax={u} mergedmaps={em} withweights=yes " \
                  "withdetmaps=yes; export HEADASNOQUERY=; " \
                  "export HEADASPROMPT=/dev/null; fthedit {em} " \
-                 "REFYCRVL delete; find . -maxdepth 1 -type f -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
+                 "REFYCRVL delete; find . -maxdepth 1 -type f ! -name 'core.*' -exec mv {{}} ../ \\;; cd ..; rm -r {d}"
 
     # These lists are to contain the lists of commands/paths/etc for each of the individual sources passed
     # to this function
